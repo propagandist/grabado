@@ -21,24 +21,8 @@
     <link rel="stylesheet" href="styles/print.css" type="text/css" media="print" />
     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.10.2/dropbox.min.js"></script>
 
-    <script src="js/oz.js"></script>
-    <script src="js/config.js"></script>
-    <script src="js/globals.js"></script>
-    <script src="js/visual.js"></script>
-    <script src="js/row.js"></script>
-    <script src="js/table.js"></script>
-    <script src="js/relation.js"></script>
-    <script src="js/key.js"></script>
-    <script src="js/rubberband.js"></script>
-    <script src="js/map.js"></script>
-    <script src="js/toggle.js"></script>
-    <script src="js/io.js"></script>
-    <script src="js/tablemanager.js"></script>
-    <script src="js/rowmanager.js"></script>
-    <script src="js/keymanager.js"></script>
-    <script src="js/window.js"></script>
-    <script src="js/options.js"></script>
-    <script src="js/wwwsqldesigner.js"></script>
+    <!-- grabado: js/*.js の読み込みと初期化は src/main.ts に集約（HANDOVER §3 段階1） -->
+    <script type="module" src="/src/main.ts"></script>
 </head>
 
 <body>
@@ -311,11 +295,7 @@
         </table>
     </div>
 
-    <script type="text/javascript">
-        var d = new SQL.Designer();
-      // d.setXhrHeaders({"Authorization": "Bearer xxx"});
-      // d.setXhrHeaders({"X-CSRF-TOKEN": "xxx"});
-    </script>
+    <!-- grabado: new SQL.Designer() と setXhrHeaders() の例は src/main.ts へ移設 -->
 </body>
 
 </html>

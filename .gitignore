@@ -7,9 +7,11 @@ Thumbs.db
 .vscode/
 *.iml
 
-# === Node / Vite（frontend・今後追加） ===
+# === Node / Vite ===
 node_modules/
-dist/
+# ルートの Vite 出力だけを無視する。階層無制限の "dist/" にすると
+# tests/dist/（配布物スモークのテストコード）まで巻き込む
+/dist/
 .vite/
 *.local
 

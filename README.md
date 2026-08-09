@@ -15,13 +15,23 @@ If you wish to support this project, <a href='https://www.paypal.com/cgi-bin/web
 
 # Quick Start
 
+> grabado 注記: HANDOVER §3 段階1 でフロントに Vite のビルド工程が入った。`index.html` は
+> `/src/main.ts` を読むので、**素の静的サーバでルートを配るだけでは動かない**。
+
 ## Local Installation:
 
-1. `npm install http-server -g`
-2. Run `http-server` in the root of this repo to start a simple http server
-3. Visit http://127.0.0.1:8080
+1. `npm install`
+2. `npm run dev` （Vite dev server）
+3. Visit http://127.0.0.1:4173/index.html
+
+配布物を確かめるときは `npm run build`（`dist/` が出る）→ `npm run preview`
+（http://127.0.0.1:4174）。テストの走らせ方は [`docs/TESTING.md`](docs/TESTING.md)。
 
 ## Docker Installation:
+
+> **現在このイメージは動かない。** upstream の `Dockerfile` は busybox httpd でリポジトリを
+> そのまま配る作りで、上記のビルド工程に未追随。マルチステージ化（フロント dist を
+> Spring Boot static に同梱）は HANDOVER §2 の仕事として別途行う。
 
 1. Build `docker build -t wwwsqldesigner .`
 2. Run   `docker run -d -p 8080:8080 wwwsqldesigner`

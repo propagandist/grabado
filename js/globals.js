@@ -1,10 +1,14 @@
-function _(str) {
+/*
+ * grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1）。
+ * 参照側（他ファイルの裸の _ / SQL / DATATYPES / LOCALE）は無変更でグローバル経由に解決される。
+ */
+window._ = function _(str) {
     /* getText */
     if (!(str in window.LOCALE)) {
         return str;
     }
     return window.LOCALE[str];
-}
+};
 
 if (typeof String.prototype.endsWith !== "function") {
     String.prototype.endsWith = function (suffix) {
@@ -37,9 +41,9 @@ if (!Object.create) {
     };
 }
 
-var DATATYPES = false;
-var LOCALE = {};
-var SQL = {
+window.DATATYPES = false;
+window.LOCALE = {};
+window.SQL = {
     _subscribers: {},
 
     publish: function (message, publisher, data) {

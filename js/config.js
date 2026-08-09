@@ -1,4 +1,5 @@
-var CONFIG = {
+/* grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1） */
+window.CONFIG = {
     AVAILABLE_DBS: [
         "mysql",
         "sqlite",

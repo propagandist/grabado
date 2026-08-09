@@ -1,5 +1,6 @@
 /* (c) 2007 - now() Ondrej Zara, 1.7 */
-var OZ = {
+/* grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1） */
+window.OZ = {
     $: function (x) {
         return typeof x == "string" ? document.getElementById(x) : x;
     },

@@ -3,11 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "grabado — ER 設計ツール（wwwsqldesigner 由来）。本 package.json は HANDOVER §7 特性化テストの基盤。",
+  "description": "grabado — ER 設計ツール（wwwsqldesigner 由来）。HANDOVER §7 特性化テストと §3 フロント TS 化の基盤。",
   "license": "BSD-3-Clause",
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "vitest run",
     "test:browser": "playwright test --project=characterization",
+    "test:dist": "playwright test --config=playwright.dist.config.ts",
     "test:all": "npm run test:browser && npm run test",
     "golden:update": "cross-env UPDATE_GOLDEN=1 playwright test --project=characterization",
     "known-issues": "playwright test --project=known-issues",
@@ -20,6 +24,8 @@
     "cross-env": "^10.1.0",
     "jsdom": "^29.1.1",
     "typescript": "^5.9.3",
+    "vite": "^8.2.1",
+    "vite-plugin-static-copy": "^4.1.1",
     "vitest": "^4.1.10",
     "xslt-processor": "^5.1.0"
   }

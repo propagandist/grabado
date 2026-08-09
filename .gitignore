@@ -1,0 +1,29 @@
+# === OS ===
+.DS_Store
+Thumbs.db
+
+# === IDE / エディタ ===
+.idea/
+.vscode/
+*.iml
+
+# === Node / Vite（frontend・今後追加） ===
+node_modules/
+dist/
+.vite/
+*.local
+
+# === Java / Gradle（backend・今後追加） ===
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# === 環境変数・秘密（イメージに焼かず env 注入。CLAUDE.md §5,§7） ===
+.env
+.env.*
+!.env.example
+# wwwsqldesigner 由来の実設定（config.xml.sample はテンプレとして追跡）
+config.xml
+
+# === ログ・一時 ===
+*.log

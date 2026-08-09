@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- 既知の不具合 #1: 識別子に & を含めると toXML() が壊れた XML を吐く -->
+<sql>
+<table x="10" y="10" name="R&amp;D">
+<row name="a&amp;b" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+</row>
+</table>
+</sql>

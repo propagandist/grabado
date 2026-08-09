@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- 既知の不具合 #3: BIGINT が Big Integer ではなく Real に解決される -->
+<sql>
+<table x="10" y="10" name="ledgers">
+<row name="amount" null="0" autoincrement="0">
+<datatype>BIGINT</datatype>
+</row>
+</table>
+</sql>

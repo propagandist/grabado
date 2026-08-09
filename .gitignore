@@ -25,5 +25,12 @@ build/
 # wwwsqldesigner 由来の実設定（config.xml.sample はテンプレとして追跡）
 config.xml
 
+# === テスト成果物（HANDOVER §7）===
+# golden（tests/golden/）は追跡対象。以下は実行時の一時出力のみ
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
 # === ログ・一時 ===
 *.log

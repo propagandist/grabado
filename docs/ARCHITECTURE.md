@@ -2,7 +2,8 @@
 
 `ondras/wwwsqldesigner` 由来の現行構成の把握と、house 新アーキテクチャ（[`HANDOVER.md`](HANDOVER.md)）への対応図。
 
-> ステータス: **§0「現物確認」実施済み（2026-08-09）**。§4 は実測値。実測環境・手順も §4.1 に記載。
+> ステータス: **§0「現物確認」実施済み（2026-08-09）／§7「特性化テスト」緑化済み（2026-08-09）**。
+> §4 は実測値。実測環境・手順も §4.1 に記載。テストの構成と走らせ方は [`TESTING.md`](TESTING.md)。
 
 ---
 
@@ -46,7 +47,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
   - [x] action 名・パラメータ・body・Content-Type・レスポンス本文
   - [x] introspection のレスポンス構造（XML）→ [`samples/introspection-postgresql.xml`](samples/introspection-postgresql.xml)
 - [x] 実測を本書 §4 に記載、HANDOVER との差分を [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) に記録
-- [ ] 特性化テスト（DDL golden ＋ serializer round-trip/決定論）を緑化 ← **次のタスク**（HANDOVER §7）
+- [x] 特性化テスト（DDL golden ＋ serializer round-trip/決定論）を緑化（HANDOVER §7 / §6・[`TESTING.md`](TESTING.md)）
 - [ ] ブラウザ UI からの end-to-end 操作確認（HTTP レベルの契約は §4 で確定済み。UI 操作の目視確認は未実施）
 
 ## 4. backend 契約（実測）
@@ -185,10 +186,28 @@ oz.js  →  config.js  →  globals.js  →  visual.js  →  row.js  →  table.
 
 ### 5.2 DDL 生成が XSLT である点（特性化テストへの影響）
 
-SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.js`](../js/io.js) の `sql()` / `finish()`）。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立てる。
+SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.js`](../js/io.js) の `clientsql()`（:527）と `finish()`（:535-559））。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立て、`.trim()` して `#textarea` に入れる。
 
-このため HANDOVER §7 の **DDL golden テストは XSLT の出力に対して組む**必要がある。Node/Vitest には `XSLTProcessor` が無いので、着手時に「XSLT を Node で実行するライブラリを噛ませて現行出力を golden 化する」か「golden を先に人手で固定してから TS 実装に置き換える」かの選択が要る。HANDOVER §6.3 の SQL エクスポート規約も最終的にこの層の置き換えになる。
+> 旧版の本書はこのメソッドを `sql()` と書いていたが、実装名は **`clientsql()`**。
+
+このため HANDOVER §7 の **DDL golden テストは XSLT の出力に対して組む**必要がある。Node/Vitest には `XSLTProcessor` が無い。**この分岐点は 2026-08-09 に決着済み**（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）— golden は実ブラウザ（Playwright/Chromium）で採り、日常回帰は jsdom + `xslt-processor` で回すハイブリッド構成。詳細は [`TESTING.md`](TESTING.md)。HANDOVER §6.3 の SQL エクスポート規約も最終的にこの層の置き換えになる。
 
 ### 5.3 外部依存
 
-`index.html` は Dropbox 連携のため **CDN から `dropbox.js` を読み込む**（`//cdnjs.cloudflare.com/…`）。Docker でローカル完結させる方針（HANDOVER §2）と噛み合わないため、Dropbox 機能の存廃とあわせて扱いを決める必要がある。
+`index.html` は Dropbox 連携のため **CDN から `dropbox.js` を読み込む**（`//cdnjs.cloudflare.com/…`）。Docker でローカル完結させる方針（HANDOVER §2）と噛み合わないため、Dropbox 機能の存廃とあわせて扱いを決める必要がある。特性化テストは常にこの読み込みを遮断してオフラインで走らせている（[`../tests/browser/harness.ts`](../tests/browser/harness.ts)）。
+
+## 6. 特性化テストの構成（HANDOVER §7・実装済み）
+
+走らせ方・golden の更新手順・fixture の追加手順は [`TESTING.md`](TESTING.md) に集約した。ここでは現行構成との対応だけ示す。
+
+| 何を固定するか | どこで採るか | 出力 |
+|---|---|---|
+| DDL（`db/<db>/output.xsl` の適用結果） | 実ブラウザ（Chromium の `XSLTProcessor`）。§5.2 の `finish()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 9 DB = 63 本） |
+| `SQL.Designer.toXML()` の出力 | 同上 | `tests/golden/xml/<fixture>.xml`（7 本） |
+| round-trip / 決定論 | 同上 | アサートのみ（golden なし） |
+| 高速回帰 | Node（jsdom ＋ `xslt-processor`）。同じ fixture・**同じ golden**を読むだけ | — |
+| 既知の不具合 | 実ブラウザ。golden を持たず「現在こう壊れている」を直接アサート | `tests/known-issues/` |
+
+- **golden は実ブラウザ採取のものが唯一の正**。Node 側は書き込まない。
+- 現行コードは抽出せずそのまま動かす。モデル層が描画 DOM と密結合（§5）なうえ、先に抽出すると「抽出後のコード」を特性化することになり安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
+- `xslt-processor` が XSLT 1.0 を満たしていない 3 DB（`oracle` / `sqlalchemy` / `vfp9`）は Node 側の DDL 回帰から外れ、ブラウザ側だけがカバーする。原因は [`../tests/node/parity-exceptions.ts`](../tests/node/parity-exceptions.ts) に実測付きで記録。

@@ -1,0 +1,38 @@
+# tests/golden — 現行実装の実出力（house 仕様ではない）
+
+このディレクトリの中身は **「2026-08-09 時点の現行 wwwsqldesigner が実際に吐いたバイト列」** であって、
+**正しい出力でも、grabado が目指す house 仕様でもない**。
+
+役割は 1 つだけ — HANDOVER §9 の移植（フロント TS 化 → IO の JSON 化 → 型パレット → backend）で
+**意図しない挙動変化が起きたら赤くする**こと。CLAUDE.md の Hard Constraint 1 が言う安全網の実体。
+
+```
+xml/<fixture>.xml        SQL.Designer.toXML() の出力（postgresql の型パレットで解決）
+ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。9 DB × 7 fixture
+```
+
+## 生成元は実ブラウザだけ
+
+すべて Chromium（本物の `XSLTProcessor` / `DOMParser` / 描画 DOM）で採取している。
+更新は必ず `npm run golden:update`。Node 側（vitest）は**読むだけで書かない**。
+理由と手順は [`../../docs/TESTING.md`](../../docs/TESTING.md)。
+
+## この golden に写り込んでいる現行の癖
+
+正常系の入力でも、現行実装の欠陥はそのまま出力に出る。golden を読むときはこれを踏まえること。
+それぞれ [`../known-issues/`](../known-issues/) に独立したテストがあり、**移植で直せばそちらが赤くなる**。
+
+- `UUID` が型パレットに無く `INTEGER` に落ちている（known-issues #4）
+- `users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る（known-issues #6）
+- `DEFAULT 'now()'` のように式が引用符で囲まれる（型の `quote` 属性をそのまま適用するため）
+- nullable な行に `<default>NULL</default>` が生えている（known-issues #2）
+- `<default>` の後だけ改行が無い（known-issues #8）
+
+## 正規化しているもの
+
+`xml/` の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけ。
+現行 `toXML()` は `location.href` を埋め込むため出力が環境依存になる
+（[js/wwwsqldesigner.js:329](../../js/wwwsqldesigner.js#L329)）。
+行ごと消すと HANDOVER §4 でこれを撤去したときに diff に現れないので、URL 部分だけ差し替えている。
+
+それ以外は一切加工していない。**改行コードを含めてバイト一致で比較する。**

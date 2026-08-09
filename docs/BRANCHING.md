@@ -73,3 +73,29 @@ git checkout -b hotfix/0.1.1 main
 - 設計データは本リポ（道具＝grabado）ではなく、**grabado を使う各プロダクトのリポジトリの `schema/*.json`** に置く。
 - 設計正本は **トランクベース**（`main` を唯一の正、短命ブランチ→PR で直接取り込み）。`develop` に載せない（split-brain 回避）。
 - 詳細は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログを参照。
+
+## ローカルブランチ保護（pre-push hook）
+
+GitHub 側のブランチ保護は現行プラン（private リポ）で使えないため、**ローカルの pre-push hook** で `main` / `develop` への直接 push を禁止する（`.githooks/pre-push`）。
+
+### 有効化（clone 後に各自1回だけ）
+
+```bash
+# macOS / Linux / Git Bash
+sh scripts/setup-hooks.sh
+```
+
+```powershell
+# Windows PowerShell
+pwsh scripts/setup-hooks.ps1
+```
+
+いずれも実体は `git config core.hooksPath .githooks` の1コマンド。設定後、`main` / `develop` へローカルから push しようとすると拒否される。
+
+### 挙動
+
+- `feature/*` など保護対象外ブランチの push は通常どおり通る。
+- `main` / `develop` への push・削除は拒否。統合は必ず GitHub 上の PR マージで行う（hook はローカル push のみ対象なので PR マージには影響しない）。
+- 緊急でどうしても直 push が必要な場合のみ、一時解除: `PUSH_ALLOW_PROTECTED=1 git push ...`
+
+> 注意: hook はクライアント側の運用支援であり、サーバー側の強制ではない。確実な強制が必要なら GitHub Team 以上へのアップグレードでブランチ保護を有効化する（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) 参照）。

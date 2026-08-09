@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# pre-push: 保護ブランチ (main / develop) へのローカル直 push を禁止する。
+# GitFlow: feature/* -> develop、release/* ・ hotfix/* -> main は PR 経由で。
+#
+# 有効化 (初回のみ): git config core.hooksPath .githooks
+#   もしくは:        sh scripts/setup-hooks.sh  /  pwsh scripts/setup-hooks.ps1
+# 緊急の一時解除:     PUSH_ALLOW_PROTECTED=1 git push ...
+#
+# 参考: docs/BRANCHING.md / CUSTOMIZATIONS.md
+
+blocked=""
+while read -r local_ref local_sha remote_ref remote_sha; do
+	case "$remote_ref" in
+		refs/heads/main|refs/heads/develop)
+			blocked="${remote_ref#refs/heads/}"
+			;;
+	esac
+done
+
+if [ -n "$blocked" ]; then
+	if [ "${PUSH_ALLOW_PROTECTED:-0}" = "1" ]; then
+		echo "pre-push: 保護ブランチ '$blocked' への push を一時許可 (PUSH_ALLOW_PROTECTED=1)" >&2
+		exit 0
+	fi
+	echo "" >&2
+	echo "  [BLOCKED] pre-push: 保護ブランチ '$blocked' への直接 push は禁止されています。" >&2
+	echo "" >&2
+	echo "  GitFlow フロー:" >&2
+	echo "    feature/*             -> develop  (PR 経由)" >&2
+	echo "    release/* ・ hotfix/* -> main     (PR 経由)" >&2
+	echo "" >&2
+	echo "  どうしても必要な場合のみ: PUSH_ALLOW_PROTECTED=1 git push ..." >&2
+	echo "" >&2
+	exit 1
+fi
+
+exit 0

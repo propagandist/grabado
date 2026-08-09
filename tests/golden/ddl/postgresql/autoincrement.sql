@@ -1,0 +1,8 @@
+CREATE TABLE counters (
+ id BIGSERIAL NOT NULL,
+ label VARCHAR(64) NOT NULL,
+ hits INTEGER NOT NULL DEFAULT 0
+);
+
+
+ALTER TABLE counters ADD CONSTRAINT counters_pkey PRIMARY KEY (id);

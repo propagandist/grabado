@@ -4,3 +4,17 @@ scripts/*.sh text eol=lf
 
 # PowerShell は Windows ネイティブなので CRLF
 scripts/*.ps1 text eol=crlf
+
+# 特性化テスト（HANDOVER §7）の入力 fixture と golden は LF 固定。
+# バイト一致で比較するため、チェックアウト時の改行変換を絶対に許さない。
+tests/fixtures/** text eol=lf
+tests/golden/**   text eol=lf
+
+# db/*/output.xsl の xsl:text 内の改行はそのまま生成 SQL に出る。
+# db/*/datatypes.xml は XMLSerializer 経由で toXML() の出力に丸ごと入る。
+# つまり両者の改行コードが golden のバイト列を左右する。
+# ただし db/vfp9/output.xsl は upstream 本体が CRLF なので eol=lf にすると
+# upstream ファイルを書き換えてしまう。改行を変換せず「コミットされたバイトのまま」
+# チェックアウトさせることで、どの環境でも golden が一致するようにする。
+db/**     -text
+locale/** -text

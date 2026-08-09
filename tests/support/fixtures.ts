@@ -1,0 +1,57 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** リポジトリルート（テストはすべてここを基準に解決する） */
+export const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
+export const FIXTURE_DIR = join(REPO_ROOT, "tests", "fixtures");
+export const GOLDEN_DIR = join(REPO_ROOT, "tests", "golden");
+
+/**
+ * db/ 配下に実在する DB プロファイル。
+ * js/config.js の CONFIG.AVAILABLE_DBS は "web2py" が重複しているため（既存の軽微なバグ、
+ * CUSTOMIZATIONS.md に記録）、テストはディレクトリ実体を正とする。
+ */
+export const DB_PROFILES: readonly string[] = Object.freeze(
+    readdirSync(join(REPO_ROOT, "db"), { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+        .sort(),
+);
+
+/** serializer の golden を採る際に使う DB プロファイル（house 到達点） */
+export const SERIALIZER_DB = "postgresql";
+
+export interface Fixture {
+    /** ファイル名から拡張子を除いたもの。golden のキーになる */
+    readonly name: string;
+    /** このテストで何を押さえるのか */
+    readonly purpose: string;
+    /** DDL golden を全 9 DB で採る対象か */
+    readonly ddl: boolean;
+}
+
+/**
+ * 正常系 fixture。既知の不具合を踏むケースはここに入れず tests/known-issues/ に隔離する
+ * （golden がバグを正当化して見えるのを避けるため）。
+ */
+export const FIXTURES: readonly Fixture[] = Object.freeze([
+    { name: "empty", purpose: "テーブル 0 件", ddl: true },
+    { name: "minimal", purpose: "1 テーブル / 1 カラム", ddl: true },
+    {
+        name: "house-defaults",
+        purpose: "uuidv7 PK・timestamptz 監査列・jsonb・複合 PK・UNIQUE key・日本語コメント",
+        ddl: true,
+    },
+    { name: "relations", purpose: "自己参照 FK・多対多・1 テーブルに複数 FK", ddl: true },
+    { name: "types-matrix", purpose: "型パレット網羅（サイズ付きを含む）", ddl: true },
+    { name: "autoincrement", purpose: "autoincrement=1（PG の BIGSERIAL 分岐）", ddl: true },
+    { name: "quotes-i18n", purpose: "コメント内のシングルクォート・日本語識別子", ddl: true },
+]);
+
+export const DDL_FIXTURES = FIXTURES.filter((f) => f.ddl);
+
+export function readFixture(name: string): string {
+    return readFileSync(join(FIXTURE_DIR, `${name}.xml`), "utf8");
+}

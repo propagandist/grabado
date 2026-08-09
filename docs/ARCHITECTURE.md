@@ -2,7 +2,8 @@
 
 `ondras/wwwsqldesigner` 由来の現行構成の把握と、house 新アーキテクチャ（[`HANDOVER.md`](HANDOVER.md)）への対応図。
 
-> ステータス: **§0「現物確認」実施済み（2026-08-09）／§7「特性化テスト」緑化済み（2026-08-09）**。
+> ステータス: **§0「現物確認」実施済み（2026-08-09）／§7「特性化テスト」緑化済み（2026-08-09）／
+> §3「フロント TS 化」段階1（Vite バンドル）実施済み（2026-08-09）**。
 > §4 は実測値。実測環境・手順も §4.1 に記載。テストの構成と走らせ方は [`TESTING.md`](TESTING.md)。
 
 ---
@@ -10,7 +11,8 @@
 ## 1. 現行（wwwsqldesigner）ディレクトリ構成（取り込み時点）
 
 ```
-index.html                アプリ本体（SPA エントリ。末尾で new SQL.Designer()）
+index.html                アプリ本体（SPA エントリ。§3 段階1 で <script type="module" src="/src/main.ts"> 1 本に）
+src/main.ts               ★ §3 で追加。js/*.js を読み込み順どおり import し new SQL.Designer() する
 js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化）
   config.js                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
@@ -31,7 +33,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
-| frontend | 素の JS（`js/`）＋グローバル `SQL.*` | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
+| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化済み**（グローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
 | **DDL 生成** | **`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）** | **TS 実装**（§6.3 の規約を含む） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
@@ -48,7 +50,8 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
   - [x] introspection のレスポンス構造（XML）→ [`samples/introspection-postgresql.xml`](samples/introspection-postgresql.xml)
 - [x] 実測を本書 §4 に記載、HANDOVER との差分を [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) に記録
 - [x] 特性化テスト（DDL golden ＋ serializer round-trip/決定論）を緑化（HANDOVER §7 / §6・[`TESTING.md`](TESTING.md)）
-- [ ] ブラウザ UI からの end-to-end 操作確認（HTTP レベルの契約は §4 で確定済み。UI 操作の目視確認は未実施）
+- [x] ブラウザ UI からの end-to-end 操作確認（§3 段階1 で実施。テーブル追加・カラム追加・SQL 出力・
+      スタイル切替・ロケール切替・cookie 保存が Vite バンドル後も動くことを確認）
 
 ## 4. backend 契約（実測）
 
@@ -169,7 +172,8 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 
 ### 5.1 読み込み順（＝依存の薄い順のおおよその指標）
 
-`index.html` の `<script>` 順:
+かつて `index.html` に並んでいた 18 本の `<script src>` は、**§3 段階1 で
+[`../src/main.ts`](../src/main.ts) の import 列に移した**（順序は同じ）。
 
 ```
 oz.js  →  config.js  →  globals.js  →  visual.js  →  row.js  →  table.js  →  relation.js
@@ -184,6 +188,23 @@ oz.js  →  config.js  →  globals.js  →  visual.js  →  row.js  →  table.
 - `wwwsqldesigner.js` の `SQL.Designer` が全体のオーナー（オプション・cookie・XHR ヘッダ・`toXML()`）。
 - TS 化は「`globals`/`config` → `io` → manager 群 → 描画中核」の順が依存的に無理がない。
 
+**相互参照は依然としてグローバル**（`OZ` / `CONFIG` / `SQL` / `DATATYPES` / `LOCALE` / `_`）。
+ESM ではトップレベル `var` がモジュールスコープに閉じるので、定義側の 6 箇所だけを `window.` に付け替えてある
+（`js/oz.js:2` / `js/config.js:1` / `js/globals.js` の `_`・`DATATYPES`・`LOCALE`・`SQL`）。
+`js/` に import/export は入っていない — これが `tests/node/harness.ts` の eval 経路を無改修で保つ条件で、
+依存グラフ化は `.ts` 化と同じ後続 PR で行う（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。
+
+### 5.1.1 ビルドと配信
+
+| | 何が配る | 用途 |
+|---|---|---|
+| `npm run dev` | Vite dev server（127.0.0.1:4173、root＝リポジトリルート） | 開発。`npm run test:browser` の webServer もこれ |
+| `npm run build` | `dist/`（index.html ＋ bundle ＋ CSS、`db/` `locale/` `images/` は static-copy） | 配布物。`npm run test:dist` がスモークを張る |
+
+`db/` `locale/` は `OZ.Request` が相対 URL で取りに行き、`images/` はバンドル後の CSS が
+`url(../images/…)` のまま参照するので、いずれも Rollup の依存グラフに乗らない。
+[`../vite.config.ts`](../vite.config.ts) の `viteStaticCopy` がこの 3 つを dist へコピーしている。
+
 ### 5.2 DDL 生成が XSLT である点（特性化テストへの影響）
 
 SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.js`](../js/io.js) の `clientsql()`（:527）と `finish()`（:535-559））。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立て、`.trim()` して `#textarea` に入れる。
@@ -194,7 +215,7 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 
 ### 5.3 外部依存
 
-`index.html` は Dropbox 連携のため **CDN から `dropbox.js` を読み込む**（`//cdnjs.cloudflare.com/…`）。Docker でローカル完結させる方針（HANDOVER §2）と噛み合わないため、Dropbox 機能の存廃とあわせて扱いを決める必要がある。特性化テストは常にこの読み込みを遮断してオフラインで走らせている（[`../tests/browser/harness.ts`](../tests/browser/harness.ts)）。
+`index.html` は Dropbox 連携のため **CDN から `dropbox.js` を読み込む**（`//cdnjs.cloudflare.com/…`）。Docker でローカル完結させる方針（HANDOVER §2）と噛み合わないため、Dropbox 機能の存廃とあわせて扱いを決める必要がある。特性化テストは常にこの読み込みを遮断してオフラインで走らせている（[`../tests/browser/harness.ts`](../tests/browser/harness.ts)）。§3 段階1 でも据え置いた（`<script src="//cdnjs…">` は Vite が外部 URL として素通しする）。
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 
@@ -207,6 +228,7 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 | round-trip / 決定論 | 同上 | アサートのみ（golden なし） |
 | 高速回帰 | Node（jsdom ＋ `xslt-processor`）。同じ fixture・**同じ golden**を読むだけ | — |
 | 既知の不具合 | 実ブラウザ。golden を持たず「現在こう壊れている」を直接アサート | `tests/known-issues/` |
+| 配布物（§3 で追加） | 実ブラウザ。`vite build` → `vite preview` に対するスモーク | `tests/dist/`（golden は読むだけ） |
 
 - **golden は実ブラウザ採取のものが唯一の正**。Node 側は書き込まない。
 - 現行コードは抽出せずそのまま動かす。モデル層が描画 DOM と密結合（§5）なうえ、先に抽出すると「抽出後のコード」を特性化することになり安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。

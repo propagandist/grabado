@@ -17,11 +17,14 @@ npm test              # Node 側（jsdom + xslt-processor）。速い。日常�
 npm run test:browser  # 実ブラウザ側（Chromium）。golden の権威
 npm run test:all      # 両方
 npm run known-issues  # 既知の不具合の再現確認（上記いずれにも含まれない）
-npm run typecheck     # tests/ の型検査（既存 js/ は対象外）
+npm run test:dist     # build 成果物（dist/）のスモーク。上記いずれにも含まれない
+npm run typecheck     # src/ と tests/ の型検査（既存 js/ は checkJs: false で対象外）
 ```
 
-`npm run test:browser` は [`tests/support/static-server.mjs`](../tests/support/static-server.mjs)
-（リポジトリルートを配るだけの静的サーバ）を Playwright が勝手に起動する。手で立てる必要はない。
+`npm run test:browser` と `npm run known-issues` は **Vite dev server** を Playwright が勝手に起動する
+（[`../vite.config.ts`](../vite.config.ts)、127.0.0.1:4173）。手で立てる必要はない。
+root はリポジトリルートのままなので、`index.html` / `db/` / `locale/` / `styles/` の URL は
+§3 段階1 以前の静的サーバ時代と同じ。
 
 ---
 
@@ -42,6 +45,11 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 
 現行コードは**抽出せずそのまま動かす**。ロジックを先に抜き出すと「抜き出した後のコード」を
 特性化することになり、安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
+
+§3 段階1（Vite バンドル化）でもこの 2 系統は無改修で通っている。`js/` に import/export を入れず
+グローバル公開だけに留めたので、Node 側の「`js/*.js` を 1 本ずつ eval する」経路が生きているため
+（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。`.ts` 化する後続 PR ではこの前提が崩れるので、
+Node ハーネスを vitest の変換に載せ替えるか IIFE バンドルを eval するかの判断が要る。
 
 ---
 
@@ -156,10 +164,24 @@ golden に写り込んでいる癖の一覧は [`tests/golden/README.md`](../tes
 
 ```
 tests/
-  support/       fixture 定義・正規化・golden 入出力・静的サーバ（両ハーネス共通）
+  support/       fixture 定義・正規化・golden 入出力（両ハーネス共通）
   fixtures/      入力設計 XML（正常系）
   golden/        現行の実出力（README.md に注意書き）
   browser/       Playwright。golden の権威
   node/          vitest + jsdom。同じ golden を高速に検証
   known-issues/  既知の不具合（golden を持たない）
+  dist/          build 成果物のスモーク（golden は読むだけ）
 ```
+
+## 配布物のスモーク（`npm run test:dist`）
+
+dev server で緑でも `dist/` が壊れていては配布できないので、
+[`../playwright.dist.config.ts`](../playwright.dist.config.ts) が `vite build` → `vite preview`
+（127.0.0.1:4174）を起こし、[`../tests/dist/smoke.spec.ts`](../tests/dist/smoke.spec.ts) が 3 点だけ確認する。
+
+- バンドルされた `index.html` から `SQL.Designer` が初期化される
+- `db/*/datatypes.xml` / `locale/*.xml` / `images/*` が dist に実在する
+  （いずれも Rollup の依存グラフに乗らず、`vite-plugin-static-copy` が運んでいる）
+- `postgresql` / `house-defaults` の DDL が既存 golden と一致する
+
+**golden は読むだけ**で、ここからは絶対に採り直さない（権威は `tests/browser/`）。

@@ -1,8 +1,10 @@
 import { defineConfig } from "@playwright/test";
+import { DEV_PORT } from "./vite.config.ts";
 
 // 実ブラウザ（Chromium）側。golden の生成・確定はこちらが唯一の正。
-// 現行アプリは素の静的ファイルなので、リポジトリルートをそのまま配って index.html を開く。
-export const PORT = 4173;
+// 配信は Vite dev server（HANDOVER §3 段階1）。root はリポジトリルートのままなので
+// index.html / db/ / locale/ / styles/ の URL は静的サーバ時代と同じ。
+export const PORT = DEV_PORT;
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
@@ -28,7 +30,7 @@ export default defineConfig({
         },
     ],
     webServer: {
-        command: "node tests/support/static-server.mjs",
+        command: "npx vite",
         url: `${BASE_URL}/index.html`,
         reuseExistingServer: !process.env["CI"],
         stdout: "ignore",

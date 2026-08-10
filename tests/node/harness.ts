@@ -37,12 +37,7 @@ const SCRIPT_ORDER = [
     "wwwsqldesigner.js",
 ] as const;
 
-export interface Designer {
-    tables: unknown[];
-    map: unknown;
-    io: { fromXMLText(xml: string): void };
-    toXML(): string;
-}
+/* SQL.designer の型は types/globals.d.ts の SqlDesigner に集約した（HANDOVER §3 段階2） */
 
 export interface NodeHarness {
     readonly dom: JSDOM;
@@ -93,11 +88,10 @@ export function createHarness(): NodeHarness {
 
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
     // new SQL.Designer() のうちに init2() まで到達する。
-    const oz = (window as unknown as { OZ: { Request: unknown } }).OZ;
-    oz.Request = (
+    window.OZ.Request = (
         url: string,
-        callback: ((data: unknown, status: number, headers: object) => void) | undefined,
-        options?: { xml?: boolean },
+        callback?: OzRequestCallback,
+        options?: OzRequestOptions,
     ) => {
         if (!callback) {
             return false;
@@ -124,7 +118,7 @@ export function createHarness(): NodeHarness {
 
     // 段階2 でクラス（SQL.Designer）と唯一のインスタンス（SQL.designer）に分離した。
     // new SQL.Designer() 自体は無改修で通る（コンストラクタが SQL.designer に自己登録する）。
-    const sql = (window as unknown as { SQL: { designer: Designer } }).SQL;
+    const sql = window.SQL;
     if (!sql?.designer?.map || !sql.designer.io) {
         throw new Error(`SQL.designer の初期化に失敗:\n${alerts.join("\n")}`);
     }
@@ -138,7 +132,7 @@ export function createHarness(): NodeHarness {
         useDatatypes(db: string): void {
             const xml = readRepoFile(`db/${db}/datatypes.xml`);
             const doc = new window.DOMParser().parseFromString(xml, "text/xml");
-            (window as unknown as { DATATYPES: Element }).DATATYPES = doc.documentElement;
+            window.DATATYPES = doc.documentElement;
         },
         loadFixture(xml: string): void {
             sql.designer.io.fromXMLText(xml);

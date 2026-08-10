@@ -8,20 +8,7 @@ import type { Page } from "@playwright/test";
  * 「抽出後のコード」を特性化することになり安全網の意味が消える。
  */
 
-declare global {
-    interface Window {
-        DATATYPES: Element;
-        SQL: {
-            /* 段階2 でクラス（SQL.Designer）と唯一のインスタンス（SQL.designer）に分離した */
-            designer: {
-                tables: unknown[];
-                map: unknown;
-                io: { fromXMLText(xml: string): void };
-                toXML(): string;
-            };
-        };
-    }
-}
+/* window.SQL / window.DATATYPES の型は types/globals.d.ts に集約した（HANDOVER §3 段階2） */
 
 /** index.html を開き、SQL.designer の init2() 完了まで待つ */
 export async function openDesigner(page: Page): Promise<void> {

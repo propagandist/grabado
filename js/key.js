@@ -4,7 +4,8 @@ SQL.Key = function (owner, type, name) {
     this.rows = [];
     this.type = type || "INDEX";
     this.name = name || "";
-    SQL.Visual.apply(this);
+    this._init();
+    this._build();
 };
 SQL.Key.prototype = Object.create(SQL.Visual.prototype);
 

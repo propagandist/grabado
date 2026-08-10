@@ -6,7 +6,8 @@ SQL.Designer = function () {
     this.relations = [];
     this.title = document.title;
 
-    SQL.Visual.apply(this);
+    this._init();
+    this._build();
     new SQL.Toggle(OZ.$("toggle"));
 
     this.dom.container = OZ.$("area");

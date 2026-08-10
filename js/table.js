@@ -8,7 +8,8 @@ SQL.Table = function (owner, name, x, y, z) {
 
     this.flag = false;
     this.selected = false;
-    SQL.Visual.apply(this);
+    this._init();
+    this._build();
     this.data.comment = "";
 
     this.setTitle(name);

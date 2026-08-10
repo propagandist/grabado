@@ -2,7 +2,8 @@
 
 SQL.Map = function (owner) {
     this.owner = owner;
-    SQL.Visual.apply(this);
+    this._init();
+    this._build();
     this.dom.container = OZ.$("minimap");
     this.width = this.dom.container.offsetWidth - 2;
     this.height = this.dom.container.offsetHeight - 2;

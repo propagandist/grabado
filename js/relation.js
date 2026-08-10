@@ -8,7 +8,8 @@ SQL.Relation = function (owner, row1, row2) {
     this.hidden = false;
     this.relationColors = CONFIG.RELATION_COLORS;
     this.highlighted = null;
-    SQL.Visual.apply(this);
+    this._init();
+    this._build();
 
     this.style = SQL.Designer.getOption("style");
     switch (this.style) {

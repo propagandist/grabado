@@ -2,7 +2,8 @@
 
 SQL.Rubberband = function (owner) {
     this.owner = owner;
-    SQL.Visual.apply(this);
+    this._init();
+    this._build();
     this.dom.container = OZ.$("rubberband");
     OZ.Event.add("area", "mousedown", this.down.bind(this));
 };

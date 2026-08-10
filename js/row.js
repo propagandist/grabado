@@ -6,7 +6,8 @@ SQL.Row = function (owner, title, data) {
     this.selected = false;
     this.expanded = false;
 
-    SQL.Visual.apply(this);
+    this._init();
+    this._build();
 
     this.data.type = 0;
     this.data.size = "";

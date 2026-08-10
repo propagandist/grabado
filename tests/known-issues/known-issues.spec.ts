@@ -73,7 +73,7 @@ test("#3 BIGINT が Big Integer ではなく Real に解決される（sql 重�
     await loadFixture(page, readKnownFixture("bigint-drift"));
 
     const label = await page.evaluate(() => {
-        const row = (window.SQL.Designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
+        const row = (window.SQL.designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
         return row!.getDataType().getAttribute("label");
     });
 
@@ -88,7 +88,7 @@ test("#4 型パレットに無い型は黙って先頭の型になる（UUID -> 
     await loadFixture(page, readFixture("house-defaults"));
 
     const label = await page.evaluate(() => {
-        const row = (window.SQL.Designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
+        const row = (window.SQL.designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
         return row!.getDataType().getAttribute("label");
     });
 
@@ -130,13 +130,13 @@ test("#7 alignTables() が tables を破壊的ソートし、テーブル順と�
     await loadFixture(page, readFixture("relations"));
 
     const before = await page.evaluate(() =>
-        (window.SQL.Designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
+        (window.SQL.designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
     );
     await page.evaluate(() =>
-        (window.SQL.Designer as unknown as { alignTables(): void }).alignTables(),
+        (window.SQL.designer as unknown as { alignTables(): void }).alignTables(),
     );
     const after = await page.evaluate(() =>
-        (window.SQL.Designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
+        (window.SQL.designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
     );
 
     // js/wwwsqldesigner.js:293-295 が this.tables.sort() で配列そのものを並べ替える。

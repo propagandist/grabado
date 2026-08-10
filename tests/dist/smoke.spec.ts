@@ -26,9 +26,9 @@ test.afterAll(async () => {
     await page.close();
 });
 
-test("バンドルされた index.html から SQL.Designer が初期化される", async () => {
+test("バンドルされた index.html から SQL.designer が初期化される", async () => {
     // openDesigner() が map / io / DATATYPES の生成を待っている。ここでは実体の型だけ確かめる。
-    const ready = await page.evaluate(() => typeof window.SQL.Designer.toXML === "function");
+    const ready = await page.evaluate(() => typeof window.SQL.designer.toXML === "function");
     expect(ready).toBe(true);
 });
 

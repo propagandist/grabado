@@ -12,7 +12,8 @@ declare global {
     interface Window {
         DATATYPES: Element;
         SQL: {
-            Designer: {
+            /* 段階2 でクラス（SQL.Designer）と唯一のインスタンス（SQL.designer）に分離した */
+            designer: {
                 tables: unknown[];
                 map: unknown;
                 io: { fromXMLText(xml: string): void };
@@ -22,7 +23,7 @@ declare global {
     }
 }
 
-/** index.html を開き、SQL.Designer の init2() 完了まで待つ */
+/** index.html を開き、SQL.designer の init2() 完了まで待つ */
 export async function openDesigner(page: Page): Promise<void> {
     // index.html:22 は Dropbox を CDN から読む。HANDOVER §2 の「Docker でローカル完結」と
     // 噛み合わない既知の外部依存（存廃は未決）。テストは常に遮断してオフラインで走らせる。
@@ -41,7 +42,7 @@ export async function openDesigner(page: Page): Promise<void> {
     // init2() は locale/*.xml と db/*/datatypes.xml の 2 本が揃ってから走る
     // （js/wwwsqldesigner.js:77-99, 118-140）。map と io が生えたら初期化完了。
     await page.waitForFunction(
-        () => !!window.SQL?.Designer?.map && !!window.SQL?.Designer?.io && !!window.DATATYPES,
+        () => !!window.SQL?.designer?.map && !!window.SQL?.designer?.io && !!window.DATATYPES,
         undefined,
         { timeout: 15_000 },
     );
@@ -80,7 +81,7 @@ export async function loadFixture(page: Page, xml: string): Promise<void> {
         const originalAlert = window.alert;
         window.alert = (msg?: unknown) => void seen.push(String(msg));
         try {
-            window.SQL.Designer.io.fromXMLText(fixtureXml);
+            window.SQL.designer.io.fromXMLText(fixtureXml);
         } finally {
             window.alert = originalAlert;
         }
@@ -92,9 +93,9 @@ export async function loadFixture(page: Page, xml: string): Promise<void> {
     }
 }
 
-/** 現行 SQL.Designer.toXML() の生出力 */
+/** 現行 SQL.designer.toXML() の生出力 */
 export function toXml(page: Page): Promise<string> {
-    return page.evaluate(() => window.SQL.Designer.toXML());
+    return page.evaluate(() => window.SQL.designer.toXML());
 }
 
 /**

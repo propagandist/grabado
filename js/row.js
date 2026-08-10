@@ -109,7 +109,7 @@ class Row extends SQL.Visual {
 
     update(data) {
         /* update subset of row data */
-        var des = SQL.Designer;
+        var des = SQL.designer;
         if (data.nll && data.def && data.def.match(/^null$/i)) {
             data.def = null;
         }

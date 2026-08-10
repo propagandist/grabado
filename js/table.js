@@ -243,7 +243,7 @@ class Table extends SQL.Visual {
     }
 
     snap() {
-        var snap = parseInt(SQL.Designer.getOption("snap"));
+        var snap = parseInt(SQL.designer.getOption("snap"));
         if (snap) {
             this.x = Math.round(this.x / snap) * snap;
             this.y = Math.round(this.y / snap) * snap;
@@ -379,7 +379,7 @@ class Table extends SQL.Visual {
     move(e) {
         /* mousemove */
         var t = Table;
-        SQL.Designer.removeSelection();
+        SQL.designer.removeSelection();
         if (e.type == "touchmove") {
             if (e.touches.length > 1) {
                 return;
@@ -400,7 +400,7 @@ class Table extends SQL.Visual {
 
     up(e) {
         var t = Table;
-        var d = SQL.Designer;
+        var d = SQL.designer;
         if (d.getOption("hide")) {
             for (var i = 0; i < t.active.length; i++) {
                 t.active[i].showRelations();

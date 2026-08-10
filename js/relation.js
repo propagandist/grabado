@@ -18,7 +18,7 @@ class Relation extends SQL.Visual {
         this._init();
         this._build();
 
-        this.style = SQL.Designer.getOption("style");
+        this.style = SQL.designer.getOption("style");
         switch (this.style) {
             case "material-inspired":
                 this.relationColors = CONFIG.MATERIAL_RELATION_COLORS;

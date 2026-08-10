@@ -122,9 +122,11 @@ export function createHarness(): NodeHarness {
 
     window.eval("new SQL.Designer();");
 
-    const sql = (window as unknown as { SQL: { Designer: Designer } }).SQL;
-    if (!sql?.Designer?.map || !sql.Designer.io) {
-        throw new Error(`SQL.Designer の初期化に失敗:\n${alerts.join("\n")}`);
+    // 段階2 でクラス（SQL.Designer）と唯一のインスタンス（SQL.designer）に分離した。
+    // new SQL.Designer() 自体は無改修で通る（コンストラクタが SQL.designer に自己登録する）。
+    const sql = (window as unknown as { SQL: { designer: Designer } }).SQL;
+    if (!sql?.designer?.map || !sql.designer.io) {
+        throw new Error(`SQL.designer の初期化に失敗:\n${alerts.join("\n")}`);
     }
 
     const takeAlerts = (): string[] => alerts.splice(0, alerts.length);
@@ -139,14 +141,14 @@ export function createHarness(): NodeHarness {
             (window as unknown as { DATATYPES: Element }).DATATYPES = doc.documentElement;
         },
         loadFixture(xml: string): void {
-            sql.Designer.io.fromXMLText(xml);
+            sql.designer.io.fromXMLText(xml);
             const failures = takeAlerts();
             if (failures.length) {
                 throw new Error(`fixture の読み込みに失敗:\n${failures.join("\n")}`);
             }
         },
         toXML(): string {
-            return sql.Designer.toXML();
+            return sql.designer.toXML();
         },
         close(): void {
             window.close();

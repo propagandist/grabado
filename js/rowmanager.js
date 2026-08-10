@@ -80,7 +80,7 @@ SQL.RowManager.prototype.tableClick = function (e) {
     p = p.replace(/%R/g, r1.getTitle());
 
     var r2 = t2.addRow(p, r1.data);
-    r2.update({ type: SQL.Designer.getFKTypeFor(r1.data.type) });
+    r2.update({ type: SQL.designer.getFKTypeFor(r1.data.type) });
     r2.update({ ai: false });
     this.owner.addRelation(r1, r2);
 };

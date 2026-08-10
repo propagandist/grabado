@@ -284,49 +284,12 @@ window.OZ = {
 };
 
 /*
- * grabado: ES5 の prototype polyfill（Function.prototype.bind、Array.prototype の
- * indexOf / lastIndexOf / forEach / every / some / map / filter）を削除した
- * （HANDOVER §3 段階2）。いずれも if (!X) ガード付きで、jsdom / Chromium の
- * どちらにもネイティブが実在するため本体は一度も評価されていない（実測確認済み）。
+ * grabado: ES5 polyfill 群を削除した（HANDOVER §3 段階2）。
+ *
+ * prototype 版（Function.prototype.bind、Array.prototype の indexOf / lastIndexOf /
+ * forEach / every / some / map / filter）は if (!X) ガード付きで、jsdom / Chromium の
+ * どちらにもネイティブが実在するため本体は一度も評価されていなかった（実測確認済み）。
+ *
+ * 非標準の静的版（Array.indexOf / lastIndexOf / forEach / every / some / map / filter）は
+ * ネイティブに無く実際にインストールされていたが、参照が 1 件も無いことを確認して削除した。
  */
-if (!Array.indexOf) {
-    Array.indexOf = function (obj, item, from) {
-        return Array.prototype.indexOf.call(obj, item, from);
-    };
-}
-
-if (!Array.lastIndexOf) {
-    Array.lastIndexOf = function (obj, item, from) {
-        return Array.prototype.lastIndexOf.call(obj, item, from);
-    };
-}
-
-if (!Array.forEach) {
-    Array.forEach = function (obj, cb, _this) {
-        Array.prototype.forEach.call(obj, cb, _this);
-    };
-}
-
-if (!Array.every) {
-    Array.every = function (obj, cb, _this) {
-        return Array.prototype.every.call(obj, cb, _this);
-    };
-}
-
-if (!Array.some) {
-    Array.some = function (obj, cb, _this) {
-        return Array.prototype.some.call(obj, cb, _this);
-    };
-}
-
-if (!Array.map) {
-    Array.map = function (obj, cb, _this) {
-        return Array.prototype.map.call(obj, cb, _this);
-    };
-}
-
-if (!Array.filter) {
-    Array.filter = function (obj, cb, _this) {
-        return Array.prototype.filter.call(obj, cb, _this);
-    };
-}

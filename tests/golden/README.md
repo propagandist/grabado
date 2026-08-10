@@ -32,7 +32,7 @@ ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。9 DB × 7 fixt
 
 `xml/` の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけ。
 現行 `toXML()` は `location.href` を埋め込むため出力が環境依存になる
-（[js/wwwsqldesigner.js:329](../../js/wwwsqldesigner.js#L329)）。
+（[js/wwwsqldesigner.js:346](../../js/wwwsqldesigner.js#L346)）。
 行ごと消すと HANDOVER §4 でこれを撤去したときに diff に現れないので、URL 部分だけ差し替えている。
 
 それ以外は一切加工していない。**改行コードを含めてバイト一致で比較する。**

@@ -18,7 +18,7 @@ npm run test:browser  # 実ブラウザ側（Chromium）。golden の権威
 npm run test:all      # 両方
 npm run known-issues  # 既知の不具合の再現確認（上記いずれにも含まれない）
 npm run test:dist     # build 成果物（dist/）のスモーク。上記いずれにも含まれない
-npm run typecheck     # src/ と tests/ の型検査（既存 js/ は checkJs: false で対象外）
+npm run typecheck     # src/ tests/ types/ の型検査（既存 js/ は checkJs: false で対象外）
 ```
 
 `npm run test:browser` と `npm run known-issues` は **Vite dev server** を Playwright が勝手に起動する
@@ -31,7 +31,7 @@ root はリポジトリルートのままなので、`index.html` / `db/` / `loc
 ## なぜ 2 系統あるのか
 
 DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**
-したもの（[js/io.js:527-559](../js/io.js#L527-L559)）。Node に `XSLTProcessor` は無い。
+したもの（[js/io.js:530-562](../js/io.js#L530-L562)）。Node に `XSLTProcessor` は無い。
 モデル層も描画 DOM と密結合で、DOM 無しでは動かない（[ARCHITECTURE.md](ARCHITECTURE.md) §5）。
 
 そこで役割を分けた。
@@ -48,8 +48,20 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 
 §3 段階1（Vite バンドル化）でもこの 2 系統は無改修で通っている。`js/` に import/export を入れず
 グローバル公開だけに留めたので、Node 側の「`js/*.js` を 1 本ずつ eval する」経路が生きているため
-（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。`.ts` 化する後続 PR ではこの前提が崩れるので、
-Node ハーネスを vitest の変換に載せ替えるか IIFE バンドルを eval するかの判断が要る。
+（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。
+
+**§3 段階2（ES クラス化）でもこの前提は崩していない。** `class X { … }` は `window.eval` では
+グローバルに残らない（lexical 宣言は使い捨ての環境レコードに入る仕様）ので、必ず同一ファイル内で
+`SQL.X = X;` する形にした。ファイル跨ぎの参照が `SQL.` 経由になるのは現行と同じで、Node ハーネスは
+無改修のまま通っている。成功判定も段階1 と同じく `git diff tests/golden/` が空であること
+（63 + 7 本すべて無差分）。
+
+`.ts` 化する段階3 ではこの前提が崩れるので、Node ハーネスを vitest の変換に載せ替えるか
+IIFE バンドルを eval するかの判断が要る。
+
+**2 系統は strict / sloppy でも違う**（[`ARCHITECTURE.md`](ARCHITECTURE.md) §5.4）。ESM で配る
+`test:browser` / `test:dist` は常に strict、`window.eval` で流す `npm test` は sloppy。
+暗黙グローバルのような問題は**ブラウザ側でしか赤くならない**ので、`npm test` だけで済ませない。
 
 ---
 
@@ -57,7 +69,7 @@ Node ハーネスを vitest の変換に載せ替えるか IIFE バンドルを 
 
 ### DDL golden — `tests/golden/ddl/<db>/<fixture>.sql`
 
-7 fixture × 9 DB = **63 本**。[js/io.js:535-559](../js/io.js#L535-L559) の `finish()` と同じ経路
+7 fixture × 9 DB = **63 本**。[js/io.js:538-562](../js/io.js#L538-L562) の `finish()` と同じ経路
 （`toXML()` → `DOMParser` → `XSLTProcessor` → `documentElement.textContent` → `trim`）で採る。
 UI の `#textarea` に入る値と一致する。
 
@@ -77,7 +89,7 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
 
 すべて手書きの well-formed XML。`toXML()` は非決定的なので **fixture の生成に現行コードを使わない**。
 `<datatypes>` ブロックは持たせず、DB プロファイルはテスト側が `window.DATATYPES` の差し替えで与える
-（`dbResponse()` と同じ操作。[js/wwwsqldesigner.js:91-99](../js/wwwsqldesigner.js#L91-L99)）。
+（`dbResponse()` と同じ操作。[js/wwwsqldesigner.js:108-116](../js/wwwsqldesigner.js#L108-L116)）。
 
 | fixture | 押さえていること |
 |---|---|

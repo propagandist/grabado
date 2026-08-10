@@ -15,7 +15,7 @@ import { REPO_ROOT } from "../support/fixtures.ts";
  *      -> toXML() が使うのは x/y だけなのでシリアライズの特性化には影響しない
  */
 
-/** index.html:24-41 の読み込み順。依存の薄い順の指標でもある（docs/ARCHITECTURE.md §5.1） */
+/** src/main.ts:13-30 の読み込み順（段階1 で index.html から移設）。依存の薄い順の指標でもある（docs/ARCHITECTURE.md §5.1） */
 const SCRIPT_ORDER = [
     "oz.js",
     "config.js",

@@ -12,7 +12,7 @@ import { PARITY_EXCEPTIONS, PARITY_EXCLUDED_DBS } from "./parity-exceptions.ts";
  * Node には XSLTProcessor が無いので xslt-processor（純 JS の XSLT 1.0 実装）で代替し、
  * 実ブラウザが採った golden と突き合わせる。
  *
- * 入力は fixture そのものではなく toXML() の出力。js/io.js:535-559 の finish() が
+ * 入力は fixture そのものではなく toXML() の出力。js/io.js:538-562 の finish() が
  * this.owner.toXML() を XSLT に渡すのと同じにするため。
  */
 /**

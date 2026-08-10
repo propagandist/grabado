@@ -1,7 +1,7 @@
 /**
  * toXML() 出力の正規化。
  *
- * 現行 SQL.Designer.prototype.toXML()（js/wwwsqldesigner.js:325-347）は
+ * 現行 SQL.designer.toXML()（js/wwwsqldesigner.js:342-364）は
  * `<!-- Active URL: ... -->` に location.href をそのまま埋め込むため、出力が環境依存になる。
  * HANDOVER §4 の決定論要件（同一モデル→同一バイト列）に真っ向から反する既知の欠陥で、
  * §4 の serializer 再実装で撤去される対象。

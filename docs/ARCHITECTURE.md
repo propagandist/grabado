@@ -3,7 +3,8 @@
 `ondras/wwwsqldesigner` 由来の現行構成の把握と、house 新アーキテクチャ（[`HANDOVER.md`](HANDOVER.md)）への対応図。
 
 > ステータス: **§0「現物確認」実施済み（2026-08-09）／§7「特性化テスト」緑化済み（2026-08-09）／
-> §3「フロント TS 化」段階1（Vite バンドル）実施済み（2026-08-09）**。
+> §3「フロント TS 化」段階1（Vite バンドル）実施済み（2026-08-09）／
+> 同 段階2（ES クラス化・デッドコード撤去）実施済み（2026-08-10、§5.4）**。
 > §4 は実測値。実測環境・手順も §4.1 に記載。テストの構成と走らせ方は [`TESTING.md`](TESTING.md)。
 
 ---
@@ -33,7 +34,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
-| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化済み**（グローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
+| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化**（グローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
 | **DDL 生成** | **`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）** | **TS 実装**（§6.3 の規約を含む） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
@@ -183,16 +184,21 @@ oz.js  →  config.js  →  globals.js  →  visual.js  →  row.js  →  table.
 ```
 
 - `oz.js` は upstream 独自の DOM / イベント / XHR ライブラリ（`OZ.*`）。`OZ.Request` が全通信の入口。
-- `globals.js` はロケール関数 `_()` と ES5 polyfill 群。
+  **§3 段階2 で `OZ.Class` 系（参照 0）と ES5 polyfill 群を撤去**した。
+- `globals.js` はロケール関数 `_()` と `SQL` 名前空間（`publish` / `subscribe` / `escape`）。
+  polyfill は段階2 で撤去。
 - `visual.js` → `row.js` / `table.js` / `relation.js` / `key.js` が描画中核（Tier 2 で温存）。
+  **段階2 で ES クラス階層になった**（§5.4）。
 - `wwwsqldesigner.js` の `SQL.Designer` が全体のオーナー（オプション・cookie・XHR ヘッダ・`toXML()`）。
+  **段階2 でクラス（`SQL.Designer`）と唯一のインスタンス（`SQL.designer`）に分離**した。
 - TS 化は「`globals`/`config` → `io` → manager 群 → 描画中核」の順が依存的に無理がない。
 
 **相互参照は依然としてグローバル**（`OZ` / `CONFIG` / `SQL` / `DATATYPES` / `LOCALE` / `_`）。
 ESM ではトップレベル `var` がモジュールスコープに閉じるので、定義側の 6 箇所だけを `window.` に付け替えてある
-（`js/oz.js:2` / `js/config.js:1` / `js/globals.js` の `_`・`DATATYPES`・`LOCALE`・`SQL`）。
+（`js/oz.js:3` / `js/config.js:1` / `js/globals.js` の `_`・`DATATYPES`・`LOCALE`・`SQL`）。
 `js/` に import/export は入っていない — これが `tests/node/harness.ts` の eval 経路を無改修で保つ条件で、
 依存グラフ化は `.ts` 化と同じ後続 PR で行う（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。
+段階2 の class 化でもこの前提は崩していない（§5.4 の「2 つの実行系」を参照）。
 
 ### 5.1.1 ビルドと配信
 
@@ -207,7 +213,7 @@ ESM ではトップレベル `var` がモジュールスコープに閉じるの
 
 ### 5.2 DDL 生成が XSLT である点（特性化テストへの影響）
 
-SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.js`](../js/io.js) の `clientsql()`（:527）と `finish()`（:535-559））。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立て、`.trim()` して `#textarea` に入れる。
+SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.js`](../js/io.js) の `clientsql()`（:530）と `finish()`（:538-562））。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立て、`.trim()` して `#textarea` に入れる。
 
 > 旧版の本書はこのメソッドを `sql()` と書いていたが、実装名は **`clientsql()`**。
 
@@ -216,6 +222,46 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 ### 5.3 外部依存
 
 `index.html` は Dropbox 連携のため **CDN から `dropbox.js` を読み込む**（`//cdnjs.cloudflare.com/…`）。Docker でローカル完結させる方針（HANDOVER §2）と噛み合わないため、Dropbox 機能の存廃とあわせて扱いを決める必要がある。特性化テストは常にこの読み込みを遮断してオフラインで走らせている（[`../tests/browser/harness.ts`](../tests/browser/harness.ts)）。§3 段階1 でも据え置いた（`<script src="//cdnjs…">` は Vite が外部 URL として素通しする）。
+
+### 5.4 クラス階層と 2 つの実行系（§3 段階2）
+
+`SQL.Visual` を頂点とする 8 クラスは段階2 で ES クラス構文になった。判断の根拠は
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
+
+| クラス | ファイル | `_build` | 親メソッド呼び出し | 静的 | `dom` の形 |
+|---|---|---|---|---|---|
+| `Visual`（基底） | `visual.js` | 空 | — | — | `{container, title}` |
+| `Key` | `key.js` | 継承 | **なし**（`destroy` は基底を呼ばない） | — | 使わない |
+| `Rubberband` | `rubberband.js` | 継承 | — | — | `{container}` |
+| `Minimap`（`SQL.Map`） | `map.js` | 継承 | — | — | `{container, port}` |
+| `Relation` | `relation.js` | 継承 | **なし**（`destroy` は基底を呼ばない） | `_counter` | **配列**（SVG path 1 本 or div 3 本） |
+| `Row` | `row.js` | **上書き** | `super.setTitle` / `super.destroy` | — | 固定キー＋後付け 8 個 |
+| `Table` | `table.js` | **上書き** | `super.setTitle` / `super.destroy` | `active` / `x` / `y` | 固定キー＋`mini` |
+| `Designer` | `wwwsqldesigner.js` | 継承 | **なし**（`setTitle` は `document.title` のみ） | — | 固定キー＋`svg` |
+
+構造上おさえておく点。
+
+- **二相構築（`_init` / `_build`）の呼び出しは基底コンストラクタに無い。** 各サブクラスが自分の
+  コンストラクタで呼ぶ。`Table._build()` が `this.owner.map.dom.container` を読むため、
+  ES クラスの「`super()` 前に `this` を触れない」制約と両立させるにはこの形しかない。
+  クラスフィールド初期化子も同じ理由で使っていない（`super()` 直後に走って順序が変わる）。
+- **`Relation` だけ `dom` が配列**で、基底が入れた `{container, title}` を上書きする。基底で `dom` の型を
+  決められない原因そのもので、`dom` バッグは全体で 3 形態ある（固定キー＋後付け／文字列キーの動的代入
+  `this.dom[id] = elm`／この配列）。**段階3 の最大の判断事項**。
+- クラス名 `Minimap` は ES 標準の `Map` との衝突を避けるため。公開名は `SQL.Map` のまま。
+
+**2 つの実行系の違いは 2 つある。** 段階2 の書き方はこの 2 点で決まっている。
+
+| | ESM（`npm run dev` / `build` / `test:browser` / `test:dist`） | `window.eval`（`npm test` の Node ハーネス） |
+|---|---|---|
+| スコープ | モジュールスコープ | グローバル（ただし `let` / `const` / `class` は使い捨ての環境レコードに入り**残らない**） |
+| strict | **常に strict** | **sloppy** |
+
+- 前者から、`class X { … }` と書いたら**同一ファイル内で必ず `SQL.X = X;`** する。これでファイル跨ぎの
+  参照が `SQL.` 経由になり、`js/` に import/export を入れないという段階1 の前提が保たれる
+  （＝ Node ハーネスの eval 経路が無改修で通る）。
+- 後者から、暗黙グローバルは**ブラウザでだけ落ちる**。段階2 で直した 2 件（`js/io.js` の `req`、
+  `js/oz.js` の `y`）はこれに当たり、「現行挙動」が実行系で割れていたため挙動不変の例外として修正した。
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

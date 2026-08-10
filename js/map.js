@@ -4,8 +4,13 @@
  * _init() / _build() は従来 SQL.Visual.apply(this) を書いていた位置で呼ぶ。
  * this.sync = this.sync.bind(this) も現行と同じ位置に置く（プロトタイプ上の
  * sync を bind してインスタンスプロパティで隠す形は class でも同じく動く）。
+ *
+ * クラス名を Map ではなく Minimap にしてあるのは ES 標準の Map と衝突するため
+ * （tsc --checkJs で TS2300 Duplicate identifier が出る）。公開名 SQL.Map は
+ * 現行のまま。段階3 でモジュール化したとき export class Map が標準 Map を
+ * 隠すのを避ける。
  */
-class Map extends SQL.Visual {
+class Minimap extends SQL.Visual {
     constructor(owner) {
         super();
         this.owner = owner;
@@ -139,4 +144,4 @@ class Map extends SQL.Visual {
     }
 }
 
-SQL.Map = Map;
+SQL.Map = Minimap;

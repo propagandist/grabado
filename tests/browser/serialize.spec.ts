@@ -9,7 +9,7 @@ import {
 } from "../support/normalize.ts";
 import { loadFixture, openDesigner, toXml, useDatatypes } from "./harness.ts";
 
-// 1 ページを beforeAll で作って使い回す（現行アプリはページ単位のグローバル SQL.Designer 1 個で動く）。
+// 1 ページを beforeAll で作って使い回す（現行アプリはページ単位のグローバル SQL.designer 1 個で動く）。
 // serial モードにはしない — 1 件落ちた時点で残りが skip され、影響範囲が見えなくなるため。
 
 let page: Page;

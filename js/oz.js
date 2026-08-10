@@ -76,51 +76,12 @@ window.OZ = {
             return e.target || e.srcElement;
         },
     },
-    Class: function () {
-        var c = function () {
-            var init = arguments.callee.prototype.init;
-            if (init) {
-                init.apply(this, arguments);
-            }
-        };
-        c.implement = function (parent) {
-            for (var p in parent.prototype) {
-                this.prototype[p] = parent.prototype[p];
-            }
-            return this;
-        };
-        c.extend = function (parent) {
-            var tmp = function () {};
-            tmp.prototype = parent.prototype;
-            this.prototype = new tmp();
-            this.prototype.constructor = this;
-            return this;
-        };
-        c.prototype.bind = function (fnc) {
-            return fnc.bind(this);
-        };
-        c.prototype.dispatch = function (type, data) {
-            var obj = {
-                type: type,
-                target: this,
-                timeStamp: new Date().getTime(),
-                data: data,
-            };
-            var tocall = [];
-            var list = OZ.Event._byName[type];
-            for (var id in list) {
-                var item = list[id];
-                if (!item[0] || item[0] == this) {
-                    tocall.push(item[2]);
-                }
-            }
-            var len = tocall.length;
-            for (var i = 0; i < len; i++) {
-                tocall[i](obj);
-            }
-        };
-        return c;
-    },
+    /*
+     * grabado: OZ.Class / implement / extend / dispatch を削除した（HANDOVER §3 段階2）。
+     * アプリからの参照が 1 件も無く、arguments.callee 依存で strict では動かないため。
+     * 実際に使われている継承は SQL.Visual を頂点とする ES クラス階層（js/visual.js）、
+     * pub/sub は SQL.publish / SQL.subscribe（js/globals.js）。
+     */
     DOM: {
         elm: function (name, opts) {
             var elm = document.createElement(name);
@@ -149,7 +110,11 @@ window.OZ = {
             var cur = OZ.$(elm);
             var html = cur.ownerDocument.documentElement;
             var parent = cur.parentNode;
-            var x = (y = 0);
+            /* grabado: 元は var x = (y = 0); で y が暗黙グローバルだった
+               （HANDOVER §3 段階2）。ESM は常に strict なので Vite ビルドでは
+               ここで ReferenceError になり、ミニマップをドラッグできなかった。 */
+            var x = 0;
+            var y = 0;
             if (cur == html) {
                 return [x, y];
             }
@@ -322,146 +287,13 @@ window.OZ = {
     },
 };
 
-if (!Function.prototype.bind) {
-    Function.prototype.bind = function (thisObj) {
-        var fn = this;
-        var args = Array.prototype.slice.call(arguments, 1);
-        return function () {
-            return fn.apply(
-                thisObj,
-                args.concat(Array.prototype.slice.call(arguments))
-            );
-        };
-    };
-}
-
-if (!Array.prototype.indexOf) {
-    Array.prototype.indexOf = function (item, from) {
-        var len = this.length;
-        var i = from || 0;
-        if (i < 0) {
-            i += len;
-        }
-        for (; i < len; i++) {
-            if (i in this && this[i] === item) {
-                return i;
-            }
-        }
-        return -1;
-    };
-}
-if (!Array.indexOf) {
-    Array.indexOf = function (obj, item, from) {
-        return Array.prototype.indexOf.call(obj, item, from);
-    };
-}
-
-if (!Array.prototype.lastIndexOf) {
-    Array.prototype.lastIndexOf = function (item, from) {
-        var len = this.length;
-        var i = from || len - 1;
-        if (i < 0) {
-            i += len;
-        }
-        for (; i > -1; i--) {
-            if (i in this && this[i] === item) {
-                return i;
-            }
-        }
-        return -1;
-    };
-}
-if (!Array.lastIndexOf) {
-    Array.lastIndexOf = function (obj, item, from) {
-        return Array.prototype.lastIndexOf.call(obj, item, from);
-    };
-}
-
-if (!Array.prototype.forEach) {
-    Array.prototype.forEach = function (cb, _this) {
-        var len = this.length;
-        for (var i = 0; i < len; i++) {
-            if (i in this) {
-                cb.call(_this, this[i], i, this);
-            }
-        }
-    };
-}
-if (!Array.forEach) {
-    Array.forEach = function (obj, cb, _this) {
-        Array.prototype.forEach.call(obj, cb, _this);
-    };
-}
-
-if (!Array.prototype.every) {
-    Array.prototype.every = function (cb, _this) {
-        var len = this.length;
-        for (var i = 0; i < len; i++) {
-            if (i in this && !cb.call(_this, this[i], i, this)) {
-                return false;
-            }
-        }
-        return true;
-    };
-}
-if (!Array.every) {
-    Array.every = function (obj, cb, _this) {
-        return Array.prototype.every.call(obj, cb, _this);
-    };
-}
-
-if (!Array.prototype.some) {
-    Array.prototype.some = function (cb, _this) {
-        var len = this.length;
-        for (var i = 0; i < len; i++) {
-            if (i in this && cb.call(_this, this[i], i, this)) {
-                return true;
-            }
-        }
-        return false;
-    };
-}
-if (!Array.some) {
-    Array.some = function (obj, cb, _this) {
-        return Array.prototype.some.call(obj, cb, _this);
-    };
-}
-
-if (!Array.prototype.map) {
-    Array.prototype.map = function (cb, _this) {
-        var len = this.length;
-        var res = new Array(len);
-        for (var i = 0; i < len; i++) {
-            if (i in this) {
-                res[i] = cb.call(_this, this[i], i, this);
-            }
-        }
-        return res;
-    };
-}
-if (!Array.map) {
-    Array.map = function (obj, cb, _this) {
-        return Array.prototype.map.call(obj, cb, _this);
-    };
-}
-
-if (!Array.prototype.filter) {
-    Array.prototype.filter = function (cb, _this) {
-        var len = this.length;
-        var res = [];
-        for (var i = 0; i < len; i++) {
-            if (i in this) {
-                var val = this[i];
-                if (cb.call(_this, val, i, this)) {
-                    res.push(val);
-                }
-            }
-        }
-        return res;
-    };
-}
-if (!Array.filter) {
-    Array.filter = function (obj, cb, _this) {
-        return Array.prototype.filter.call(obj, cb, _this);
-    };
-}
+/*
+ * grabado: ES5 polyfill 群を削除した（HANDOVER §3 段階2）。
+ *
+ * prototype 版（Function.prototype.bind、Array.prototype の indexOf / lastIndexOf /
+ * forEach / every / some / map / filter）は if (!X) ガード付きで、jsdom / Chromium の
+ * どちらにもネイティブが実在するため本体は一度も評価されていなかった（実測確認済み）。
+ *
+ * 非標準の静的版（Array.indexOf / lastIndexOf / forEach / every / some / map / filter）は
+ * ネイティブに無く実際にインストールされていたが、参照が 1 件も無いことを確認して削除した。
+ */

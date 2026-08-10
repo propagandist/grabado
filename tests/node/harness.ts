@@ -15,7 +15,7 @@ import { REPO_ROOT } from "../support/fixtures.ts";
  *      -> toXML() が使うのは x/y だけなのでシリアライズの特性化には影響しない
  */
 
-/** index.html:24-41 の読み込み順。依存の薄い順の指標でもある（docs/ARCHITECTURE.md §5.1） */
+/** src/main.ts:13-30 の読み込み順（段階1 で index.html から移設）。依存の薄い順の指標でもある（docs/ARCHITECTURE.md §5.1） */
 const SCRIPT_ORDER = [
     "oz.js",
     "config.js",
@@ -37,12 +37,7 @@ const SCRIPT_ORDER = [
     "wwwsqldesigner.js",
 ] as const;
 
-export interface Designer {
-    tables: unknown[];
-    map: unknown;
-    io: { fromXMLText(xml: string): void };
-    toXML(): string;
-}
+/* SQL.designer の型は types/globals.d.ts の SqlDesigner に集約した（HANDOVER §3 段階2） */
 
 export interface NodeHarness {
     readonly dom: JSDOM;
@@ -93,11 +88,10 @@ export function createHarness(): NodeHarness {
 
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
     // new SQL.Designer() のうちに init2() まで到達する。
-    const oz = (window as unknown as { OZ: { Request: unknown } }).OZ;
-    oz.Request = (
+    window.OZ.Request = (
         url: string,
-        callback: ((data: unknown, status: number, headers: object) => void) | undefined,
-        options?: { xml?: boolean },
+        callback?: OzRequestCallback,
+        options?: OzRequestOptions,
     ) => {
         if (!callback) {
             return false;
@@ -122,9 +116,11 @@ export function createHarness(): NodeHarness {
 
     window.eval("new SQL.Designer();");
 
-    const sql = (window as unknown as { SQL: { Designer: Designer } }).SQL;
-    if (!sql?.Designer?.map || !sql.Designer.io) {
-        throw new Error(`SQL.Designer の初期化に失敗:\n${alerts.join("\n")}`);
+    // 段階2 でクラス（SQL.Designer）と唯一のインスタンス（SQL.designer）に分離した。
+    // new SQL.Designer() 自体は無改修で通る（コンストラクタが SQL.designer に自己登録する）。
+    const sql = window.SQL;
+    if (!sql?.designer?.map || !sql.designer.io) {
+        throw new Error(`SQL.designer の初期化に失敗:\n${alerts.join("\n")}`);
     }
 
     const takeAlerts = (): string[] => alerts.splice(0, alerts.length);
@@ -136,17 +132,17 @@ export function createHarness(): NodeHarness {
         useDatatypes(db: string): void {
             const xml = readRepoFile(`db/${db}/datatypes.xml`);
             const doc = new window.DOMParser().parseFromString(xml, "text/xml");
-            (window as unknown as { DATATYPES: Element }).DATATYPES = doc.documentElement;
+            window.DATATYPES = doc.documentElement;
         },
         loadFixture(xml: string): void {
-            sql.Designer.io.fromXMLText(xml);
+            sql.designer.io.fromXMLText(xml);
             const failures = takeAlerts();
             if (failures.length) {
                 throw new Error(`fixture の読み込みに失敗:\n${failures.join("\n")}`);
             }
         },
         toXML(): string {
-            return sql.Designer.toXML();
+            return sql.designer.toXML();
         },
         close(): void {
             window.close();

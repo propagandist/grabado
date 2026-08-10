@@ -139,7 +139,7 @@ HANDOVER §3 は「Vite で束ねる → `checkJs`+JSDoc → 依存の薄い順�
   1 本だけ張る。golden は読むだけで採り直さない。
 - **UI の end-to-end 操作確認（ARCHITECTURE §3 の未実施項目）をここで実施した。** テーブル追加・カラム追加・
   SQL 出力（`clientsql`）・スタイル切替・ロケール切替・cookie 保存が Vite 化後も動くことを確認済み。
-  スタイル切替は `<link>` の **`title` 属性**での照合（[`js/wwwsqldesigner.js:102-115`](js/wwwsqldesigner.js#L102-L115)）
+  スタイル切替は `<link>` の **`title` 属性**での照合（[`js/wwwsqldesigner.js:118-133`](js/wwwsqldesigner.js#L118-L133)）
   なので、build でファイル名がハッシュ化されても機能する。
 
 **upstream の `Dockerfile`（busybox httpd でリポジトリを丸ごと配る）はこの変更で動かなくなる。**
@@ -151,13 +151,145 @@ build 出力について記録しておく点（いずれも実害なしと判�
 - `styles/print.css` は data URI にインライン化される（`media="print"` のまま機能する）。
 - IE6/7 用の条件付きコメントが参照する `styles/ie6.css` / `ie7.css` は dist にコピーされない。条件付きコメントは
   IE 以外では単なる HTML コメントで評価されないため無害。撤去は将来の掃除で扱う。
-- `js/wwwsqldesigner.js:198` の直接 `eval`（cookie のオブジェクトリテラル評価）に rolldown が警告を出す。
+- `js/wwwsqldesigner.js:215` の直接 `eval`（cookie のオブジェクトリテラル評価）に rolldown が警告を出す。
   外部変数を参照しないので minify 後も壊れない。§4 の IO 移植で自然に消える。
 
 ### 2026-08-09 `index.html` の CDN 依存（未処理）
 
 - `index.html` は Dropbox 連携のため `//cdnjs.cloudflare.com/…/dropbox.min.js` を読み込む。**Docker でローカル完結**という HANDOVER §2 の方針と噛み合わない。
 - Dropbox 機能の存廃とあわせて扱いを決める（現時点では未決）。
+
+### 2026-08-10 HANDOVER §3「フロント TS 化」段階2 — `checkJs`+JSDoc をやめ、JS のまま構造を正す
+
+HANDOVER §3 は段階2 を「`checkJs` + JSDoc」と定めていたが、**この段階はそのままでは成立しない**。
+段階2 を「**JS のまま、TS が読める構造に正す**」へ組み替えた。走らせ方は [`docs/TESTING.md`](docs/TESTING.md)、
+クラス階層の実情は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.4。ここには判断だけ残す。
+
+**組み替えの根拠（実測）**。`tsc --allowJs --checkJs --noEmit --strict --target ES2022
+--lib ES2022,DOM,DOM.Iterable js/*.js` で **1,275 件**（TS2339 573 / TS2304 375 / TS7006 253 ほか）。
+TS2339 のうち 247 件以上が `'Row'` / `'Map'` / `'Table'` / `'Rubberband'` に対する
+「そのクラス自体を知らない」エラーで、原因は 2 つとも JSDoc では解決できない。
+
+- `SQL.Visual.apply(this)` で親コンストラクタを呼び、`this.dom` / `this.data` は `_init()` の中で
+  代入していた。TS が拾うのは**コンストラクタ本体内**の `this.x =` だけ。
+- `SQL.Row.prototype = Object.create(SQL.Visual.prototype)` を TS は継承と認識しない。
+  `@extends` は `class` 宣言か `@constructor` 付き関数にしか効かない。
+
+4,200 行に JSDoc を撒く前に構造を正すほうが安く、段階3 の `.ts` 化がそのまま接続する。
+
+**class 化の設計判断**。
+
+- **`_init()` / `_build()` の呼び出しを基底コンストラクタから外し**、各サブクラスが従来
+  `SQL.Visual.apply(this)` を書いていた位置で呼ぶ形にした（Step4 で先に分離してから class 化）。
+  [`js/table.js`](js/table.js) の `_build()` が `this.owner.map.dom.container` を読むため、
+  「基底コンストラクタが `_build()` を呼ぶ」形は **ES クラスの「`super()` 前に `this` を触れない」制約と
+  原理的に両立しない**。呼び出し順は現行と 1 行もずれていない。
+- **クラスフィールド初期化子は使わない**。派生クラスの初期化子は `super()` 直後に走るため、現行の
+  「自前フィールド代入 → `_init()`」の順序と食い違う。代入はすべてコンストラクタ本体に置いた。
+  例外は `static`（`Relation._counter`）のみ。
+- **`class X { … }` + `SQL.X = X;` の 2 行形を必須とした**。実測で `window.eval("class Foo {}")` は
+  `Foo` をグローバルに残さない（lexical 宣言は使い捨ての環境レコードに入る仕様。`var` は残る）。
+  ファイル跨ぎの参照が `SQL.` 経由になるのは現行と同じなので、**`js/` に import/export を入れない
+  という段階1 の前提は崩れず、`tests/node/harness.ts` の eval 経路は無改修で通った**。
+- `SQL.Table` の静的 `active` / `x` / `y` は**初期化子なしの `static` 宣言**にした。`= false` にすると
+  初回ドラッグ前の値が `undefined` から `false` に変わるため（読むのは `move()` と `up()` だけで観測は
+  できないが、証明できる同値を採る）。`npm run test:dist` でバンドル後も `static active;` がそのまま
+  出力されることを確認済み。
+- `SQL.Relation` は **`this.dom` を配列で上書きする箇所（基底の `{container,title}` を置き換える）を
+  触っていない**。基底で `dom` の型を決められない原因そのものだが、直すと `redrawNormal` / `redrawSide` /
+  `show` / `hide` / `destroy` を全部書き換えることになるうえ、`checkJs` を立てない段階2 では型上の利益が
+  ゼロ。段階3 の判断事項として残す。
+- **基底を呼ばない `destroy` / `setTitle` に `super.` を足していない**。`SQL.Key`（dom を持たない）、
+  `SQL.Relation`（dom が配列なので基底では落ちる）、`SQL.Designer.setTitle`（`document.title` を
+  更新するだけ）の 3 つ。いずれもコメントで明示した。
+- **minimap のクラス名は `Map` ではなく `Minimap`**。ES 標準の `Map` と同名で `TS2300 Duplicate
+  identifier` が出る。現状の実害はゼロだが、段階3 でモジュール化すると `export class Map` が
+  import 側で標準 `Map` を隠す。公開名 `SQL.Map` は現行のまま。
+
+**`SQL.Designer` のクラス/インスタンス分離**。現行は `SQL.Designer = function () { SQL.Designer = this; … }`
+で、生成した瞬間にクラスが唯一のインスタンスに置き換わっていた。参照側（`table` / `row` / `relation` /
+`rowmanager` の 6 箇所）はすべて実体を期待しているので、**クラス = `SQL.Designer` / インスタンス =
+`SQL.designer`** に分けた。自己登録をコンストラクタに残したのは、起動経路が 3 つあり
+（[`src/main.ts`](src/main.ts) / `tests/node/harness.ts` の `window.eval` / ブラウザ）、いずれも戻り値を
+`SQL` に載せないため。DI 化は §4 の IO 分離と同時に行う。
+**副作用**: `new SQL.Designer()` を 2 回呼べるようになった（現在は 2 回目が「クラスではない」で落ちる）。
+呼ぶ箇所は無い。
+
+**削除したもの**。
+
+- `OZ.Class` / `implement` / `extend` / `dispatch`（参照 0・`arguments.callee` 依存）。
+- ES5 polyfill 群（`js/oz.js` の `Function.prototype.bind` と `Array.prototype.*`、
+  [`js/globals.js`](js/globals.js) の `endsWith` / `trim` / `Object.create`）。**すべて `if (!X)` ガード付きで、
+  ネイティブがある実行系では本体が一度も評価されない**＝「微妙に違う実装で上書きしていた」ことは
+  原理的に起こり得ない。jsdom と Chromium 151 の両方でネイティブ実在を実測した。
+- 非標準の静的版（`Array.indexOf` ほか 7 本、`String.trim`）は**ネイティブに無いので実際に
+  インストールされていた**が、リポジトリ全体で参照 0 件を確認して削除。
+- `js/oz.js` 468 → 295 行、`js/globals.js` 88 → 63 行。
+
+**挙動不変の例外として直した 2 件**（暗黙グローバル）。
+
+- [`js/io.js`](js/io.js) の `req = r[1]`（`var` 抜け）、[`js/oz.js`](js/oz.js) の `var x = (y = 0)`（`y` が暗黙グローバル）。
+- 根拠は **ESM が常に strict** であること。Vite の dev / build 経路では既に `ReferenceError` で落ちており、
+  sloppy な `window.eval` で動く Node ハーネスとの間で「現行挙動」が割れている。再現すべき単一の挙動が
+  存在しないので修正側を採った。**PG18 introspection の判断（well-formed でない XML を再現しない）と同じ論法**。
+- 実測（Vite dev + Chromium、`?backend=php-file`）: 修正前は `pageerror: req is not defined` ×2 で
+  `SQL.designer.io` が生えない＝**アプリが起動しない**。修正後は pageerror 0 件。
+  `oz.js` 側の到達経路はミニマップの mousedown（`OZ.DOM.pos` の唯一の呼び出し元は [`js/map.js`](js/map.js)）で、
+  同じく修正前は `ReferenceError: y is not defined` を実測した。
+- どちらも golden の経路は通らないので `git diff tests/golden/` は空のまま。
+
+**今回やらなかったこと（理由つき）**。
+
+- **`DATATYPES = false` → `null` の是正を見送った**。`== false` / `!DATATYPES` は全 12 箇所中 0 件で、
+  唯一の真偽評価が [`js/wwwsqldesigner.js:353`](js/wwwsqldesigner.js#L353) の `window.DATATYPES.xml`。
+  `false` なら `undefined`（例外にならない）、`null` なら **TypeError**。`checkJs` を立てない段階2 では
+  診断が 1 件も変わらず利益ゼロで、この分岐は §4 の XML 書き出し撤去で丸ごと消える。
+  `typeIndex` / `fkTypeFor` も同じ扱いにした。
+- **[`js/wwwsqldesigner.js:356`](js/wwwsqldesigner.js#L356) の未定義 `e` を触っていない**。代入ではなく読み取りなので
+  strict / sloppy で挙動が割れておらず、到達不能（`XMLSerializer` が無い環境のみ）。直すには
+  「何を表示すべきか」を発明することになる。段階3 の計測で `TS2304` が 1 件だけ残り、本物のバグを指す
+  マーカーになる。
+- **[`js/wwwsqldesigner.js:215`](js/wwwsqldesigner.js#L215) の `eval`（cookie）も据え置き**。形式が `{k:'v'}` で JSON ではなく
+  `JSON.parse` に単純置換できない。§4 の IO 移植で消える。
+- **`SQL.Visual` を継承していない 7 クラス**（`IO` / `Toggle` / `TableManager` / `RowManager` /
+  `KeyManager` / `Window` / `Options`）は class 化していない。継承が無いので「クラスを知らない」問題も
+  起きず、承認済みスコープを広げないため。入れれば TS2339 がさらに 200 件前後改善する見込み。
+- **`checkJs` は立てていない**。段階3 で `.ts` 化と同時。
+
+**段階3 readiness（同条件での実測）**。総数は 1,275 → **1,274** でほぼ横ばいだが、**診断の性質が
+変わった**ことがこの段階の成果。
+
+| | before | after |
+|---|---|---|
+| TS2339 のうち `'Row'` / `'Map'` / `'Table'` / `'Rubberband'` 等（クラス自体が見えない） | 247+ | **0** |
+| TS2339 のうち `'{ container: null; title: null; }'` / `'{ title: string; }'`（基底の dom/data の実型が見えた上での指摘） | 0 | 113 |
+| TS2532（Object is possibly 'undefined'） | 0 | 210 |
+| TS2304 の `y`（`oz.js`）と `req`（`io.js`） | 10 | **0** |
+| TS2304 の `e`（本物のバグ） | 1 | 1 |
+
+つまり「構造が読めない」から「読めた上での指摘」に変質した。段階3 で解くべき本丸は
+**`dom` バッグが異種であること**（3 形態: 固定キー＋後付け／文字列キーの動的代入／`Relation` の配列）
+だと数値で確定した。
+
+**`types/globals.d.ts` を入れた目的**は js/ の ambient 化ではない（`checkJs: false` なので js/ の診断は
+1 件も変わらない）。`SQL.Designer` → `SQL.designer` の改名を `npm run typecheck` が検出できるようにする
+こと。集約前は型が 3 ファイルに散り、うち `tests/node/harness.ts` は `as unknown as {…}` で受けていたため
+直し忘れてもコンパイルが通っていた。実証として、`sql.designer.toXML()` をわざと `sql.Designer.toXML()` に
+戻すと `TS2339: Property 'toXML' does not exist on type 'new () => SqlDesigner'` で落ちることを確認した。
+index signature と js/ 用の裸グローバル（`OZ` / `_` / `CONFIG` / `Dropbox` / `ActiveXObject`）は意図的に
+書いていない。段階3 で js/ が `.ts` になったら本ファイルは消す。
+
+**検証**。成功判定は段階1 と同じく **`git diff tests/golden/` が空**であること（63 + 7 本すべて無差分）。
+`npm run golden:update` はこの PR で一度も打っていない。known-issues は 9 件のままアサート値を 1 文字も
+変えていない。加えて golden が張っていない対話パスを Playwright で 31 項目一巡し、
+**`npm run dev`（4173）と `npm run preview`（4174）の両方で 31/31**（テーブル追加・カラム追加と展開・
+ドラッグ・shift 複数選択・ラバーバンド・ミニマップ・リサイズ追随・FK と関係線の色・ハイライト・
+key ダイアログ・SQL 出力・カラム/テーブル削除・スタイル切替と cookie・`?backend=` / `?toolbar=hidden`）。
+
+> 副産物の記録: 複数選択は **shift + mousedown** でしか効かない（`Table.click` は `shiftKey` を見ず、
+> `Table.down` だけが見る）。段階2 の回帰ではないことを `develop` 上で同じ操作を流して確認済み。
+> スタイル切替も `Options.save` が cookie に書くだけで `applyStyle` を呼ばない（`index.html` の
+> 「* は再読み込みが必要」の注記どおり）。どちらも現行仕様。
 
 ---
 
@@ -170,7 +302,7 @@ build 出力について記録しておく点（いずれも実害なしと判�
 | XML 永続化（`toXML()` / `save` の body） | 保持。**§7 で golden 固定済み**（`tests/golden/xml/`） | JSON 統一。XML は読込専用に。書き出しは撤去（§4） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持 | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4） |
-| 描画エンジン（`js/`, `styles/`） | 保持。**§3 段階1 で Vite のバンドル配下に入れた**（変更はグローバル公開の 6 箇所のみ） | 温存し TS で巻く（Tier 2）。`checkJs` → `.ts` → `strict` は後続 |
+| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、**段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去**（挙動は不変） | 温存し TS で巻く（Tier 2）。`.ts` 化 → `checkJs` → `strict` は後続 |
 | `index.html` の Dropbox CDN 読み込み | 保持（テストでは遮断） | 存廃を未決（上記決定ログ参照） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。

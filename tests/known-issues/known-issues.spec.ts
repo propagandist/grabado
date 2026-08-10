@@ -44,7 +44,7 @@ test("#1 識別子に & を含めると toXML() が well-formed でない XML �
 
     const xml = await toXml(page);
 
-    // 属性値のエスケープは " -> &quot; だけ（js/table.js:277, js/row.js:390）
+    // 属性値のエスケープは " -> &quot; だけ（js/table.js:303, js/row.js:405）
     expect(xml).toContain('name="R&D"');
     expect(xml).toContain('name="a&b"');
 
@@ -63,7 +63,7 @@ test("#2 nullable かつ default 未指定の行が、保存すると <default>N
     const xml = await toXml(page);
 
     // fixture の articles.body は <default> を持たないが、保存すると生える
-    // （js/row.js:13 の既定 null -> js/row.js:403 で NULL として出力）
+    // （js/row.js:21 の既定 null -> js/row.js:420 で NULL として出力）
     expect(readFixture("house-defaults")).toContain('<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>');
     expect(xml).toContain('<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n<default>NULL</default>');
 });
@@ -73,12 +73,12 @@ test("#3 BIGINT が Big Integer ではなく Real に解決される（sql 重�
     await loadFixture(page, readKnownFixture("bigint-drift"));
 
     const label = await page.evaluate(() => {
-        const row = (window.SQL.Designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
+        const row = (window.SQL.designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
         return row!.getDataType().getAttribute("label");
     });
 
     // db/postgresql/datatypes.xml は sql="BIGINT" を Big Integer と Real の 2 か所に持ち、
-    // js/row.js:455-462 のループは break しないので後勝ちになる
+    // js/row.js:472-479 のループは break しないので後勝ちになる
     expect(label).toBe("Real");
     expect(label).not.toBe("Big Integer");
 });
@@ -88,12 +88,12 @@ test("#4 型パレットに無い型は黙って先頭の型になる（UUID -> 
     await loadFixture(page, readFixture("house-defaults"));
 
     const label = await page.evaluate(() => {
-        const row = (window.SQL.Designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
+        const row = (window.SQL.designer.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
         return row!.getDataType().getAttribute("label");
     });
 
     // fixture の users.id は UUID。現行 db/postgresql/datatypes.xml に uuid 型が無く、
-    // js/row.js:438 の初期値 type:0 が残るため Integer になる。
+    // js/row.js:455 の初期値 type:0 が残るため Integer になる。
     // HANDOVER §6.1 の型パレット差し替えで解消される想定。
     expect(label).toBe("Integer");
 
@@ -130,17 +130,17 @@ test("#7 alignTables() が tables を破壊的ソートし、テーブル順と�
     await loadFixture(page, readFixture("relations"));
 
     const before = await page.evaluate(() =>
-        (window.SQL.Designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
+        (window.SQL.designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
     );
     await page.evaluate(() =>
-        (window.SQL.Designer as unknown as { alignTables(): void }).alignTables(),
+        (window.SQL.designer as unknown as { alignTables(): void }).alignTables(),
     );
     const after = await page.evaluate(() =>
-        (window.SQL.Designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
+        (window.SQL.designer.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
     );
 
-    // js/wwwsqldesigner.js:293-295 が this.tables.sort() で配列そのものを並べ替える。
-    // js/io.js:679 の importresponse がロード後にこれを呼ぶため、
+    // js/wwwsqldesigner.js:310-312 が this.tables.sort() で配列そのものを並べ替える。
+    // js/io.js:676 の importresponse がロード後にこれを呼ぶため、
     // サーバ import 経由で開くと保存 XML のテーブル順が変わる。
     expect(before).toEqual(["employees", "projects", "teams", "employee_projects"]);
     expect(after).not.toEqual(before);
@@ -153,7 +153,7 @@ test("#8 <default> だけ改行が付かず diff が読みにくい", async () =
 
     const xml = await toXml(page);
 
-    // js/row.js:411 は他の要素と違い末尾に \n を付けない。
+    // js/row.js:428 は他の要素と違い末尾に \n を付けない。
     // HANDOVER §4 の「1テーブル=独立ブロック・diff フレンドリー」に反する。
     expect(xml).toContain("<default>NULL</default></row>");
     expect(xml).toContain("<default>NULL</default><comment>");

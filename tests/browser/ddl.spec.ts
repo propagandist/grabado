@@ -7,7 +7,7 @@ import { generateDdl, loadFixture, openDesigner, useDatatypes } from "./harness.
 // DDL 生成の実体は db/<db>/output.xsl（XSLT 1.0）をブラウザの XSLTProcessor で適用したもの。
 // Node には XSLTProcessor が無いため、golden は必ずこの実ブラウザ経路で採る。
 //
-// 1 ページを beforeAll で作って使い回す（現行アプリはページ単位のグローバル SQL.Designer 1 個で動く）。
+// 1 ページを beforeAll で作って使い回す（現行アプリはページ単位のグローバル SQL.designer 1 個で動く）。
 // serial モードにはしない — 1 件落ちた時点で残りが skip され、
 // 「何件が影響を受けたのか」が見えなくなるため。順序は workers:1 / fullyParallel:false で保証される。
 

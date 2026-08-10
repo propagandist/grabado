@@ -10,36 +10,12 @@ window._ = function _(str) {
     return window.LOCALE[str];
 };
 
-if (typeof String.prototype.endsWith !== "function") {
-    String.prototype.endsWith = function (suffix) {
-        return this.indexOf(suffix, this.length - suffix.length) !== -1;
-    };
-}
-
-if (!String.prototype.trim) {
-    String.prototype.trim = function () {
-        return this.match(/^\s*([\s\S]*?)\s*$/)[1];
-    };
-}
-
-if (!String.trim) {
-    String.trim = function (obj) {
-        return String.prototype.trim.call(obj);
-    };
-}
-
-if (!Object.create) {
-    Object.create = function (o) {
-        if (arguments.length > 1) {
-            throw new Error(
-                "Object.create polyfill only accepts the first parameter"
-            );
-        }
-        var tmp = function () {};
-        tmp.prototype = o;
-        return new tmp();
-    };
-}
+/*
+ * grabado: ES5/ES2015 polyfill（String.prototype.endsWith / trim、Object.create）を
+ * 削除した（HANDOVER §3 段階2）。いずれもガード付きで、jsdom / Chromium の
+ * どちらにもネイティブが実在するため本体は一度も評価されていなかった（実測確認済み）。
+ * 非標準の String.trim（静的版）は実際にインストールされていたが参照 0 件。
+ */
 
 window.DATATYPES = false;
 window.LOCALE = {};

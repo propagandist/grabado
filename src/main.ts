@@ -31,13 +31,8 @@ import "../js/wwwsqldesigner.js";
 
 // 旧 index.html 末尾のインライン script 相当。<script type="module"> は defer 相当なので、
 // body 末尾で走らせていた現行と同じく DOM 構築後に初期化される。
-// 型付けは後続段階の仕事なので、ここでは最小限のキャストに留める（tsconfig は checkJs: false）。
-const app = window as unknown as {
-    SQL: { Designer: new () => unknown };
-    d?: unknown;
-};
-
-app.d = new app.SQL.Designer();
+// window 越しの型は types/globals.d.ts に集約してあるのでキャストは要らない（§3 段階2）。
+window.d = new window.SQL.Designer();
 
 // d.setXhrHeaders({"Authorization": "Bearer xxx"});
 // d.setXhrHeaders({"X-CSRF-TOKEN": "xxx"});

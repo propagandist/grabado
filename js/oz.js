@@ -110,7 +110,11 @@ window.OZ = {
             var cur = OZ.$(elm);
             var html = cur.ownerDocument.documentElement;
             var parent = cur.parentNode;
-            var x = (y = 0);
+            /* grabado: 元は var x = (y = 0); で y が暗黙グローバルだった
+               （HANDOVER §3 段階2）。ESM は常に strict なので Vite ビルドでは
+               ここで ReferenceError になり、ミニマップをドラッグできなかった。 */
+            var x = 0;
+            var y = 0;
             if (cur == html) {
                 return [x, y];
             }

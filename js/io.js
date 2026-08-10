@@ -102,7 +102,10 @@ SQL.IO.prototype.build = function () {
     var be = CONFIG.DEFAULT_BACKEND;
     var r = window.location.search.substring(1).match(/backend=([^&]*)/);
     if (r) {
-        req = r[1];
+        /* grabado: var 宣言が抜けていた（HANDOVER §3 段階2）。ESM は常に strict なので
+           Vite ビルドではここで ReferenceError になり、?backend= 付き URL で
+           アプリが起動しなかった。 */
+        var req = r[1];
         if (bs.indexOf(req) != -1) {
             be = req;
         }

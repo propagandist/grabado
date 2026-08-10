@@ -76,51 +76,12 @@ window.OZ = {
             return e.target || e.srcElement;
         },
     },
-    Class: function () {
-        var c = function () {
-            var init = arguments.callee.prototype.init;
-            if (init) {
-                init.apply(this, arguments);
-            }
-        };
-        c.implement = function (parent) {
-            for (var p in parent.prototype) {
-                this.prototype[p] = parent.prototype[p];
-            }
-            return this;
-        };
-        c.extend = function (parent) {
-            var tmp = function () {};
-            tmp.prototype = parent.prototype;
-            this.prototype = new tmp();
-            this.prototype.constructor = this;
-            return this;
-        };
-        c.prototype.bind = function (fnc) {
-            return fnc.bind(this);
-        };
-        c.prototype.dispatch = function (type, data) {
-            var obj = {
-                type: type,
-                target: this,
-                timeStamp: new Date().getTime(),
-                data: data,
-            };
-            var tocall = [];
-            var list = OZ.Event._byName[type];
-            for (var id in list) {
-                var item = list[id];
-                if (!item[0] || item[0] == this) {
-                    tocall.push(item[2]);
-                }
-            }
-            var len = tocall.length;
-            for (var i = 0; i < len; i++) {
-                tocall[i](obj);
-            }
-        };
-        return c;
-    },
+    /*
+     * grabado: OZ.Class / implement / extend / dispatch を削除した（HANDOVER §3 段階2）。
+     * アプリからの参照が 1 件も無く、arguments.callee 依存で strict では動かないため。
+     * 実際に使われている継承は SQL.Visual を頂点とする ES クラス階層（js/visual.js）、
+     * pub/sub は SQL.publish / SQL.subscribe（js/globals.js）。
+     */
     DOM: {
         elm: function (name, opts) {
             var elm = document.createElement(name);

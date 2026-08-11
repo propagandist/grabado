@@ -1,17 +1,46 @@
 /* --------------------- minimap ------------ */
 /*
- * grabado: ES クラス化（HANDOVER §3 段階2）。
+ * grabado: ES クラス化（HANDOVER §3 段階2）。段階3-2 で .ts 化した。
  * _init() / _build() は従来 SQL.Visual.apply(this) を書いていた位置で呼ぶ。
  * this.sync = this.sync.bind(this) も現行と同じ位置に置く（プロトタイプ上の
  * sync を bind してインスタンスプロパティで隠す形は class でも同じく動く）。
  *
  * クラス名を Map ではなく Minimap にしてあるのは ES 標準の Map と衝突するため
  * （tsc --checkJs で TS2300 Duplicate identifier が出る）。公開名 SQL.Map は
- * 現行のまま。段階3 でモジュール化したとき export class Map が標準 Map を
- * 隠すのを避ける。
+ * 現行のまま。段階3-2 でモジュール化しても export class Map が標準 Map を
+ * 隠さないよう、この名前を保つ。
+ *
+ * dom は container（OZ.$ 由来の HTMLElement）と port（elm("div") 由来の
+ * HTMLDivElement）で出所が違う。インスタンスプロパティを declare で宣言する
+ * 理由は js/visual.ts の冒頭。
  */
-class Minimap extends SQL.Visual {
-    constructor(owner) {
+
+import { OZ } from "./oz.ts";
+import { SQL, type SqlDesigner } from "./globals.ts";
+import { Visual, type VisualDom } from "./visual.ts";
+
+export interface MinimapDom extends VisualDom {
+    port: HTMLDivElement;
+}
+
+export class Minimap extends Visual<MinimapDom> {
+    declare owner: SqlDesigner;
+    /* 表示領域の実寸。jsdom では offsetWidth が常に 0 なので -2 になる（golden が固定済み） */
+    declare width: number;
+    declare height: number;
+    /* ドラッグ中の基準点 */
+    declare x: number;
+    declare y: number;
+    /* port の位置と大きさ */
+    declare l: number;
+    declare t: number;
+    declare w: number;
+    declare h: number;
+    declare flag: boolean;
+    declare documentMove: number;
+    declare documentUp: number;
+
+    constructor(owner: SqlDesigner) {
         super();
         this.owner = owner;
         this._init();
@@ -34,7 +63,7 @@ class Minimap extends SQL.Visual {
         OZ.Event.add(this.dom.container, "touchmove", OZ.Event.prevent);
     }
 
-    down(e) {
+    down(e: MouseEvent | TouchEvent): void {
         /* mousedown - move view and start drag */
         this.flag = true;
         this.dom.container.style.cursor = "move";
@@ -60,20 +89,25 @@ class Minimap extends SQL.Visual {
         this.documentUp = OZ.Event.add(document, eventUp, this.up.bind(this));
     }
 
-    move(e) {
+    move(e: MouseEvent | TouchEvent): void {
         /* mousemove */
         if (!this.flag) {
             return;
         }
         OZ.Event.prevent(e);
 
+        /*
+         * grabado: 元は両分岐とも var event（HANDOVER §3 段階3-2）。TS2403 は宣言型の
+         * 一致を見るので、同じ注釈を両方に書けば消える（実行コードは変えていない）。
+         * 読むのは clientX / clientY だけで、Touch にも MouseEvent にもある。
+         */
         if (e.type.match(/touch/)) {
-            if (e.touches.length > 1) {
+            if ((e as TouchEvent).touches.length > 1) {
                 return;
             }
-            var event = e.touches[0];
+            var event: MouseEvent | Touch = (e as TouchEvent).touches[0]!;
         } else {
-            var event = e;
+            var event: MouseEvent | Touch = e as MouseEvent;
         }
 
         var dx = event.clientX - this.x;
@@ -108,7 +142,7 @@ class Minimap extends SQL.Visual {
         this.redraw();
     }
 
-    up(e) {
+    up(e: MouseEvent | TouchEvent): void {
         /* mouseup */
         this.flag = false;
         this.dom.container.style.cursor = "";
@@ -116,7 +150,7 @@ class Minimap extends SQL.Visual {
         OZ.Event.remove(this.documentUp);
     }
 
-    sync() {
+    sync(): void {
         /* when window changes, adjust map */
         var dims = OZ.DOM.win();
         var scroll = OZ.DOM.scroll();
@@ -136,7 +170,7 @@ class Minimap extends SQL.Visual {
         this.redraw();
     }
 
-    redraw() {
+    redraw(): void {
         this.dom.port.style.width = this.w + "px";
         this.dom.port.style.height = this.h + "px";
         this.dom.port.style.left = this.l + "px";

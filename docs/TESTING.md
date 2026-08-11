@@ -99,6 +99,9 @@ build API（`write: false`）で単一 IIFE に束ね、それを jsdom の `win
 `OzRequestCallback` / `OzRequestOptions` を `import type` で受ける 1 行だけで済んだ
 （型の置き場所が [`../types/globals.d.ts`](../types/globals.d.ts) から `js/oz.ts` へ移ったため）。
 バンドル経路そのものは 1 行も触っていない。
+**段階3-2 では描画中核 7 本が `.ts` になり `extends` が値 import に変わったが、ハーネスは
+1 行も変えていない**（`SqlDesigner` が `types/globals.d.ts` から `js/globals.ts` へ移った分は
+`interface Window` の 1 行が `import(...)` を挟む形になっただけ）。
 
 判断の根拠・却下した 2 案は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
 
@@ -118,8 +121,16 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 `js/oz.js` の `y` のような問題は `npm run test:browser` だけが赤くする）。
 
 **ただしこの穴は `.ts` 化が進むほど縮む。** `.ts` になったファイルは `npm run typecheck` の
-対象なので、暗黙グローバルは実行前に `TS2304 Cannot find name` で落ちる。段階3-1 の時点で
-`js/oz.ts` / `js/config.ts` / `js/globals.ts` の 3 本がこちら側に移った。
+対象なので、暗黙グローバルは実行前に `TS2304 Cannot find name` で落ちる。段階3-2 の時点で
+`js/` 18 本のうち 10 本（`oz` / `config` / `globals` ＋ 描画中核 7 本）がこちら側に移り、
+残るは末尾 8 本（段階3-3）。
+
+**それでも `.ts` 化そのものが張れない層がある。** golden はモデル API（`toXML` / `fromXML`）を
+直接叩くので、マウス／キーボード操作の経路（ドラッグ、row の展開・折りたたみ、ラバーバンド、
+ミニマップ）は誰も張っていない。段階3-1・3-2 はここを **`npm run dev` と `npm run preview` の
+両方で一巡し pageerror 0 件**を確認することで補っている（項目と結果は
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。回帰かどうかの切り分けは
+`develop` 上で同じ操作を流して突き合わせる。
 
 ---
 

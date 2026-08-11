@@ -35,9 +35,21 @@ export const OZ = {
      * 文字列なら getElementById、それ以外は素通し。
      * 戻りを non-null で宣言してあるのは、呼び出し 60 箇所に実行時ガードを足させないため
      * （存在しない id を渡せば現行も同じ場所で落ちる）。
+     *
+     * grabado: 型にだけオーバーロードを被せた（HANDOVER §3 段階3-2。実行コードは無変更で、
+     * as は emit で消える）。単一シグネチャ <T extends EventTarget = HTMLElement>(x: string | T): T
+     * だと、文字列を渡したとき T の推論候補に string が入り、制約違反で EventTarget に
+     * フォールバックする（既定の HTMLElement は候補が 1 つも無いときしか使われない）。
+     * .js のうちは checkJs: false で露見しなかったが、.ts から呼ぶと
+     * OZ.$("rubberband") が EventTarget になって代入先と合わない。
+     * 3 本目は引数が union の呼び出し（本ファイル内の OZ.$(elm) / OZ.$(arr[0]) など）用。
      */
     $: function <T extends EventTarget = HTMLElement>(x: string | T): T {
         return (typeof x == "string" ? document.getElementById(x) : x) as T;
+    } as {
+        (x: string): HTMLElement;
+        <T extends EventTarget>(x: T): T;
+        <T extends EventTarget>(x: string | T): T;
     },
     /*
      * grabado: 元は opera / ie / gecko / webkit / khtml の 5 つで、いずれも
@@ -53,15 +65,23 @@ export const OZ = {
         _id: 0,
         _byName: {} as Record<string, Record<number, OzEventRecord>>,
         _byID: {} as Record<number, OzEventRecord>,
-        add: function (
+        /*
+         * grabado: cb をジェネリックにした（HANDOVER §3 段階3-2。型だけの変更）。
+         *
+         * EventListener は (e: Event) => void の呼び出しシグネチャなので strictFunctionTypes が
+         * 効き、click(e: MouseEvent) を bind して渡すと引数が反変で TS2345 になる。登録側で
+         * as EventListener を撒くと段階3-2 の 21 箇所＋段階3-3 の 40 箇所超に散るため、
+         * ここで 1 度だけ受け側の型を広げる。実行コードは変えていない（下の as は emit で消える）。
+         */
+        add: function <E extends Event = Event>(
             elm: string | EventTarget,
             event: string,
-            cb: EventListener,
+            cb: (e: E) => void,
         ): number {
             var id = OZ.Event._id++;
             var element = OZ.$(elm);
             /* grabado: 元は attachEvent がある環境だけ cb を this 束縛でラップしていた */
-            var fnc = cb;
+            var fnc = cb as EventListener;
             var rec: OzEventRecord = [element, event, fnc];
             var parts = event.split(" ");
             while (parts.length) {

@@ -1,12 +1,46 @@
 /* --------------------------- relation (connector) ----------- */
 /*
- * grabado: ES クラス化（HANDOVER §3 段階2）。
+ * grabado: ES クラス化（HANDOVER §3 段階2）。段階3-2 で .ts 化した。
  * _init() / _build() は従来 SQL.Visual.apply(this) を書いていた位置で呼ぶ。
+ *
+ * dom が配列なのはこのクラスだけで、基底 Visual を型引数付きにした理由そのもの
+ * （docs/ARCHITECTURE.md §5.4 の「3 形態」）。要素をユニオンにしてあるのは、
+ * setAttribute（Element 由来）と .style（SVGElement も ElementCSSInlineStyle を
+ * 実装する）がユニオンの両側にあるため、読み出し 28 箇所がキャストなしで通る。
+ * 配列側のユニオン（SVGPathElement[] | HTMLDivElement[]）にすると owner.vector が
+ * this.dom を narrowing しないので全箇所にキャストが要る。
+ *
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  */
-class Relation extends SQL.Visual {
+
+import { OZ } from "./oz.ts";
+import { CONFIG } from "./config.ts";
+import { SQL, type SqlDesigner } from "./globals.ts";
+import { Visual } from "./visual.ts";
+import type { Row } from "./row.ts";
+
+/** vector なら path 1 本、非 vector なら div 3 本（constructor を参照） */
+export type RelationNode = SVGPathElement | HTMLDivElement;
+
+/**
+ * 先頭 1 個を保証したタプル。dom[0] のリテラル添字 12 箇所が ! なしで通る。
+ * 空配列なのは constructor の this.dom = [] から push までの間だけ。
+ */
+export type RelationDom = [RelationNode, ...RelationNode[]];
+
+export class Relation extends Visual<RelationDom> {
     static _counter = 0;
 
-    constructor(owner, row1, row2) {
+    declare owner: SqlDesigner;
+    declare row1: Row;
+    declare row2: Row;
+    declare color: string;
+    declare hidden: boolean;
+    declare relationColors: string[];
+    declare highlighted: boolean | null;
+    declare style: string;
+
+    constructor(owner: SqlDesigner, row1: Row, row2: Row) {
         super();
         this.owner = owner;
         this.row1 = row1;
@@ -32,29 +66,35 @@ class Relation extends SQL.Visual {
         var all = row1.relations.concat(row2.relations);
         if (all.length) {
             /* inherit */
-            this.color = all[0].getColor();
+            this.color = all[0]!.getColor();
         } else if (this.relationColors) {
             /* pick next */
             Relation._counter++;
             var colorIndex =
                 (Relation._counter - 1) % this.relationColors.length;
-            this.color = this.relationColors[colorIndex];
+            this.color = this.relationColors[colorIndex]!;
         }
 
         this.row1.addRelation(this);
         this.row2.addRelation(this);
         /*
          * 基底の _init() が入れた dom（{container, title}）を配列で置き換える。
-         * SVG path 1 本、または div 3 本を持つ。基底と形が違うので dom の型を
-         * Visual 側で決められない原因そのものだが、段階2 は挙動不変が判定なので
-         * 触らない。扱いは段階3（.ts 化）で決める。
+         * 型の嘘はこの 1 行に閉じ込める（直後に必ず 1 本以上 push する）。
          */
-        this.dom = [];
+        this.dom = [] as unknown as RelationDom;
 
         if (this.owner.vector) {
-            var path = document.createElementNS(this.owner.svgNS, "path");
+            /* svgNS は string なので createElementNS の戻りは Element 止まり */
+            var path = document.createElementNS(
+                this.owner.svgNS,
+                "path"
+            ) as SVGPathElement;
             path.setAttribute("stroke", this.color);
-            path.setAttribute("stroke-width", CONFIG.RELATION_THICKNESS);
+            /* 数値→文字列の暗黙変換に依存している代入（現行のまま） */
+            path.setAttribute(
+                "stroke-width",
+                CONFIG.RELATION_THICKNESS as unknown as string
+            );
             path.setAttribute("fill", "none");
             this.owner.dom.svg.appendChild(path);
             this.dom.push(path);
@@ -84,11 +124,11 @@ class Relation extends SQL.Visual {
         this.redraw();
     }
 
-    getColor() {
+    getColor(): string {
         return this.color;
     }
 
-    highlight() {
+    highlight(): void {
         if (this.highlighted) {
             return;
         }
@@ -96,36 +136,43 @@ class Relation extends SQL.Visual {
         this.dom[0].setAttribute("stroke", CONFIG.RELATION_HIGHLIGHTED_COLOR);
         this.dom[0].setAttribute(
             "stroke-width",
-            CONFIG.RELATION_HIGHLIGHTED_THICKNESS
+            CONFIG.RELATION_HIGHLIGHTED_THICKNESS as unknown as string
         );
         this.redraw();
     }
 
-    dehighlight() {
+    dehighlight(): void {
         if (!this.highlighted) {
             return;
         }
         this.highlighted = false;
         this.dom[0].setAttribute("stroke", this.color);
-        this.dom[0].setAttribute("stroke-width", CONFIG.RELATION_THICKNESS);
+        this.dom[0].setAttribute(
+            "stroke-width",
+            CONFIG.RELATION_THICKNESS as unknown as string
+        );
         this.redraw();
     }
 
-    show() {
+    show(): void {
         this.hidden = false;
         for (var i = 0; i < this.dom.length; i++) {
-            this.dom[i].style.visibility = "";
+            this.dom[i]!.style.visibility = "";
         }
     }
 
-    hide() {
+    hide(): void {
         this.hidden = true;
         for (var i = 0; i < this.dom.length; i++) {
-            this.dom[i].style.visibility = "hidden";
+            this.dom[i]!.style.visibility = "hidden";
         }
     }
 
-    redrawNormal(p1, p2, half) {
+    redrawNormal(
+        p1: [number, number],
+        p2: [number, number],
+        half: number
+    ): void {
         if (this.owner.vector) {
             var str =
                 "M " +
@@ -144,18 +191,18 @@ class Relation extends SQL.Visual {
             this.dom[0].style.top = p1[1] + "px";
             this.dom[0].style.width = half + "px";
 
-            this.dom[1].style.left = p1[0] + half + "px";
-            this.dom[1].style.top = Math.min(p1[1], p2[1]) + "px";
-            this.dom[1].style.height =
+            this.dom[1]!.style.left = p1[0] + half + "px";
+            this.dom[1]!.style.top = Math.min(p1[1], p2[1]) + "px";
+            this.dom[1]!.style.height =
                 Math.abs(p1[1] - p2[1]) + CONFIG.RELATION_THICKNESS + "px";
 
-            this.dom[2].style.left = p1[0] + half + 1 + "px";
-            this.dom[2].style.top = p2[1] + "px";
-            this.dom[2].style.width = half + "px";
+            this.dom[2]!.style.left = p1[0] + half + 1 + "px";
+            this.dom[2]!.style.top = p2[1] + "px";
+            this.dom[2]!.style.width = half + "px";
         }
     }
 
-    redrawSide(p1, p2, x) {
+    redrawSide(p1: [number, number], p2: [number, number], x: number): void {
         if (this.owner.vector) {
             var str =
                 "M " + p1[0] + " " + p1[1] + " C " + x + " " + p1[1] + " ";
@@ -166,35 +213,42 @@ class Relation extends SQL.Visual {
             this.dom[0].style.top = p1[1] + "px";
             this.dom[0].style.width = Math.abs(p1[0] - x) + "px";
 
-            this.dom[1].style.left = x + "px";
-            this.dom[1].style.top = Math.min(p1[1], p2[1]) + "px";
-            this.dom[1].style.height =
+            this.dom[1]!.style.left = x + "px";
+            this.dom[1]!.style.top = Math.min(p1[1], p2[1]) + "px";
+            this.dom[1]!.style.height =
                 Math.abs(p1[1] - p2[1]) + CONFIG.RELATION_THICKNESS + "px";
 
-            this.dom[2].style.left = Math.min(x, p2[0]) + "px";
-            this.dom[2].style.top = p2[1] + "px";
-            this.dom[2].style.width = Math.abs(p2[0] - x) + "px";
+            this.dom[2]!.style.left = Math.min(x, p2[0]) + "px";
+            this.dom[2]!.style.top = p2[1] + "px";
+            this.dom[2]!.style.width = Math.abs(p2[0] - x) + "px";
         }
     }
 
-    redraw() {
+    redraw(): void {
         /* draw connector */
         if (this.hidden) {
             return;
         }
-        var t1 = this.row1.owner.dom.container;
-        var t2 = this.row2.owner.dom.container;
+        /*
+         * grabado: 元は要素側も var t1 / var t2 で、下の「テーブル上端＋行の中心」を
+         * 同名で再宣言していた（HANDOVER §3 段階3-2）。HTMLElement と number の
+         * 再宣言は TS2403 で、t1++ が lvalue なので as でも回避できない。
+         * 要素側を改名すると下の宣言が再宣言でなくなり、:201 以降の t1 / t2 の
+         * 読み出し 10 箇所は 1 文字も触らずに済む（旧束縛はここから先で読まれない）。
+         */
+        var e1 = this.row1.owner.dom.container;
+        var e2 = this.row2.owner.dom.container;
 
-        var l1 = t1.offsetLeft;
-        var l2 = t2.offsetLeft;
-        var r1 = l1 + t1.offsetWidth;
-        var r2 = l2 + t2.offsetWidth;
+        var l1 = e1.offsetLeft;
+        var l2 = e2.offsetLeft;
+        var r1 = l1 + e1.offsetWidth;
+        var r2 = l2 + e2.offsetWidth;
         var t1 =
-            t1.offsetTop +
+            e1.offsetTop +
             this.row1.dom.container.offsetTop +
             Math.round(this.row1.dom.container.offsetHeight / 2);
         var t2 =
-            t2.offsetTop +
+            e2.offsetTop +
             this.row2.dom.container.offsetTop +
             Math.round(this.row2.dom.container.offsetHeight / 2);
 
@@ -209,8 +263,9 @@ class Relation extends SQL.Visual {
             r2--;
         }
 
-        var p1 = [0, 0];
-        var p2 = [0, 0];
+        /* タプルで注釈しておくと redrawNormal / redrawSide 側の添字に ! が要らない */
+        var p1: [number, number] = [0, 0];
+        var p2: [number, number] = [0, 0];
 
         if (r1 < l2 || r2 < l1) {
             /* between tables */
@@ -246,11 +301,11 @@ class Relation extends SQL.Visual {
      * 基底の destroy() は呼ばない（現行どおり）。dom がオブジェクトではなく
      * 配列なので、基底の this.dom.container.parentNode で落ちる。
      */
-    destroy() {
+    destroy(): void {
         this.row1.removeRelation(this);
         this.row2.removeRelation(this);
         for (var i = 0; i < this.dom.length; i++) {
-            this.dom[i].parentNode.removeChild(this.dom[i]);
+            this.dom[i]!.parentNode!.removeChild(this.dom[i]!);
         }
     }
 }

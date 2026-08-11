@@ -53,15 +53,23 @@ export const OZ = {
         _id: 0,
         _byName: {} as Record<string, Record<number, OzEventRecord>>,
         _byID: {} as Record<number, OzEventRecord>,
-        add: function (
+        /*
+         * grabado: cb をジェネリックにした（HANDOVER §3 段階3-2。型だけの変更）。
+         *
+         * EventListener は (e: Event) => void の呼び出しシグネチャなので strictFunctionTypes が
+         * 効き、click(e: MouseEvent) を bind して渡すと引数が反変で TS2345 になる。登録側で
+         * as EventListener を撒くと段階3-2 の 21 箇所＋段階3-3 の 40 箇所超に散るため、
+         * ここで 1 度だけ受け側の型を広げる。実行コードは変えていない（下の as は emit で消える）。
+         */
+        add: function <E extends Event = Event>(
             elm: string | EventTarget,
             event: string,
-            cb: EventListener,
+            cb: (e: E) => void,
         ): number {
             var id = OZ.Event._id++;
             var element = OZ.$(elm);
             /* grabado: 元は attachEvent がある環境だけ cb を this 束縛でラップしていた */
-            var fnc = cb;
+            var fnc = cb as EventListener;
             var rec: OzEventRecord = [element, event, fnc];
             var parts = event.split(" ");
             while (parts.length) {

@@ -1,4 +1,10 @@
 import { defineConfig } from "vitest/config";
+import { assertCanonicalCwd } from "./scripts/canonical-cwd.mjs";
+
+// WORKAROUND(vitest): npm test を経由せず npx vitest / IDE 拡張から起動された場合に、
+// cwd のドライブレターが小文字だと「テスト 0 件 + reading 'config' の TypeError」に
+// なる。原因の分かるエラーで先に止める。scripts/vitest.mjs とセットで撤去すること。
+assertCanonicalCwd();
 
 // Node 側（高速回帰）。jsdom は tests/node/harness.ts が自前で構築するため
 // environment は "node" のまま（vitest の jsdom 環境は使わない）。

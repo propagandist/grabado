@@ -3,6 +3,9 @@ import { join } from "node:path";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { build } from "vite";
 import { REPO_ROOT } from "../support/fixtures.ts";
+/* OZ の型は js/oz.ts の export に移した（HANDOVER §3 段階3-1）。
+   実体は window.eval したバンドルが載せるので、ここでは型だけ借りる。 */
+import type { OzRequestCallback, OzRequestOptions } from "../../js/oz.ts";
 
 /**
  * jsdom 上に現行アプリを起こす、Node 側（高速回帰）のハーネス。

@@ -9,33 +9,13 @@
  *
  * 意図的に書いていないもの:
  * - index signature（[k: string]: any）。typo が any に化けて上の目的が消えるため。
- * - js/ 用の裸グローバル（OZ / _ / CONFIG / Dropbox / ActiveXObject）の宣言。
+ * - js/ 用の裸グローバル（_ / CONFIG / Dropbox / ActiveXObject）の宣言。
  *   checkJs を立てない今は誰も読まず、段階3 で import に置き換わって即座に陳腐化する。
  *
- * 段階3 で js/ が .ts になったら、export された実体の型に置き換えて本ファイルは消す。
+ * 段階3 で js/ が .ts になるたび、その面をここから実体側（js/*.ts の export と
+ * declare global）へ移す。移設済み: OZ（-> js/oz.ts、段階3-1）。
+ * 全 18 本が .ts になったら本ファイルは消える。
  */
-
-/** js/oz.js の OZ。tests/node/harness.ts が Request を差し替えるので、その面だけ宣言する */
-interface OzRequestOptions {
-    data?: string | false;
-    method?: string;
-    headers?: Record<string, string>;
-    xml?: boolean;
-}
-
-type OzRequestCallback = (
-    data: unknown,
-    status: number,
-    headers: Record<string, string>,
-) => void;
-
-interface Oz {
-    Request(
-        url: string,
-        callback?: OzRequestCallback,
-        options?: OzRequestOptions,
-    ): unknown;
-}
 
 /** js/wwwsqldesigner.js の SQL.Designer インスタンス。テストが触る面だけ */
 interface SqlDesigner {
@@ -54,7 +34,6 @@ interface Sql {
 }
 
 interface Window {
-    OZ: Oz;
     SQL: Sql;
     /**
      * js/globals.js の初期値は false で、dbResponse() が Element を入れる。

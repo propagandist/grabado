@@ -14,7 +14,7 @@
  * （OZ / CONFIG / SQL / DATATYPES / LOCALE / _）のままで、定義側だけを window に載せてある。
  * import/export の依存グラフへの置き換えは .ts 化と同じ後続 PR で行う（段階3-2 以降）。
  */
-import "../js/oz.js";
+import "../js/oz.ts";
 import "../js/config.js";
 import "../js/globals.js";
 import "../js/visual.js";

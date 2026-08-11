@@ -4,7 +4,8 @@
 
 > ステータス: **§0「現物確認」実施済み（2026-08-09）／§7「特性化テスト」緑化済み（2026-08-09）／
 > §3「フロント TS 化」段階1（Vite バンドル）実施済み（2026-08-09）／
-> 同 段階2（ES クラス化・デッドコード撤去）実施済み（2026-08-10、§5.4）**。
+> 同 段階2（ES クラス化・デッドコード撤去）実施済み（2026-08-10、§5.4）／
+> 同 段階3-0（Node ハーネスの IIFE バンドル化）実施済み（2026-08-11、§5.1・§5.4）**。
 > §4 は実測値。実測環境・手順も §4.1 に記載。テストの構成と走らせ方は [`TESTING.md`](TESTING.md)。
 
 ---
@@ -13,7 +14,8 @@
 
 ```
 index.html                アプリ本体（SPA エントリ。§3 段階1 で <script type="module" src="/src/main.ts"> 1 本に）
-src/main.ts               ★ §3 で追加。js/*.js を読み込み順どおり import し new SQL.Designer() する
+src/app.ts                ★ §3 で追加。js/*.js を読み込み順どおり import するだけ（起動しない）
+src/main.ts               ★ §3 で追加。src/app.ts を読んで new SQL.Designer() する起動エントリ
 js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化）
   config.js                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
@@ -173,8 +175,11 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 
 ### 5.1 読み込み順（＝依存の薄い順のおおよその指標）
 
-かつて `index.html` に並んでいた 18 本の `<script src>` は、**§3 段階1 で
-[`../src/main.ts`](../src/main.ts) の import 列に移した**（順序は同じ）。
+かつて `index.html` に並んでいた 18 本の `<script src>` は、**§3 段階1 で `src/main.ts` の
+import 列に移し、段階3-0 で [`../src/app.ts`](../src/app.ts) に分離した**（順序はどちらも同じ）。
+`src/app.ts` は js/ を評価するだけで起動はせず、[`../src/main.ts`](../src/main.ts) が
+`import "./app.ts"` ＋ `new SQL.Designer()` を持つ。読み込み順の定義はこの 1 か所だけで、
+Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
 ```
 oz.js  →  config.js  →  globals.js  →  visual.js  →  row.js  →  table.js  →  relation.js
@@ -206,6 +211,7 @@ ESM ではトップレベル `var` がモジュールスコープに閉じるの
 |---|---|---|
 | `npm run dev` | Vite dev server（127.0.0.1:4173、root＝リポジトリルート） | 開発。`npm run test:browser` の webServer もこれ |
 | `npm run build` | `dist/`（index.html ＋ bundle ＋ CSS、`db/` `locale/` `images/` は static-copy） | 配布物。`npm run test:dist` がスモークを張る |
+| `npm test` | vite の build API が `src/app.ts` を単一 IIFE に束ねる（`write: false` なのでディスクには出さない） | Node ハーネスが jsdom に流す（§5.4・[`TESTING.md`](TESTING.md)） |
 
 `db/` `locale/` は `OZ.Request` が相対 URL で取りに行き、`images/` はバンドル後の CSS が
 `url(../images/…)` のまま参照するので、いずれも Rollup の依存グラフに乗らない。
@@ -250,18 +256,26 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
   `this.dom[id] = elm`／この配列）。**段階3 の最大の判断事項**。
 - クラス名 `Minimap` は ES 標準の `Map` との衝突を避けるため。公開名は `SQL.Map` のまま。
 
-**2 つの実行系の違いは 2 つある。** 段階2 の書き方はこの 2 点で決まっている。
+**2 つの実行系の差は §3 段階3-0 でほとんど消えた。** Node ハーネスも
+[`../src/app.ts`](../src/app.ts) を vite で束ねた単一 IIFE を評価する形になり、
+スコープの性質と strict がブラウザ側と揃った（[`TESTING.md`](TESTING.md)）。
 
-| | ESM（`npm run dev` / `build` / `test:browser` / `test:dist`） | `window.eval`（`npm test` の Node ハーネス） |
+| | ESM（`npm run dev` / `build` / `test:browser` / `test:dist`） | Node ハーネス（`npm test`） |
 |---|---|---|
-| スコープ | モジュールスコープ | グローバル（ただし `let` / `const` / `class` は使い捨ての環境レコードに入り**残らない**） |
-| strict | **常に strict** | **sloppy** |
+| 評価の単位 | モジュール | **同じ `src/app.ts` を束ねた単一 IIFE** |
+| スコープ | モジュールスコープ | IIFE スコープ（同じく閉じている） |
+| strict | **常に strict** | **`"use strict";` を前置**。ただし暗黙グローバル代入だけは jsdom の Window（vm の contextified global＝Proxy）で素通りする |
+| DOM | 本物 | jsdom。レイアウトしないので `offsetWidth` / `offsetHeight` は常に 0 |
 
-- 前者から、`class X { … }` と書いたら**同一ファイル内で必ず `SQL.X = X;`** する。これでファイル跨ぎの
-  参照が `SQL.` 経由になり、`js/` に import/export を入れないという段階1 の前提が保たれる
-  （＝ Node ハーネスの eval 経路が無改修で通る）。
-- 後者から、暗黙グローバルは**ブラウザでだけ落ちる**。段階2 で直した 2 件（`js/io.js` の `req`、
+- どちらの実行系でも、`class X { … }` と書いたら**同一ファイル内で必ず `SQL.X = X;`** する。
+  `js/` に import/export が無く、ファイル跨ぎの参照が `SQL.` 経由だから。
+  （段階2 の時点では「`window.eval` では lexical 宣言がグローバルに残らない」ことが直接の理由
+  だったが、バンドル経由になった今は両実行系とも閉じたスコープなので、理由は依存グラフ側に
+  一本化された。段階3 で import を入れるときにこの制約が外れる。）
+- 暗黙グローバルは**ブラウザでだけ落ちる**。段階2 で直した 2 件（`js/io.js` の `req`、
   `js/oz.js` の `y`）はこれに当たり、「現行挙動」が実行系で割れていたため挙動不変の例外として修正した。
+  段階3-0 の `"use strict"` 前置でも jsdom 側は捕まえられない（上表・実測は
+  [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

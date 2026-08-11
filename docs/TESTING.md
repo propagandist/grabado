@@ -72,7 +72,7 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 
 | | 実ブラウザ（`tests/browser/`） | Node（`tests/node/`） |
 |---|---|---|
-| 実行系 | Playwright + Chromium。本物の `XSLTProcessor` / `DOMParser` / 描画 DOM | vitest + jsdom + `xslt-processor`（純 JS の XSLT 1.0） |
+| 実行系 | Playwright + Chromium。本物の `XSLTProcessor` / `DOMParser` / 描画 DOM | vitest + jsdom + `xslt-processor`（純 JS の XSLT 1.0）。アプリは vite が束ねた IIFE を jsdom で eval |
 | golden | **生成・確定する（唯一の正）** | 読むだけ。**絶対に書かない** |
 | 速さ | 数秒 | 速い |
 | カバー範囲 | 全 9 DB プロファイル | 6 DB（3 つは parity 例外、下記） |
@@ -80,22 +80,36 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 現行コードは**抽出せずそのまま動かす**。ロジックを先に抜き出すと「抜き出した後のコード」を
 特性化することになり、安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
 
-§3 段階1（Vite バンドル化）でもこの 2 系統は無改修で通っている。`js/` に import/export を入れず
-グローバル公開だけに留めたので、Node 側の「`js/*.js` を 1 本ずつ eval する」経路が生きているため
-（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。
+### Node 側がアプリを起こす経路（§3 段階3-0 で変更）
 
-**§3 段階2（ES クラス化）でもこの前提は崩していない。** `class X { … }` は `window.eval` では
-グローバルに残らない（lexical 宣言は使い捨ての環境レコードに入る仕様）ので、必ず同一ファイル内で
-`SQL.X = X;` する形にした。ファイル跨ぎの参照が `SQL.` 経由になるのは現行と同じで、Node ハーネスは
-無改修のまま通っている。成功判定も段階1 と同じく `git diff tests/golden/` が空であること
-（63 + 7 本すべて無差分）。
+[`../tests/node/harness.ts`](../tests/node/harness.ts) は **[`../src/app.ts`](../src/app.ts) を vite の
+build API（`write: false`）で単一 IIFE に束ね、それを jsdom の `window.eval` に 1 回渡す**。
+段階1・2 の間は `js/*.js` を 1 本ずつ eval していたが、その経路は `js/` が `.ts` になった時点で
+動かなくなる（本書がかつて「段階3 の分岐点」として予告していた箇所）。バンドルを噛ませると
+**`js/` が `.js` でも `.ts` でも、参照がグローバルでも ESM でも同じハーネスで動く**ので、
+段階3 の残り（`.ts` 化と import 導入）でここを触り直さずに済む。
 
-`.ts` 化する段階3 ではこの前提が崩れるので、Node ハーネスを vitest の変換に載せ替えるか
-IIFE バンドルを eval するかの判断が要る。
+副次的に、読み込み順の定義が `src/app.ts` の 1 か所になった（従来はハーネス側にも
+`SCRIPT_ORDER` として二重に書かれていた）。ハーネスがバンドルするのが `src/main.ts` ではなく
+`src/app.ts` なのは、**js/ を全部評価 → `OZ.Request` を fs 読みに差し替え → `new SQL.Designer()`**
+という順序を現行のまま保つため（起動を含むエントリを束ねるとこの順序が作れない）。
 
-**2 系統は strict / sloppy でも違う**（[`ARCHITECTURE.md`](ARCHITECTURE.md) §5.4）。ESM で配る
-`test:browser` / `test:dist` は常に strict、`window.eval` で流す `npm test` は sloppy。
-暗黙グローバルのような問題は**ブラウザ側でしか赤くならない**ので、`npm test` だけで済ませない。
+判断の根拠・却下した 2 案は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
+
+### strict / sloppy の差（縮んだが、消えてはいない）
+
+`window.eval` に渡すコードには `"use strict";` を前置してある（段階3-0）。ESM で配る
+`test:browser` / `test:dist` が常に strict なのに Node 側だけ sloppy、という乖離を縮めるため。
+
+**ただし暗黙グローバルは依然として `npm test` では捕まらない。** jsdom の `Window` は vm の
+contextified global（Proxy）で、strict でも未宣言の名前への代入が成立してしまう。実測では
+前置ありのとき関数内の `this` は `undefined`、frozen への代入は `TypeError`、`delete` 変数は
+`SyntaxError`（＝コードは確かに strict）だが、暗黙グローバル代入だけが素通りして `window` に載る。
+Node の素の indirect eval と `vm.runInContext` では同じコードが `ReferenceError` になるので、
+これは jsdom 固有の制約。
+
+したがって **`npm test` だけで済ませない**（段階2 が直した `js/io.js` の `req` /
+`js/oz.js` の `y` のような問題は `npm run test:browser` だけが赤くする）。
 
 ---
 

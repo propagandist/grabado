@@ -1,11 +1,68 @@
 /* --------------------- table row ( = db column) ------------ */
 /*
- * grabado: ES クラス化（HANDOVER §3 段階2）。
+ * grabado: ES クラス化（HANDOVER §3 段階2）。段階3-2 で .ts 化した。
  * _init() / _build() は従来 SQL.Visual.apply(this) を書いていた位置で呼ぶ。
  * 親メソッド呼び出し（旧 SQL.Visual.prototype.X.apply(this, ...)）は super.X() に。
+ *
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  */
-class Row extends SQL.Visual {
-    constructor(owner, title, data) {
+
+import { OZ } from "./oz.ts";
+import { SQL, _, type SqlDesigner } from "./globals.ts";
+import { Visual, type VisualDom, type VisualData } from "./visual.ts";
+import type { Table } from "./table.ts";
+import type { Key } from "./key.ts";
+import type { Relation } from "./relation.ts";
+
+/**
+ * buildEdit() が作る編集フォームの 8 要素。
+ *
+ * 不変条件: この 8 つが存在する ⇔ this.expanded === true。
+ *   立てるのは expand() だけ（先頭で expanded を見て早期 return する）、
+ *   読むのは collapse() / load() / changeComment() で、いずれも expanded が
+ *   true のときしか到達しない（collapse も先頭で早期 return、changeComment は
+ *   buildEdit が張ったリスナー経由）。
+ * optional にしないのは、TS2532 が 20 箇所超に出てイディオム C（実行時ガードを
+ * 足さない）と正面衝突するため。non-optional は「同じ不変条件を 20 回書く代わりに
+ * ここに 1 回書く」ことと等価。
+ */
+export interface RowEditDom {
+    name: HTMLInputElement;
+    type: HTMLSelectElement;
+    size: HTMLInputElement;
+    def: HTMLInputElement;
+    ai: HTMLInputElement;
+    nll: HTMLInputElement;
+    comment: HTMLSpanElement;
+    commentbtn: HTMLInputElement;
+}
+
+export interface RowDom extends VisualDom, RowEditDom {
+    container: HTMLTableSectionElement;
+    content: HTMLTableRowElement;
+    selected: HTMLDivElement;
+    title: HTMLDivElement;
+    typehint: HTMLTableCellElement;
+}
+
+export interface RowData extends VisualData {
+    type: number;
+    size: string;
+    def: string | null;
+    nll: boolean;
+    ai: boolean;
+    comment: string;
+}
+
+export class Row extends Visual<RowDom> {
+    declare data: RowData;
+    declare owner: Table;
+    declare relations: Relation[];
+    declare keys: Key[];
+    declare selected: boolean;
+    declare expanded: boolean;
+
+    constructor(owner: Table, title: string, data?: Partial<RowData>) {
         super();
         this.owner = owner;
         this.relations = [];
@@ -29,7 +86,7 @@ class Row extends SQL.Visual {
         this.setTitle(title);
     }
 
-    _build() {
+    _build(): void {
         this.dom.container = OZ.DOM.elm("tbody");
 
         this.dom.content = OZ.DOM.elm("tr");
@@ -55,33 +112,33 @@ class Row extends SQL.Visual {
         OZ.Event.add(this.dom.container, "dblclick", this.dblclick.bind(this));
     }
 
-    select() {
+    select(): void {
         if (this.selected) {
             return;
         }
         this.selected = true;
         for (var i = 0; i < this.relations.length; i++) {
-            this.relations[i].highlight();
+            this.relations[i]!.highlight();
         }
         this.redraw();
     }
 
-    deselect() {
+    deselect(): void {
         if (!this.selected) {
             return;
         }
         this.selected = false;
         for (var i = 0; i < this.relations.length; i++) {
-            this.relations[i].dehighlight();
+            this.relations[i]!.dehighlight();
         }
         this.redraw();
         this.collapse();
     }
 
-    setTitle(t) {
+    setTitle(t: string): void {
         var old = this.getTitle();
         for (var i = 0; i < this.relations.length; i++) {
-            var r = this.relations[i];
+            var r = this.relations[i]!;
             if (r.row1 != this) {
                 continue;
             }
@@ -94,20 +151,20 @@ class Row extends SQL.Visual {
         super.setTitle(t);
     }
 
-    click(e) {
+    click(e: MouseEvent): void {
         /* clicked on row */
         SQL.publish("rowclick", this);
         this.owner.owner.rowManager.select(this);
     }
 
-    dblclick(e) {
+    dblclick(e: MouseEvent): void {
         /* dblclicked on row */
         OZ.Event.prevent(e);
         OZ.Event.stop(e);
         this.expand();
     }
 
-    update(data) {
+    update(data: Partial<RowData>): void {
         /* update subset of row data */
         var des = SQL.designer;
         if (data.nll && data.def && data.def.match(/^null$/i)) {
@@ -115,7 +172,9 @@ class Row extends SQL.Visual {
         }
 
         for (var p in data) {
-            this.data[p] = data[p];
+            (this.data as unknown as Record<string, unknown>)[p] = (
+                data as unknown as Record<string, unknown>
+            )[p];
         }
         if (!this.data.nll && this.data.def === null) {
             this.data.def = "";
@@ -123,7 +182,7 @@ class Row extends SQL.Visual {
 
         var elm = this.getDataType();
         for (var i = 0; i < this.relations.length; i++) {
-            var r = this.relations[i];
+            var r = this.relations[i]!;
             if (r.row1 == this) {
                 r.row2.update({
                     type: des.getFKTypeFor(this.data.type),
@@ -134,42 +193,43 @@ class Row extends SQL.Visual {
         this.redraw();
     }
 
-    up() {
+    up(): void {
         /* shift up */
         var r = this.owner.rows;
         var idx = r.indexOf(this);
         if (!idx) {
             return;
         }
-        r[idx - 1].dom.container.parentNode.insertBefore(
+        r[idx - 1]!.dom.container.parentNode!.insertBefore(
             this.dom.container,
-            r[idx - 1].dom.container
+            r[idx - 1]!.dom.container
         );
         r.splice(idx, 1);
         r.splice(idx - 1, 0, this);
         this.redraw();
     }
 
-    down() {
+    down(): void {
         /* shift down */
         var r = this.owner.rows;
         var idx = r.indexOf(this);
         if (idx + 1 == this.owner.rows.length) {
             return;
         }
-        r[idx].dom.container.parentNode.insertBefore(
+        r[idx]!.dom.container.parentNode!.insertBefore(
             this.dom.container,
-            r[idx + 1].dom.container.nextSibling
+            r[idx + 1]!.dom.container.nextSibling
         );
         r.splice(idx, 1);
         r.splice(idx + 1, 0, this);
         this.redraw();
     }
 
-    buildEdit() {
+    /** ここが RowEditDom の 8 キーを成立させる唯一の場所（不変条件は同 interface のコメント） */
+    buildEdit(): void {
         OZ.DOM.clear(this.dom.container);
 
-        var elms = [];
+        var elms: Array<[string, HTMLElement]> = [];
         this.dom.name = OZ.DOM.elm("input");
         this.dom.name.type = "text";
         elms.push(["name", this.dom.name]);
@@ -208,7 +268,7 @@ class Row extends SQL.Visual {
         OZ.Event.add(this.dom.commentbtn, "click", this.changeComment);
 
         for (var i = 0; i < elms.length; i++) {
-            var row = elms[i];
+            var row = elms[i]!;
             var tr = OZ.DOM.elm("tr");
             var td1 = OZ.DOM.elm("td");
             var td2 = OZ.DOM.elm("td");
@@ -228,7 +288,7 @@ class Row extends SQL.Visual {
         this.dom.container.appendChild(tr);
     }
 
-    changeComment(e) {
+    changeComment(e: MouseEvent): void {
         var c = prompt(_("commenttext"), this.data.comment);
         if (c === null) {
             return;
@@ -240,7 +300,7 @@ class Row extends SQL.Visual {
         );
     }
 
-    expand() {
+    expand(): void {
         if (this.expanded) {
             return;
         }
@@ -253,7 +313,7 @@ class Row extends SQL.Visual {
         this.dom.name.select();
     }
 
-    collapse() {
+    collapse(): void {
         if (!this.expanded) {
             return;
         }
@@ -275,7 +335,7 @@ class Row extends SQL.Visual {
         this.setTitle(this.dom.name.value);
     }
 
-    load() {
+    load(): void {
         /* put data to expanded form */
         this.dom.name.value = this.getTitle();
         var def = this.data.def;
@@ -289,7 +349,7 @@ class Row extends SQL.Visual {
         this.dom.ai.checked = this.data.ai;
     }
 
-    redraw() {
+    redraw(): void {
         var color = this.getColor();
         this.dom.container.style.backgroundColor = color;
         this.dom.container.style.borderColor = color;
@@ -304,10 +364,10 @@ class Row extends SQL.Visual {
         this.dom.selected.style.display = this.selected ? "" : "none";
         this.dom.container.title = this.data.comment;
 
-        var typehint = [];
+        var typehint: string[] = [];
         if (this.owner.owner.getOption("showtype")) {
             var elm = this.getDataType();
-            typehint.push(elm.getAttribute("sql"));
+            typehint.push(elm.getAttribute("sql")!);
         }
 
         if (this.owner.owner.getOption("showsize") && this.data.size) {
@@ -319,11 +379,11 @@ class Row extends SQL.Visual {
         this.owner.owner.rowManager.redraw();
     }
 
-    addRelation(r) {
+    addRelation(r: Relation): void {
         this.relations.push(r);
     }
 
-    removeRelation(r) {
+    removeRelation(r: Relation): void {
         var idx = this.relations.indexOf(r);
         if (idx == -1) {
             return;
@@ -331,12 +391,12 @@ class Row extends SQL.Visual {
         this.relations.splice(idx, 1);
     }
 
-    addKey(k) {
+    addKey(k: Key): void {
         this.keys.push(k);
         this.redraw();
     }
 
-    removeKey(k) {
+    removeKey(k: Key): void {
         var idx = this.keys.indexOf(k);
         if (idx == -1) {
             return;
@@ -345,39 +405,53 @@ class Row extends SQL.Visual {
         this.redraw();
     }
 
-    getDataType() {
+    /*
+     * grabado: 裸の DATATYPES を window.DATATYPES にした（HANDOVER §3 段階3-2）。
+     * モジュール化すると裸の識別子は解決できず（declare global の interface Window は
+     * 裸の識別子を作らない）、js/globals.ts も window にだけ載せて値 export していない。
+     * 同一物への参照で、下の :472 相当は現行コード自身が既に window 越しに書いている。
+     *
+     * 戻りを non-null の Element で確定させるのは OZ.$ と同じ論法。呼び出し 4 箇所が
+     * ガードなしで getAttribute を呼ぶので、undefined を戻り型に出すと全部が
+     * イディオム C と衝突する（添字が範囲外なら現行も同じ場所で落ちる）。
+     * window.DATATYPES が false なのは dbResponse() が Element を入れるまでで、
+     * ここに到達する時点では必ず Element（init2 は locale と datatypes が揃ってから走る）。
+     */
+    getDataType(): Element {
         var type = this.data.type;
-        var elm = DATATYPES.getElementsByTagName("type")[type];
-        return elm;
+        var elm = (window.DATATYPES as Element).getElementsByTagName("type")[
+            type
+        ];
+        return elm!;
     }
 
-    getColor() {
+    getColor(): string {
         var elm = this.getDataType();
-        var g = this.getDataType().parentNode;
+        var g = this.getDataType().parentNode as Element;
         return elm.getAttribute("color") || g.getAttribute("color") || "#fff";
     }
 
-    buildTypeSelect(id) {
+    buildTypeSelect(id: number): HTMLSelectElement {
         /* build selectbox with avail datatypes */
         var s = OZ.DOM.elm("select");
-        var gs = DATATYPES.getElementsByTagName("group");
+        var gs = (window.DATATYPES as Element).getElementsByTagName("group");
         for (var i = 0; i < gs.length; i++) {
-            var g = gs[i];
+            var g = gs[i]!;
             var og = OZ.DOM.elm("optgroup");
             og.style.backgroundColor = g.getAttribute("color") || "#fff";
-            og.label = g.getAttribute("label");
+            og.label = g.getAttribute("label")!;
             s.appendChild(og);
             var ts = g.getElementsByTagName("type");
             for (var j = 0; j < ts.length; j++) {
-                var t = ts[j];
+                var t = ts[j]!;
                 var o = OZ.DOM.elm("option");
                 if (t.getAttribute("color")) {
-                    o.style.backgroundColor = t.getAttribute("color");
+                    o.style.backgroundColor = t.getAttribute("color")!;
                 }
                 if (t.getAttribute("note")) {
-                    o.title = t.getAttribute("note");
+                    o.title = t.getAttribute("note")!;
                 }
-                o.innerHTML = t.getAttribute("label");
+                o.innerHTML = t.getAttribute("label")!;
                 og.appendChild(o);
             }
         }
@@ -385,17 +459,17 @@ class Row extends SQL.Visual {
         return s;
     }
 
-    destroy() {
+    destroy(): void {
         super.destroy();
         while (this.relations.length) {
-            this.owner.owner.removeRelation(this.relations[0]);
+            this.owner.owner.removeRelation(this.relations[0]!);
         }
         for (var i = 0; i < this.keys.length; i++) {
-            this.keys[i].removeRow(this);
+            this.keys[i]!.removeRow(this);
         }
     }
 
-    toXML() {
+    toXML(): string {
         var xml = "";
 
         var t = this.getTitle().replace(/"/g, "&quot;");
@@ -411,14 +485,17 @@ class Row extends SQL.Visual {
             '">\n';
 
         var elm = this.getDataType();
-        var t = elm.getAttribute("sql");
+        /* getAttribute の null を ! で潰しているのは、下の t += が string を要求するため。
+           sql 属性の無い型は datatypes.xml に存在しない（あれば現行も "null(...)" を書く） */
+        var t = elm.getAttribute("sql")!;
         if (this.data.size.length) {
             t += "(" + this.data.size + ")";
         }
         xml += "<datatype>" + t + "</datatype>\n";
 
         if (this.data.def || this.data.def === null) {
-            var q = elm.getAttribute("quote");
+            /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
+            var q = elm.getAttribute("quote")!;
             var d = this.data.def;
             if (d === null) {
                 d = "NULL";
@@ -429,7 +506,7 @@ class Row extends SQL.Visual {
         }
 
         for (var i = 0; i < this.relations.length; i++) {
-            var r = this.relations[i];
+            var r = this.relations[i]!;
             if (r.row2 != this) {
                 continue;
             }
@@ -449,58 +526,71 @@ class Row extends SQL.Visual {
         return xml;
     }
 
-    fromXML(node) {
+    fromXML(node: Element): void {
         var name = node.getAttribute("name");
 
-        var obj = { type: 0, size: "" };
+        /* Pick を交差させてあるのは、下の :482 相当（添字に obj.type を使う行）で
+           optional 由来の undefined を出さないため */
+        var obj: Partial<RowData> & Pick<RowData, "type" | "size"> = {
+            type: 0,
+            size: "",
+        };
         obj.nll = node.getAttribute("null") == "1";
         obj.ai = node.getAttribute("autoincrement") == "1";
 
         var cs = node.getElementsByTagName("comment");
-        if (cs.length && cs[0].firstChild) {
-            obj.comment = cs[0].firstChild.nodeValue;
+        if (cs.length && cs[0]!.firstChild) {
+            obj.comment = cs[0]!.firstChild!.nodeValue!;
         }
 
         var d = node.getElementsByTagName("datatype");
-        if (d.length && d[0].firstChild) {
-            var s = d[0].firstChild.nodeValue;
+        if (d.length && d[0]!.firstChild) {
+            var s = d[0]!.firstChild!.nodeValue!;
             var r = s.match(/^([^\(]+)(\((.*)\))?.*$/);
-            var type = r[1];
-            if (r[3]) {
-                obj.size = r[3];
+            var type = r![1]!;
+            if (r![3]) {
+                obj.size = r![3]!;
             }
-            var types = window.DATATYPES.getElementsByTagName("type");
+            var types = (window.DATATYPES as Element).getElementsByTagName(
+                "type"
+            );
             for (var i = 0; i < types.length; i++) {
-                var sql = types[i].getAttribute("sql");
-                var re = types[i].getAttribute("re");
+                var sql = types[i]!.getAttribute("sql");
+                var re = types[i]!.getAttribute("re");
                 if (sql == type || (re && new RegExp(re).exec(type))) {
                     obj.type = i;
                 }
             }
         }
 
-        var elm = DATATYPES.getElementsByTagName("type")[obj.type];
+        var elm = (window.DATATYPES as Element).getElementsByTagName("type")[
+            obj.type
+        ];
         var d = node.getElementsByTagName("default");
-        if (d.length && d[0].firstChild) {
-            var def = d[0].firstChild.nodeValue;
+        if (d.length && d[0]!.firstChild) {
+            var def = d[0]!.firstChild!.nodeValue!;
             obj.def = def;
-            var q = elm.getAttribute("quote");
+            var q = elm!.getAttribute("quote");
             if (q) {
-                var re = new RegExp("^" + q + "(.*)" + q + "$");
-                var r = def.match(re);
+                /* grabado: 元は var re（HANDOVER §3 段階3-2）。上のループの
+                   var re が string | null なので、同名だと TS2403（宣言型の不一致）に
+                   なる。改名は 2 行（宣言とすぐ下の match）で、旧束縛はここから先で
+                   読まれない＝挙動同値 */
+                var quoteRe = new RegExp("^" + q + "(.*)" + q + "$");
+                var r = def.match(quoteRe);
                 if (r) {
-                    obj.def = r[1];
+                    obj.def = r[1]!;
                 }
             }
         }
 
         this.update(obj);
-        this.setTitle(name);
+        this.setTitle(name!);
     }
 
-    isPrimary() {
+    isPrimary(): boolean {
         for (var i = 0; i < this.keys.length; i++) {
-            var k = this.keys[i];
+            var k = this.keys[i]!;
             if (k.getType() == "PRIMARY") {
                 return true;
             }
@@ -508,9 +598,9 @@ class Row extends SQL.Visual {
         return false;
     }
 
-    isUnique() {
+    isUnique(): boolean {
         for (var i = 0; i < this.keys.length; i++) {
-            var k = this.keys[i];
+            var k = this.keys[i]!;
             var t = k.getType();
             if (t == "PRIMARY" || t == "UNIQUE") {
                 return true;
@@ -519,11 +609,11 @@ class Row extends SQL.Visual {
         return false;
     }
 
-    isKey() {
+    isKey(): boolean {
         return this.keys.length > 0;
     }
 
-    enter(e) {
+    enter(e: KeyboardEvent): void {
         if (e.keyCode == 13) {
             this.collapse();
         }

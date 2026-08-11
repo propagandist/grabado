@@ -14,6 +14,10 @@
  * emit から完全に消えるので、Rollup の依存グラフに辺が生えない。
  */
 import type { Visual } from "./visual.ts";
+import type { Row } from "./row.ts";
+import type { Table } from "./table.ts";
+import type { Relation } from "./relation.ts";
+import type { Key } from "./key.ts";
 import type { Rubberband } from "./rubberband.ts";
 import type { Minimap } from "./map.ts";
 
@@ -30,14 +34,36 @@ export type SqlSubscriber = (e: { target: unknown; data: unknown }) => void;
  * 置き換わる（7 ファイルを回って消す作業は発生しない）。
  */
 export interface SqlDesigner {
+    /** SVG で描くか。実体は getOption("vector") && document.createElementNS の truthy 値 */
+    vector: boolean;
+    svgNS: string;
     /* 描画領域の実寸。js/map.ts が縮尺の分母に使う */
     width: number;
     height: number;
+    dom: { container: HTMLElement; svg: SVGSVGElement };
+    map: Minimap;
+    tables: Table[];
     tableManager: {
+        selection: Table[];
+        select(t: Table | false, multi?: boolean): void;
+        edit(): void;
         selectRect(x: number, y: number, w: number, h: number): void;
     };
-    map: Minimap;
-    tables: unknown[];
+    rowManager: {
+        select(r: Row | false): void;
+        redraw(): void;
+    };
+    sync(): void;
+    removeRelation(r: Relation): void;
+    removeSelection(): void;
+    getFKTypeFor(typeIndex: number): number;
+    /*
+     * 戻りは cookie の値（文字列）か switch の既定値（文字列または 0）。
+     * 呼び出しの多くは truthy 判定だけをするので総称シグネチャで足り、
+     * switch のキーに使う style だけ string で確定させる。
+     */
+    getOption(name: "style"): string;
+    getOption(name: string): string | number;
     io: { fromXMLText(xml: string): void };
     toXML(): string;
 }
@@ -63,6 +89,10 @@ export interface SqlNamespace {
      * （.js のときのようなグローバル型の合成は起きない）。
      */
     Visual: typeof Visual;
+    Row: typeof Row;
+    Table: typeof Table;
+    Relation: typeof Relation;
+    Key: typeof Key;
     Rubberband: typeof Rubberband;
     /** 公開名は SQL.Map、クラス名は Minimap（ES 標準 Map との衝突回避。§5.4） */
     Map: typeof Minimap;

@@ -1,11 +1,25 @@
 /* --------------------- db index ------------ */
 /*
- * grabado: ES クラス化（HANDOVER §3 段階2）。
+ * grabado: ES クラス化（HANDOVER §3 段階2）。段階3-2 で .ts 化した。
  * _init() / _build() は従来 SQL.Visual.apply(this) を書いていた位置で呼ぶ。
- * class 宣言は window.eval に残らないので、同一ファイル内で SQL に載せる。
+ *
+ * dom を一度も触らないので基底の VisualDom のまま（_init() が入れた
+ * {container, title} が使われずに残る）。インスタンスプロパティを declare で
+ * 宣言する理由は js/visual.ts の冒頭。
  */
-class Key extends SQL.Visual {
-    constructor(owner, type, name) {
+
+import { SQL } from "./globals.ts";
+import { Visual } from "./visual.ts";
+import type { Table } from "./table.ts";
+import type { Row } from "./row.ts";
+
+export class Key extends Visual {
+    declare owner: Table;
+    declare rows: Row[];
+    declare type: string;
+    declare name: string;
+
+    constructor(owner: Table, type?: string, name?: string) {
         super();
         this.owner = owner;
         this.rows = [];
@@ -15,29 +29,31 @@ class Key extends SQL.Visual {
         this._build();
     }
 
-    setName(n) {
+    setName(n: string): void {
         this.name = n;
     }
 
-    getName() {
+    getName(): string {
         return this.name;
     }
 
-    setType(t) {
+    /* null を受けるのは、下の fromXML が getAttribute の結果をそのまま渡すため
+       （ガードが実在するので型に出しても呼び出し側の負担にならない） */
+    setType(t: string | null): void {
         if (!t) {
             return;
         }
         this.type = t;
         for (var i = 0; i < this.rows.length; i++) {
-            this.rows[i].redraw();
+            this.rows[i]!.redraw();
         }
     }
 
-    getType() {
+    getType(): string {
         return this.type;
     }
 
-    addRow(r) {
+    addRow(r: Row): void {
         if (r.owner != this.owner) {
             return;
         }
@@ -45,7 +61,7 @@ class Key extends SQL.Visual {
         r.addKey(this);
     }
 
-    removeRow(r) {
+    removeRow(r: Row): void {
         var idx = this.rows.indexOf(r);
         if (idx == -1) {
             return;
@@ -55,17 +71,17 @@ class Key extends SQL.Visual {
     }
 
     /* 基底の destroy() は呼ばない（現行どおり）。Key は dom.container を持たないため */
-    destroy() {
+    destroy(): void {
         for (var i = 0; i < this.rows.length; i++) {
-            this.rows[i].removeKey(this);
+            this.rows[i]!.removeKey(this);
         }
     }
 
-    getLabel() {
+    getLabel(): string {
         return this.name || this.type;
     }
 
-    toXML() {
+    toXML(): string {
         var xml = "";
         xml +=
             '<key type="' +
@@ -74,20 +90,22 @@ class Key extends SQL.Visual {
             this.getName() +
             '">\n';
         for (var i = 0; i < this.rows.length; i++) {
-            var r = this.rows[i];
+            var r = this.rows[i]!;
             xml += "<part>" + r.getTitle() + "</part>\n";
         }
         xml += "</key>\n";
         return xml;
     }
 
-    fromXML(node) {
+    fromXML(node: Element): void {
         this.setType(node.getAttribute("type"));
-        this.setName(node.getAttribute("name"));
+        this.setName(node.getAttribute("name")!);
         var parts = node.getElementsByTagName("part");
         for (var i = 0; i < parts.length; i++) {
-            var name = parts[i].firstChild.nodeValue;
-            var row = this.owner.findNamedRow(name);
+            var name = parts[i]!.firstChild!.nodeValue!;
+            /* <part> には自テーブルの row 名しか書かれない前提（IO の不変条件）。
+               外れれば現行も addRow の r.owner で TypeError になる */
+            var row = this.owner.findNamedRow(name) as Row;
             this.addRow(row);
         }
     }

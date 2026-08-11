@@ -1,22 +1,76 @@
 /* --------------------- db table ------------ */
 /*
- * grabado: ES クラス化（HANDOVER §3 段階2）。
+ * grabado: ES クラス化（HANDOVER §3 段階2）。段階3-2 で .ts 化した。
  * _init() / _build() は従来 SQL.Visual.apply(this) を書いていた位置で呼ぶ。
  * _build() が this.owner.map.dom.container を読むので、this.owner の代入より
  * 後でなければならない（＝基底コンストラクタからは呼べない）。
+ *
+ * Row / Key の生成は new SQL.Row / new SQL.Key のまま据え置く。import に変えると
+ * 実行コードが変わるうえ、js/key.ts は本ファイルより後に読む決まりなので値 import は
+ * 評価順を逆転させる。型は js/globals.ts の SqlNamespace が供給する（イディオム B の
+ * 例外である SQL.designer と同じ論理）。
+ *
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  */
-class Table extends SQL.Visual {
+
+import { OZ } from "./oz.ts";
+import { SQL, type SqlDesigner } from "./globals.ts";
+import { Visual, type VisualDom, type VisualData } from "./visual.ts";
+import type { Row, RowData } from "./row.ts";
+import type { Key } from "./key.ts";
+import type { Relation } from "./relation.ts";
+
+export interface TableDom extends VisualDom {
+    container: HTMLDivElement;
+    content: HTMLTableElement;
+    title: HTMLTableCellElement;
+    /** ミニマップ上の分身。自分では append せず Minimap の中に入る（_build を参照） */
+    mini: HTMLDivElement;
+}
+
+export interface TableData extends VisualData {
+    comment: string;
+}
+
+export class Table extends Visual<TableDom> {
     /*
      * ドラッグ中の状態。現行は down() が代入するまでプロパティ自体が存在せず、
      * up() が active を false に戻す。初期化子を書かないのは、= false にすると
      * 初回ドラッグ前の値が undefined から false に変わるため（読むのは move() と
      * up() だけなので観測はできないが、証明できる同値を採る）。
+     *
+     * 型は「読むときの形」だけを出す。active に Table[] | false を出すと move() と
+     * up() の t.active.length が 2 箇所エラーになり、イディオム C でガードを足せない。
+     * false は「ドラッグ終了」の印で、up() がリスナーを外しているので次の down() が
+     * 代入するまで読まれない。static には declare を付けない（現行の emit と揃える）。
      */
-    static active;
-    static x;
-    static y;
+    static active: Table[];
+    static x: number[];
+    static y: number[];
 
-    constructor(owner, name, x, y, z) {
+    declare data: TableData;
+    declare owner: SqlDesigner;
+    declare rows: Row[];
+    declare keys: Key[];
+    declare zIndex: number;
+    /** 自分が張ったリスナーの id。destroy() でまとめて外す */
+    declare _ec: number[];
+    declare flag: boolean;
+    declare selected: boolean;
+    declare x: number;
+    declare y: number;
+    declare width: number;
+    declare height: number;
+    declare documentMove: number;
+    declare documentUp: number;
+
+    constructor(
+        owner: SqlDesigner,
+        name: string,
+        x: number | undefined,
+        y: number | undefined,
+        z: number
+    ) {
         super();
         this.owner = owner;
         this.rows = [];
@@ -37,7 +91,7 @@ class Table extends SQL.Visual {
         this.snap();
     }
 
-    _build() {
+    _build(): void {
         this.dom.container = OZ.DOM.elm("div", { className: "table" });
         this.dom.content = OZ.DOM.elm("table");
         var thead = OZ.DOM.elm("thead");
@@ -75,12 +129,12 @@ class Table extends SQL.Visual {
         );
     }
 
-    setTitle(t) {
+    setTitle(t: string): void {
         var old = this.getTitle();
         for (var i = 0; i < this.rows.length; i++) {
-            var row = this.rows[i];
+            var row = this.rows[i]!;
             for (var j = 0; j < row.relations.length; j++) {
-                var r = row.relations[j];
+                var r = row.relations[j]!;
                 if (r.row1 != row) {
                     continue;
                 }
@@ -93,12 +147,12 @@ class Table extends SQL.Visual {
         super.setTitle(t);
     }
 
-    getRelations() {
-        var arr = [];
+    getRelations(): Relation[] {
+        var arr: Relation[] = [];
         for (var i = 0; i < this.rows.length; i++) {
-            var row = this.rows[i];
+            var row = this.rows[i]!;
             for (var j = 0; j < row.relations.length; j++) {
-                var r = row.relations[j];
+                var r = row.relations[j]!;
                 if (arr.indexOf(r) == -1) {
                     arr.push(r);
                 }
@@ -107,21 +161,21 @@ class Table extends SQL.Visual {
         return arr;
     }
 
-    showRelations() {
+    showRelations(): void {
         var rs = this.getRelations();
         for (var i = 0; i < rs.length; i++) {
-            rs[i].show();
+            rs[i]!.show();
         }
     }
 
-    hideRelations() {
+    hideRelations(): void {
         var rs = this.getRelations();
         for (var i = 0; i < rs.length; i++) {
-            rs[i].hide();
+            rs[i]!.hide();
         }
     }
 
-    click(e) {
+    click(e: MouseEvent): void {
         OZ.Event.stop(e);
         var t = OZ.Event.target(e);
         this.owner.tableManager.select(this);
@@ -134,14 +188,14 @@ class Table extends SQL.Visual {
         this.owner.rowManager.select(false);
     }
 
-    dblclick(e) {
+    dblclick(e: MouseEvent): void {
         var t = OZ.Event.target(e);
         if (t == this.dom.title) {
             this.owner.tableManager.edit();
         }
     }
 
-    select() {
+    select(): void {
         if (this.selected) {
             return;
         }
@@ -151,7 +205,7 @@ class Table extends SQL.Visual {
         this.redraw();
     }
 
-    deselect() {
+    deselect(): void {
         if (!this.selected) {
             return;
         }
@@ -161,7 +215,7 @@ class Table extends SQL.Visual {
         this.redraw();
     }
 
-    addRow(title, data) {
+    addRow(title: string, data?: Partial<RowData>): Row {
         var r = new SQL.Row(this, title, data);
         this.rows.push(r);
         this.dom.content.appendChild(r.dom.container);
@@ -169,7 +223,7 @@ class Table extends SQL.Visual {
         return r;
     }
 
-    removeRow(r) {
+    removeRow(r: Row): void {
         var idx = this.rows.indexOf(r);
         if (idx == -1) {
             return;
@@ -179,13 +233,21 @@ class Table extends SQL.Visual {
         this.redraw();
     }
 
-    addKey(name) {
-        var k = new SQL.Key(this, name);
+    /*
+     * grabado: 仮引数名を name から type に直した（HANDOVER §3 段階3-2）。
+     * 実引数は SQL.Key の第 2 引数＝type に渡っており、name という名前は誤読しかない。
+     * arguments を読んでいないので emit 上の意味は変わらない。
+     * js/tablemanager.js:154 だけが addKey("PRIMARY", "") と 2 引数で呼ぶ。第 2 引数は
+     * 現行でも捨てられており、new Key(this, "PRIMARY") でも name は name || "" で "" に
+     * なるので結果は同一。是正は同ファイルを .ts 化する段階3-3 で行う。
+     */
+    addKey(type?: string): Key {
+        var k = new SQL.Key(this, type);
         this.keys.push(k);
         return k;
     }
 
-    removeKey(k) {
+    removeKey(k: Key): void {
         var idx = this.keys.indexOf(k);
         if (idx == -1) {
             return;
@@ -194,7 +256,7 @@ class Table extends SQL.Visual {
         this.keys.splice(idx, 1);
     }
 
-    redraw() {
+    redraw(): void {
         var x = this.x;
         var y = this.y;
         if (this.selected) {
@@ -222,11 +284,11 @@ class Table extends SQL.Visual {
 
         var rs = this.getRelations();
         for (var i = 0; i < rs.length; i++) {
-            rs[i].redraw();
+            rs[i]!.redraw();
         }
     }
 
-    moveBy(dx, dy) {
+    moveBy(dx: number, dy: number): void {
         this.x += dx;
         this.y += dy;
 
@@ -234,7 +296,7 @@ class Table extends SQL.Visual {
         this.redraw();
     }
 
-    moveTo(x, y) {
+    moveTo(x: number, y: number): void {
         this.x = x;
         this.y = y;
 
@@ -242,29 +304,36 @@ class Table extends SQL.Visual {
         this.redraw();
     }
 
-    snap() {
-        var snap = parseInt(SQL.designer.getOption("snap"));
+    snap(): void {
+        /* getOption("snap") の既定は数値 0、cookie 経由なら文字列。
+           parseInt(0) は現行も "0" に変換されて 0 になる（挙動不変） */
+        var snap = parseInt(SQL.designer.getOption("snap") as string);
         if (snap) {
             this.x = Math.round(this.x / snap) * snap;
             this.y = Math.round(this.y / snap) * snap;
         }
     }
 
-    down(e) {
+    down(e: MouseEvent | TouchEvent): void {
         /* mousedown - start drag */
         OZ.Event.stop(e);
-        var t = OZ.Event.target(e);
-        if (t != this.dom.title) {
+        /* grabado: 元は var t（HANDOVER §3 段階3-2）。下の var t = Table と同名で
+           TS2403（HTMLElement と typeof Table）になる。読み出しは次の 1 行だけで、
+           以降このスコープでは読まれない＝挙動同値 */
+        var el = OZ.Event.target(e);
+        if (el != this.dom.title) {
             return;
         } /* on a row */
 
         /* touch? */
+        /* grabado: 元は両分岐とも var event。TS2403 は宣言型の一致を見るので、
+           同じ注釈を両方に書けば消える（読むのは clientX / clientY だけ） */
         if (e.type == "touchstart") {
-            var event = e.touches[0];
+            var event: MouseEvent | Touch = (e as TouchEvent).touches[0]!;
             var moveEvent = "touchmove";
             var upEvent = "touchend";
         } else {
-            var event = e;
+            var event: MouseEvent | Touch = e as MouseEvent;
             var moveEvent = "mousemove";
             var upEvent = "mouseup";
         }
@@ -281,13 +350,13 @@ class Table extends SQL.Visual {
         t.y = new Array(n);
         for (var i = 0; i < n; i++) {
             /* position relative to mouse cursor */
-            t.x[i] = t.active[i].x - event.clientX;
-            t.y[i] = t.active[i].y - event.clientY;
+            t.x[i] = t.active[i]!.x - event.clientX;
+            t.y[i] = t.active[i]!.y - event.clientY;
         }
 
         if (this.owner.getOption("hide")) {
             for (var i = 0; i < n; i++) {
-                t.active[i].hideRelations();
+                t.active[i]!.hideRelations();
             }
         }
 
@@ -299,16 +368,16 @@ class Table extends SQL.Visual {
         this.documentUp = OZ.Event.add(document, upEvent, this.up.bind(this));
     }
 
-    toXML() {
+    toXML(): string {
         var t = this.getTitle().replace(/"/g, "&quot;");
         var xml = "";
         xml +=
             '<table x="' + this.x + '" y="' + this.y + '" name="' + t + '">\n';
         for (var i = 0; i < this.rows.length; i++) {
-            xml += this.rows[i].toXML();
+            xml += this.rows[i]!.toXML();
         }
         for (var i = 0; i < this.keys.length; i++) {
-            xml += this.keys[i].toXML();
+            xml += this.keys[i]!.toXML();
         }
         var c = this.getComment();
         if (c) {
@@ -318,106 +387,113 @@ class Table extends SQL.Visual {
         return xml;
     }
 
-    fromXML(node) {
+    fromXML(node: Element): void {
         var name = node.getAttribute("name");
-        this.setTitle(name);
-        var x = parseInt(node.getAttribute("x")) || 0;
-        var y = parseInt(node.getAttribute("y")) || 0;
+        this.setTitle(name!);
+        var x = parseInt(node.getAttribute("x")!) || 0;
+        var y = parseInt(node.getAttribute("y")!) || 0;
         this.moveTo(x, y);
         var rows = node.getElementsByTagName("row");
         for (var i = 0; i < rows.length; i++) {
-            var row = rows[i];
+            var row = rows[i]!;
             var r = this.addRow("");
             r.fromXML(row);
         }
         var keys = node.getElementsByTagName("key");
         for (var i = 0; i < keys.length; i++) {
-            var key = keys[i];
+            var key = keys[i]!;
             var k = this.addKey();
             k.fromXML(key);
         }
         for (var i = 0; i < node.childNodes.length; i++) {
-            var ch = node.childNodes[i];
+            /* テキストノードも来るので Element として読む（tagName が無ければ短絡する） */
+            var ch = node.childNodes[i] as Element;
             if (
                 ch.tagName &&
                 ch.tagName.toLowerCase() == "comment" &&
                 ch.firstChild
             ) {
-                this.setComment(ch.firstChild.nodeValue);
+                this.setComment(ch.firstChild.nodeValue!);
             }
         }
     }
 
-    getZ() {
+    getZ(): number {
         return this.zIndex;
     }
 
-    setZ(z) {
+    setZ(z: number): void {
         this.zIndex = z;
-        this.dom.container.style.zIndex = z;
+        /* 数値→文字列の暗黙変換に依存している代入（現行のまま） */
+        this.dom.container.style.zIndex = z as unknown as string;
     }
 
-    findNamedRow(n) {
+    /*
+     * false を戻り型に出すのは、js/wwwsqldesigner.js が if (!r1) { continue; } で
+     * 実際に消費しているため（Row と偽ると段階3-3 でその分岐が型上ありえなくなる）。
+     * 唯一ガードなしで受ける js/key.ts 側を 1 キャストで通す。
+     */
+    findNamedRow(n: string): Row | false {
         /* return row with a given name */
         for (var i = 0; i < this.rows.length; i++) {
-            if (this.rows[i].getTitle() == n) {
-                return this.rows[i];
+            if (this.rows[i]!.getTitle() == n) {
+                return this.rows[i]!;
             }
         }
         return false;
     }
 
-    setComment(c) {
+    setComment(c: string): void {
         this.data.comment = c;
         this.dom.title.title = this.data.comment;
     }
 
-    getComment() {
+    getComment(): string {
         return this.data.comment;
     }
 
-    move(e) {
+    move(e: MouseEvent | TouchEvent): void {
         /* mousemove */
         var t = Table;
         SQL.designer.removeSelection();
         if (e.type == "touchmove") {
-            if (e.touches.length > 1) {
+            if ((e as TouchEvent).touches.length > 1) {
                 return;
             }
-            var event = e.touches[0];
+            var event: MouseEvent | Touch = (e as TouchEvent).touches[0]!;
         } else {
-            var event = e;
+            var event: MouseEvent | Touch = e as MouseEvent;
         }
 
         for (var i = 0; i < t.active.length; i++) {
-            var x = t.x[i] + event.clientX;
-            var y = t.y[i] + event.clientY;
+            var x = t.x[i]! + event.clientX;
+            var y = t.y[i]! + event.clientY;
             x = Math.max(x, 0);
             y = Math.max(y, 0);
-            t.active[i].moveTo(x, y);
+            t.active[i]!.moveTo(x, y);
         }
     }
 
-    up(e) {
+    up(e: MouseEvent | TouchEvent): void {
         var t = Table;
         var d = SQL.designer;
         if (d.getOption("hide")) {
             for (var i = 0; i < t.active.length; i++) {
-                t.active[i].showRelations();
-                t.active[i].redraw();
+                t.active[i]!.showRelations();
+                t.active[i]!.redraw();
             }
         }
-        t.active = false;
+        t.active = false as unknown as Table[];
         OZ.Event.remove(this.documentMove);
         OZ.Event.remove(this.documentUp);
         this.owner.sync();
     }
 
-    destroy() {
+    destroy(): void {
         super.destroy();
-        this.dom.mini.parentNode.removeChild(this.dom.mini);
+        this.dom.mini.parentNode!.removeChild(this.dom.mini);
         while (this.rows.length) {
-            this.removeRow(this.rows[0]);
+            this.removeRow(this.rows[0]!);
         }
         this._ec.forEach(OZ.Event.remove, OZ.Event);
     }

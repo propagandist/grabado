@@ -446,6 +446,138 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 `npm run test:dist` 3 passed、`npm run known-issues` 9 passed（アサート値は 1 文字も変えていない）、
 `npm run typecheck` 0 error。
 
+### 2026-08-12 HANDOVER §3「フロント TS 化」段階3-1 — 先頭 3 本を `.ts` 化し、移行イディオムを決めた
+
+段階3 の本体（`js/` 18 本・4,183 行の `.ts` 化）に着手した。**一度に全部やらない**。
+`tsc --allowJs --checkJs --noEmit --strict --noUncheckedIndexedAccess` での実測は **1,281 件**あり、
+1 PR で潰すと golden に差分が出たときに原因ファイルを切り分けられない（段階1 と同じ論法）。
+本 PR は読み込み順の先頭 3 本 — [`js/oz.ts`](js/oz.ts) / [`js/config.ts`](js/config.ts) /
+[`js/globals.ts`](js/globals.ts)（462 行・101 診断）— に絞り、**残り 15 本が従うイディオムを確定する**
+ことを目的にした。構成は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.1・§5.5、走らせ方は
+[`docs/TESTING.md`](docs/TESTING.md)。ここには判断だけ残す。
+
+**着手前の実測（診断 1,281 件の内訳）**。総数より性質が重要だった。
+
+| | 件数 | 段階3 での意味 |
+|---|---|---|
+| TS2304（`OZ` 266 / `_` 57 / `CONFIG` 24 / `Dropbox` 10 / `DATATYPES` 3 / `ActiveXObject` 3 / `e` 1） | 364 | **型作業ではない**。裸グローバルが宣言されていないだけで、import 化すれば消える |
+| TS2339 | 381 | `dom` バッグの 3 形態（§5.4）が本丸。段階3-2 |
+| TS2532 + TS2531 | 251 | `noUncheckedIndexedAccess` 由来が大半 |
+| TS7006 | 210 | 引数の implicit any |
+
+ファイル別は `row` 275 / `io` 179 / `table` 132 / `keymanager` 125 が重く、`config` 1 / `toggle` 8 /
+`visual` 9 / `key` 9 が軽い。**段階3-2 は描画中核（visual/row/table/relation/key/rubberband/map）、
+3-3 は IO・manager 群、3-4 は `window` 登録と `types/globals.d.ts` の撤去**に割る。
+
+**イディオム A: `.ts` 化 ＝ モジュール化。ただし `window` 登録は残す。**
+`.ts` にして非モジュールのまま置くと、`class Window` / `Options` / `Key` / `Table` が
+グローバル型空間に出て `lib.dom` と衝突する。**`.ts` 化とモジュール化は分離できない**。
+一方まだ `.js` の 15 本は裸のグローバルを読むので、`export` と併せて `window.X = X` を残し、
+各ファイルが自分の面を `declare global` で宣言する。段階3-4 で宣言ごと消える。
+[`types/globals.d.ts`](types/globals.d.ts) に集約し続けるより後始末が確実で、実際この PR で
+同ファイルは `SqlDesigner` とデバッグ用ハンドルだけに縮んだ。
+
+**イディオム B: 読み込み順の先頭から進める。**
+[`src/app.ts`](src/app.ts) の順に前から `.ts` 化すれば、`.ts` 側が参照するシンボルは常に
+**既に `.ts` 化済み**で import に置き換えられる。葉から進めると未 `.ts` のグローバルに対する
+ambient 宣言が要り、その宣言自体が後で捨てる作業になる。**移行用の ambient 宣言ファイルは作らない**。
+例外は実行時インスタンス（`SQL.designer` を `table` / `row` / `relation` / `rowmanager` が見る 6 箇所）で、
+import にすると循環するため `SQL` 名前空間オブジェクト経由のまま据え置く（DI 化は §4 の IO 分離と同時）。
+
+**イディオム C: 実行コードは変えない。** 型は注釈・`as`・オーバーロードで通し、`if (!x) return;` の
+ような実行時ガードは足さない（挙動が変わるため）。`any` で埋めない。例外は下の D の死にコード撤去だけ。
+
+**イディオム D: 撤去は「対象実行系で一度も評価されない」を実測してから。**
+段階2 の polyfill 撤去と同じ論法。Chromium 151.0.7922.34 と jsdom 29.1.1 の**両方**で計測し、
+15 項目すべてが一致した（撤去する側は 6 件とも false、残す側は 6 件とも true）。
+
+| 判別子 | Chromium | jsdom | 扱い |
+|---|---|---|---|
+| `"attachEvent" in document` / element、`"detachEvent" in element` | false | false | 撤去 |
+| `window.opera`、`document.getAnonymousElementByAttribute` | false | false | 撤去 |
+| `"ActiveXObject" in window`、`"currentStyle" in element` | false | false | 撤去 |
+| `window.XMLHttpRequest`、`defaultView.getComputedStyle` | true | true | 残す |
+| `Event.prototype` の `stopPropagation` / `preventDefault` / `target` | true | true | 残す |
+
+`srcElement` / `cancelBubble` / `returnValue` は**プロパティ自体は両実行系に存在する**が、
+`e.target || e.srcElement` のような三項の第 1 項（`target` / `stopPropagation` / `preventDefault`）が
+必ず真になるので else 側には落ちない。実測を見て初めて「存在するが到達しない」と分かる部類で、
+`in` の結果だけを見て撤去していたら判断を誤っていた。
+
+これで [`js/oz.ts`](js/oz.ts) から消したもの: 参照 0 の `select` / `gecko` / `webkit` / `khtml`、
+`Event.add` / `remove` の `attachEvent` / `detachEvent` 分岐、`Event.stop` / `prevent` / `target` の
+IE フォールバック、`Style.get` の `currentStyle`、`Style.set` の opacity→filter と float→styleFloat、
+`DOM.pos` の opera 分岐、`Request` の `ActiveXObject` 分岐。299 → 354 行（消したぶんより型注釈と根拠コメントのほうが多い）。
+
+**`OZ.ie` / `OZ.opera` はプロパティだけ残した。** [`js/tablemanager.js:217`](js/tablemanager.js#L217)（IE6 で
+`select()` が throw する回避）と [`js/io.js:689`](js/io.js#L689)（F2 の preventDefault）がまだ `.js` で読む。
+元式は上表のとおり両実行系で false なので値は `false` 固定にし、参照側を `.ts` 化する段階3-3 で
+分岐ごと畳んで消す。
+
+**「XMLHttpRequest / getComputedStyle があるか」の判定も一緒に撤去した**（当初の計画外）。
+どちらも撤去対象フォールバックの**相方**で、`else` 側が消えると条件だけが残る。特に `Request` は
+`var xhr = false;` に XHR を代入する形なので、TS では `xhr` が `XMLHttpRequest | false` になり、
+`onreadystatechange` のクロージャ内では narrowing が効かず `xhr.readyState` が全部エラーになる。
+実行コードを変えずに通すと `(xhr as XMLHttpRequest)` を 5 箇所に撒くことになり、型注釈が
+「実在しない可能性」を主張し続ける。実測で到達不能と分かっている分岐なので、撤去して
+`var xhr = new XMLHttpRequest();` にした。戻り型の `XMLHttpRequest | false` は残してある
+（[`tests/node/harness.ts`](tests/node/harness.ts) が `Request` を fs 読みに差し替えて `false` を返すため）。
+
+**`while (1)` を `while (true)` にした 1 件だけは、型のためのコード変更。**
+TS の制御フロー解析が無限ループと認識するのは `while (true)` だけで、`1` のままだと
+`OZ.DOM.pos` が「`undefined` を返しうる」と判定される。定数の真偽値としては完全に同値。
+
+**型の設計で後続に効く判断**。
+
+- **`OZ.$` の戻りは non-null。** `<T extends EventTarget = HTMLElement>(x: string | T): T` にした。
+  `getElementById` の `null` を戻り型に出すと呼び出し 60 箇所すべてがガード追加を要求され、
+  イディオム C と正面衝突する（存在しない id を渡せば現行も同じ場所で落ちる）。制約が `Element` では
+  なく `EventTarget` なのは、`OZ.Event.add` に `document` / `window` を渡す呼び出しが 11 件あるため。
+- **`OZ.DOM.elm` は `HTMLElementTagNameMap` でタグ名から要素型を返す。** 呼び出し 38 箇所の
+  タグ名がすべて文字列リテラルであることを確認済みなので、`elm("td", …)` が `HTMLTableCellElement` を
+  返す。段階3-2 で `dom` バッグの型を決めるときの材料になる。
+- **`OZ.Event.target` の戻りも non-null の `HTMLElement`。** 呼び出し 5 箇所が `nodeName` を読むか
+  `dom.title` と比較するだけで、`EventTarget | null` を返すと全箇所がキャストだらけになる。
+- **`OZ.DOM.append` は rest 引数のシグネチャだけ与え、本体は `arguments` のまま。** rest 変数を
+  読む形に書き換えると実行コードが変わる。
+
+**`window.SQL` への代入だけキャストが要る。** まだ `.js` の 15 本が `SQL.Visual = Visual;` と
+トップレベルで生やしており、TS は `allowJs` のもとで**その代入から `SQL` のグローバル型を合成する**。
+結果 `window.SQL` の型は「[`js/globals.ts`](js/globals.ts) の `SqlNamespace` ∩ 合成型」になり、
+まだ生えていないクラス 14 個を要求してくる。`as unknown as typeof window.SQL` で受けた。
+段階3-3 で `.js` が尽きれば合成が止まり、素の代入に戻せる。
+
+**`SqlNamespace` に `Designer` / `designer` を宣言し続けた**のは、段階2 で入れた
+「`SQL.Designer` → `SQL.designer` の改名を `npm run typecheck` が検出する」安全網を維持するため。
+実証もやり直した: [`tests/node/harness.ts`](tests/node/harness.ts) の `sql.designer.toXML()` を
+`sql.Designer.toXML()` に戻すと、合成型と交差した後でも
+`TS2339: Property 'toXML' does not exist on type 'new () => SqlDesigner'` で落ちる。
+
+**`DATATYPES` と `LOCALE` はモジュールローカル変数にしなかった。**
+[`js/wwwsqldesigner.js:110,370`](js/wwwsqldesigner.js#L110) と両ハーネスが `window.DATATYPES = …` で
+差し替え、`window.LOCALE[n] = v` で書き込む。参照経路を現行と 1 バイトも変えないため、
+`js/globals.ts` 側も `window.` 越しに読む形を保った。
+
+**検証**。成功判定は段階1・2・3-0 と同じく **`git diff tests/golden/` が空**であること（63 + 7 本すべて
+無差分。untracked も無し＝`npm run golden:update` をこの PR で一度も打っていない）。
+`npm test` 61 passed / 21 skipped（件数不変）、`npm run test:browser` 80 passed、
+`npm run test:dist` 3 passed、`npm run known-issues` 9 passed（アサート値は 1 文字も変えていない）、
+`npm run typecheck` 0 error。
+
+**加えて、golden が張らない対話パスのうち撤去した分岐に触る 8 項目**を
+`npm run dev`（4173）と `npm run preview`（4174）の両方で一巡し、**8/8・pageerror 0 件**を確認した
+（起動時の `OZ.Request`／追加モードの `DOM.addClass`／テーブルドラッグの `Style.set`／
+ミニマップ mousedown の `DOM.pos`／Delete キーの `Event.target`・`prevent`／リサイズの `DOM.win`／
+ダイアログ開閉の `DOM.win`+`scroll`／POST での `Request`）。
+
+> 副産物の記録（いずれも `develop` 上で同じ操作を流し、**現行仕様であって段階3-1 の回帰ではない**
+> ことを確認済み）: **テーブルは Delete キーで消えない。** [`js/table.js`](js/table.js) の `click` が
+> `#area` へのバブリングを止めるため [`js/tablemanager.js:158`](js/tablemanager.js#L158) の
+> `rowManager.select(false)` が走らず、`TableManager.press` が「row 選択中」で早期 return する
+> （同 :242）。`#removetable` ボタンなら消える。また **`#addtable` は追加モードに入るだけ**で、
+> 実際の生成は `#area` のクリック（同 :142-161）、その直後に編集ダイアログが開いて `#background` が
+> 全面を覆う。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
@@ -457,7 +589,7 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 | XML 永続化（`toXML()` / `save` の body） | 保持。**§7 で golden 固定済み**（`tests/golden/xml/`） | JSON 統一。XML は読込専用に。書き出しは撤去（§4） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持 | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4） |
-| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、**段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去**（挙動は不変） | 温存し TS で巻く（Tier 2）。`.ts` 化 → `checkJs` → `strict` は後続 |
+| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、**段階3-1 で `oz` / `config` / `globals` を `.ts` 化**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。残り 15 本の `.ts` 化は段階3-2 / 3-3、`window` 登録の撤去は 3-4 |
 | `index.html` の Dropbox CDN 読み込み | 保持（テストでは遮断） | 存廃を未決（上記決定ログ参照） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。

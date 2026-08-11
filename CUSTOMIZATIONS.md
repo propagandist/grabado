@@ -578,6 +578,180 @@ TS の制御フロー解析が無限ループと認識するのは `while (true)
 > 実際の生成は `#area` のクリック（同 :142-161）、その直後に編集ダイアログが開いて `#background` が
 > 全面を覆う。
 
+### 2026-08-12 HANDOVER §3「フロント TS 化」段階3-2 — 描画中核 7 本を `.ts` 化し、`dom` バッグの型を決めた
+
+段階3-1 で名指ししていた本丸（`dom` バッグの 3 形態）に着手した。対象は
+[`js/visual.ts`](js/visual.ts) / [`row.ts`](js/row.ts) / [`table.ts`](js/table.ts) /
+[`relation.ts`](js/relation.ts) / [`key.ts`](js/key.ts) / [`rubberband.ts`](js/rubberband.ts) /
+[`map.ts`](js/map.ts) の 1,589 行で、`tsc --allowJs --checkJs --strict --noUncheckedIndexedAccess`
+実測は **550 件**（TS2532 200 / TS2339 125 / TS2304 114 / TS7006 66 / TS2531 29 / TS7008 9 /
+TS18048 3 / TS2403 2 / TS7053 1 / TS2415 1）。構成は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+§5.1・§5.4・§5.5。ここには判断だけ残す。
+
+**7 本を 1 PR にした。** 段階3-1 は 3 本 462 行を 1 PR にしたが、3-2 は分割していない。
+7 本が型的に強連結だからで、`row` ↔ `table` ↔ `relation` ↔ `key` が相互に型参照し、
+基底 `Visual` の型引数は 6 サブクラス全部を見ないと決まらない。分割すると中間状態で
+`SqlNamespace` と `Visual<D>` を 2 度書くことになる。切り分けはコミットを 4 つに割って担保した
+（oz 地ならし / visual+rubberband+map / row+table+relation+key / 台帳）。
+
+**原理: 型は「構築完了後の状態」を記述し、嘘は初期化の 1 行に閉じ込める。**
+`Visual._init()` の `container: null`、`Row` の後付け 8 キー、`Relation.dom = []` は
+「型と食い違う瞬間があるが、その間に誰も読めない」という同じ構造をしている。optional / union /
+ガードで毎回の読み出しに不確実性を撒くのではなく、型は完成形を宣言し `as unknown as` を初期化の
+1 行にだけ置く。イディオム C（呼び出し側にガードを足させない）と、段階3-1 の `OZ.$` non-null の
+前例と同型。
+
+**イディオム E（新規・機械的規則）: インスタンスプロパティは必ず `declare` で宣言する。**
+[`tsconfig.json`](tsconfig.json) の `target` が ES2022 ＝ **`useDefineForClassFields` が既定 true**
+なので、`.ts` でプロパティ宣言を書くと `dom;` がクラス本体に emit され、構築時に own property が
+生えて挙動が変わる。`!`（definite assignment assertion）でも emit されるので `declare` でなければ
+ならない。Vite/esbuild も同じフラグを見るため dist にも出る。逆に [`js/table.ts`](js/table.ts) の
+`static active` / `x` / `y` には**付けない**（現行が既に `static active;` を emit している）。
+段階3-3 / 3-4 でも効き続ける規則なので `docs/ARCHITECTURE.md` §5.5 の規約に足した。
+
+**基底 `Visual` は `dom` だけ型引数にした**（`class Visual<D = VisualDom>`）。却下した案:
+
+| 案 | 却下理由 |
+|---|---|
+| 基底 `dom: VisualDom` 固定 ＋ サブクラスで `declare dom: RowDom` 再宣言 | `Relation` が **TS2415** で成立しない（`any[]` に container / title が無い）。交差型で誤魔化すと「配列が container を持つ」と型が嘘をつく。`Relation` が `extends` をやめるのはプロトタイプ鎖が変わる実行コード変更 |
+| `D extends VisualDom` と制約を付ける | 基底のキャストは消えるが配列が制約を満たさず `Relation` が排除される。`Partial<VisualDom>` も weak type 判定で弾かれる |
+| 基底 `dom: unknown` ＋ 基底メソッド内でキャスト | キャスト数は採用案と同じで、`Visual` 型で受ける変数が将来出たとき `unknown` が伝播する |
+
+`data` は型引数にしていない。基底 `setTitle()` が `this.data.title` を書くので、型引数にすると
+そこにもキャストが要る。`Row` / `Table` が `declare data: RowData`（`extends VisualData` なので
+共変で合法）で狭めれば、基底のキャストは `dom` 由来の 4 個（`_init` 1 / `destroy` 2 / `setTitle` 1）に
+収まり、[`js/visual.ts`](js/visual.ts) 56 行の中に閉じる。見返りに `this.dom.*` の読み出し
+**172 箇所**（row 74 / table 36 / relation 35 / map 16 / rubberband 7 / visual 4）が注釈ゼロで通る。
+
+**形態 (ii)（`this.dom[id] = elm`）は段階3-3 に持ち越せる。** `io` / `keymanager` / `rowmanager` /
+`tablemanager` は `function` ＋ prototype 方式で `extends` を 1 つも持たないので、`Visual.dom` の型が
+到達しない。3-3 で唯一 `Visual` を継ぐ `Designer` は形態 (i) なので `Visual<DesignerDom>` にそのまま乗る。
+
+**`Row` の後付け 8 キーは non-optional にした。** `buildEdit()` が作る編集フォームで、
+不変条件は「8 つが存在する ⇔ `expanded === true`」。optional にすると `collapse()` / `load()` /
+`changeComment()` / `buildEdit()` の自己参照で 20 箇所超が `TS2532` になり、イディオム C により
+ガードを足せないので全部 `!` になる。**同じ不変条件を 20 回書く代わりに `RowEditDom` の
+JSDoc に 1 回書く**ほうが読み手に伝わる。各キーの要素型（`HTMLInputElement` / `HTMLSelectElement` /
+`HTMLSpanElement`）は `OZ.DOM.elm` の `HTMLElementTagNameMap` シグネチャから機械的に決まり、
+段階3-1 の投資がここで効いた。
+
+**`Relation` の `dom` は要素ユニオン ＋ 先頭 1 個のタプル**（`[RelationNode, ...RelationNode[]]`、
+`RelationNode = SVGPathElement | HTMLDivElement`）。要素ユニオンにする根拠は、`setAttribute`
+（`Element` 由来）と `.style`（`SVGElement` も `ElementCSSInlineStyle` を実装）が**ユニオンの両側に
+存在する**こと。読み出し 28 箇所がキャストなしで通る。配列側のユニオン
+（`SVGPathElement[] | HTMLDivElement[]`）は `this.owner.vector` が `this.dom` を narrowing しないので
+28 箇所すべてにキャストが要り、`redrawNormal` は 1 メソッド内で両分岐を跨ぐため却下。
+タプルにすると `noUncheckedIndexedAccess` 下でも `this.dom[0]` の 12 箇所が `!` 不要になり、
+代償は初期化の `as unknown as` 1 個だけ。
+
+**`this.owner`（Designer）の型は [`js/globals.ts`](js/globals.ts) の `SqlDesigner` に集約した。**
+イディオム B が禁じているのは「移行用の ambient 宣言**ファイル**を作る」ことで、`js/globals.ts` は
+実体のあるモジュールかつ既に `SQL.designer` の宣言責任を持つ。7 本にローカルの構造的 interface を
+書く案は、同じ Designer の別々の面を 7 回書くことになり、**面がずれても誰も気づかない**
+（`getOption` の戻りを table が `string`、relation が `unknown` と書く類）。3-3 で本物の `Designer` が
+来たときどちらか一方だけが満たされない。削除コストも 7 倍。集約したので
+[`types/globals.d.ts`](types/globals.d.ts) は拡張ではなく**縮んだ**（`SqlDesigner` の定義が消え、
+`d?: import("../js/globals.ts").SqlDesigner` の 1 行になった）。3-3 で消える予定は変わらない。
+
+**循環しない。** 実行時の辺は 7 本 → `globals.ts` の一方向だけで、`globals.ts` → 7 本は
+`import type` のみ。`verbatimModuleSyntax` が `type` キーワードの明示を強制するので emit から完全に
+消え、Rollup の依存グラフに辺が生えない。読み込み順は 1 バイトも動かない。誤って値 import に戻すと
+`globals.ts` が 7 本を先に評価しにいって順序が壊れるので、import 群にその旨のコメントを置いた。
+
+**`SqlNamespace` に 7 クラスを足した。** `.ts` 側は import した `SQL` に `SQL.Row = Row;` と代入する
+ので、宣言が無いと**代入自体が TS2339** になる（`.js` のときのようなグローバル型の合成は起きない）。
+同時にこれは **`new SQL.Row(...)` / `new SQL.Key(...)` を import に書き換えなくてよい**根拠でもある。
+書き換えると (a) 実行コードが変わり、(b) `key.ts` は `table.ts` より後に読む決まりなのに `table.ts` が
+`key.ts` を値 import すると評価順が逆転する。**値 import を使うのは `extends Visual` だけ**
+（型引数を渡すため必須で、`visual.ts` は 7 本の先頭なので順序も安全）。イディオム B の例外
+（`SQL.designer` を名前空間経由で据え置く）と同じ論理が、クラス参照にも一貫して適用できた。
+
+[`js/globals.ts`](js/globals.ts) の `as unknown as typeof window.SQL` は**残る**。合成に寄与する
+`.js` が 15 本 → 8 本に減っただけで、素の代入に戻せるのは 3-3 完了時（コメントの数字を更新した）。
+
+**`js/oz.ts` に 2 件の型変更を入れた**（実行コードは無変更）。どちらも「`.ts` から初めて呼んで
+露見した」もので、`.js` のうちは `checkJs: false` により見えなかった。
+
+- **`OZ.Event.add` のジェネリック化。** `EventListener` は呼び出しシグネチャなので
+  `strictFunctionTypes` が効き、`click(e: MouseEvent)` を `.bind(this)` して渡すと引数が反変で
+  TS2345 になる。登録は 3-2 の 7 本で 21 箇所（row 4 / table 7 / rubberband 3 / map 7）、
+  3-3 の io / tablemanager / keymanager / window でさらに 40 箇所超。受け側を 1 度広げるほうが安い。
+- **`OZ.$` にオーバーロードを被せた。** 単一シグネチャ
+  `<T extends EventTarget = HTMLElement>(x: string | T): T` だと、文字列を渡したとき `T` の推論候補に
+  `string` が入り、制約違反で `EventTarget` にフォールバックする（**既定の `HTMLElement` は推論候補が
+  1 つも無いときしか使われない**）。`OZ.$("rubberband")` が `EventTarget` になって代入先と合わなかった。
+  3 本目のシグネチャは引数が union の呼び出し（`oz.ts` 内部の `OZ.$(elm)` / `OZ.$(arr[0])`）用。
+
+**型のためのコード変更 4 件**（段階3-1 の `while (1)` → `while (true)` に続く 2〜5 件目）。
+いずれも挙動同値で、**旧束縛が改名点から先で読まれない**ことを確認している。
+
+| 箇所 | 症状 | 変更 |
+|---|---|---|
+| [`js/relation.ts`](js/relation.ts) `redraw()` | `var t1` / `t2` が `HTMLElement` → `number` の再宣言で TS2403。`t1++` が lvalue なので `as` では回避不能 | 要素側を `e1` / `e2` に改名（宣言 2 ＋ 読み出し 6 ＝ 8 行）。`:201` 以降の t1 / t2 の読み出し 10 箇所は無変更 |
+| [`js/table.ts`](js/table.ts) `down()` | `var t = OZ.Event.target(e)` と `var t = Table` が TS2403 | 前者を `el` に改名（2 行。読み出しは直後の 1 行のみ） |
+| [`js/row.ts`](js/row.ts) `fromXML()` | `var re` が `string \| null` → `RegExp` の再宣言で TS2403 | 後者を `quoteRe` に改名（2 行） |
+| [`js/table.ts`](js/table.ts) `addKey` | 仮引数名 `name` だが実引数は `Key` の第 2 引数＝`type` に渡っている | `addKey(type?: string)` に改名（1 語。`arguments` 不使用なので emit 上の意味は変わらない） |
+
+**`var event` の TS2403（table 2 箇所 / map 2 箇所）はコード変更なしで消えた。** TS2403 は
+**宣言型の一致**を見るので、両分岐に同じ注釈 `MouseEvent | Touch` を書けばよい（読むのは
+`clientX` / `clientY` だけで、`Touch` にも `MouseEvent` にもある）。同様に `js/table.ts` の
+`var x` / `var y` の再宣言は `this.x` / `this.y` を `number` と宣言した時点で自動的に消えた
+（`checkJs` 下で 1 個目が `any` 推論されていたのが原因）。
+
+**その他の型判断。**
+
+- **裸の `DATATYPES` は `window.DATATYPES` にした。** モジュール化すると裸の識別子は解決できず
+  （`declare global` の `interface Window` は裸の識別子を作らない）、`js/globals.ts` も `window` にだけ
+  載せて値 export していない。同一物への参照で、現行コード自身が `js/row.js:472` で既に
+  `window` 越しに書いていた。`getDataType()` の戻りは non-null の `Element` で確定させ、
+  呼び出し 4 箇所を無改修で通した（`OZ.$` と同じ論法）。
+- **`Table.findNamedRow` は `Row | false` を正直に出した。** 段階3-1 の「null / false を戻り型に
+  出さない」前例は**その false を誰も消費していない**から成立していたが、ここは
+  `js/wwwsqldesigner.js:395,406` が `if (!r1) { continue; }` で実際に消費している。`Row` と偽ると
+  3-3 でその分岐が「型上ありえない」ことになり、型が実在する制御フローを隠す。唯一ガードなしで
+  受ける [`js/key.ts`](js/key.ts) を `as Row` 1 キャストで通した。
+- **`Table` の static は「読める形」だけ型に出した**（`static active: Table[]`）。`Table[] | false` に
+  すると `move()` と `up()` の `t.active.length` が 2 箇所エラーになり、イディオム C でガードを足せない。
+  `false` は「ドラッグ終了」の印で、`up()` がリスナーを外しているので次の `down()` が代入するまで
+  読まれない。`t.active = false` の 1 行にだけキャストを置いた。
+- **数値→文字列の暗黙変換に依存している代入は 4 箇所**（`relation` の `setAttribute("stroke-width", …)`
+  3 件と `table` の `style.zIndex`）。`String()` を挟むのは実行コード変更なので値側に
+  `as unknown as string` を置き、書き方を揃えた。`CONFIG.RELATION_THICKNESS` を `string` にする案は
+  同じ定数が数値演算にも使われるため不可。
+
+**検証**。成功判定は段階1・2・3-0・3-1 と同じく **`git diff tests/golden/` が空**であること（63 + 7 本
+すべて無差分。untracked も無し＝`npm run golden:update` をこの PR で一度も打っていない）。
+`npm test` 61 passed / 21 skipped（件数不変）、`npm run test:browser` 80 passed、
+`npm run test:dist` 3 passed、`npm run known-issues` 9 passed（アサート値は 1 文字も変えていない）、
+`npm run typecheck` 0 error。
+
+**加えて、バンドル出力の diff を副次判定に使った**（イディオム E の検算）。`develop` と本ブランチで
+`vite build --minify false` を走らせ、Rollup が付けるモジュールスコープの接尾辞（`OZ$1` → `OZ` 等）と
+コメントを正規化して比較したところ、実質差分は次に**収束した**。
+
+- `extends SQL.Visual` → `extends Visual`（値 import。6 クラス）
+- `DATATYPES` → `window.DATATYPES`（3 箇所）
+- 上表のコード変更 4 件
+- `var el = OZ.Event.target(e); if (el != …)` → `if (OZ.Event.target(e) != …)`（Rollup が
+  1 回しか使われない変数をインライン化した副産物。評価回数も順序も同じ）
+
+**インスタンスフィールドの emit は 1 つも増えていない**（`var Visual=class{_init(){…` のまま）。
+`declare` の付け忘れがあればここに現れるので、この比較がそのまま規則の検算になっている。
+
+**対話パスの一巡**（golden が張らないマウス／キーボード操作）。`npm run dev`（4173）と
+`npm run preview`（4174）の両方で 11 項目を流し、**pageerror 0 件**。項目はテーブル追加 ×2 /
+テーブルドラッグ / row 追加→dblclick 展開→Enter 折りたたみ / リレーション作成と再描画 /
+row 選択と解除 / PK 追加 / ミニマップのドラッグ / ラバーバンド選択 / リサイズとスクロール /
+`toXML` → `fromXML` 往復 / テーブル削除。
+
+> 副産物の記録（`develop` 上で同じ操作を流し、**現行仕様であって段階3-2 の回帰ではない**ことを
+> 確認済み。差分の中身まで完全に一致した）: **同名のテーブルが 2 つあると `fromXML` でリレーションが
+> 復元されない。** 既定名（`new table`）のまま 2 つ作って FK を張り、`toXML` → `fromXML` → `toXML` を
+> 往復すると `<relation table="new table" row="id" />` が消える。
+> [`js/wwwsqldesigner.js`](js/wwwsqldesigner.js) の `fromXML` が `findNamedTable(tname)` で
+> 名前解決しており、参照元と参照先が同名だと両端が同じテーブルに解決されるため。
+> §4 の IO 作り替えで名前ではなく id で参照する形にすれば解消する（`formatVersion` 側の設計に含める）。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
@@ -589,7 +763,7 @@ TS の制御フロー解析が無限ループと認識するのは `while (true)
 | XML 永続化（`toXML()` / `save` の body） | 保持。**§7 で golden 固定済み**（`tests/golden/xml/`） | JSON 統一。XML は読込専用に。書き出しは撤去（§4） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持 | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4） |
-| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、**段階3-1 で `oz` / `config` / `globals` を `.ts` 化**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。残り 15 本の `.ts` 化は段階3-2 / 3-3、`window` 登録の撤去は 3-4 |
+| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、**段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。残り 8 本の `.ts` 化は段階3-3、`window` 登録の撤去は 3-4 |
 | `index.html` の Dropbox CDN 読み込み | 保持（テストでは遮断） | 存廃を未決（上記決定ログ参照） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。

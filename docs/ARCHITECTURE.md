@@ -185,32 +185,37 @@ import 列に移し、段階3-0 で [`../src/app.ts`](../src/app.ts) に分離�
 Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
 ```
-oz.ts  →  config.ts  →  globals.ts  →  visual.js  →  row.js  →  table.js  →  relation.js
-      →  key.js  →  rubberband.js  →  map.js  →  toggle.js  →  io.js
+oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
+      →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.js  →  io.js
       →  tablemanager.js  →  rowmanager.js  →  keymanager.js  →  window.js  →  options.js
       →  wwwsqldesigner.js
 ```
 
-**この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本が `.ts` になった。
+**この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本、段階3-2 で
+続く描画中核 7 本が `.ts` になり、残りは末尾 8 本（段階3-3）。
 
 - `oz.ts` は upstream 独自の DOM / イベント / XHR ライブラリ（`OZ.*`）。`OZ.Request` が全通信の入口。
   **§3 段階2 で `OZ.Class` 系（参照 0）と ES5 polyfill 群を撤去**し、
   **段階3-1 で `.ts` 化とともに IE 専用分岐・参照 0 の API（`select` / `gecko` / `webkit` / `khtml`）を撤去**した。
 - `globals.ts` はロケール関数 `_()` と `SQL` 名前空間（`publish` / `subscribe` / `escape`）。
-  polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。
-- `visual.js` → `row.js` / `table.js` / `relation.js` / `key.js` が描画中核（Tier 2 で温存）。
-  **段階2 で ES クラス階層になった**（§5.4）。
+  polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。**段階3-2 で
+  `SqlDesigner`（`Designer` インスタンスの面）が [`../types/globals.d.ts`](../types/globals.d.ts)
+  から移設され、描画中核 7 本の `this.owner` はすべてこの 1 つの宣言を見る**。
+- `visual.ts` → `row.ts` / `table.ts` / `relation.ts` / `key.ts` が描画中核（Tier 2 で温存）。
+  **段階2 で ES クラス階層になり、段階3-2 で `.ts` 化した**（§5.4）。
 - `wwwsqldesigner.js` の `SQL.Designer` が全体のオーナー（オプション・cookie・XHR ヘッダ・`toXML()`）。
   **段階2 でクラス（`SQL.Designer`）と唯一のインスタンス（`SQL.designer`）に分離**した。
 - **`.ts` 化はこの読み込み順の先頭から進める**（§5.5）。葉から進めると未 `.ts` のグローバルに対する
   ambient 宣言が要り、それ自体が後で捨てる作業になるため。
 
-**まだ `.js` の 15 本の相互参照はグローバルのまま**（`OZ` / `CONFIG` / `SQL` / `DATATYPES` / `LOCALE` / `_`）。
+**まだ `.js` の 8 本の相互参照はグローバルのまま**（`OZ` / `CONFIG` / `SQL` / `DATATYPES` / `LOCALE` / `_`）。
 ESM ではトップレベル `var` がモジュールスコープに閉じるので、定義側の 6 箇所だけを `window.` に付け替えてある
 （[`../js/oz.ts`](../js/oz.ts) / [`../js/config.ts`](../js/config.ts) / [`../js/globals.ts`](../js/globals.ts) の
-`_`・`DATATYPES`・`LOCALE`・`SQL`）。`.ts` 化した 3 本も `export` と併せてこの登録を残しており、
+`_`・`DATATYPES`・`LOCALE`・`SQL`）。`.ts` 化した 10 本も `export` と併せてこの登録を残しており、
 参照側が全部 `.ts` になる段階3-4 でまとめて撤去する。
-段階2 の class 化でも段階3-1 の `.ts` 化でもこの前提は崩していない（§5.4 の「2 つの実行系」を参照）。
+描画中核 7 本は `window` にではなく `SQL` 名前空間に載る（`SQL.Row = Row;` 等）ので、
+その型は `SqlNamespace` が持つ（§5.5）。
+段階2 の class 化でも段階3-1・3-2 の `.ts` 化でもこの前提は崩していない（§5.4 の「2 つの実行系」を参照）。
 
 ### 5.1.1 ビルドと配信
 
@@ -241,16 +246,16 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 `SQL.Visual` を頂点とする 8 クラスは段階2 で ES クラス構文になった。判断の根拠は
 [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
 
-| クラス | ファイル | `_build` | 親メソッド呼び出し | 静的 | `dom` の形 |
+| クラス | ファイル | `_build` | 親メソッド呼び出し | 静的 | `dom` の形（`.ts` 化後の型） |
 |---|---|---|---|---|---|
-| `Visual`（基底） | `visual.js` | 空 | — | — | `{container, title}` |
-| `Key` | `key.js` | 継承 | **なし**（`destroy` は基底を呼ばない） | — | 使わない |
-| `Rubberband` | `rubberband.js` | 継承 | — | — | `{container}` |
-| `Minimap`（`SQL.Map`） | `map.js` | 継承 | — | — | `{container, port}` |
-| `Relation` | `relation.js` | 継承 | **なし**（`destroy` は基底を呼ばない） | `_counter` | **配列**（SVG path 1 本 or div 3 本） |
-| `Row` | `row.js` | **上書き** | `super.setTitle` / `super.destroy` | — | 固定キー＋後付け 8 個 |
-| `Table` | `table.js` | **上書き** | `super.setTitle` / `super.destroy` | `active` / `x` / `y` | 固定キー＋`mini` |
-| `Designer` | `wwwsqldesigner.js` | 継承 | **なし**（`setTitle` は `document.title` のみ） | — | 固定キー＋`svg` |
+| `Visual`（基底） | `visual.ts` | 空 | — | — | `VisualDom = {container, title}`。**型引数 `D` で差し替える** |
+| `Key` | `key.ts` | 継承 | **なし**（`destroy` は基底を呼ばない） | — | 使わない（基底のまま） |
+| `Rubberband` | `rubberband.ts` | 継承 | — | — | `VisualDom`（`title` は永久に null・参照 0） |
+| `Minimap`（`SQL.Map`） | `map.ts` | 継承 | — | — | `MinimapDom = VisualDom + port` |
+| `Relation` | `relation.ts` | 継承 | **なし**（`destroy` は基底を呼ばない） | `_counter` | **配列**（SVG path 1 本 or div 3 本）＝ `[RelationNode, ...RelationNode[]]` |
+| `Row` | `row.ts` | **上書き** | `super.setTitle` / `super.destroy` | — | `RowDom = VisualDom + 固定 3 + RowEditDom`（後付け 8 個） |
+| `Table` | `table.ts` | **上書き** | `super.setTitle` / `super.destroy` | `active` / `x` / `y` | `TableDom = VisualDom + content + mini` |
+| `Designer` | `wwwsqldesigner.js` | 継承 | **なし**（`setTitle` は `document.title` のみ） | — | 固定キー＋`svg`（段階3-3 で `Visual<DesignerDom>` に乗る） |
 
 構造上おさえておく点。
 
@@ -259,8 +264,13 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
   ES クラスの「`super()` 前に `this` を触れない」制約と両立させるにはこの形しかない。
   クラスフィールド初期化子も同じ理由で使っていない（`super()` 直後に走って順序が変わる）。
 - **`Relation` だけ `dom` が配列**で、基底が入れた `{container, title}` を上書きする。基底で `dom` の型を
-  決められない原因そのもので、`dom` バッグは全体で 3 形態ある（固定キー＋後付け／文字列キーの動的代入
-  `this.dom[id] = elm`／この配列）。**段階3 の最大の判断事項**。
+  決められない原因そのもので、`dom` バッグは全体で 3 形態ある（(i) 固定キー＋後付け／(ii) 文字列キーの
+  動的代入 `this.dom[id] = elm`／(iii) この配列）。**段階3-2 で (i) と (iii) が決着した**：
+  基底 `Visual` を `class Visual<D = VisualDom>` にして各サブクラスが型引数で自分の形を渡す。
+  基底を固定型にしてサブクラスで `declare dom` 再宣言する案は `Relation` が TS2415 で成立せず、
+  `D extends VisualDom` の制約も配列を排除する。
+  **(ii) は段階3-3 に残る**が、該当する `io` / `keymanager` / `rowmanager` / `tablemanager` は
+  `function` ＋ prototype 方式で `Visual` を継承していないため、`Visual.dom` の型に縛られず自由に決められる。
 - クラス名 `Minimap` は ES 標準の `Map` との衝突を避けるため。公開名は `SQL.Map` のまま。
 
 **2 つの実行系の差は §3 段階3-0 でほとんど消えた。** Node ハーネスも
@@ -294,15 +304,16 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 |---|---|---|
 | 3-0 | Node ハーネスを IIFE バンドル化（`js/` は無改修） | 済（2026-08-11） |
 | 3-1 | `oz` / `config` / `globals` | 済（2026-08-12） |
-| 3-2 | 描画中核 `visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map` | 未 |
+| 3-2 | 描画中核 `visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map` | 済（2026-08-12） |
 | 3-3 | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` | 未 |
 | 3-4 | `window` 登録と [`../types/globals.d.ts`](../types/globals.d.ts) の撤去、`strict` の最終確認 | 未 |
 
 着手前の実測（`tsc --allowJs --checkJs --noEmit --strict --noUncheckedIndexedAccess`）は **1,281 件**。
 うち TS2304 の 364 件は「裸グローバルが宣言されていないだけ」で import 化すれば消える。実質の型作業は
-TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3 形態**（§5.4）＝ 段階3-2。
+TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3 形態**（§5.4）＝ 段階3-2
+（同段階の内訳は 550 件）。
 
-守る規約は 4 つ。
+守る規約は 5 つ。
 
 1. **`.ts` 化 ＝ モジュール化。** 非モジュールのまま `.ts` にすると `class Window` / `Options` / `Key` /
    `Table` がグローバル型空間に出て `lib.dom` と衝突する。ただし未 `.ts` の参照側のために
@@ -313,8 +324,21 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
    実行時ガードを足さない（挙動が変わる）。`any` で埋めない。
 4. **死にコードの撤去は実測してから。** 「対象実行系（Chromium / jsdom）で一度も評価されない」ことを
    両方で計測し、結果を台帳に残す（段階2 の polyfill 撤去と同じ論法）。
+5. **インスタンスプロパティは必ず `declare` で宣言する**（段階3-2 で追加。3-3 / 3-4 でも効き続ける）。
+   [`../tsconfig.json`](../tsconfig.json) の `target` が ES2022 ＝ `useDefineForClassFields` が既定 true
+   なので、`declare` なしの宣言はクラス本体に emit され、構築時に own property が生えて挙動が変わる
+   （`!` による definite assignment assertion でも emit される）。Vite/esbuild も同じフラグを見るので
+   dist にも出る。逆に `Table` の `static active` / `x` / `y` には**付けない**（現行が既に emit している）。
+   この規則が守れていれば `.ts` 化のバンドル差分は「module 配線＋意図したコード変更」に収束するので、
+   `npm run build` の出力 diff を副次的な成功判定に使える（実際に段階3-2 で検算した）。
 
-段階3-1 で決めた型のうち、後続に効くもの。
+型設計を貫く原理は「**型は構築完了後の状態を記述し、嘘は初期化の 1 行に閉じ込める**」。
+`Visual._init()` の `container: null`、`Row` の後付け 8 キー、`Relation.dom = []` はいずれも
+「型と食い違う瞬間があるが、その間に誰も読めない」構造で、optional や union で毎回の読み出しに
+不確実性を撒くより、初期化の 1 行に `as unknown as` を置いて不変条件をコメントで残すほうが安い
+（規約 3 と衝突しない）。
+
+段階3-1・3-2 で決めた型のうち、後続に効くもの。
 
 | API | 型 | 理由 |
 |---|---|---|
@@ -322,6 +346,10 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 | `OZ.DOM.elm` | `<K extends keyof HTMLElementTagNameMap>(name: K, opts?) => HTMLElementTagNameMap[K]` | 呼び出し 38 箇所のタグ名がすべてリテラル。段階3-2 で `dom` バッグの型を決める材料になる |
 | `OZ.Event.target` | `(e: Event) => HTMLElement` | 呼び出し 5 箇所は `nodeName` を読むか `dom.title` と比較するだけ |
 | `OZ.Request` | `(url, callback?, options?) => XMLHttpRequest \| false` | `false` は [`../tests/node/harness.ts`](../tests/node/harness.ts) の差し替え実装が返す |
+| `OZ.$`（3-2 で追補） | 上に加えて `(x: string) => HTMLElement` のオーバーロード | 単一シグネチャだと文字列を渡したとき `T` の推論候補に `string` が入り、制約違反で `EventTarget` にフォールバックする（既定の `HTMLElement` は候補が 1 つも無いときしか使われない） |
+| `OZ.Event.add`（3-2） | `<E extends Event = Event>(elm, event, cb: (e: E) => void) => number` | `EventListener` は呼び出しシグネチャなので `strictFunctionTypes` が効き、`click(e: MouseEvent)` を bind して渡すと反変で TS2345。登録は 3-2 で 21 箇所、3-3 でさらに 40 箇所超 |
+| `SqlDesigner`（3-2） | [`../js/globals.ts`](../js/globals.ts) の `export interface` | 描画中核 7 本の `this.owner` の面を 1 か所に集約。7 本にローカル interface を書くと面がずれても気づけず、削除コストも 7 倍。段階3-3 で `import type { Designer }` に置き換わる |
+| `SqlNamespace`（3-2） | `Visual` / `Row` / `Table` / `Relation` / `Key` / `Rubberband` / `Map` を追加 | `.ts` 側は import した `SQL` に代入するので、宣言が無いと代入自体が TS2339（`.js` のようなグローバル型の合成は起きない）。同時にこれが `new SQL.Row(...)` を import に書き換えずに済む根拠でもある |
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

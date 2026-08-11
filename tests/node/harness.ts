@@ -111,7 +111,18 @@ export async function createHarness(): Promise<NodeHarness> {
     });
     const window = dom.window;
 
-    window.eval(appBundle);
+    // strict で評価する。ESM で配る側（dev / build / test:browser / test:dist）は常に strict
+    // なのに window.eval は sloppy、という実行系の乖離を縮めるため。rolldown の IIFE 出力自体には
+    // "use strict" が付かないので前置が要る。
+    //
+    // ただし暗黙グローバル（段階2 で直した js/io.js の req / js/oz.js の y）は、これを入れても
+    // 捕まらない。jsdom の Window は vm の contextified global（Proxy）なので、strict でも
+    // 未宣言の名前への代入が成立してしまう。実測: 前置ありで関数内の this は undefined、
+    // frozen への代入は TypeError、delete 変数は SyntaxError になる（＝コードは strict）が、
+    // 暗黙グローバル代入だけは素通りして window に載る。Node の素の indirect eval と
+    // vm.runInContext では同じコードが ReferenceError になるので、これは jsdom 固有の制約。
+    // 暗黙グローバルの検出は引き続き npm run test:browser の担当（docs/TESTING.md）。
+    window.eval(`"use strict";\n${appBundle}`);
 
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
     // new SQL.Designer() のうちに init2() まで到達する。

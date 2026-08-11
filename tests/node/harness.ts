@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM, VirtualConsole } from "jsdom";
+import { build } from "vite";
 import { REPO_ROOT } from "../support/fixtures.ts";
 
 /**
@@ -14,28 +15,6 @@ import { REPO_ROOT } from "../support/fixtures.ts";
  *   2. offsetWidth/offsetHeight が常に 0（jsdom はレイアウトしない）
  *      -> toXML() が使うのは x/y だけなのでシリアライズの特性化には影響しない
  */
-
-/** src/main.ts:13-30 の読み込み順（段階1 で index.html から移設）。依存の薄い順の指標でもある（docs/ARCHITECTURE.md §5.1） */
-const SCRIPT_ORDER = [
-    "oz.js",
-    "config.js",
-    "globals.js",
-    "visual.js",
-    "row.js",
-    "table.js",
-    "relation.js",
-    "key.js",
-    "rubberband.js",
-    "map.js",
-    "toggle.js",
-    "io.js",
-    "tablemanager.js",
-    "rowmanager.js",
-    "keymanager.js",
-    "window.js",
-    "options.js",
-    "wwwsqldesigner.js",
-] as const;
 
 /* SQL.designer の型は types/globals.d.ts の SqlDesigner に集約した（HANDOVER §3 段階2） */
 
@@ -62,9 +41,59 @@ function resolveRequestUrl(url: string): string {
     return url.replace(/^\/+/, "").split("?")[0] ?? "";
 }
 
-export function createHarness(): NodeHarness {
+/**
+ * src/app.ts（js/ 18 本の読み込み順）を単一 IIFE に束ねて返す（HANDOVER §3 段階3-0）。
+ *
+ * 以前はここで js/*.js を 1 本ずつ eval していたが、その経路は js/ が .ts になった時点で
+ * 動かなくなる（docs/TESTING.md が段階3 の分岐点として予告していた箇所）。バンドルを噛ませると
+ * js/ が .js でも .ts でも、参照がグローバルでも ESM でも同じコードで動くので、移行が 1 回で済む。
+ * 副次的に、読み込み順の定義が src/app.ts の 1 か所に集約される（従来はここに SCRIPT_ORDER として
+ * 二重に書かれていた）。
+ *
+ * 起動（new SQL.Designer()）は含めない。OZ.Request を fs 読みに差し替えてから生成する必要があり、
+ * その順序は現行と 1 行も変えないため。だから束ねるのは src/main.ts ではなく src/app.ts。
+ */
+async function bundleApp(): Promise<string> {
+    const result = await build({
+        // vite.config.ts を読ませない。viteStaticCopy が走ると dist/ に書き込んでしまう。
+        configFile: false,
+        // process.cwd() を読ませない（Windows の cwd 大小問題と非干渉にする。
+        // scripts/canonical-cwd.mjs の WORKAROUND を参照）。
+        root: REPO_ROOT,
+        logLevel: "silent",
+        build: {
+            write: false,
+            target: "es2022",
+            minify: false,
+            // 副作用 import だけで構成されるエントリなので、ツリーシェイクの判断に
+            // 安全網を依存させない。配布物の妥当性は npm run test:dist が別途張る。
+            rollupOptions: { treeshake: false },
+            lib: {
+                entry: "src/app.ts",
+                formats: ["iife"],
+                name: "GrabadoApp",
+                fileName: "app",
+            },
+        },
+    });
+
+    const outputs = Array.isArray(result) ? result : [result];
+    const first = outputs[0];
+    if (!first || !("output" in first)) {
+        throw new Error("vite build がバンドル出力を返さなかった（watch モードになっている）");
+    }
+    const chunk = first.output.find((o) => o.type === "chunk");
+    if (!chunk) {
+        throw new Error("バンドル出力に chunk が無い");
+    }
+    return chunk.code;
+}
+
+export async function createHarness(): Promise<NodeHarness> {
+    const appBundle = await bundleApp();
+
     // index.html から <script src> と末尾の `new SQL.Designer()` を外す。
-    // スクリプトは順序と OZ.Request の差し替えを制御するため手で評価する。
+    // 評価の順序と OZ.Request の差し替えを制御するため、バンドルは手で eval する。
     const html = readRepoFile("index.html")
         .replace(/<script[^>]*\bsrc=[^>]*><\/script>/g, "")
         .replace(/<script type="text\/javascript">[\s\S]*?<\/script>/g, "");
@@ -82,9 +111,18 @@ export function createHarness(): NodeHarness {
     });
     const window = dom.window;
 
-    for (const file of SCRIPT_ORDER) {
-        window.eval(readRepoFile(`js/${file}`));
-    }
+    // strict で評価する。ESM で配る側（dev / build / test:browser / test:dist）は常に strict
+    // なのに window.eval は sloppy、という実行系の乖離を縮めるため。rolldown の IIFE 出力自体には
+    // "use strict" が付かないので前置が要る。
+    //
+    // ただし暗黙グローバル（段階2 で直した js/io.js の req / js/oz.js の y）は、これを入れても
+    // 捕まらない。jsdom の Window は vm の contextified global（Proxy）なので、strict でも
+    // 未宣言の名前への代入が成立してしまう。実測: 前置ありで関数内の this は undefined、
+    // frozen への代入は TypeError、delete 変数は SyntaxError になる（＝コードは strict）が、
+    // 暗黙グローバル代入だけは素通りして window に載る。Node の素の indirect eval と
+    // vm.runInContext では同じコードが ReferenceError になるので、これは jsdom 固有の制約。
+    // 暗黙グローバルの検出は引き続き npm run test:browser の担当（docs/TESTING.md）。
+    window.eval(`"use strict";\n${appBundle}`);
 
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
     // new SQL.Designer() のうちに init2() まで到達する。

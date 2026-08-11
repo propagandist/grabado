@@ -372,6 +372,80 @@ vitest のバージョンを固定していて、**上げると必ず 1 回赤�
 **Linux では起きない**（`process.cwd()` が常に解決済みの物理パスを返すため）。HANDOVER §2 で
 主経路が Docker に移れば本件は消えるが、Windows でのローカル開発が続く限りラッパーは残す。
 
+### 2026-08-11 HANDOVER §3「フロント TS 化」段階3-0 — Node ハーネスを IIFE バンドルに載せ替えた
+
+段階3 は「依存の薄い順に `.ts` 化」。その**着手前に潰す障害が 1 つ**あり、これを独立した PR にした。
+[`tests/node/harness.ts`](tests/node/harness.ts) は `js/*.js` を 1 本ずつ `window.eval` していて、
+`js/` の 1 本目を `.ts` にした瞬間にこの経路が死ぬ（[`docs/TESTING.md`](docs/TESTING.md) が
+「段階3 の分岐点」として予告していた箇所）。**Hard Constraint 1 の安全網が、まさに移植を始める
+瞬間に片肺になる**。走らせ方は [`docs/TESTING.md`](docs/TESTING.md)、構成は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.1・§5.4。ここには判断だけ残す。
+
+- **`js/` を 1 行も触らずにハーネスだけを載せ替えた。** 段階1 の「一括でやると *ビルド経路の変化* と
+  *型付けによる書き換え* のどちらが原因か切り分けられない」という論法を、ハーネス自体に適用した形。
+  既知良好な現行 `js/` に対して緑を確認してから型付けに入る。
+- **採ったのは vite の `build()`（`write: false`）で `src/app.ts` を単一 IIFE に束ね、jsdom の
+  `window.eval` に 1 回渡す形。** 決め手は「`js/` が `.js` でも `.ts` でも、参照がグローバルでも
+  ESM でも**同じハーネスコードで動く**」こと。移行が 1 回で済み、段階3 の後続（`.ts` 化・import 導入）と
+  完全に独立になる。実測: 89,263 bytes / バンドル 1 回あたり約 0.3 秒。`npm test` 全体は
+  **61 passed + 21 skipped（3 files）で件数不変**、所要も悪化しない（実測 5〜13 秒。キャッシュ状態で振れる）。
+- **エントリを `src/app.ts`（定義）と `src/main.ts`（起動）に分けた。** ハーネスは「js/ を全部評価 →
+  `OZ.Request` を fs 読みに差し替え → `new SQL.Designer()`」の順序を要求するので、起動を含む
+  エントリは束ねられない。分けたことで**読み込み順の定義が `src/app.ts` の 1 か所に集約**され、
+  ハーネス側の `SCRIPT_ORDER`（18 行の二重管理）が消えた。`index.html` は無改修。
+- **`configFile: false` と `root: REPO_ROOT` は必須。** 前者は [`vite.config.ts`](vite.config.ts) の
+  `viteStaticCopy` を走らせないため（走ると `dist/` に書き込む＝テストが副作用を持つ）。後者は
+  `process.cwd()` を読ませないため（上記の Windows ワークアラウンドと非干渉にする）。実測で、
+  cwd のドライブレターを小文字に強制した実行でも 61 passed。`vitest.config.ts` と
+  `scripts/vitest.mjs` は 1 行も触っていない。
+- **`rollupOptions.treeshake: false`。** 副作用 import だけで構成されるエントリなので、
+  安全網をツリーシェイクの判断に依存させない。配布物の妥当性は `npm run test:dist` が別途張る。
+
+**却下した 2 案**（いずれも実測）。
+
+- **`ts.transpileModule` で 1 ファイルずつ型を剥がして今までどおり eval する。** 新規依存ゼロで
+  変更も小さいが、**`import type` が 1 つでもあると素の eval が壊れる**。実測（typescript 5.9.3、
+  `import type { Row } from "./row.ts"` を含む入力）: `module: ESNext` は末尾に **`export {};`** を
+  付けて `SyntaxError`、`module: None` は先頭に **`Object.defineProperty(exports, …)`** を付けて
+  `ReferenceError`。型だけの import ですらこうなるので、段階3 で import を入れた時点で**もう一度
+  移行する**ことになる。ただし本方式が行き詰まったときの退避策としては有効なので記録に残す。
+- **vitest の `environment` を `jsdom` にして `import()` する。** ハーネスは自前 JSDOM を毎回構築し
+  `NodeHarness.dom` として返しているが、vitest の jsdom 環境は**ワーカーに 1 個**しか無く HTML も
+  config 固定なので、`createHarness()` を複数回呼べる現在の形が成立しない（インターフェースが壊れる）。
+  加えて ES モジュールはインスタンス化が 1 回だけキャッシュされるため、`window.OZ = {… ie: !!document.attachEvent …}`
+  のような**評価時に ambient global へ束縛される**コードを 2 つ目の window に対して起こし直せない。
+  Windows ワークアラウンドが張り付いた `vitest.config.ts` を触ることにもなる。
+
+**`"use strict";` を前置した — ただし想定した効果の一部は得られない（実測）。**
+
+ESM で配る側（`dev` / `build` / `test:browser` / `test:dist`）は常に strict なのに `window.eval` 側は
+sloppy、という乖離を縮めるために前置した。rolldown の IIFE 出力自体には `"use strict"` が付かない。
+安全性は事前に実測済み（`js/` に `with` / `arguments.callee` / 8 進リテラルは 0 件。`eval` は
+[`js/wwwsqldesigner.js:215`](js/wwwsqldesigner.js#L215) の 1 件だけで、外側で `var` 宣言済みの `obj` に
+代入する**式評価**なので strict でも挙動が変わらない）。実際に `npm test` は緑のまま。
+
+**しかし暗黙グローバルは、これを入れても `npm test` では捕まらない。** jsdom の `Window` は vm の
+contextified global（Proxy）で、strict でも未宣言の名前への代入が成立してしまう。
+
+| 判別子（`"use strict";` 前置あり） | 実測 |
+|---|---|
+| 関数呼び出しの `this` | `undefined`（＝strict） |
+| frozen オブジェクトへの代入 | `TypeError`（＝strict） |
+| `delete` 変数 | `SyntaxError`（＝strict） |
+| **暗黙グローバル代入** | **素通りして `window` に載る** |
+
+Node の素の indirect eval と `vm.runInContext` では同じコードが `ReferenceError` になるので、
+これは jsdom 固有の制約。**したがって「暗黙グローバルはブラウザ側でしか赤くならない」という
+注意書きは撤去せず、理由を精密化して残した**（当初は前置で不要になる想定だった）。
+段階2 で直した 2 件（`js/io.js` の `req` / `js/oz.js` の `y`）と同種の問題は、引き続き
+`npm run test:browser` だけが張っている。
+
+**検証**。成功判定は段階1・2 と同じく **`git diff tests/golden/` が空**であること（63 + 7 本すべて
+無差分。untracked も無し＝`npm run golden:update` をこの PR で一度も打っていない）。
+`npm test` 61 passed / 21 skipped（件数不変）、`npm run test:browser` 80 passed、
+`npm run test:dist` 3 passed、`npm run known-issues` 9 passed（アサート値は 1 文字も変えていない）、
+`npm run typecheck` 0 error。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

@@ -61,8 +61,8 @@ function readStylesheet(db: string): string {
 describe("DDL golden（Node / xslt-processor）", () => {
     let h: NodeHarness;
 
-    beforeAll(() => {
-        h = createHarness();
+    beforeAll(async () => {
+        h = await createHarness();
     });
 
     afterAll(() => {

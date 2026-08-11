@@ -8,8 +8,8 @@ import { createHarness, type NodeHarness } from "./harness.ts";
 describe("serializer 特性化（Node / jsdom）", () => {
     let h: NodeHarness;
 
-    beforeAll(() => {
-        h = createHarness();
+    beforeAll(async () => {
+        h = await createHarness();
     });
 
     afterAll(() => {

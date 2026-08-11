@@ -26,6 +26,40 @@ npm run typecheck     # src/ tests/ types/ の型検査（既存 js/ は checkJs
 root はリポジトリルートのままなので、`index.html` / `db/` / `locale/` / `styles/` の URL は
 §3 段階1 以前の静的サーバ時代と同じ。
 
+### `npm test` はラッパー経由（Windows の vitest バグ回避）
+
+`npm test` は `vitest run` を直接呼ばず [`../scripts/vitest.mjs`](../scripts/vitest.mjs) を経由する。
+**Windows で cwd のドライブレターが小文字（`d:\…`）だと vitest ランタイムが二重ロードされ、
+テストが 1 件も走らないまま落ちる**ため（vitest 側の未修正バグ）。ラッパーは cwd を
+`fs.realpathSync.native` と一致する形に正規化してから vitest を起動するだけで、
+**Windows 以外では何もしない**（Docker / Linux は無関係）。
+
+**この症状の見分け方** — テストが 0 件で、トップレベルの `describe(...)` の行にこれが出る:
+
+```
+TypeError: Cannot read properties of undefined (reading 'config')
+ ❯ tests/node/serialize.test.ts:8:1
+ Test Files  2 failed (2)
+      Tests  no tests
+```
+
+`npx vitest` や IDE の vitest 拡張から直接起動すると**ラッパーを通らない**。その場合は
+[`../vitest.config.ts`](../vitest.config.ts) のガードが原因を説明して止めるので、`npm test` を使うこと。
+
+再現・検証したいときは cwd の case を強制する（`cd` は case を正規化してしまうので使えない）:
+
+```bash
+# 危険側（ラッパー無し）。対策前はこれで必ず落ちた
+node -e "process.chdir('d:/projects/grabado'); require('child_process').spawnSync(process.execPath,['node_modules/vitest/vitest.mjs','run'],{stdio:'inherit'})"
+
+# 対策後（ラッパー経由）。同じ cwd で通る
+node -e "process.chdir('d:/projects/grabado'); require('child_process').spawnSync(process.execPath,['scripts/vitest.mjs','run'],{stdio:'inherit'})"
+```
+
+原因・却下した対策・**撤去条件**は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
+撤去忘れを防ぐため [`workarounds.test.ts`](../tests/node/workarounds.test.ts) が vitest の
+バージョンを固定していて、**vitest を上げると必ず 1 回赤くなる**（parity 例外と同じイディオム）。
+
 ---
 
 ## なぜ 2 系統あるのか

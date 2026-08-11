@@ -291,6 +291,87 @@ key ダイアログ・SQL 出力・カラム/テーブル削除・スタイル�
 > スタイル切替も `Options.save` が cookie に書くだけで `applyStyle` を呼ばない（`index.html` の
 > 「* は再読み込みが必要」の注記どおり）。どちらも現行仕様。
 
+### 2026-08-11 vitest の Windows 小文字ドライブレター問題に cwd 正規化ラッパーを入れた
+
+段階2 の作業中、`npm test` が**テストを 1 件も走らせずに落ちる**事象を観測した。走らせ方は
+[`docs/TESTING.md`](docs/TESTING.md)。ここには判断だけ残す。
+
+```
+ ❯ tests/node/serialize.test.ts (0 test)
+TypeError: Cannot read properties of undefined (reading 'config')
+ ❯ tests/node/serialize.test.ts:8:1      ← トップレベルの describe(...) 行
+ Test Files  2 failed (2)
+      Tests  no tests
+```
+
+**当初「初回だけ落ちる」と見えたが、実際は「cwd のドライブレターが小文字の間ずっと落ちる」だった。**
+2 回目が通ったのはシェルの cwd が途中で大文字に変わったためで、キャッシュとは無関係。
+小文字 cwd を強制すると **5/5 で失敗**、対策後は **5/5 で成功**する（実測）。
+
+**原因**（vitest 4.1.10 / vite 8.2.1 時点。版が上がれば行番号はずれる）:
+
+- vitest の `distDir` は `import.meta.url` 由来なので **cwd の大小をそのまま引き継ぐ**。
+- 一方 vite にバンドルされた pathe（`normalizeWindowsPath`）は**必ず**ドライブレターを大文字化する。
+- Node の ESM レジストリは URL 文字列でキーされるので、両者がずれると
+  **vitest ランタイムが 2 インスタンス読み込まれる**。テストファイルが掴んだ側は
+  `clearCollectorContext` を通らず `runner` が `undefined` のままで、`describe()` 内の
+  `validateTags(runner.config, …)` が TypeError になる。
+- 確率的に見えたのは、vite の `safeRealpathSync` が `net use` の非同期判定を境に
+  `realpathSync`（大小を保存）と `realpathSync.native`（正規化する）を**同一プロセス内で切り替える**ため。
+  設定で消せる類のレースではない。
+
+upstream: [vitest#10692](https://github.com/vitest-dev/vitest/issues/10692) /
+[#10812](https://github.com/vitest-dev/vitest/issues/10812) /
+[PR#10843](https://github.com/vitest-dev/vitest/pull/10843)（**いずれも未修正**。4.1.10 が最新で、
+v5.0.0-beta.7 でも同じエラーが報告されている）。
+
+**採った対策**: [`scripts/vitest.mjs`](scripts/vitest.mjs) が cwd を `fs.realpathSync.native` と
+一致する形に正規化してから vitest CLI を起動する。判定は [`scripts/canonical-cwd.mjs`](scripts/canonical-cwd.mjs)
+に集約し、[`vitest.config.ts`](vitest.config.ts) からも呼んで**ラッパーを通らない起動**
+（`npx vitest` / IDE 拡張）を原因の分かるエラーで止める。`package.json` の `test` は 1 行変更。
+
+- **単なる大文字化ではなく `realpathSync.native` に揃える**のが要点。vite の `safeRealpathSync` が
+  どちらの実装に切り替わっても同じ文字列を返す状態になり、レース自体が無害化する。
+- **再 spawn しない**（`chdir` + 正規化済み絶対 URL からの `import()`）。プロセスが 1 個で済むので
+  終了コード・TTY・引数が素のまま通る。実測で `npm test -- -t "決定論"` などの透過と、
+  失敗時に exit 1 が返ることを確認済み。
+- **`process.chdir()` だけでは cwd の case が変わらないことがある**。Windows の
+  `SetCurrentDirectory` が「同じディレクトリ」と判断して内部の文字列を更新しないため。
+  更新されなかった場合だけ親を経由して切り替える。
+- `platform !== "win32"` なら完全に no-op。symlink 解決や UNC 展開で**大小以外が変わる場合は触らない**
+  （cwd を動かすと別の事故になる）。`realpathSync.native` が例外を投げる環境では素の cwd にフォールバックする。
+
+**却下した対策**:
+
+- **`root` の指定（config でも `--root` でも）は効かない。** issue #10692 は「`--root` を明示すれば
+  回避できる」と書いているが、本環境で実測したところ **`root` を大文字/小文字どちらで渡しても
+  `distDir` は変わらなかった**（`distDir` は `import.meta.url` 由来で `root` と無関係）。
+  むしろ vite は渡した root を pathe で大文字化するので、`distDir` が小文字のままだと
+  不一致を固定しかねない。
+- `pool` / `poolOptions` / `maxWorkers` / `isolate: false` / `deps.optimizer` — 本件はワーカー初期化の
+  タイミング問題ではなくモジュール解決の同一性問題なので原理的に無関係。issue でも「効かない」と報告されている。
+- **ドキュメントに「PowerShell で実行」と書くだけ** — cwd の case は親プロセスから継承されるので、
+  シェルの種類は原因ではなく相関にすぎない（同じ Git Bash で大文字・小文字の両方を実測した）。
+  Hard Constraint 1 の安全網を人間の運用に依存させるのは弱い。
+- `experimental.viteModuleRunner: false` — native import 経路も pathe を通るので同じ問題を踏む。
+- `patch-package` で PR#10843 を当てる — 未マージ PR は内容が変わりうる。依存も増える。
+
+**撤去条件**。次の 3 つが揃ったら `scripts/vitest.mjs` / `scripts/canonical-cwd.mjs` /
+`package.json` の `test` / `vitest.config.ts` のガード / `tests/node/workarounds.test.ts` を
+**同時に**元へ戻す（1 コミットにまとめる）。
+
+1. PR#10843 がマージされた版へ vitest を上げた
+2. 小文字 cwd を強制してラッパー無しで 20 回走らせ、20/20 緑
+3. `distDir` とその pathe 正規化後が一致する（[`docs/TESTING.md`](docs/TESTING.md) の再現コマンド）
+
+撤去忘れを防ぐため [`tests/node/workarounds.test.ts`](tests/node/workarounds.test.ts) が
+vitest のバージョンを固定していて、**上げると必ず 1 回赤くなる**。
+[`tests/node/parity-exceptions.ts`](tests/node/parity-exceptions.ts)（xslt-processor の例外が
+まだ実在すること自体をテストにする）と同じイディオム。
+
+**Linux では起きない**（`process.cwd()` が常に解決済みの物理パスを返すため）。HANDOVER §2 で
+主経路が Docker に移れば本件は消えるが、Windows でのローカル開発が続く限りラッパーは残す。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

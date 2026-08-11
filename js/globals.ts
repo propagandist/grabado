@@ -8,8 +8,39 @@
  * モジュールローカルの変数にはしない。参照経路を現行と 1 バイトも変えないため。
  */
 
+/*
+ * ここは必ず import type。値 import にすると globals.ts が 7 本を先に評価しにいって
+ * 読み込み順（src/app.ts）が壊れる。型だけの import は verbatimModuleSyntax のもとで
+ * emit から完全に消えるので、Rollup の依存グラフに辺が生えない。
+ */
+import type { Visual } from "./visual.ts";
+import type { Rubberband } from "./rubberband.ts";
+import type { Minimap } from "./map.ts";
+
 /** SQL.subscribe が受け取るハンドラ。SQL.publish が {target, data} を渡す */
 export type SqlSubscriber = (e: { target: unknown; data: unknown }) => void;
+
+/**
+ * js/wwwsqldesigner.js の SQL.Designer インスタンス（types/globals.d.ts から移設）。
+ *
+ * まだ .js の 8 本の中で唯一「7 本の描画中核から参照される実体」なので、その面を
+ * ここに集約する（HANDOVER §3 段階3-2）。7 本それぞれにローカルの構造的 interface を
+ * 書く案は、同じ Designer の別々の面を 7 回書くことになり、面がずれても誰も気づかない。
+ * 段階3-3 で js/wwwsqldesigner.ts が実体を持てば、ここは import type { Designer } に
+ * 置き換わる（7 ファイルを回って消す作業は発生しない）。
+ */
+export interface SqlDesigner {
+    /* 描画領域の実寸。js/map.ts が縮尺の分母に使う */
+    width: number;
+    height: number;
+    tableManager: {
+        selectRect(x: number, y: number, w: number, h: number): void;
+    };
+    map: Minimap;
+    tables: unknown[];
+    io: { fromXMLText(xml: string): void };
+    toXML(): string;
+}
 
 /**
  * SQL 名前空間。
@@ -26,6 +57,15 @@ export interface SqlNamespace {
     subscribe(message: string, subscriber: SqlSubscriber): void;
     unsubscribe(message: string, subscriber: SqlSubscriber): void;
     escape(str: string): string;
+    /*
+     * 描画中核のクラス（段階3-2 で .ts 化した分から順に載せていく）。
+     * .ts 側は import した SQL に代入するので、宣言が無いと代入自体が TS2339 になる
+     * （.js のときのようなグローバル型の合成は起きない）。
+     */
+    Visual: typeof Visual;
+    Rubberband: typeof Rubberband;
+    /** 公開名は SQL.Map、クラス名は Minimap（ES 標準 Map との衝突回避。§5.4） */
+    Map: typeof Minimap;
     /** クラス。生成すると自身を SQL.designer に登録する */
     Designer: new () => SqlDesigner;
     /** 唯一のインスタンス。new SQL.Designer() が走るまでは存在しない */

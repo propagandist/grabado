@@ -19,13 +19,13 @@
 import "../js/oz.ts";
 import "../js/config.ts";
 import "../js/globals.ts";
-import "../js/visual.js";
+import "../js/visual.ts";
 import "../js/row.js";
 import "../js/table.js";
 import "../js/relation.js";
 import "../js/key.js";
-import "../js/rubberband.js";
-import "../js/map.js";
+import "../js/rubberband.ts";
+import "../js/map.ts";
 import "../js/toggle.js";
 import "../js/io.js";
 import "../js/tablemanager.js";

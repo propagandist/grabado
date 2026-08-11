@@ -35,9 +35,21 @@ export const OZ = {
      * 文字列なら getElementById、それ以外は素通し。
      * 戻りを non-null で宣言してあるのは、呼び出し 60 箇所に実行時ガードを足させないため
      * （存在しない id を渡せば現行も同じ場所で落ちる）。
+     *
+     * grabado: 型にだけオーバーロードを被せた（HANDOVER §3 段階3-2。実行コードは無変更で、
+     * as は emit で消える）。単一シグネチャ <T extends EventTarget = HTMLElement>(x: string | T): T
+     * だと、文字列を渡したとき T の推論候補に string が入り、制約違反で EventTarget に
+     * フォールバックする（既定の HTMLElement は候補が 1 つも無いときしか使われない）。
+     * .js のうちは checkJs: false で露見しなかったが、.ts から呼ぶと
+     * OZ.$("rubberband") が EventTarget になって代入先と合わない。
+     * 3 本目は引数が union の呼び出し（本ファイル内の OZ.$(elm) / OZ.$(arr[0]) など）用。
      */
     $: function <T extends EventTarget = HTMLElement>(x: string | T): T {
         return (typeof x == "string" ? document.getElementById(x) : x) as T;
+    } as {
+        (x: string): HTMLElement;
+        <T extends EventTarget>(x: T): T;
+        <T extends EventTarget>(x: string | T): T;
     },
     /*
      * grabado: 元は opera / ie / gecko / webkit / khtml の 5 つで、いずれも

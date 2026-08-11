@@ -1,10 +1,28 @@
 /* --------------------- rubberband -------------------- */
 /*
- * grabado: ES クラス化（HANDOVER §3 段階2）。
+ * grabado: ES クラス化（HANDOVER §3 段階2）。段階3-2 で .ts 化した。
  * _init() / _build() は従来 SQL.Visual.apply(this) を書いていた位置で呼ぶ。
+ *
+ * dom は基底の VisualDom のまま（container だけ使い、title は永久に null で参照 0）。
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  */
-class Rubberband extends SQL.Visual {
-    constructor(owner) {
+
+import { OZ } from "./oz.ts";
+import { SQL, type SqlDesigner } from "./globals.ts";
+import { Visual } from "./visual.ts";
+
+export class Rubberband extends Visual {
+    declare owner: SqlDesigner;
+    declare x: number;
+    declare y: number;
+    declare x0: number;
+    declare y0: number;
+    declare width: number;
+    declare height: number;
+    declare documentMove: number;
+    declare documentUp: number;
+
+    constructor(owner: SqlDesigner) {
         super();
         this.owner = owner;
         this._init();
@@ -13,7 +31,7 @@ class Rubberband extends SQL.Visual {
         OZ.Event.add("area", "mousedown", this.down.bind(this));
     }
 
-    down(e) {
+    down(e: MouseEvent): void {
         OZ.Event.prevent(e);
         var scroll = OZ.DOM.scroll();
         this.x = this.x0 = e.clientX + scroll[0];
@@ -29,7 +47,7 @@ class Rubberband extends SQL.Visual {
         this.documentUp = OZ.Event.add(document, "mouseup", this.up.bind(this));
     }
 
-    move(e) {
+    move(e: MouseEvent): void {
         var scroll = OZ.DOM.scroll();
         var x = e.clientX + scroll[0];
         var y = e.clientY + scroll[1];
@@ -49,7 +67,7 @@ class Rubberband extends SQL.Visual {
         this.dom.container.style.visibility = "visible";
     }
 
-    up(e) {
+    up(e: MouseEvent): void {
         OZ.Event.prevent(e);
         this.dom.container.style.visibility = "hidden";
         OZ.Event.remove(this.documentMove);
@@ -62,7 +80,7 @@ class Rubberband extends SQL.Visual {
         );
     }
 
-    redraw() {
+    redraw(): void {
         this.dom.container.style.left = this.x + "px";
         this.dom.container.style.top = this.y + "px";
         this.dom.container.style.width = this.width + "px";

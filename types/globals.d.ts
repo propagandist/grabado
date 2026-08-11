@@ -13,21 +13,13 @@
  *   checkJs を立てない今は誰も読まず、段階3 で import に置き換わって即座に陳腐化する。
  *
  * 段階3 で js/ が .ts になるたび、その面をここから実体側（js/*.ts の export と
- * declare global）へ移す。移設済み（すべて段階3-1）: OZ -> js/oz.ts、
- * SQL / DATATYPES / LOCALE -> js/globals.ts。
- * 残っているのは js/wwwsqldesigner.js（まだ .js）が返す実体の型と、それを
- * src/main.ts が置くデバッグ用ハンドルだけ。段階3-3 で本ファイルは消える。
+ * declare global）へ移す。移設済み: OZ -> js/oz.ts、SQL / DATATYPES / LOCALE ->
+ * js/globals.ts（段階3-1）、SqlDesigner -> js/globals.ts（段階3-2。描画中核 7 本が
+ * this.owner として同じ面を参照するため、宣言を実体側に集約した）。
+ * 残っているのは src/main.ts が置くデバッグ用ハンドルだけ。段階3-3 で本ファイルは消える。
  */
-
-/** js/wwwsqldesigner.js の SQL.Designer インスタンス。テストが触る面だけ */
-interface SqlDesigner {
-    tables: unknown[];
-    map: unknown;
-    io: { fromXMLText(xml: string): void };
-    toXML(): string;
-}
 
 interface Window {
     /** src/main.ts が置くデバッグ用ハンドル（旧 index.html 末尾の var d = new SQL.Designer()） */
-    d?: SqlDesigner;
+    d?: import("../js/globals.ts").SqlDesigner;
 }

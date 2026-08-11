@@ -10,13 +10,15 @@
  * エントリにすることで、読み込み順の定義が 1 か所に集約される（段階3-0 以前はハーネス側に
  * SCRIPT_ORDER として二重に書かれていた）。
  *
- * js/ 側に import / export は入っていない。相互参照は現行どおりグローバル
- * （OZ / CONFIG / SQL / DATATYPES / LOCALE / _）のままで、定義側だけを window に載せてある。
- * import/export の依存グラフへの置き換えは .ts 化と同じ後続 PR で行う（段階3-2 以降）。
+ * 先頭 3 本は段階3-1 で .ts になった（.ts 化 = モジュール化。イディオムは js/oz.ts の冒頭）。
+ * 残り 15 本はまだ .js で、相互参照も現行どおりグローバル（OZ / CONFIG / SQL / DATATYPES /
+ * LOCALE / _）のまま。.ts 側はその参照が生き続けるよう定義を window にも載せている。
+ * 参照側の import/export 化は各ファイルの .ts 化と同じ PR で行い、window 登録は
+ * 全部が .ts になる段階3-4 でまとめて撤去する。
  */
-import "../js/oz.js";
-import "../js/config.js";
-import "../js/globals.js";
+import "../js/oz.ts";
+import "../js/config.ts";
+import "../js/globals.ts";
 import "../js/visual.js";
 import "../js/row.js";
 import "../js/table.js";

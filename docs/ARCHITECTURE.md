@@ -5,7 +5,8 @@
 > ステータス: **§0「現物確認」実施済み（2026-08-09）／§7「特性化テスト」緑化済み（2026-08-09）／
 > §3「フロント TS 化」段階1（Vite バンドル）実施済み（2026-08-09）／
 > 同 段階2（ES クラス化・デッドコード撤去）実施済み（2026-08-10、§5.4）／
-> 同 段階3-0（Node ハーネスの IIFE バンドル化）実施済み（2026-08-11、§5.1・§5.4）**。
+> 同 段階3-0（Node ハーネスの IIFE バンドル化）実施済み（2026-08-11、§5.1・§5.4）／
+> 同 段階3-1（先頭 3 本の `.ts` 化・移行イディオム確定）実施済み（2026-08-12、§5.1・§5.5）**。
 > §4 は実測値。実測環境・手順も §4.1 に記載。テストの構成と走らせ方は [`TESTING.md`](TESTING.md)。
 
 ---
@@ -14,10 +15,12 @@
 
 ```
 index.html                アプリ本体（SPA エントリ。§3 段階1 で <script type="module" src="/src/main.ts"> 1 本に）
-src/app.ts                ★ §3 で追加。js/*.js を読み込み順どおり import するだけ（起動しない）
+src/app.ts                ★ §3 で追加。js/ を読み込み順どおり import するだけ（起動しない）
 src/main.ts               ★ §3 で追加。src/app.ts を読んで new SQL.Designer() する起動エントリ
-js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化）
-  config.js                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
+js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化。§3 段階3 で .ts へ移行中）
+  oz.ts config.ts globals.ts  ★ 段階3-1 で .ts 化済み（§5.5）
+  その他 15 本（.js）           段階3-2 以降で .ts 化（順序は §5.1）
+  config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
 db/<db>/                   DB プロファイル。型パレット差分の対象
@@ -36,7 +39,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
-| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化**（グローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
+| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1 で先頭 3 本を `.ts` 化**（残り 15 本のグローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
 | **DDL 生成** | **`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）** | **TS 実装**（§6.3 の規約を含む） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
@@ -182,28 +185,32 @@ import 列に移し、段階3-0 で [`../src/app.ts`](../src/app.ts) に分離�
 Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
 ```
-oz.js  →  config.js  →  globals.js  →  visual.js  →  row.js  →  table.js  →  relation.js
+oz.ts  →  config.ts  →  globals.ts  →  visual.js  →  row.js  →  table.js  →  relation.js
       →  key.js  →  rubberband.js  →  map.js  →  toggle.js  →  io.js
       →  tablemanager.js  →  rowmanager.js  →  keymanager.js  →  window.js  →  options.js
       →  wwwsqldesigner.js
 ```
 
-- `oz.js` は upstream 独自の DOM / イベント / XHR ライブラリ（`OZ.*`）。`OZ.Request` が全通信の入口。
-  **§3 段階2 で `OZ.Class` 系（参照 0）と ES5 polyfill 群を撤去**した。
-- `globals.js` はロケール関数 `_()` と `SQL` 名前空間（`publish` / `subscribe` / `escape`）。
-  polyfill は段階2 で撤去。
+**この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本が `.ts` になった。
+
+- `oz.ts` は upstream 独自の DOM / イベント / XHR ライブラリ（`OZ.*`）。`OZ.Request` が全通信の入口。
+  **§3 段階2 で `OZ.Class` 系（参照 0）と ES5 polyfill 群を撤去**し、
+  **段階3-1 で `.ts` 化とともに IE 専用分岐・参照 0 の API（`select` / `gecko` / `webkit` / `khtml`）を撤去**した。
+- `globals.ts` はロケール関数 `_()` と `SQL` 名前空間（`publish` / `subscribe` / `escape`）。
+  polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。
 - `visual.js` → `row.js` / `table.js` / `relation.js` / `key.js` が描画中核（Tier 2 で温存）。
   **段階2 で ES クラス階層になった**（§5.4）。
 - `wwwsqldesigner.js` の `SQL.Designer` が全体のオーナー（オプション・cookie・XHR ヘッダ・`toXML()`）。
   **段階2 でクラス（`SQL.Designer`）と唯一のインスタンス（`SQL.designer`）に分離**した。
-- TS 化は「`globals`/`config` → `io` → manager 群 → 描画中核」の順が依存的に無理がない。
+- **`.ts` 化はこの読み込み順の先頭から進める**（§5.5）。葉から進めると未 `.ts` のグローバルに対する
+  ambient 宣言が要り、それ自体が後で捨てる作業になるため。
 
-**相互参照は依然としてグローバル**（`OZ` / `CONFIG` / `SQL` / `DATATYPES` / `LOCALE` / `_`）。
+**まだ `.js` の 15 本の相互参照はグローバルのまま**（`OZ` / `CONFIG` / `SQL` / `DATATYPES` / `LOCALE` / `_`）。
 ESM ではトップレベル `var` がモジュールスコープに閉じるので、定義側の 6 箇所だけを `window.` に付け替えてある
-（`js/oz.js:3` / `js/config.js:1` / `js/globals.js` の `_`・`DATATYPES`・`LOCALE`・`SQL`）。
-`js/` に import/export は入っていない — これが `tests/node/harness.ts` の eval 経路を無改修で保つ条件で、
-依存グラフ化は `.ts` 化と同じ後続 PR で行う（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。
-段階2 の class 化でもこの前提は崩していない（§5.4 の「2 つの実行系」を参照）。
+（[`../js/oz.ts`](../js/oz.ts) / [`../js/config.ts`](../js/config.ts) / [`../js/globals.ts`](../js/globals.ts) の
+`_`・`DATATYPES`・`LOCALE`・`SQL`）。`.ts` 化した 3 本も `export` と併せてこの登録を残しており、
+参照側が全部 `.ts` になる段階3-4 でまとめて撤去する。
+段階2 の class 化でも段階3-1 の `.ts` 化でもこの前提は崩していない（§5.4 の「2 つの実行系」を参照）。
 
 ### 5.1.1 ビルドと配信
 
@@ -271,11 +278,50 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
   `js/` に import/export が無く、ファイル跨ぎの参照が `SQL.` 経由だから。
   （段階2 の時点では「`window.eval` では lexical 宣言がグローバルに残らない」ことが直接の理由
   だったが、バンドル経由になった今は両実行系とも閉じたスコープなので、理由は依存グラフ側に
-  一本化された。段階3 で import を入れるときにこの制約が外れる。）
+  一本化された。**段階3-1 で `.ts` 化した 3 本はこの制約から外れ**、`export` ＋ `window` 登録に
+  移行している。残り 15 本は `.ts` になるまで従来どおり。）
 - 暗黙グローバルは**ブラウザでだけ落ちる**。段階2 で直した 2 件（`js/io.js` の `req`、
   `js/oz.js` の `y`）はこれに当たり、「現行挙動」が実行系で割れていたため挙動不変の例外として修正した。
   段階3-0 の `"use strict"` 前置でも jsdom 側は捕まえられない（上表・実測は
   [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）。
+
+### 5.5 `.ts` 化の進捗と移行イディオム（§3 段階3）
+
+段階3 は `js/` 18 本・4,183 行を `.ts` にする作業で、**読み込み順（§5.1）の先頭から 1 本ずつ**進める。
+判断の根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
+
+| 段階 | 対象 | 状態 |
+|---|---|---|
+| 3-0 | Node ハーネスを IIFE バンドル化（`js/` は無改修） | 済（2026-08-11） |
+| 3-1 | `oz` / `config` / `globals` | 済（2026-08-12） |
+| 3-2 | 描画中核 `visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map` | 未 |
+| 3-3 | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` | 未 |
+| 3-4 | `window` 登録と [`../types/globals.d.ts`](../types/globals.d.ts) の撤去、`strict` の最終確認 | 未 |
+
+着手前の実測（`tsc --allowJs --checkJs --noEmit --strict --noUncheckedIndexedAccess`）は **1,281 件**。
+うち TS2304 の 364 件は「裸グローバルが宣言されていないだけ」で import 化すれば消える。実質の型作業は
+TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3 形態**（§5.4）＝ 段階3-2。
+
+守る規約は 4 つ。
+
+1. **`.ts` 化 ＝ モジュール化。** 非モジュールのまま `.ts` にすると `class Window` / `Options` / `Key` /
+   `Table` がグローバル型空間に出て `lib.dom` と衝突する。ただし未 `.ts` の参照側のために
+   `window.X = X` と `declare global` は残し、段階3-4 でまとめて撤去する。
+2. **読み込み順の先頭から。** 移行用の ambient 宣言ファイルは作らない。例外は実行時インスタンス
+   （`SQL.designer`）で、import にすると循環するため `SQL` 名前空間オブジェクト経由のまま。
+3. **実行コードは変えない。** 型は注釈・`as`・オーバーロードで通す。`if (!x) return;` のような
+   実行時ガードを足さない（挙動が変わる）。`any` で埋めない。
+4. **死にコードの撤去は実測してから。** 「対象実行系（Chromium / jsdom）で一度も評価されない」ことを
+   両方で計測し、結果を台帳に残す（段階2 の polyfill 撤去と同じ論法）。
+
+段階3-1 で決めた型のうち、後続に効くもの。
+
+| API | 型 | 理由 |
+|---|---|---|
+| `OZ.$` | `<T extends EventTarget = HTMLElement>(x: string \| T) => T` | 戻りを non-null に。`null` を出すと呼び出し 60 箇所がガード追加を要求され規約 3 と衝突する。制約が `EventTarget` なのは `document` / `window` を渡す呼び出しが 11 件あるため |
+| `OZ.DOM.elm` | `<K extends keyof HTMLElementTagNameMap>(name: K, opts?) => HTMLElementTagNameMap[K]` | 呼び出し 38 箇所のタグ名がすべてリテラル。段階3-2 で `dom` バッグの型を決める材料になる |
+| `OZ.Event.target` | `(e: Event) => HTMLElement` | 呼び出し 5 箇所は `nodeName` を読むか `dom.title` と比較するだけ |
+| `OZ.Request` | `(url, callback?, options?) => XMLHttpRequest \| false` | `false` は [`../tests/node/harness.ts`](../tests/node/harness.ts) の差し替え実装が返す |
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

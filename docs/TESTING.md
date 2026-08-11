@@ -94,6 +94,12 @@ build API（`write: false`）で単一 IIFE に束ね、それを jsdom の `win
 `src/app.ts` なのは、**js/ を全部評価 → `OZ.Request` を fs 読みに差し替え → `new SQL.Designer()`**
 という順序を現行のまま保つため（起動を含むエントリを束ねるとこの順序が作れない）。
 
+**この狙いは段階3-1 で実証された**。`js/oz.js` / `config.js` / `globals.js` が `.ts` になり
+`export` を持ったが、[`../tests/node/harness.ts`](../tests/node/harness.ts) の変更は
+`OzRequestCallback` / `OzRequestOptions` を `import type` で受ける 1 行だけで済んだ
+（型の置き場所が [`../types/globals.d.ts`](../types/globals.d.ts) から `js/oz.ts` へ移ったため）。
+バンドル経路そのものは 1 行も触っていない。
+
 判断の根拠・却下した 2 案は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
 
 ### strict / sloppy の差（縮んだが、消えてはいない）
@@ -110,6 +116,10 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 
 したがって **`npm test` だけで済ませない**（段階2 が直した `js/io.js` の `req` /
 `js/oz.js` の `y` のような問題は `npm run test:browser` だけが赤くする）。
+
+**ただしこの穴は `.ts` 化が進むほど縮む。** `.ts` になったファイルは `npm run typecheck` の
+対象なので、暗黙グローバルは実行前に `TS2304 Cannot find name` で落ちる。段階3-1 の時点で
+`js/oz.ts` / `js/config.ts` / `js/globals.ts` の 3 本がこちら側に移った。
 
 ---
 

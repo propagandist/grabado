@@ -1,5 +1,10 @@
-/* grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1） */
-window.CONFIG = {
+/*
+ * grabado: HANDOVER §3 段階3-1 で .ts 化した。
+ *
+ * export ＋ window 登録の 2 本立て（イディオムは js/oz.ts の冒頭を参照）。
+ * まだ .js の 15 本が裸の CONFIG を読むので、window 登録は段階3-4 まで残す。
+ */
+export const CONFIG = {
     AVAILABLE_DBS: [
         "mysql",
         "sqlite",
@@ -96,5 +101,16 @@ window.CONFIG = {
      * http://localhost/sqldesigner/dropbox-oauth-receiver.html as a Redirection URI.
      * Copy the shown "App key" and paste it here below instead of the null value:
      */
-    DROPBOX_KEY: null, // such as: "d6stdscwewhl6sa"
+    /* grabado: 各自が文字列を入れる前提の設定値なので、既定値の null からは
+       型が決まらない。js/io.js:378 が truthy 判定で読む（HANDOVER §3 段階3-1）。 */
+    DROPBOX_KEY: null as string | null, // such as: "d6stdscwewhl6sa"
 };
+
+declare global {
+    interface Window {
+        CONFIG: typeof CONFIG;
+    }
+}
+
+/* grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1） */
+window.CONFIG = CONFIG;

@@ -13,8 +13,10 @@
  *   checkJs を立てない今は誰も読まず、段階3 で import に置き換わって即座に陳腐化する。
  *
  * 段階3 で js/ が .ts になるたび、その面をここから実体側（js/*.ts の export と
- * declare global）へ移す。移設済み: OZ（-> js/oz.ts、段階3-1）。
- * 全 18 本が .ts になったら本ファイルは消える。
+ * declare global）へ移す。移設済み（すべて段階3-1）: OZ -> js/oz.ts、
+ * SQL / DATATYPES / LOCALE -> js/globals.ts。
+ * 残っているのは js/wwwsqldesigner.js（まだ .js）が返す実体の型と、それを
+ * src/main.ts が置くデバッグ用ハンドルだけ。段階3-3 で本ファイルは消える。
  */
 
 /** js/wwwsqldesigner.js の SQL.Designer インスタンス。テストが触る面だけ */
@@ -25,24 +27,7 @@ interface SqlDesigner {
     toXML(): string;
 }
 
-interface Sql {
-    /** クラス。生成すると自身を SQL.designer に登録する */
-    Designer: new () => SqlDesigner;
-    /** 唯一のインスタンス。new SQL.Designer() が走るまでは存在しない */
-    designer: SqlDesigner;
-    escape(str: string): string;
-}
-
 interface Window {
-    SQL: Sql;
-    /**
-     * js/globals.js の初期値は false で、dbResponse() が Element を入れる。
-     * false のままにしてあるのは js/wwwsqldesigner.js の XMLSerializer フォールバックが
-     * `window.DATATYPES.xml` を評価するため（null にすると TypeError）。
-     * 是正は段階3（この分岐は HANDOVER §4 の XML 書き出し撤去で丸ごと消える）。
-     */
-    DATATYPES: Element | false;
-    LOCALE: Record<string, string>;
     /** src/main.ts が置くデバッグ用ハンドル（旧 index.html 末尾の var d = new SQL.Designer()） */
     d?: SqlDesigner;
 }

@@ -828,6 +828,136 @@ prototype メソッド → クラス本体のメソッド、末尾に `SQL.X = X
 `clientsql` の DDL 出力（XSLT 経路）/ Esc でダイアログを閉じる / F2 quicksave（backend 不在の応答処理）/
 オプションダイアログ / テーブル削除。class 化した 7 クラスすべてに触れている。
 
+### 2026-08-12 HANDOVER §3「フロント TS 化」段階3-3b — 残り 8 本を `.ts` 化し、`js/` から `.js` を無くした
+
+段階3 の最後の実作業。[`js/toggle.ts`](js/toggle.ts) / [`io.ts`](js/io.ts) /
+[`tablemanager.ts`](js/tablemanager.ts) / [`rowmanager.ts`](js/rowmanager.ts) /
+[`keymanager.ts`](js/keymanager.ts) / [`window.ts`](js/window.ts) / [`options.ts`](js/options.ts) /
+[`wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の 8 本・2,132 行（診断 619 件）を `.ts` にした。
+イディオムは段階3-1・3-2 で確定済みなので、ここには**この段階に固有の判断だけ**残す。
+規約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.5。
+
+**`dom` バッグの形態 (ii)（`this.dom[id] = elm`）が決着した。** 段階3-2 で「`io` / `keymanager` /
+`rowmanager` / `tablemanager` は `Visual` を継ばないので自由に決められる」と送った 4 本。採ったのは
+3-2 と同じ原理 —「型は構築完了後の状態を記述し、嘘は初期化の 1 行に閉じ込める」。完成形を
+`IoDom`（23 キー）/ `TableManagerDom`（10）/ `RowManagerDom`（7）/ `KeyManagerDom`（11）として
+宣言し、初期化に `as unknown as XxxDom` を 1 個、ループ代入に
+`(this.dom as unknown as Record<string, HTMLInputElement>)[id] = elm` を 1 個置く。
+**キャストは 4 本合計 8 個**で、見返りに `this.dom.*` の読み出しが全部注釈ゼロで通る。
+要素型は id とタグの対応（`index.html` を実測）から機械的に決まり、ループが埋めるキーは直後に
+`elm.value = _(id)` を書くのですべて `HTMLInputElement`。
+
+**`SqlDesigner` は構造的 interface をやめ、実体への型エイリアスにした。**
+`export type SqlDesigner = Designer;` の 1 行で、**参照している 13 本は 1 文字も変えていない**
+（3-2 に「7 ファイルを回って消す作業は発生しない」と書いた形がそのまま成立した）。段階3-2 の
+interface が持っていた面（`getOption` / `window` / `tableManager` …）は、実体の型と食い違って
+いれば `npm run typecheck` が落ちる。実際 **`getOption` は `string | number` ではなく
+`string | number | boolean` だった**（`hide` が `false`、`vector` が `true` を返す）。3-2 の
+構造的宣言は「よくある呼ばれ方」から書いた近似で、実体に置き換えて初めて確定した。
+
+**`Designer` は `Visual<DesignerDom>` に乗り、値 import は `Visual` だけ。** 他クラス
+（`Table` / `Map` / `IO` …）の参照は `SQL` 名前空間経由のまま据え置いた（値 import にすると
+評価順が読み込み順と逆転する。3-2 の判断がそのまま効く）。`SqlNamespace` には 8 クラスを足し、
+`Designer: new () => SqlDesigner` は `typeof Designer` に、`designer` は `Designer` になった。
+
+**`SQL.Window` は `lib.dom` の `Window` と同名。** クラス名は公開名に合わせて `Window` のまま
+（`SQL.Window` を変えない）、import 側で `import type { Window as SqlWindow }` と改名して受ける。
+モジュール内なので値の衝突は起きない（`OZ.Event.add(window, …)` の小文字 `window` は無関係）。
+
+**`RowManager.selected` は `Row | false | null` を正直に出した。** ガード付きで読む経路
+（`select` / `redraw` / `press`）が実在し、`Row` と偽るとその分岐が「型上ありえない」ことになる
+（段階3-2 の `Table.findNamedRow` と同じ論法）。ガードなしで読む 8 箇所は、ボタンの `disabled` を
+`redraw()` が管理していることが根拠なので `as Row` を置いた。
+
+**Dropbox は局所 `declare` で据え置いた。** `js/io.ts` の冒頭に本ファイルが触る面だけ
+（`Dropbox.Client` / `ApiError` の 8 定数 / `AuthDriver.Popup`、`DropboxError` / `DropboxClient`）を
+宣言し、実装には触れていない。`any` では埋めていない。存廃は HANDOVER §4 の IO 作り替えと同時。
+
+**死にコードの撤去（規約4）。** Chromium 151.0.7922.34 と jsdom 29.1.1 の**両方**で実測してから
+落とした。今回は `window.XSLTProcessor` が**実行系で割れた**のが収穫で、機械的に「相方の判定も
+一緒に撤去」していたら Node ハーネスの挙動を変えていた。
+
+| 判別子 | Chromium | jsdom | 扱い |
+|---|---|---|---|
+| `"ActiveXObject" in window` / `!!window.ActiveXObject` | false | false | 撤去（`fromXMLText` / `finish` の 2 分岐） |
+| `!!window.DOMParser` | true | true | 判定ごと撤去（`fromXMLText`。else が消えたため） |
+| `!!window.XSLTProcessor` | **true** | **false** | **判定は残す**（`finish`。無い実行系は現行どおり throw に落ちる） |
+| `!!window.getSelection` | true | true | 三項の判定ごと撤去（`removeSelection`） |
+| `!!document.selection` | false | false | 撤去（同上の else 側） |
+| `!!window.XMLSerializer` | true | true | 残す（下の「マーカー」参照） |
+
+あわせて **`OZ.ie` / `OZ.opera` をプロパティごと撤去**した（段階3-1 で「参照側を `.ts` 化する
+段階3-3 で分岐ごと畳んで消す」と予告していた分）。参照は
+[`js/io.ts`](js/io.ts) の F2 `preventDefault` と [`js/tablemanager.ts`](js/tablemanager.ts) の
+IE6 `select()` 回避の 2 箇所だけで、どちらも実測で false 固定。
+
+**型のためのコード変更 3 件**（段階3-1 の 1 件、3-2 の 4 件に続く 6〜8 件目）。
+
+| 箇所 | 症状 | 変更 |
+|---|---|---|
+| `io` / `tablemanager` / `keymanager` の 2 つ目の id ループ | 同名の `var elm` が「ボタン（`HTMLInputElement`）」と「ラベル」で再宣言され TS2403 | ラベル側を `labelElm` に改名（各 2 行。読み出しは直後の 1 行だけ） |
+| [`js/tablemanager.ts`](js/tablemanager.ts) `click()` | `newtable.addKey("PRIMARY", "")` が 2 引数（TS2554） | 第 2 引数を落とした。`Table.addKey` は 1 引数しか読まず、[`js/table.ts`](js/table.ts) 側に「是正は段階3-3 で」と予告コメントが入っていた |
+| [`js/table.ts`](js/table.ts) `findNamedRow` | 引数が `string` 固定だが、`Designer.fromXML` は属性欠落時に `null` を渡しうる | シグネチャを `string \| null` に広げた（型だけ） |
+
+**逆に、型のために増やしかけた emit を 2 件戻した。** バンドル diff の副次判定（下記）が
+説明のつかない差分として拾ったもの。(a) `removeSelection` で `var legacy = sel as …` と
+ローカル変数を作っていたのを、キャストをインラインに畳んで変数ごと消した。(b) `getXhrHeaders` の
+未使用仮引数 `value` を型付けのついでに落としていたのを戻した。**どちらも挙動同値だが、
+「実行コードは変えない」を emit で担保するには差分ゼロのほうが強い。**
+
+**本物のバグを型で隠さない（マーカーとして残したもの）。**
+
+- [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) `toXML()` の**未定義 `e`**（段階2 が意図して
+  残した TS2304 1 件）。`// @ts-expect-error` ＋ 根拠コメントで通した。`@ts-expect-error` は
+  「エラーが消えたらそれ自体がエラーになる」ので、§4 の XML 書き出し撤去でこの分岐が消えたときに
+  必ず気づける。到達不能（`XMLSerializer` が無い実行系のみ）なので撤去はしない。
+- **`CONFIG.DEFAULT_BACKEND` が文字列ではなく配列 `["php-mysql"]`**（upstream の取り違え。
+  `.js` のうちは `checkJs: false` で見えなかった）。`js/io.ts` の `bs[i] == be` が緩い比較で
+  配列を文字列化するため現行は意図どおり動いており、値を直すのは実行コード変更になるので
+  型で受けるだけにした（`string | string[]`）。是正は §5 の backend 移植で既定 backend の扱いごと。
+
+**`.js` が尽きたことで回収したもの。**
+
+- [`js/globals.ts`](js/globals.ts) の `window.SQL = SQL as unknown as typeof window.SQL` が
+  **素の代入に戻った**（`.js` のトップレベル代入からグローバル型が合成される問題が消えたため。
+  段階3-1 から予告していた回収）。
+- `types/globals.d.ts` を**削除**。最後まで残っていた `window.d`（デバッグ用ハンドル）の宣言は
+  [`src/main.ts`](src/main.ts) の `declare global` へ引き取った。
+- [`tsconfig.json`](tsconfig.json) から **`checkJs` を落とした**。`allowJs` は残す —
+  [`vitest.config.ts`](vitest.config.ts) が [`scripts/canonical-cwd.mjs`](scripts/canonical-cwd.mjs) を
+  import しているため（`js/` のためではない）。`include` からも `types/**/*.d.ts` を外した。
+- `window.X = X` と `declare global` は**残す**。撤去は段階3-4（index.html や外部から触る面の
+  確認と同時にやるほうが安全）。
+
+**検証**。成功判定は段階1・2・3-0〜3-3a と同じく **`git diff tests/golden/` が空**であること
+（63 ＋ 7 本すべて無差分。untracked も無し＝`npm run golden:update` をこの PR で一度も打っていない）。
+`npm test` 61 passed / 21 skipped（件数不変）、`npm run test:browser` 80 passed、
+`npm run test:dist` 3 passed、`npm run known-issues` 9 passed（アサート値は 1 文字も変えていない）、
+`npm run typecheck` 0 error。
+
+**バンドル出力の diff は「意図した撤去 ＋ module 配線」に完全に収束した。** `develop` と本ブランチで
+`vite build --minify false` を走らせ、コメントと Rollup のスコープ接尾辞を正規化して比較した結果、
+残る差分は次の 9 種類だけ（他に 1 行も無い）。
+
+| 差分 | 由来 |
+|---|---|
+| `opera: false` / `ie: false` の消滅 | `OZ` の判別子撤去 |
+| `if (window.DOMParser) … else if (ActiveXObject) …` → `new DOMParser()` 1 行 | `fromXMLText` |
+| `else if (ActiveXObject) …` の消滅 | `finish`（`XSLTProcessor` の判定は残っている） |
+| `if (OZ.opera) e.preventDefault();` の消滅 | `IO.press` |
+| `if (OZ.ie) try { select() } catch … else …` → `setSelectionRange` 1 行 | `TableManager.edit` |
+| `window.getSelection ? … : document.selection` → `window.getSelection()` | `Designer.removeSelection` |
+| `addKey("PRIMARY", "")` → `addKey("PRIMARY")` | 上表のコード変更 |
+| `var elm` → `var labelElm`（3 箇所） | 上表のコード変更 |
+| `extends SQL.Visual` → `extends Visual` | 値 import（`Designer`） |
+
+**インスタンスフィールドの emit は 1 つも増えていない**（`var Designer = class extends Visual {
+constructor() {…`）。イディオム E（`declare` 必須）の検算がここでも効いている。
+
+**対話パスの一巡**は段階3-3a と同じ 18 項目を `npm run dev`（4173）と `npm run preview`（4174）の
+両方で流し、**18/18・pageerror 0 件**。撤去した分岐に触る経路（`clientsql` の XSLT、
+F2 quicksave、テーブル編集ダイアログの `setSelectionRange`、`clientload` の `DOMParser`）を含む。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
@@ -839,7 +969,7 @@ prototype メソッド → クラス本体のメソッド、末尾に `SQL.X = X
 | XML 永続化（`toXML()` / `save` の body） | 保持。**§7 で golden 固定済み**（`tests/golden/xml/`） | JSON 統一。XML は読込専用に。書き出しは撤去（§4） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持 | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4） |
-| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、**段階3-3a で残る prototype 方式 7 本（`io` / `toggle` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options`）を class 化**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。残り 8 本の `.ts` 化は段階3-3b、`window` 登録の撤去は 3-4 |
+| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | `index.html` の Dropbox CDN 読み込み | 保持（テストでは遮断） | 存廃を未決（上記決定ログ参照） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。

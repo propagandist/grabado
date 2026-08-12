@@ -9,6 +9,10 @@
  * IE 専用分岐と参照 0 の API（select / gecko / webkit / khtml）は撤去した。
  * 段階2 の polyfill 撤去と同じ論法で、対象実行系（Chromium 151 / jsdom 29）の
  * どちらでも一度も評価されないことを実測してある（CUSTOMIZATIONS.md の決定ログ）。
+ *
+ * ブラウザ判別子（opera / ie）は段階3-1 では値 false のプロパティだけを残していた
+ * （まだ .js だった js/io.js と js/tablemanager.js が読むため）。段階3-3b で参照側の
+ * 分岐を畳んだので、プロパティごと撤去した。
  */
 
 export interface OzRequestOptions {
@@ -51,16 +55,6 @@ export const OZ = {
         <T extends EventTarget>(x: T): T;
         <T extends EventTarget>(x: string | T): T;
     },
-    /*
-     * grabado: 元は opera / ie / gecko / webkit / khtml の 5 つで、いずれも
-     * UA 判定だった（HANDOVER §3 段階3-1）。gecko / webkit / khtml は参照 0 なので撤去。
-     * opera と ie はまだ .js の 2 箇所（js/io.js:689 / js/tablemanager.js:217）が読むので
-     * プロパティだけ残す。元の式（!!window.opera / !!document.attachEvent && !window.opera）は
-     * Chromium・jsdom のどちらでも false になることを実測しており、値は false 固定にした。
-     * 参照側を .ts 化する段階3-3 で分岐ごと畳んで消す。
-     */
-    opera: false,
-    ie: false,
     Event: {
         _id: 0,
         _byName: {} as Record<string, Record<number, OzEventRecord>>,

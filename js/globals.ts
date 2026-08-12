@@ -2,9 +2,10 @@
  * grabado: HANDOVER §3 段階3-1 で .ts 化した。
  *
  * export ＋ window 登録の 2 本立て（イディオムは js/oz.ts の冒頭を参照）。
- * まだ .js の 15 本が裸の _ / SQL / DATATYPES / LOCALE を読むので、window 登録は
- * 段階3-4 まで残す。DATATYPES と LOCALE は js/wwwsqldesigner.js とテストが
- * window 越しに差し替える（window.DATATYPES = … / window.LOCALE[n] = …）ので、
+ * 段階3-3b で js/ が全部 .ts になったので裸のグローバルを読む参照側は無くなったが、
+ * window 登録の撤去は段階3-4 でまとめて行う（index.html や外部から触る面の確認と
+ * 同時にやるほうが安全なため）。DATATYPES と LOCALE は js/wwwsqldesigner.ts と
+ * テストが window 越しに差し替える（window.DATATYPES = … / window.LOCALE[n] = …）ので、
  * モジュールローカルの変数にはしない。参照経路を現行と 1 バイトも変えないため。
  */
 
@@ -20,53 +21,29 @@ import type { Relation } from "./relation.ts";
 import type { Key } from "./key.ts";
 import type { Rubberband } from "./rubberband.ts";
 import type { Minimap } from "./map.ts";
+import type { Toggle } from "./toggle.ts";
+import type { IO } from "./io.ts";
+import type { TableManager } from "./tablemanager.ts";
+import type { RowManager } from "./rowmanager.ts";
+import type { KeyManager } from "./keymanager.ts";
+/* Window は lib.dom のグローバル型と同名なので改名して受ける */
+import type { Window as SqlWindow } from "./window.ts";
+import type { Options } from "./options.ts";
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /** SQL.subscribe が受け取るハンドラ。SQL.publish が {target, data} を渡す */
 export type SqlSubscriber = (e: { target: unknown; data: unknown }) => void;
 
 /**
- * js/wwwsqldesigner.js の SQL.Designer インスタンス（types/globals.d.ts から移設）。
+ * Designer インスタンスの型。
  *
- * まだ .js の 8 本の中で唯一「7 本の描画中核から参照される実体」なので、その面を
- * ここに集約する（HANDOVER §3 段階3-2）。7 本それぞれにローカルの構造的 interface を
- * 書く案は、同じ Designer の別々の面を 7 回書くことになり、面がずれても誰も気づかない。
- * 段階3-3 で js/wwwsqldesigner.ts が実体を持てば、ここは import type { Designer } に
- * 置き換わる（7 ファイルを回って消す作業は発生しない）。
+ * 段階3-2 まではここに構造的 interface を書いていた（当時 js/wwwsqldesigner.js は
+ * まだ .js で、描画中核 7 本の this.owner が同じ面を参照する必要があったため）。
+ * 段階3-3b で実体が .ts になったので、実体への型エイリアスにした。参照している
+ * 13 本は import を変えずに本物の型を見る（3-2 で予告したとおり、7 ファイルを
+ * 回って書き換える作業は発生しない）。名前を Designer に統一するのは段階3-4。
  */
-export interface SqlDesigner {
-    /** SVG で描くか。実体は getOption("vector") && document.createElementNS の truthy 値 */
-    vector: boolean;
-    svgNS: string;
-    /* 描画領域の実寸。js/map.ts が縮尺の分母に使う */
-    width: number;
-    height: number;
-    dom: { container: HTMLElement; svg: SVGSVGElement };
-    map: Minimap;
-    tables: Table[];
-    tableManager: {
-        selection: Table[];
-        select(t: Table | false, multi?: boolean): void;
-        edit(): void;
-        selectRect(x: number, y: number, w: number, h: number): void;
-    };
-    rowManager: {
-        select(r: Row | false): void;
-        redraw(): void;
-    };
-    sync(): void;
-    removeRelation(r: Relation): void;
-    removeSelection(): void;
-    getFKTypeFor(typeIndex: number): number;
-    /*
-     * 戻りは cookie の値（文字列）か switch の既定値（文字列または 0）。
-     * 呼び出しの多くは truthy 判定だけをするので総称シグネチャで足り、
-     * switch のキーに使う style だけ string で確定させる。
-     */
-    getOption(name: "style"): string;
-    getOption(name: string): string | number;
-    io: { fromXMLText(xml: string): void };
-    toXML(): string;
-}
+export type SqlDesigner = Designer;
 
 /**
  * SQL 名前空間。
@@ -96,10 +73,18 @@ export interface SqlNamespace {
     Rubberband: typeof Rubberband;
     /** 公開名は SQL.Map、クラス名は Minimap（ES 標準 Map との衝突回避。§5.4） */
     Map: typeof Minimap;
+    Toggle: typeof Toggle;
+    IO: typeof IO;
+    TableManager: typeof TableManager;
+    RowManager: typeof RowManager;
+    KeyManager: typeof KeyManager;
+    /** 公開名は SQL.Window（lib.dom の Window とは別物） */
+    Window: typeof SqlWindow;
+    Options: typeof Options;
     /** クラス。生成すると自身を SQL.designer に登録する */
-    Designer: new () => SqlDesigner;
+    Designer: typeof Designer;
     /** 唯一のインスタンス。new SQL.Designer() が走るまでは存在しない */
-    designer: SqlDesigner;
+    designer: Designer;
 }
 
 /* getText。window.LOCALE を読むのは現行のまま（初期化はこのファイルの下） */
@@ -195,14 +180,12 @@ window._ = _;
 window.DATATYPES = false;
 window.LOCALE = {};
 /*
- * grabado: このキャストは移行中だけのもの（HANDOVER §3 段階3-1）。
- * まだ .js の 15 本が `SQL.Visual = Visual;` のようにトップレベルでプロパティを
- * 生やしており、TS は allowJs のもとで .js のその代入から SQL のグローバル型を
- * 合成する。結果 window.SQL の型は「上の SqlNamespace ∩ js/ が合成した型」になり、
- * まだ生えていないクラス 14 個を要求してくる。段階3-3 で全部 .ts になれば合成が
- * 止まり、素の代入に戻せる。
+ * grabado: 段階3-1〜3-2 はここに as unknown as typeof window.SQL を置いていた。
+ * まだ .js のファイルがトップレベルで SQL.X = X と生やすと、TS が allowJs のもとで
+ * その代入からグローバル型を合成し、window.SQL の型が「SqlNamespace ∩ 合成型」に
+ * なっていたため。段階3-3b で js/ から .js が尽きて合成が止まったので、素の代入に戻した。
  */
-window.SQL = SQL as unknown as typeof window.SQL;
+window.SQL = SQL;
 
 window.onbeforeunload = function (e) {
     return ""; /* some browsers will show this text, some won't. */

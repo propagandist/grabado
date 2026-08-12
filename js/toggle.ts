@@ -1,12 +1,18 @@
 /* ------------------ minimize/restore bar ----------- */
-
 /*
- * grabado: ES クラス化した（HANDOVER §3 段階3-3）。段階2 で SQL.Visual 階層に施した変換と
- * 同じ形で、prototype メソッドをクラス本体へ移しただけ。フィールド代入の順序も呼び出し順も
- * 1 行も変えていない（クラスフィールド初期化子は使わない）。
+ * grabado: ES クラス化（HANDOVER §3 段階3-3a）。段階3-3b で .ts 化した。
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  */
-class Toggle {
-    constructor(elm) {
+
+import { OZ } from "./oz.ts";
+import { SQL } from "./globals.ts";
+
+export class Toggle {
+    /* 初期値は null で、コンストラクタが呼ぶ _switch() が必ず boolean を入れる */
+    declare _state: boolean | null;
+    declare _elm: HTMLElement;
+
+    constructor(elm: HTMLElement) {
         this._state = null;
         this._elm = elm;
         OZ.Event.add(elm, "click", this._click.bind(this));
@@ -18,11 +24,11 @@ class Toggle {
         this._switch(defaultState);
     }
 
-    _click(e) {
+    _click(e: MouseEvent): void {
         this._switch(!this._state);
     }
 
-    _switch(state) {
+    _switch(state: boolean): void {
         this._state = state;
         if (this._state) {
             OZ.$("bar").style.maxHeight = "";

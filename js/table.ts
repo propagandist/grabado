@@ -433,7 +433,8 @@ export class Table extends Visual<TableDom> {
      * 実際に消費しているため（Row と偽ると段階3-3 でその分岐が型上ありえなくなる）。
      * 唯一ガードなしで受ける js/key.ts 側を 1 キャストで通す。
      */
-    findNamedRow(n: string): Row | false {
+    /* n が null になりうるのは Designer.fromXML の relation 属性経由（属性が無いとき） */
+    findNamedRow(n: string | null): Row | false {
         /* return row with a given name */
         for (var i = 0; i < this.rows.length; i++) {
             if (this.rows[i]!.getTitle() == n) {

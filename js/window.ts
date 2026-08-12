@@ -1,22 +1,48 @@
 /* --------------------- window ------------ */
 
 /*
- * grabado: ES クラス化した（HANDOVER §3 段階3-3）。prototype メソッドをクラス本体へ移した
- * だけで、代入と呼び出しの順序は現行のまま。this.sync = this.sync.bind(this) は
- * 「プロトタイプのメソッドをインスタンスの own property で上書きする」現行の形を温存している
- * （OZ.Event.add に同一の関数オブジェクトを渡すため）。
+ * grabado: ES クラス化（HANDOVER §3 段階3-3a）。段階3-3b で .ts 化した。
+ *
+ * this.sync の bind 再代入は「プロトタイプのメソッドをインスタンスの own property で
+ * 上書きする」現行の形を温存している（OZ.Event.add に同一の関数オブジェクトを渡すため）。
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
+ *
+ * クラス名 Window は lib.dom のグローバル型と同名。モジュールなので衝突はしないが、
+ * import する側は名前を変える（js/globals.ts の import type { Window as SqlWindow }）。
  */
-class Window {
-    constructor(owner) {
+
+import { OZ } from "./oz.ts";
+import { SQL, _, type SqlDesigner } from "./globals.ts";
+
+/** ダイアログの DOM。すべてコンストラクタで埋まる（後付けキーは無い） */
+export interface WindowDom {
+    container: HTMLElement;
+    background: HTMLElement;
+    ok: HTMLInputElement;
+    cancel: HTMLInputElement;
+    title: HTMLElement;
+    content: HTMLElement;
+    throbber: HTMLImageElement;
+}
+
+export class Window {
+    declare owner: SqlDesigner;
+    declare dom: WindowDom;
+    /** 0 = 閉じている / 1 = 開いている */
+    declare state: number;
+    /** open() が受け取る OK 時のコールバック。省略時は cancel ボタンを隠す */
+    declare callback: (() => void) | undefined;
+
+    constructor(owner: SqlDesigner) {
         this.owner = owner;
         this.dom = {
             container: OZ.$("window"),
             background: OZ.$("background"),
-            ok: OZ.$("windowok"),
-            cancel: OZ.$("windowcancel"),
+            ok: OZ.$<HTMLInputElement>("windowok"),
+            cancel: OZ.$<HTMLInputElement>("windowcancel"),
             title: OZ.$("windowtitle"),
             content: OZ.$("windowcontent"),
-            throbber: OZ.$("throbber"),
+            throbber: OZ.$<HTMLImageElement>("throbber"),
         };
         this.dom.ok.value = _("windowok");
         this.dom.cancel.value = _("windowcancel");
@@ -35,19 +61,19 @@ class Window {
         this.sync();
     }
 
-    showThrobber() {
+    showThrobber(): void {
         this.dom.throbber.style.visibility = "";
     }
 
-    hideThrobber() {
+    hideThrobber(): void {
         this.dom.throbber.style.visibility = "hidden";
     }
 
-    open(title, content, callback) {
+    open(title: string, content: HTMLElement, callback?: () => void): void {
         this.state = 1;
         this.callback = callback;
         while (this.dom.title.childNodes.length > 1) {
-            this.dom.title.removeChild(this.dom.title.childNodes[1]);
+            this.dom.title.removeChild(this.dom.title.childNodes[1]!);
         }
 
         var txt = OZ.DOM.text(title);
@@ -73,14 +99,14 @@ class Window {
         var formElements = ["input", "select", "textarea"];
         var all = this.dom.container.getElementsByTagName("*");
         for (var i = 0; i < all.length; i++) {
-            if (formElements.indexOf(all[i].tagName.toLowerCase()) != -1) {
-                all[i].focus();
+            if (formElements.indexOf(all[i]!.tagName.toLowerCase()) != -1) {
+                (all[i] as HTMLElement).focus();
                 break;
             }
         }
     }
 
-    key(e) {
+    key(e: KeyboardEvent): void {
         if (!this.state) {
             return;
         }
@@ -92,14 +118,14 @@ class Window {
         }
     }
 
-    ok(e) {
+    ok(e?: Event): void {
         if (this.callback) {
             this.callback();
         }
         this.close();
     }
 
-    close() {
+    close(): void {
         if (!this.state) {
             return;
         }
@@ -108,7 +134,7 @@ class Window {
         this.dom.container.style.visibility = "hidden";
     }
 
-    sync() {
+    sync(): void {
         /* adjust background position */
         var dims = OZ.DOM.win();
         var scroll = OZ.DOM.scroll();

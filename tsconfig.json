@@ -1,9 +1,9 @@
 {
-  // HANDOVER §7 のテストコードと §3 段階1 のエントリ（src/）が対象。
-  // 既存 js/ は import 経由で解決するだけで型検査しない（checkJs は §3 の後続段階で入れる）。
+  // js/ src/ tests/ のすべてが .ts（§3 段階3-3b で js/ の .js が尽きた）。
+  // checkJs は落とした（型検査すべき .js がもう無い）。allowJs だけ残すのは
+  // vitest.config.ts が scripts/canonical-cwd.mjs を import しているため。
   "compilerOptions": {
     "allowJs": true,
-    "checkJs": false,
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
@@ -18,5 +18,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["js/**/*.ts", "src/**/*.ts", "tests/**/*.ts", "types/**/*.d.ts", "*.config.ts"]
+  "include": ["js/**/*.ts", "src/**/*.ts", "tests/**/*.ts", "*.config.ts"]
 }

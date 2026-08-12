@@ -1,13 +1,46 @@
 /* --------------------- row manager ------------ */
 
 /*
- * grabado: ES クラス化した（HANDOVER §3 段階3-3）。prototype メソッドをクラス本体へ移した
- * だけで、代入と呼び出しの順序は現行のまま（クラスフィールド初期化子は使わない）。
+ * grabado: ES クラス化（HANDOVER §3 段階3-3a）。段階3-3b で .ts 化した。
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
+ *
+ * dom バッグは「文字列キーの動的代入」形態（docs/ARCHITECTURE.md §5.4 の (ii)）で、
+ * ここは全 7 キーがループで埋まる。型は完成形を宣言し、嘘は初期化とループ代入の
+ * 2 行に閉じ込める（段階3-2 の原理）。
+ *
+ * selected は Row | false | null を正直に出した。ガード付きで読む箇所（select /
+ * redraw / press）が実在し、Row と偽るとその分岐が「型上ありえない」ことになるため。
+ * ガードなしで読む up / down / remove / edit / foreigndisconnect / tableClick は
+ * ボタンの disabled（redraw が管理）で保護されているので ! を置く。
  */
-class RowManager {
-    constructor(owner) {
+
+import { OZ } from "./oz.ts";
+import { SQL, _, type SqlDesigner } from "./globals.ts";
+import type { Row } from "./row.ts";
+import type { Table } from "./table.ts";
+
+/** 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」（7 個ともループが埋める） */
+export interface RowManagerDom {
+    editrow: HTMLInputElement;
+    removerow: HTMLInputElement;
+    uprow: HTMLInputElement;
+    downrow: HTMLInputElement;
+    foreigncreate: HTMLInputElement;
+    foreignconnect: HTMLInputElement;
+    foreigndisconnect: HTMLInputElement;
+}
+
+export class RowManager {
+    declare owner: SqlDesigner;
+    declare dom: RowManagerDom;
+    declare selected: Row | false | null;
+    declare creating: boolean;
+    declare connecting: boolean;
+
+    constructor(owner: SqlDesigner) {
         this.owner = owner;
-        this.dom = {};
+        /* 型は構築完了後の状態。7 キーはこの下のループが埋める */
+        this.dom = {} as unknown as RowManagerDom;
         this.selected = null;
         this.creating = false;
         this.connecting = false;
@@ -22,9 +55,10 @@ class RowManager {
             "foreigndisconnect",
         ];
         for (var i = 0; i < ids.length; i++) {
-            var id = ids[i];
-            var elm = OZ.$(id);
-            this.dom[id] = elm;
+            var id = ids[i]!;
+            var elm = OZ.$<HTMLInputElement>(id);
+            /* 動的キーの代入はこの 1 行だけ。完成形は上の RowManagerDom が宣言している */
+            (this.dom as unknown as Record<string, HTMLInputElement>)[id] = elm;
             elm.value = _(id);
         }
 
@@ -55,7 +89,7 @@ class RowManager {
         SQL.subscribe("rowclick", this.rowClick.bind(this));
     }
 
-    select(row) {
+    select(row: Row | false): void {
         /* activate a row */
         if (this.selected === row) {
             return;
@@ -71,16 +105,17 @@ class RowManager {
         this.redraw();
     }
 
-    tableClick(e) {
+    tableClick(e: { target: unknown; data: unknown }): void {
         /* create relation after clicking target table */
         if (!this.creating) {
             return;
         }
 
-        var r1 = this.selected;
-        var t2 = e.target;
+        var r1 = this.selected as Row;
+        var t2 = e.target as Table;
 
-        var p = this.owner.getOption("pattern");
+        /* getOption の戻りは string | number（既定値に 0 がある）。pattern は文字列 */
+        var p = this.owner.getOption("pattern") as string;
         p = p.replace(/%T/g, r1.owner.getTitle());
         p = p.replace(/%t/g, t2.getTitle());
         p = p.replace(/%R/g, r1.getTitle());
@@ -91,14 +126,14 @@ class RowManager {
         this.owner.addRelation(r1, r2);
     }
 
-    rowClick(e) {
+    rowClick(e: { target: unknown; data: unknown }): void {
         /* draw relation after clicking target row */
         if (!this.connecting) {
             return;
         }
 
-        var r1 = this.selected;
-        var r2 = e.target;
+        var r1 = this.selected as Row;
+        var r2 = e.target as Row;
 
         if (r1 == r2) {
             return;
@@ -107,7 +142,7 @@ class RowManager {
         this.owner.addRelation(r1, r2);
     }
 
-    foreigncreate(e) {
+    foreigncreate(e?: Event): void {
         /* start creating fk */
         this.endConnect();
         if (this.creating) {
@@ -118,7 +153,7 @@ class RowManager {
         }
     }
 
-    foreignconnect(e) {
+    foreignconnect(e?: Event): void {
         /* start drawing fk */
         this.endCreate();
         if (this.connecting) {
@@ -130,11 +165,11 @@ class RowManager {
         }
     }
 
-    foreigndisconnect(e) {
+    foreigndisconnect(e?: Event): void {
         /* remove connector */
-        var rels = this.selected.relations;
+        var rels = (this.selected as Row).relations;
         for (var i = rels.length - 1; i >= 0; i--) {
-            var r = rels[i];
+            var r = rels[i]!;
             if (r.row2 == this.selected) {
                 this.owner.removeRelation(r);
             }
@@ -142,44 +177,44 @@ class RowManager {
         this.redraw();
     }
 
-    endCreate() {
+    endCreate(): void {
         this.creating = false;
         this.dom.foreigncreate.value = _("foreigncreate");
     }
 
-    endConnect() {
+    endConnect(): void {
         this.connecting = false;
         this.dom.foreignconnect.value = _("foreignconnect");
     }
 
-    up(e) {
-        this.selected.up();
+    up(e?: Event): void {
+        (this.selected as Row).up();
         this.redraw();
     }
 
-    down(e) {
-        this.selected.down();
+    down(e?: Event): void {
+        (this.selected as Row).down();
         this.redraw();
     }
 
-    remove(e) {
+    remove(e?: Event): void {
         var result = confirm(
-            _("confirmrow") + " '" + this.selected.getTitle() + "' ?"
+            _("confirmrow") + " '" + (this.selected as Row).getTitle() + "' ?"
         );
         if (!result) {
             return;
         }
-        var t = this.selected.owner;
-        this.selected.owner.removeRow(this.selected);
+        var t = (this.selected as Row).owner;
+        (this.selected as Row).owner.removeRow(this.selected as Row);
 
-        var next = false;
+        var next: Row | false = false;
         if (t.rows) {
-            next = t.rows[t.rows.length - 1];
+            next = t.rows[t.rows.length - 1]!;
         }
         this.select(next);
     }
 
-    redraw() {
+    redraw(): void {
         this.endCreate();
         this.endConnect();
         if (this.selected) {
@@ -195,7 +230,7 @@ class RowManager {
             this.dom.foreigndisconnect.disabled = true;
             var rels = this.selected.relations;
             for (var i = 0; i < rels.length; i++) {
-                var r = rels[i];
+                var r = rels[i]!;
                 if (r.row2 == this.selected) {
                     this.dom.foreigndisconnect.disabled = false;
                 }
@@ -211,7 +246,7 @@ class RowManager {
         }
     }
 
-    press(e) {
+    press(e: KeyboardEvent): void {
         if (!this.selected) {
             return;
         }
@@ -241,8 +276,8 @@ class RowManager {
         }
     }
 
-    edit(e) {
-        this.selected.expand();
+    edit(e?: Event): void {
+        (this.selected as Row).expand();
     }
 }
 

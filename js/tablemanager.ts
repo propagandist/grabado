@@ -1,19 +1,50 @@
 /* --------------------- table manager ------------ */
 
 /*
- * grabado: ES クラス化した（HANDOVER §3 段階3-3）。prototype メソッドをクラス本体へ移した
- * だけで、代入と呼び出しの順序は現行のまま。this.save = this.save.bind(this) は
- * 「プロトタイプのメソッドをインスタンスの own property で上書きする」現行の形を温存している
- * （SQL.Window.open にコールバックとして渡すため）。
+ * grabado: ES クラス化（HANDOVER §3 段階3-3a）。段階3-3b で .ts 化した。
+ *
+ * this.save の bind 再代入は「プロトタイプのメソッドをインスタンスの own property で
+ * 上書きする」現行の形を温存している（SQL.Window.open にコールバックとして渡すため）。
+ * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
+ *
+ * dom バッグは「文字列キーの動的代入」形態（docs/ARCHITECTURE.md §5.4 の (ii)）。
+ * 型は完成形を宣言し、嘘は初期化とループ代入の 2 行に閉じ込める（段階3-2 の原理）。
  */
-class TableManager {
-    constructor(owner) {
+
+import { OZ } from "./oz.ts";
+import { SQL, _, type SqlDesigner } from "./globals.ts";
+import type { Table } from "./table.ts";
+
+/** 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」（ボタン 7 個はループが埋める） */
+export interface TableManagerDom {
+    container: HTMLElement;
+    name: HTMLInputElement;
+    comment: HTMLTextAreaElement;
+    addtable: HTMLInputElement;
+    removetable: HTMLInputElement;
+    aligntables: HTMLInputElement;
+    cleartables: HTMLInputElement;
+    addrow: HTMLInputElement;
+    edittable: HTMLInputElement;
+    tablekeys: HTMLInputElement;
+}
+
+export class TableManager {
+    declare owner: SqlDesigner;
+    declare dom: TableManagerDom;
+    declare selection: Table[];
+    declare adding: boolean;
+    /** 追加モードに入る前の #addtable のラベル（preAdd が控える） */
+    declare oldvalue: string;
+
+    constructor(owner: SqlDesigner) {
         this.owner = owner;
+        /* 型は構築完了後の状態。残りはこの下のループが埋める */
         this.dom = {
             container: OZ.$("table"),
-            name: OZ.$("tablename"),
-            comment: OZ.$("tablecomment"),
-        };
+            name: OZ.$<HTMLInputElement>("tablename"),
+            comment: OZ.$<HTMLTextAreaElement>("tablecomment"),
+        } as unknown as TableManagerDom;
         this.selection = [];
         this.adding = false;
 
@@ -27,17 +58,19 @@ class TableManager {
             "tablekeys",
         ];
         for (var i = 0; i < ids.length; i++) {
-            var id = ids[i];
-            var elm = OZ.$(id);
-            this.dom[id] = elm;
+            var id = ids[i]!;
+            var elm = OZ.$<HTMLInputElement>(id);
+            /* 動的キーの代入はこの 1 行だけ。完成形は上の TableManagerDom が宣言している */
+            (this.dom as unknown as Record<string, HTMLInputElement>)[id] = elm;
             elm.value = _(id);
         }
 
         var ids = ["tablenamelabel", "tablecommentlabel"];
         for (var i = 0; i < ids.length; i++) {
-            var id = ids[i];
-            var elm = OZ.$(id);
-            elm.innerHTML = _(id);
+            var id = ids[i]!;
+            /* grabado: 上のループの elm と型が違う（ラベル要素）ため改名した（段階3-3b） */
+            var labelElm = OZ.$(id);
+            labelElm.innerHTML = _(id);
         }
 
         this.select(false);
@@ -58,16 +91,16 @@ class TableManager {
         OZ.Event.add(this.dom.tablekeys, "click", this.keys.bind(this));
         OZ.Event.add(document, "keydown", this.press.bind(this));
 
-        this.dom.container.parentNode.removeChild(this.dom.container);
+        this.dom.container.parentNode!.removeChild(this.dom.container);
     }
 
-    addRow(e) {
-        var newrow = this.selection[0].addRow(_("newrow"));
+    addRow(e?: Event): void {
+        var newrow = this.selection[0]!.addRow(_("newrow"));
         this.owner.rowManager.select(newrow);
         newrow.expand();
     }
 
-    select(table, multi) {
+    select(table: Table | false, multi?: boolean): void {
         /* activate table */
         if (table) {
             if (multi) {
@@ -89,10 +122,10 @@ class TableManager {
         this.processSelection();
     }
 
-    processSelection() {
+    processSelection(): void {
         var tables = this.owner.tables;
         for (var i = 0; i < tables.length; i++) {
-            tables[i].deselect();
+            tables[i]!.deselect();
         }
         if (this.selection.length == 1) {
             this.dom.addrow.disabled = false;
@@ -114,20 +147,20 @@ class TableManager {
             this.dom.removetable.value = _("removetable");
         }
         for (var i = 0; i < this.selection.length; i++) {
-            var t = this.selection[i];
+            var t = this.selection[i]!;
             t.owner.raise(t);
             t.select();
         }
     }
 
-    selectRect(x, y, width, height) {
+    selectRect(x: number, y: number, width: number, height: number): void {
         /* select all tables intersecting a rectangle */
         this.selection = [];
         var tables = this.owner.tables;
         var x1 = x + width;
         var y1 = y + height;
         for (var i = 0; i < tables.length; i++) {
-            var t = tables[i];
+            var t = tables[i]!;
             var tx = t.x;
             var tx1 = t.x + t.width;
             var ty = t.y;
@@ -146,9 +179,9 @@ class TableManager {
         this.processSelection();
     }
 
-    click(e) {
+    click(e: MouseEvent): void {
         /* finish adding new table */
-        var newtable = false;
+        var newtable: Table | false = false;
         if (this.adding) {
             this.adding = false;
             OZ.DOM.removeClass("area", "adding");
@@ -158,7 +191,11 @@ class TableManager {
             var y = e.clientY + scroll[1];
             newtable = this.owner.addTable(_("newtable"), x, y);
             var r = newtable.addRow("id", { ai: true });
-            var k = newtable.addKey("PRIMARY", "");
+            /*
+             * grabado: 第 2 引数 "" を落とした（HANDOVER §3 段階3-3b）。Table.addKey は
+             * 1 引数しか読まず、現行でも捨てられている（js/table.ts:240 の予告どおり）。
+             */
+            var k = newtable.addKey("PRIMARY");
             k.addRow(r);
         }
         this.select(newtable);
@@ -168,7 +205,7 @@ class TableManager {
         }
     }
 
-    preAdd(e) {
+    preAdd(e?: Event): void {
         /* click add new table */
         if (this.adding) {
             this.adding = false;
@@ -182,7 +219,7 @@ class TableManager {
         }
     }
 
-    clear(e) {
+    clear(e?: Event): void {
         /* remove all tables */
         if (!this.owner.tables.length) {
             return;
@@ -194,10 +231,14 @@ class TableManager {
         this.owner.clearTables();
     }
 
-    remove(e) {
-        var titles = this.selection.slice(0);
+    remove(e?: Event): void {
+        /*
+         * grabado: 現行は Table[] のコピーを文字列で上書きしていく。型では両方を持たせ、
+         * 読み出し側に as Table を 1 個置くだけにした（実行コードは無変更・段階3-3b）。
+         */
+        var titles: Array<Table | string> = this.selection.slice(0);
         for (var i = 0; i < titles.length; i++) {
-            titles[i] = "'" + titles[i].getTitle() + "'";
+            titles[i] = "'" + (titles[i] as Table).getTitle() + "'";
         }
         var result = confirm(_("confirmtable") + " " + titles.join(", ") + "?");
         if (!result) {
@@ -205,43 +246,42 @@ class TableManager {
         }
         var sel = this.selection.slice(0);
         for (var i = 0; i < sel.length; i++) {
-            this.owner.removeTable(sel[i]);
+            this.owner.removeTable(sel[i]!);
         }
     }
 
-    edit(e) {
+    edit(e?: Event): void {
         this.owner.window.open(_("edittable"), this.dom.container, this.save);
 
-        var title = this.selection[0].getTitle();
+        var title = this.selection[0]!.getTitle();
         this.dom.name.value = title;
         try {
             /* throws in ie6 */
-            this.dom.comment.value = this.selection[0].getComment();
+            this.dom.comment.value = this.selection[0]!.getComment();
         } catch (e) {}
 
         /* pre-select table name */
         this.dom.name.focus();
-        if (OZ.ie) {
-            try {
-                /* throws in ie6 */
-                this.dom.name.select();
-            } catch (e) {}
-        } else {
-            this.dom.name.setSelectionRange(0, title.length);
-        }
+        /*
+         * grabado: OZ.ie の分岐（IE6 で select() が throw するのを避ける経路）を
+         * 撤去した（HANDOVER §3 段階3-3b）。元式 !!document.attachEvent && !window.opera は
+         * Chromium 151 / jsdom 29 のどちらでも false（段階3-1 の実測）で、常に
+         * else 側が走っている。これで js/oz.ts の ie / opera プロパティも参照 0 になった。
+         */
+        this.dom.name.setSelectionRange(0, title.length);
     }
 
-    keys(e) {
+    keys(e?: Event): void {
         /* open keys dialog */
-        this.owner.keyManager.open(this.selection[0]);
+        this.owner.keyManager.open(this.selection[0]!);
     }
 
-    save() {
-        this.selection[0].setTitle(this.dom.name.value);
-        this.selection[0].setComment(this.dom.comment.value);
+    save(): void {
+        this.selection[0]!.setTitle(this.dom.name.value);
+        this.selection[0]!.setComment(this.dom.comment.value);
     }
 
-    press(e) {
+    press(e: KeyboardEvent): void {
         var target = OZ.Event.target(e).nodeName.toLowerCase();
         if (target == "textarea" || target == "input") {
             return;

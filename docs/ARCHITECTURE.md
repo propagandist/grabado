@@ -8,7 +8,8 @@
 > 同 段階3-0（Node ハーネスの IIFE バンドル化）実施済み（2026-08-11、§5.1・§5.4）／
 > 同 段階3-1（先頭 3 本の `.ts` 化・移行イディオム確定）実施済み（2026-08-12、§5.1・§5.5）／
 > 同 段階3-2（描画中核 7 本の `.ts` 化・`dom` バッグの型決定）実施済み（2026-08-12、§5.4・§5.5）／
-> 同 段階3-3a（prototype 方式 7 本の class 化）実施済み（2026-08-12、§5.4・§5.5）**。
+> 同 段階3-3a（prototype 方式 7 本の class 化）実施済み（2026-08-12、§5.4・§5.5）／
+> 同 段階3-3b（残り 8 本の `.ts` 化。`js/` から `.js` が尽きた）実施済み（2026-08-12、§5.1・§5.5）**。
 > §4 は実測値。実測環境・手順も §4.1 に記載。テストの構成と走らせ方は [`TESTING.md`](TESTING.md)。
 
 ---
@@ -19,10 +20,11 @@
 index.html                アプリ本体（SPA エントリ。§3 段階1 で <script type="module" src="/src/main.ts"> 1 本に）
 src/app.ts                ★ §3 で追加。js/ を読み込み順どおり import するだけ（起動しない）
 src/main.ts               ★ §3 で追加。src/app.ts を読んで new SQL.Designer() する起動エントリ
-js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化。§3 段階3 で .ts へ移行中）
-  oz.ts config.ts globals.ts  ★ 段階3-1 で .ts 化済み（§5.5）
-  visual/row/table/relation/key/rubberband/map .ts  ★ 段階3-2 で .ts 化済み
-  その他 8 本（.js）            段階3-3 で .ts 化（順序は §5.1。段階3-3a で class 化だけ済み）
+js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化。§3 段階3 で全 18 本が .ts に）
+  oz.ts config.ts globals.ts        ★ 段階3-1 で .ts 化
+  visual/row/table/relation/key/rubberband/map .ts  ★ 段階3-2 で .ts 化
+  toggle/io/tablemanager/rowmanager/keymanager/window/options/wwwsqldesigner .ts
+                                    ★ 段階3-3a で class 化 → 3-3b で .ts 化
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
@@ -42,7 +44,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
-| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-2 で 10 本を `.ts` 化・段階3-3a で残る 7 本を class 化**（残り 8 本のグローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
+| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-3b で 18 本すべてを `.ts` 化**（`window` 登録と `declare global` は段階3-4 で撤去） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
 | **DDL 生成** | **`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）** | **TS 実装**（§6.3 の規約を含む） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
@@ -195,7 +197,7 @@ oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.
 ```
 
 **この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本、段階3-2 で
-続く描画中核 7 本が `.ts` になり、残りは末尾 8 本（段階3-3）。
+続く描画中核 7 本、段階3-3b で末尾 8 本が `.ts` になり、**`js/` に `.js` は 1 本も残っていない**。
 
 - `oz.ts` は upstream 独自の DOM / イベント / XHR ライブラリ（`OZ.*`）。`OZ.Request` が全通信の入口。
   **§3 段階2 で `OZ.Class` 系（参照 0）と ES5 polyfill 群を撤去**し、
@@ -211,14 +213,16 @@ oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.
 - **`.ts` 化はこの読み込み順の先頭から進める**（§5.5）。葉から進めると未 `.ts` のグローバルに対する
   ambient 宣言が要り、それ自体が後で捨てる作業になるため。
 
-**まだ `.js` の 8 本の相互参照はグローバルのまま**（`OZ` / `CONFIG` / `SQL` / `DATATYPES` / `LOCALE` / `_`）。
-ESM ではトップレベル `var` がモジュールスコープに閉じるので、定義側の 6 箇所だけを `window.` に付け替えてある
-（[`../js/oz.ts`](../js/oz.ts) / [`../js/config.ts`](../js/config.ts) / [`../js/globals.ts`](../js/globals.ts) の
-`_`・`DATATYPES`・`LOCALE`・`SQL`）。`.ts` 化した 10 本も `export` と併せてこの登録を残しており、
-参照側が全部 `.ts` になる段階3-4 でまとめて撤去する。
-描画中核 7 本は `window` にではなく `SQL` 名前空間に載る（`SQL.Row = Row;` 等）ので、
-その型は `SqlNamespace` が持つ（§5.5）。
-段階2 の class 化でも段階3-1・3-2 の `.ts` 化でもこの前提は崩していない（§5.4 の「2 つの実行系」を参照）。
+**相互参照はすべて import に置き換わった。** 裸のグローバル（`OZ` / `CONFIG` / `SQL` / `DATATYPES` /
+`LOCALE` / `_`）を読むファイルはもう無い。ただし定義側の `window` 登録（[`../js/oz.ts`](../js/oz.ts) /
+[`../js/config.ts`](../js/config.ts) / [`../js/globals.ts`](../js/globals.ts) の
+`OZ`・`CONFIG`・`_`・`DATATYPES`・`LOCALE`・`SQL`）と `declare global` は**段階3-4 まで残す**
+（`index.html` や外部から触る面の確認と同時に撤去するほうが安全なため）。`DATATYPES` と `LOCALE` は
+[`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts) とテストが `window` 越しに差し替えるので、
+撤去時にその経路の設計が要る。
+クラスは `window` にではなく `SQL` 名前空間に載る（`SQL.Row = Row;` 等）ので、その型は
+`SqlNamespace` が持つ（§5.5）。段階2 の class 化でも段階3 の `.ts` 化でもこの前提は崩していない
+（§5.4 の「2 つの実行系」を参照）。
 
 ### 5.1.1 ビルドと配信
 
@@ -260,7 +264,7 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 | `Relation` | `relation.ts` | 継承 | **なし**（`destroy` は基底を呼ばない） | `_counter` | **配列**（SVG path 1 本 or div 3 本）＝ `[RelationNode, ...RelationNode[]]` |
 | `Row` | `row.ts` | **上書き** | `super.setTitle` / `super.destroy` | — | `RowDom = VisualDom + 固定 3 + RowEditDom`（後付け 8 個） |
 | `Table` | `table.ts` | **上書き** | `super.setTitle` / `super.destroy` | `active` / `x` / `y` | `TableDom = VisualDom + content + mini` |
-| `Designer` | `wwwsqldesigner.js` | 継承 | **なし**（`setTitle` は `document.title` のみ） | — | 固定キー＋`svg`（段階3-3 で `Visual<DesignerDom>` に乗る） |
+| `Designer` | `wwwsqldesigner.ts` | 継承 | **なし**（`setTitle` は `document.title` のみ） | — | `DesignerDom = VisualDom + svg`。段階3-3b で `Visual<DesignerDom>` に乗った |
 
 構造上おさえておく点。
 
@@ -274,8 +278,9 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
   基底 `Visual` を `class Visual<D = VisualDom>` にして各サブクラスが型引数で自分の形を渡す。
   基底を固定型にしてサブクラスで `declare dom` 再宣言する案は `Relation` が TS2415 で成立せず、
   `D extends VisualDom` の制約も配列を排除する。
-  **(ii) は段階3-3 に残る**が、該当する `io` / `keymanager` / `rowmanager` / `tablemanager` は
-  （段階3-3a で class になった今も）`Visual` を継承していないため、`Visual.dom` の型に縛られず自由に決められる。
+  **(ii) は段階3-3b で決着した**：該当する `io` / `keymanager` / `rowmanager` / `tablemanager` は
+  `Visual` を継がないので、完成形（`IoDom` ほか）を interface で宣言し、初期化とループ代入の
+  2 行にだけキャストを置く（4 本で合計 8 個）。形態 (i) の `Designer` は `Visual<DesignerDom>` に乗った。
 - クラス名 `Minimap` は ES 標準の `Map` との衝突を避けるため。公開名は `SQL.Map` のまま。
 
 **2 つの実行系の差は §3 段階3-0 でほとんど消えた。** Node ハーネスも
@@ -311,8 +316,13 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 | 3-1 | `oz` / `config` / `globals` | 済（2026-08-12） |
 | 3-2 | 描画中核 `visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map` | 済（2026-08-12） |
 | 3-3a | prototype 方式 7 本（`io` / `toggle` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options`）を class 化（`.js` のまま。§5.4） | 済（2026-08-12） |
-| 3-3b | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` の `.ts` 化 | 未 |
-| 3-4 | `window` 登録と [`../types/globals.d.ts`](../types/globals.d.ts) の撤去、`strict` の最終確認 | 未 |
+| 3-3b | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` の `.ts` 化 | 済（2026-08-12） |
+| 3-4 | `window` 登録と `declare global` の撤去、`strict` の最終確認 | 未 |
+
+段階3-3b で **`types/globals.d.ts` は役目を終えて削除**した（最後まで残っていた `window.d` の宣言は
+[`../src/main.ts`](../src/main.ts) へ移した）。[`../tsconfig.json`](../tsconfig.json) の `checkJs` も
+落としてある（`allowJs` だけは [`../vitest.config.ts`](../vitest.config.ts) が
+`scripts/canonical-cwd.mjs` を import するために残る）。
 
 着手前の実測（`tsc --allowJs --checkJs --noEmit --strict --noUncheckedIndexedAccess`）は **1,281 件**。
 うち TS2304 の 364 件は「裸グローバルが宣言されていないだけ」で import 化すれば消える。実質の型作業は
@@ -359,6 +369,9 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 | `OZ.Event.add`（3-2） | `<E extends Event = Event>(elm, event, cb: (e: E) => void) => number` | `EventListener` は呼び出しシグネチャなので `strictFunctionTypes` が効き、`click(e: MouseEvent)` を bind して渡すと反変で TS2345。登録は 3-2 で 21 箇所、3-3 でさらに 40 箇所超 |
 | `SqlDesigner`（3-2） | [`../js/globals.ts`](../js/globals.ts) の `export interface` | 描画中核 7 本の `this.owner` の面を 1 か所に集約。7 本にローカル interface を書くと面がずれても気づけず、削除コストも 7 倍。段階3-3 で `import type { Designer }` に置き換わる |
 | `SqlNamespace`（3-2） | `Visual` / `Row` / `Table` / `Relation` / `Key` / `Rubberband` / `Map` を追加 | `.ts` 側は import した `SQL` に代入するので、宣言が無いと代入自体が TS2339（`.js` のようなグローバル型の合成は起きない）。同時にこれが `new SQL.Row(...)` を import に書き換えずに済む根拠でもある |
+| `SqlDesigner`（3-3b） | `export type SqlDesigner = Designer;`（実体への型エイリアス） | 3-2 の構造的 interface を実体に置き換えた。参照している 13 本は無改修。近似で書いていた面は実体との食い違いが `typecheck` で出る（`getOption` の戻りが `string \| number \| boolean` だったのはこれで判明） |
+| `dom` 形態 (ii)（3-3b） | 完成形を `IoDom` / `TableManagerDom` / `RowManagerDom` / `KeyManagerDom` で宣言 | 初期化に `as unknown as XxxDom` 1 個、ループ代入に `(this.dom as unknown as Record<string, HTMLInputElement>)[id]` 1 個。4 本で計 8 個のキャストと引き換えに読み出しが全部注釈ゼロで通る |
+| `SqlNamespace`（3-3b） | 残り 8 クラスを追加し、`Designer: typeof Designer` / `designer: Designer` に | `SQL.Window` は `lib.dom` の `Window` と同名なので、import 側で `import type { Window as SqlWindow }` と改名して受ける |
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

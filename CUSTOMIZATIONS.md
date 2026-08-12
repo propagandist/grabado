@@ -752,6 +752,82 @@ row 選択と解除 / PK 追加 / ミニマップのドラッグ / ラバーバ�
 > 名前解決しており、参照元と参照先が同名だと両端が同じテーブルに解決されるため。
 > §4 の IO 作り替えで名前ではなく id で参照する形にすれば解消する（`formatVersion` 側の設計に含める）。
 
+### 2026-08-12 HANDOVER §3「フロント TS 化」段階3-3a — prototype 方式 7 本を class 化した
+
+段階3-3 の対象は残り 8 本（`toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` /
+`options` / `wwwsqldesigner`、2,132 行）。着手前の実測
+（`tsc --allowJs --checkJs --noEmit --strict --noUncheckedIndexedAccess src/app.ts`）は **619 件**で、
+内訳は TS2339 239 / TS2304 223（`OZ` 145 / `_` 54 / `CONFIG` 11 / `Dropbox` 10 / `ActiveXObject` 2 /
+`e` 1）/ TS7006 105 / その他 52。ファイル別は `io` 179 / `keymanager` 125 / `wwwsqldesigner` 79 /
+`tablemanager` 76 / `rowmanager` 62 / `options` 59 / `window` 31 / `toggle` 8。
+
+**TS2339 239 件の本丸は `SQL.X = function(){}` ＋ prototype 方式そのもの**なので、`.ts` 化の前に
+構造を正す PR を分けた。**段階2 が明示的に見送った判断を覆している**（当時の理由は「`SQL.Visual` を
+継承しない 7 クラスは『クラスを知らない』問題を起こさないので、承認済みスコープを広げない」で、
+同じ箇所に「入れれば TS2339 がさらに 200 件前後改善する見込み」と書いてあった）。覆した根拠は
+2 つ。**(a)** prototype のまま型を付けるには 88 本のメソッド全部に `this: X` 注釈が要る
+（TS は prototype 代入の `this` を推論しない）。**(b)** その注釈は将来 class 化した時点で全部捨てる
+作業になる。段階3-3 の `.ts` 化と同じ PR に混ぜなかったのは、golden に差分が出たとき
+「構造変更が原因か型付けが原因か」を PR 境界で切り分けるため（段階1 以来の論法）。
+
+**変換規則は段階2 の `SQL.Visual` 階層と同一。** `SQL.X = function (owner) {…}` → `class X { constructor(owner) {…} }`、
+prototype メソッド → クラス本体のメソッド、末尾に `SQL.X = X;`。**クラスフィールド初期化子は使わない**
+（`super()` を持たないクラスでも、代入の順序を現行と 1 行もずらさないため）。import/export は入れない
+（この PR では `js/` に 1 つも `.ts` が増えない）。
+
+**着手前の実測 3 項目**（規約4「構造変更は実測してから」）。いずれも**該当 0 件**で、class 化で
+観測できる差が生じないことを確認した。
+
+| 項目 | 実測 | class 化で起きうる差 |
+|---|---|---|
+| インスタンスに対する `for...in` | 0 件（`for (var p in …)` は cookie の obj / `OZ` の opts・options・headers / `Row` の data＝いずれもプレーンオブジェクト） | prototype メソッドが enumerable → non-enumerable |
+| `new` なしの呼び出し | 0 件（生成は `js/wwwsqldesigner.js` の 7 箇所のみで全部 `new`） | class は `new` 必須 |
+| `SQL.X.prototype` への外部代入・静的プロパティ | 0 件（`SQL.X.<name> =` は prototype メソッド定義以外に存在しない） | クラス定義外からの生やし足しが効かなくなる |
+
+**`this.saveresponse = this.saveresponse.bind(this)` 系は温存した**（`io` 4 本 / `keymanager` の
+`purge` / `window` の `sync` / `tablemanager` の `save` / `options` の `save`）。「プロトタイプの
+メソッドをインスタンスの own property で上書きする」形は class でも同じ意味で動く。`OZ.Request` や
+`SQL.Window.open` に**同一の関数オブジェクト**を渡すための現行の書き方なので、変えない。
+
+**[`js/io.js`](js/io.js)（695 行・35 メソッド）は機械変換した。** 手で書き写すと差分の中に
+写し間違いが紛れ込む。awk で「トップレベルの `SQL.IO.prototype.X = function (…) {` をメソッド
+シグネチャに」「トップレベルの `};` を `}` に」「本文を 4 スペース字下げ」だけを行い、
+**空白を無視した diff がシグネチャ 35 行と閉じ括弧 36 行、つまり変換対象そのものだけである**ことを
+確認してから採用した（トップレベル `};` が 36 個＝35 メソッド＋コンストラクタで、1 行完結でない
+シグネチャが 0 件であることも事前に数えている）。
+
+**検証**。成功判定は段階1・2・3-0〜3-2 と同じく **`git diff tests/golden/` が空**であること（63 ＋ 7 本
+すべて無差分。untracked も無し＝`npm run golden:update` をこの PR で一度も打っていない）。
+`npm test` 61 passed / 21 skipped（件数不変）、`npm run test:browser` 80 passed、
+`npm run test:dist` 3 passed、`npm run known-issues` 9 passed（アサート値は 1 文字も変えていない）、
+`npm run typecheck` 0 error。
+
+**バンドル出力の diff が「class 変換だけ」に収束することを副次判定に使った**（段階3-2 で導入した検算）。
+`develop` と本ブランチで `vite build --minify false` を走らせ、空白を無視して比較した結果は
+**過不足なく対応している**。
+
+| | 削除 | 追加 |
+|---|---|---|
+| prototype メソッド代入 | 88 | — |
+| コンストラクタ関数代入（`SQL.X = function …`） | 7 | — |
+| `};` → `}` | 95 | 95 |
+| メソッドシグネチャ | — | 88 |
+| `var X = class {` | — | 7 |
+| `SQL.X = X;` | — | 7 |
+
+**インスタンスフィールドの emit は 1 つも現れていない**（`var IO = class { constructor(owner) {…`）。
+段階3-2 のイディオム E（`.ts` ではプロパティ宣言に必ず `declare` を付ける）は `useDefineForClassFields`
+由来の規則なので、`.js` のこの PR では該当しないが、同じ検算がそのまま「クラス本体に余計な
+フィールドを足していない」ことの確認になっている。
+
+**対話パスの一巡**（golden が張らないマウス／キーボード操作）を `npm run dev`（4173）と
+`npm run preview`（4174）の両方で流し、**18/18・pageerror 0 件**。項目は Toggle バーの開閉 /
+テーブル追加 ×2 / テーブルドラッグ / row 追加→展開→折りたたみ / row 選択・上下移動・解除 /
+キー管理（追加・左右移動）/ リレーション作成 / ミニマップのドラッグ / ラバーバンド選択 /
+リサイズとスクロール / 保存読込ダイアログと backend セレクト / `clientsave`→`clientload` 往復 /
+`clientsql` の DDL 出力（XSLT 経路）/ Esc でダイアログを閉じる / F2 quicksave（backend 不在の応答処理）/
+オプションダイアログ / テーブル削除。class 化した 7 クラスすべてに触れている。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
@@ -763,7 +839,7 @@ row 選択と解除 / PK 追加 / ミニマップのドラッグ / ラバーバ�
 | XML 永続化（`toXML()` / `save` の body） | 保持。**§7 で golden 固定済み**（`tests/golden/xml/`） | JSON 統一。XML は読込専用に。書き出しは撤去（§4） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持 | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4） |
-| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、**段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。残り 8 本の `.ts` 化は段階3-3、`window` 登録の撤去は 3-4 |
+| 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、**段階3-3a で残る prototype 方式 7 本（`io` / `toggle` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options`）を class 化**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。残り 8 本の `.ts` 化は段階3-3b、`window` 登録の撤去は 3-4 |
 | `index.html` の Dropbox CDN 読み込み | 保持（テストでは遮断） | 存廃を未決（上記決定ログ参照） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。

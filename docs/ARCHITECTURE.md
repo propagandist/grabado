@@ -6,7 +6,9 @@
 > §3「フロント TS 化」段階1（Vite バンドル）実施済み（2026-08-09）／
 > 同 段階2（ES クラス化・デッドコード撤去）実施済み（2026-08-10、§5.4）／
 > 同 段階3-0（Node ハーネスの IIFE バンドル化）実施済み（2026-08-11、§5.1・§5.4）／
-> 同 段階3-1（先頭 3 本の `.ts` 化・移行イディオム確定）実施済み（2026-08-12、§5.1・§5.5）**。
+> 同 段階3-1（先頭 3 本の `.ts` 化・移行イディオム確定）実施済み（2026-08-12、§5.1・§5.5）／
+> 同 段階3-2（描画中核 7 本の `.ts` 化・`dom` バッグの型決定）実施済み（2026-08-12、§5.4・§5.5）／
+> 同 段階3-3a（prototype 方式 7 本の class 化）実施済み（2026-08-12、§5.4・§5.5）**。
 > §4 は実測値。実測環境・手順も §4.1 に記載。テストの構成と走らせ方は [`TESTING.md`](TESTING.md)。
 
 ---
@@ -19,7 +21,8 @@ src/app.ts                ★ §3 で追加。js/ を読み込み順どおり im
 src/main.ts               ★ §3 で追加。src/app.ts を読んで new SQL.Designer() する起動エントリ
 js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化。§3 段階3 で .ts へ移行中）
   oz.ts config.ts globals.ts  ★ 段階3-1 で .ts 化済み（§5.5）
-  その他 15 本（.js）           段階3-2 以降で .ts 化（順序は §5.1）
+  visual/row/table/relation/key/rubberband/map .ts  ★ 段階3-2 で .ts 化済み
+  その他 8 本（.js）            段階3-3 で .ts 化（順序は §5.1。段階3-3a で class 化だけ済み）
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
@@ -39,7 +42,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
-| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1 で先頭 3 本を `.ts` 化**（残り 15 本のグローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
+| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-2 で 10 本を `.ts` 化・段階3-3a で残る 7 本を class 化**（残り 8 本のグローバル参照はそのまま） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
 | **DDL 生成** | **`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）** | **TS 実装**（§6.3 の規約を含む） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
@@ -244,7 +247,9 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 ### 5.4 クラス階層と 2 つの実行系（§3 段階2）
 
 `SQL.Visual` を頂点とする 8 クラスは段階2 で ES クラス構文になった。判断の根拠は
-[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。**`Visual` を継承しない 7 クラス
+（`IO` / `Toggle` / `TableManager` / `RowManager` / `KeyManager` / `Window` / `Options`）は段階2 では
+見送られていたが、段階3-3a で同じ規則で class 化した**（`js/` に `function` ＋ prototype 方式は残っていない）。
 
 | クラス | ファイル | `_build` | 親メソッド呼び出し | 静的 | `dom` の形（`.ts` 化後の型） |
 |---|---|---|---|---|---|
@@ -270,7 +275,7 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
   基底を固定型にしてサブクラスで `declare dom` 再宣言する案は `Relation` が TS2415 で成立せず、
   `D extends VisualDom` の制約も配列を排除する。
   **(ii) は段階3-3 に残る**が、該当する `io` / `keymanager` / `rowmanager` / `tablemanager` は
-  `function` ＋ prototype 方式で `Visual` を継承していないため、`Visual.dom` の型に縛られず自由に決められる。
+  （段階3-3a で class になった今も）`Visual` を継承していないため、`Visual.dom` の型に縛られず自由に決められる。
 - クラス名 `Minimap` は ES 標準の `Map` との衝突を避けるため。公開名は `SQL.Map` のまま。
 
 **2 つの実行系の差は §3 段階3-0 でほとんど消えた。** Node ハーネスも
@@ -305,13 +310,17 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 | 3-0 | Node ハーネスを IIFE バンドル化（`js/` は無改修） | 済（2026-08-11） |
 | 3-1 | `oz` / `config` / `globals` | 済（2026-08-12） |
 | 3-2 | 描画中核 `visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map` | 済（2026-08-12） |
-| 3-3 | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` | 未 |
+| 3-3a | prototype 方式 7 本（`io` / `toggle` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options`）を class 化（`.js` のまま。§5.4） | 済（2026-08-12） |
+| 3-3b | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` の `.ts` 化 | 未 |
 | 3-4 | `window` 登録と [`../types/globals.d.ts`](../types/globals.d.ts) の撤去、`strict` の最終確認 | 未 |
 
 着手前の実測（`tsc --allowJs --checkJs --noEmit --strict --noUncheckedIndexedAccess`）は **1,281 件**。
 うち TS2304 の 364 件は「裸グローバルが宣言されていないだけ」で import 化すれば消える。実質の型作業は
 TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3 形態**（§5.4）＝ 段階3-2
-（同段階の内訳は 550 件）。
+（同段階の内訳は 550 件）。**段階3-3 の残り 8 本は 619 件**（TS2339 239 / TS2304 223 / TS7006 105 /
+その他 52）で、TS2339 の大半は `SQL.X = function(){}` ＋ prototype 方式そのものに由来する。
+`.ts` 化の前に構造を正すのが安いので、class 化だけを 3-3a として切り出した（段階2 が
+「承認済みスコープを広げない」として見送っていた分）。
 
 守る規約は 5 つ。
 

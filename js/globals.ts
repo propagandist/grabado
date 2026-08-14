@@ -2,6 +2,7 @@
  * grabado: HANDOVER §3 段階3-1 で .ts 化した。
  *
  * 段階3-4c で window 登録（_ / LOCALE / SQL）を撤去し、素の ES モジュールになった。
+ * 段階4-0a では SQL 名前空間そのものが消え、値 export は下記 3 つだけになった。
  * 残る window 面は DATATYPES 1 つだけで、理由はファイル末尾の declare global に書いてある。
  *
  * 中身は 3 つ: ロケール辞書と getText（LOCALE / _）、pub/sub（publish / subscribe）、
@@ -30,34 +31,26 @@ export type SqlSubscriber = (e: { target: unknown; data: unknown }) => void;
  * まだ .js で、描画中核 7 本の this.owner が同じ面を参照する必要があったため）。
  * 段階3-3b で実体が .ts になったので、実体への型エイリアスにした。参照している
  * 13 本は import を変えずに本物の型を見る（3-2 で予告したとおり、7 ファイルを
- * 回って書き換える作業は発生しない）。名前を Designer に統一するのは段階3-4。
+ * 回って書き換える作業は発生しない）。名前を Designer に一本化するかは、
+ * §4 のモデル層分離（段階4-1）で描画エンジン側の面が確定してから判断する。
  */
 export type SqlDesigner = Designer;
 
-/**
- * SQL 名前空間。
+/*
+ * grabado: SQL 名前空間（interface SqlNamespace と export const SQL）は
+ * 段階4-0a で撤去した（HANDOVER §4）。
  *
- * 段階3-4a でクラス 15 個と publish / subscribe / unsubscribe / escape が抜け、
- * 残るのは実行時インスタンスまわりの 2 つだけになった。クラスはファイル間の
- * 相互参照が import になったので名前空間に載せる必要がなくなり、pub/sub と escape は
- * 本ファイルの named export に出した（SQL は 1 個しか存在せず、関数値を取り出して
- * 渡す呼び出しも無いので this 束縛が消えても同値）。
+ * 最後まで残っていたのは SQL.designer = 唯一の Designer インスタンスへの参照で、
+ * 実コード 7 行から読まれていた。読み手はすべて Designer に所有される側
+ * （Row / Table / Relation / RowManager）だったので、owner 鎖をたどれば同じ実体に
+ * 届く。this.owner（Relation / RowManager / Table）と this.owner.owner（Row）への
+ * 置換で同値になり、名前空間オブジェクトそのものが不要になった。
  *
- * designer は「唯一のインスタンス」への参照で、import にすると循環するため
- * 名前空間オブジェクト経由のまま据え置く。DI 化は HANDOVER §4 の IO 分離と同時
- * （段階3-4 のスコープは「外部から触れる面＝window の撤去」まで。内部の可変
- * シングルトンの撤去は「Designer は生涯 1 個」というプログラム不変条件への依存で、
- * 参照経路の付け替えとは性質が違う）。
- *
- * Designer（クラス）も段階3-4c で抜けた（src/main.ts と Node ハーネスが値 import と
- * window.__grabado で直接掴むようになったため）。残りは designer 1 つで、
- * これが §4 の DI 化の作業対象そのものになる。index signature は書かない
- * （typo が any に化けるため）。
+ * 段階3-4 のスコープに入れなかったのは、可変シングルトンの撤去が「Designer は生涯
+ * 1 個」というプログラム不変条件への依存で、window 面の撤去とは性質が違うため。
+ * §4 のモデル層分離は「どの Designer のモデルか」を型で表す必要があるので、
+ * その前提として §4 の先頭で外した。
  */
-export interface SqlNamespace {
-    /** 唯一のインスタンス。new Designer() が走るまでは存在しない */
-    designer: Designer;
-}
 
 /*
  * ロケール辞書。段階3-4c で window.LOCALE からモジュール変数にした。
@@ -127,12 +120,6 @@ export function escape(str: string): string {
         .replace(/>/g, "&gt;")
         .replace(/</g, "&lt;");
 }
-
-/*
- * designer は js/wwwsqldesigner.ts が後から載せるので、リテラルだけでは
- * SqlNamespace を満たさない。撤去は HANDOVER §4 の DI 化と同時。
- */
-export const SQL = {} as SqlNamespace;
 
 /*
  * grabado: 段階3-4c で window 登録を撤去した（OZ / CONFIG / _ / LOCALE / SQL）。

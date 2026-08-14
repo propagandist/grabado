@@ -8,7 +8,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, _, publish, escape, type SqlDesigner } from "./globals.ts";
+import { _, publish, escape, type SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";
@@ -166,7 +166,9 @@ export class Row extends Visual<RowDom> {
 
     update(data: Partial<RowData>): void {
         /* update subset of row data */
-        var des = SQL.designer;
+        /* grabado: 旧 SQL.designer（段階4-0a）。コンストラクタは this.owner の代入後に
+           update() を呼ぶので、ここで owner 鎖は必ず張れている */
+        var des = this.owner.owner;
         if (data.nll && data.def && data.def.match(/^null$/i)) {
             data.def = null;
         }

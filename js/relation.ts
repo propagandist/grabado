@@ -15,7 +15,7 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import { SQL, type SqlDesigner } from "./globals.ts";
+import type { SqlDesigner } from "./globals.ts";
 import { Visual } from "./visual.ts";
 import type { Row } from "./row.ts";
 
@@ -52,7 +52,8 @@ export class Relation extends Visual<RelationDom> {
         this._init();
         this._build();
 
-        this.style = SQL.designer.getOption("style");
+        /* grabado: 旧 SQL.designer（段階4-0a）。this.owner は上の代入で入っている */
+        this.style = this.owner.getOption("style");
         switch (this.style) {
             case "material-inspired":
                 this.relationColors = CONFIG.MATERIAL_RELATION_COLORS;

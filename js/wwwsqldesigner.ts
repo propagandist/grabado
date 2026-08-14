@@ -7,9 +7,9 @@
  * relation / rowmanager）はすべて実体を期待するので、クラス = SQL.Designer、
  * 唯一のインスタンス = SQL.designer に分けた。
  *
- * 自己登録（SQL.designer = this）をコンストラクタに残しているのは、起動経路が
- * 3 つあり（src/main.ts、tests/node/harness.ts の window.eval、ブラウザ）、
- * いずれも戻り値を SQL に載せないため。DI 化は HANDOVER §4 の IO 分離と同時に行う。
+ * 自己登録（SQL.designer = this）は段階4-0a で撤去した（HANDOVER §4）。読み手は
+ * すべて Designer に所有される側で、owner 鎖の終端が同じ実体を指すため
+ * this.owner / this.owner.owner に置換できた。詳細は js/globals.ts の該当コメント。
  *
  * 本ファイルが .ts になったことで js/globals.ts の SqlDesigner は構造的 interface を
  * やめ、この Designer への型エイリアスになった（参照している 13 本は無改修）。
@@ -23,7 +23,7 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import { SQL, _, LOCALE } from "./globals.ts";
+import { _, LOCALE } from "./globals.ts";
 import { Visual, type VisualDom } from "./visual.ts";
 import { Table } from "./table.ts";
 import type { Row } from "./row.ts";
@@ -73,7 +73,6 @@ export class Designer extends Visual<DesignerDom> {
 
     constructor() {
         super();
-        SQL.designer = this;
 
         this.xhrheaders = {};
         this.tables = [];

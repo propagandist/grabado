@@ -75,7 +75,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         expect(normalizeDesignXml(raw)).not.toContain(href);
     });
 
-    test("型解決は window.DATATYPES 依存（DB 横断 golden を持たない根拠）", async () => {
+    test("型解決は型パレット依存（DB 横断 golden を持たない根拠）", async () => {
         const xml = readFixture("minimal");
 
         await useDatatypes(page, "postgresql");

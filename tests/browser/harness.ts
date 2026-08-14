@@ -11,7 +11,8 @@ import type { Page } from "@playwright/test";
 /*
  * page.evaluate はバンドルの外で走るので、アプリに触るには window 越しのハンドルが要る。
  * 段階3-4b で window.SQL.designer から window.d に寄せた（src/main.ts が置く唯一の
- * 公開ハンドル。window.SQL は段階3-4c で撤去済み）。DATATYPES の差し替えは §4 まで現行のまま。
+ * 公開ハンドル。window.SQL は段階3-4c で撤去済み）。段階4-0b で型パレットの差し替えも
+ * window.DATATYPES から window.d.palette になり、page 側が触る面は d だけになった。
  */
 
 /** index.html を開き、Designer の init2() 完了まで待つ */
@@ -33,7 +34,7 @@ export async function openDesigner(page: Page): Promise<void> {
     // init2() は locale/*.xml と db/*/datatypes.xml の 2 本が揃ってから走る
     // （js/wwwsqldesigner.js:71-116, 135-157）。map と io が生えたら初期化完了。
     await page.waitForFunction(
-        () => !!window.d?.map && !!window.d?.io && !!window.DATATYPES,
+        () => !!window.d?.map && !!window.d?.io && !!window.d?.palette.isLoaded(),
         undefined,
         { timeout: 15_000 },
     );
@@ -46,9 +47,10 @@ export async function openDesigner(page: Page): Promise<void> {
 /**
  * DB プロファイルを切り替える。
  *
- * getOption("db") は cookie だけが上書き経路（js/wwwsqldesigner.js:230-262）なので
- * URL では切り替えられない。dbResponse()（同 91-99）と同じく window.DATATYPES を
- * 直接差し替えるのが実経路どおりで、かつ 1 ページで 9 DB を回せる。
+ * getOption("db") は cookie だけが上書き経路（js/wwwsqldesigner.ts:230-262）なので
+ * URL では切り替えられない。dbResponse()（同 91-99）と同じく型パレットを直接
+ * 差し替えるのが実経路どおりで、かつ 1 ページで 9 DB を回せる。
+ * 差し替え口は段階4-0b で window.DATATYPES から d.palette になった（操作は同じ）。
  */
 export async function useDatatypes(page: Page, db: string): Promise<void> {
     await page.evaluate(async (dbName) => {
@@ -57,7 +59,7 @@ export async function useDatatypes(page: Page, db: string): Promise<void> {
             throw new Error(`datatypes.xml が取れない: ${dbName} (${res.status})`);
         }
         const doc = new DOMParser().parseFromString(await res.text(), "text/xml");
-        window.DATATYPES = doc.documentElement;
+        window.d!.palette.setRoot(doc.documentElement);
     }, db);
 }
 

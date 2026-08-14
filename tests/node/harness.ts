@@ -26,7 +26,7 @@ import type { GrabadoTestApi } from "./app-entry.ts";
 export interface NodeHarness {
     readonly dom: JSDOM;
     readonly window: JSDOM["window"];
-    /** window.DATATYPES を差し替える（dbResponse() と同じ操作） */
+    /** 型パレットを差し替える（dbResponse() と同じ操作） */
     useDatatypes(db: string): void;
     /** fixture を読み込む。alert が出たら例外にする */
     loadFixture(xml: string): void;
@@ -185,7 +185,9 @@ export async function createHarness(): Promise<NodeHarness> {
         useDatatypes(db: string): void {
             const xml = readRepoFile(`db/${db}/datatypes.xml`);
             const doc = new window.DOMParser().parseFromString(xml, "text/xml");
-            window.DATATYPES = doc.documentElement;
+            // 段階4-0b で window.DATATYPES から Designer のプロパティになった。
+            // 差し替えの中身（dbResponse() と同じ「documentElement を入れる」操作）は不変。
+            designer.palette.setRoot(doc.documentElement);
         },
         loadFixture(xml: string): void {
             designer.io.fromXMLText(xml);

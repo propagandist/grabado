@@ -80,19 +80,34 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 現行コードは**抽出せずそのまま動かす**。ロジックを先に抜き出すと「抜き出した後のコード」を
 特性化することになり、安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
 
-### Node 側がアプリを起こす経路（§3 段階3-0 で変更）
+### Node 側がアプリを起こす経路（§3 段階3-0 で変更・3-4b で入口を差し替え）
 
-[`../tests/node/harness.ts`](../tests/node/harness.ts) は **[`../src/app.ts`](../src/app.ts) を vite の
-build API（`write: false`）で単一 IIFE に束ね、それを jsdom の `window.eval` に 1 回渡す**。
+[`../tests/node/harness.ts`](../tests/node/harness.ts) は **[`../tests/node/app-entry.ts`](../tests/node/app-entry.ts)
+を vite の build API（`write: false`）で単一 IIFE に束ね、それを jsdom の `window.eval` に 1 回渡す**。
 段階1・2 の間は `js/*.js` を 1 本ずつ eval していたが、その経路は `js/` が `.ts` になった時点で
 動かなくなる（本書がかつて「段階3 の分岐点」として予告していた箇所）。バンドルを噛ませると
 **`js/` が `.js` でも `.ts` でも、参照がグローバルでも ESM でも同じハーネスで動く**ので、
 段階3 の残り（`.ts` 化と import 導入）でここを触り直さずに済む。
 
 副次的に、読み込み順の定義が `src/app.ts` の 1 か所になった（従来はハーネス側にも
-`SCRIPT_ORDER` として二重に書かれていた）。ハーネスがバンドルするのが `src/main.ts` ではなく
-`src/app.ts` なのは、**js/ を全部評価 → `OZ.Request` を fs 読みに差し替え → `new SQL.Designer()`**
-という順序を現行のまま保つため（起動を含むエントリを束ねるとこの順序が作れない）。
+`SCRIPT_ORDER` として二重に書かれていた）。ハーネスがバンドルするのが `src/main.ts` ではないのは、
+**js/ を全部評価 → `OZ.Request` を fs 読みに差し替え → `new Designer()`** という順序を現行のまま
+保つため（起動を含むエントリを束ねるとこの順序が作れない）。
+
+**エントリが `src/app.ts` から [`../tests/node/app-entry.ts`](../tests/node/app-entry.ts) に替わったのは
+段階3-4b。** `import "../../src/app.ts"` に続けて `window.__grabado = { OZ, Designer }` を載せるだけの
+薄いファイルで、読み込み順の定義は `src/app.ts` の 1 か所のまま。差し替えの理由は、
+**バンドルの内側に Node 側から手を届かせる経路をテストが自分で持つため** — 段階3-4a までは
+出荷コードが置いていた `window.OZ` / `window.SQL` を踏んでいたが、その撤去が段階3-4 の目的そのもの。
+ハーネス側は `window.OZ.Request = …` が `api.OZ.Request = …` に、
+`window.eval("new SQL.Designer();")` ＋ `window.SQL.designer` が `new api.Designer()` の戻り値に
+なった（差し替える関数の中身は 1 文字も変えていない）。
+
+**page 文脈（`test:browser` / `test:dist` / `known-issues`）は別経路**。`page.evaluate` は
+バンドルの外で走るので `import` に置き換えられず、`window` 越しのハンドルが要る。段階3-4b で
+`window.SQL.designer` から **[`../src/main.ts`](../src/main.ts) が置く `window.d`** に寄せた
+（upstream 由来のデバッグハンドルを、そのままテスト API として使う）。`window.DATATYPES` の
+差し替えは HANDOVER §4 まで現行のまま。
 
 **この狙いは段階3-1 で実証された**。`js/oz.js` / `config.js` / `globals.js` が `.ts` になり
 `export` を持ったが、[`../tests/node/harness.ts`](../tests/node/harness.ts) の変更は

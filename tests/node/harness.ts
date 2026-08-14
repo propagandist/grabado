@@ -6,6 +6,8 @@ import { REPO_ROOT } from "../support/fixtures.ts";
 /* OZ の型は js/oz.ts の export に移した（HANDOVER §3 段階3-1）。
    実体は window.eval したバンドルが載せるので、ここでは型だけ借りる。 */
 import type { OzRequestCallback, OzRequestOptions } from "../../js/oz.ts";
+/* バンドルが window に載せるハンドルの型（実体は tests/node/app-entry.ts） */
+import type { GrabadoTestApi } from "./app-entry.ts";
 
 /**
  * jsdom 上に現行アプリを起こす、Node 側（高速回帰）のハーネス。
@@ -45,7 +47,7 @@ function resolveRequestUrl(url: string): string {
 }
 
 /**
- * src/app.ts（js/ 18 本の読み込み順）を単一 IIFE に束ねて返す（HANDOVER §3 段階3-0）。
+ * tests/node/app-entry.ts を単一 IIFE に束ねて返す（HANDOVER §3 段階3-0、3-4b で入口を変更）。
  *
  * 以前はここで js/*.js を 1 本ずつ eval していたが、その経路は js/ が .ts になった時点で
  * 動かなくなる（docs/TESTING.md が段階3 の分岐点として予告していた箇所）。バンドルを噛ませると
@@ -53,8 +55,12 @@ function resolveRequestUrl(url: string): string {
  * 副次的に、読み込み順の定義が src/app.ts の 1 か所に集約される（従来はここに SCRIPT_ORDER として
  * 二重に書かれていた）。
  *
- * 起動（new SQL.Designer()）は含めない。OZ.Request を fs 読みに差し替えてから生成する必要があり、
- * その順序は現行と 1 行も変えないため。だから束ねるのは src/main.ts ではなく src/app.ts。
+ * 束ねるのは src/app.ts をそのまま import して window.__grabado を載せるだけの薄いエントリ
+ * （段階3-4b）。バンドルの内側にある OZ と Designer に Node 側から手を届かせるためで、
+ * 読み込み順の定義は src/app.ts の 1 か所のまま。
+ *
+ * 起動（new Designer()）は含めない。OZ.Request を fs 読みに差し替えてから生成する必要があり、
+ * その順序は現行と 1 行も変えないため。だから束ねるのは src/main.ts ではない。
  */
 async function bundleApp(): Promise<string> {
     const result = await build({
@@ -72,7 +78,7 @@ async function bundleApp(): Promise<string> {
             // 安全網を依存させない。配布物の妥当性は npm run test:dist が別途張る。
             rollupOptions: { treeshake: false },
             lib: {
-                entry: "src/app.ts",
+                entry: "tests/node/app-entry.ts",
                 formats: ["iife"],
                 name: "GrabadoApp",
                 fileName: "app",
@@ -127,9 +133,16 @@ export async function createHarness(): Promise<NodeHarness> {
     // 暗黙グローバルの検出は引き続き npm run test:browser の担当（docs/TESTING.md）。
     window.eval(`"use strict";\n${appBundle}`);
 
+    // バンドルが載せたハンドル（tests/node/app-entry.ts）。段階3-4b までは
+    // window.OZ / window.SQL という出荷コード側のグローバルを踏んでいた。
+    const api = (window as unknown as { __grabado?: GrabadoTestApi }).__grabado;
+    if (!api) {
+        throw new Error("バンドルが window.__grabado を載せていない（tests/node/app-entry.ts）");
+    }
+
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
-    // new SQL.Designer() のうちに init2() まで到達する。
-    window.OZ.Request = (
+    // new Designer() のうちに init2() まで到達する。
+    api.OZ.Request = (
         url: string,
         callback?: OzRequestCallback,
         options?: OzRequestOptions,
@@ -155,13 +168,12 @@ export async function createHarness(): Promise<NodeHarness> {
     const alerts: string[] = [];
     window.alert = (msg?: unknown) => void alerts.push(String(msg));
 
-    window.eval("new SQL.Designer();");
-
-    // 段階2 でクラス（SQL.Designer）と唯一のインスタンス（SQL.designer）に分離した。
-    // new SQL.Designer() 自体は無改修で通る（コンストラクタが SQL.designer に自己登録する）。
-    const sql = window.SQL;
-    if (!sql?.designer?.map || !sql.designer.io) {
-        throw new Error(`SQL.designer の初期化に失敗:\n${alerts.join("\n")}`);
+    // 段階3-4b まで window.eval("new SQL.Designer();") と書いて結果を window.SQL.designer から
+    // 拾っていた。ハンドルを掴んでいるので戻り値をそのまま使える（コンストラクタ内の
+    // SQL.designer への自己登録は残っているが、ハーネスはもう読まない）。
+    const designer = new api.Designer();
+    if (!designer.map || !designer.io) {
+        throw new Error(`Designer の初期化に失敗:\n${alerts.join("\n")}`);
     }
 
     const takeAlerts = (): string[] => alerts.splice(0, alerts.length);
@@ -176,14 +188,14 @@ export async function createHarness(): Promise<NodeHarness> {
             window.DATATYPES = doc.documentElement;
         },
         loadFixture(xml: string): void {
-            sql.designer.io.fromXMLText(xml);
+            designer.io.fromXMLText(xml);
             const failures = takeAlerts();
             if (failures.length) {
                 throw new Error(`fixture の読み込みに失敗:\n${failures.join("\n")}`);
             }
         },
         toXML(): string {
-            return sql.designer.toXML();
+            return designer.toXML();
         },
         close(): void {
             window.close();

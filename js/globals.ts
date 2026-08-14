@@ -6,9 +6,9 @@
  * 段階4-0b で DATATYPES も js/io/palette.ts へ移り、本ファイルの window 面は尽きた
  * （経緯はファイル末尾のコメント）。
  *
- * 中身は 3 つ: ロケール辞書と getText（LOCALE / _）、pub/sub（publish / subscribe）、
- * XML エスケープ（escape）。いずれも HANDOVER §4 で行き先が決まっている
- * （escape は serializer へ、pub/sub は RowManager 周りへ）。
+ * 段階4-1a で escape が js/io/xml-serializer.ts へ出たので、値 export は
+ * ロケール辞書と getText（LOCALE / _）、pub/sub（publish / subscribe）の 2 組。
+ * pub/sub も HANDOVER §4 で RowManager 周りへ移る予定。
  */
 
 /*
@@ -114,13 +114,12 @@ export function subscribe(message: string, subscriber: SqlSubscriber): void {
  * 名前で呼ぶ経路は物理的に存在しない。
  */
 
-/* XML 書き出し用（HANDOVER §4 で serializer 側に移る）。lib.dom の非推奨 escape とは別物 */
-export function escape(str: string): string {
-    return str
-        .replace(/&/g, "&amp;")
-        .replace(/>/g, "&gt;")
-        .replace(/</g, "&lt;");
-}
+/*
+ * grabado: XML エスケープ（escape）は段階4-1a で js/io/xml-serializer.ts に
+ * escapeXML として移した（HANDOVER §4）。呼び手 3 か所（table / row の <comment> と
+ * <default>）がすべて toXML 経路だったので、書き出しの移設と同時に import ごと消えた。
+ * lib.dom の非推奨グローバル escape との同名衝突も構造的に無くなっている。
+ */
 
 /*
  * grabado: 段階3-4c で window 登録を撤去し（OZ / CONFIG / _ / LOCALE / SQL）、

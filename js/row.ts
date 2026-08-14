@@ -8,7 +8,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { _, publish, escape, type SqlDesigner } from "./globals.ts";
+import { _, publish, type SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";
@@ -466,63 +466,6 @@ export class Row extends Visual<RowDom> {
         for (var i = 0; i < this.keys.length; i++) {
             this.keys[i]!.removeRow(this);
         }
-    }
-
-    toXML(): string {
-        var xml = "";
-
-        var t = this.getTitle().replace(/"/g, "&quot;");
-        var nn = this.data.nll ? "1" : "0";
-        var ai = this.data.ai ? "1" : "0";
-        xml +=
-            '<row name="' +
-            t +
-            '" null="' +
-            nn +
-            '" autoincrement="' +
-            ai +
-            '">\n';
-
-        var elm = this.getDataType();
-        /* getAttribute の null を ! で潰しているのは、下の t += が string を要求するため。
-           sql 属性の無い型は datatypes.xml に存在しない（あれば現行も "null(...)" を書く） */
-        var t = elm.getAttribute("sql")!;
-        if (this.data.size.length) {
-            t += "(" + this.data.size + ")";
-        }
-        xml += "<datatype>" + t + "</datatype>\n";
-
-        if (this.data.def || this.data.def === null) {
-            /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
-            var q = elm.getAttribute("quote")!;
-            var d = this.data.def;
-            if (d === null) {
-                d = "NULL";
-            } else if (d != "CURRENT_TIMESTAMP") {
-                d = q + d + q;
-            }
-            xml += "<default>" + escape(d) + "</default>";
-        }
-
-        for (var i = 0; i < this.relations.length; i++) {
-            var r = this.relations[i]!;
-            if (r.row2 != this) {
-                continue;
-            }
-            xml +=
-                '<relation table="' +
-                r.row1.owner.getTitle() +
-                '" row="' +
-                r.row1.getTitle() +
-                '" />\n';
-        }
-
-        if (this.data.comment) {
-            xml += "<comment>" + escape(this.data.comment) + "</comment>\n";
-        }
-
-        xml += "</row>\n";
-        return xml;
     }
 
     fromXML(node: Element): void {

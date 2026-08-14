@@ -80,22 +80,6 @@ export class Key extends Visual {
         return this.name || this.type;
     }
 
-    toXML(): string {
-        var xml = "";
-        xml +=
-            '<key type="' +
-            this.getType() +
-            '" name="' +
-            this.getName() +
-            '">\n';
-        for (var i = 0; i < this.rows.length; i++) {
-            var r = this.rows[i]!;
-            xml += "<part>" + r.getTitle() + "</part>\n";
-        }
-        xml += "</key>\n";
-        return xml;
-    }
-
     fromXML(node: Element): void {
         this.setType(node.getAttribute("type"));
         this.setName(node.getAttribute("name")!);

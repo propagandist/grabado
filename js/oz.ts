@@ -347,14 +347,11 @@ export const OZ = {
     },
 };
 
-declare global {
-    interface Window {
-        OZ: typeof OZ;
-    }
-}
-
-/* grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1） */
-window.OZ = OZ;
+/*
+ * grabado: window.OZ と declare global を撤去した（HANDOVER §3 段階3-4c）。
+ * 最後の消費者だった Node ハーネスの OZ.Request 差し替えは、段階3-4b で
+ * tests/node/app-entry.ts が載せる window.__grabado 経由になっている。
+ */
 
 /*
  * grabado: ES5 polyfill 群を削除した（HANDOVER §3 段階2）。

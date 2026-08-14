@@ -11,7 +11,7 @@ import type { Page } from "@playwright/test";
 /*
  * page.evaluate はバンドルの外で走るので、アプリに触るには window 越しのハンドルが要る。
  * 段階3-4b で window.SQL.designer から window.d に寄せた（src/main.ts が置く唯一の
- * 公開ハンドル。window.SQL は段階3-4c で消える）。DATATYPES の差し替えは §4 まで現行のまま。
+ * 公開ハンドル。window.SQL は段階3-4c で撤去済み）。DATATYPES の差し替えは §4 まで現行のまま。
  */
 
 /** index.html を開き、Designer の init2() 完了まで待つ */

@@ -44,7 +44,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
-| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-3b で 18 本すべてを `.ts` 化**（`window` 登録と `declare global` は段階3-4 で撤去） | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
+| frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-3b で 18 本すべてを `.ts` 化・段階3-4 で `SQL.*` と `window` 登録を撤去** | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
 | **DDL 生成** | **`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）** | **TS 実装**（§6.3 の規約を含む） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
@@ -213,13 +213,18 @@ oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.
 - **`.ts` 化はこの読み込み順の先頭から進める**（§5.5）。葉から進めると未 `.ts` のグローバルに対する
   ambient 宣言が要り、それ自体が後で捨てる作業になるため。
 
-**相互参照はすべて import に置き換わった。** 裸のグローバル（`OZ` / `CONFIG` / `SQL` / `DATATYPES` /
-`LOCALE` / `_`）を読むファイルはもう無い。ただし定義側の `window` 登録（[`../js/oz.ts`](../js/oz.ts) /
-[`../js/config.ts`](../js/config.ts) / [`../js/globals.ts`](../js/globals.ts) の
-`OZ`・`CONFIG`・`_`・`DATATYPES`・`LOCALE`・`SQL`）と `declare global` は**段階3-4 まで残す**
-（`index.html` や外部から触る面の確認と同時に撤去するほうが安全なため）。`DATATYPES` と `LOCALE` は
-[`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts) とテストが `window` 越しに差し替えるので、
-撤去時にその経路の設計が要る。
+**相互参照はすべて import に置き換わり、定義側の `window` 登録も段階3-4c で撤去した。**
+`OZ` / `CONFIG` / `_` / `LOCALE` / `SQL` は素の ES モジュールになっている。**出荷コードが持つ
+`window` 面は 2 つだけ**。
+
+| 残る面 | 置き場所 | なぜ残るか |
+|---|---|---|
+| `window.DATATYPES` | [`../js/globals.ts`](../js/globals.ts) | 読み 12・書き 2 に加えて**両ハーネスが差し替える**（`page.evaluate` はバンドル外なのでモジュールの setter に届かない）。Designer / TypePalette のプロパティにするのは HANDOVER §6.1 の型パレット差し替えと同時が自然なので §4 へ繰り越し |
+| `window.d` | [`../src/main.ts`](../src/main.ts) | upstream 由来のデバッグハンドル。段階3-4b から page 側テストの入口も兼ねる（同上の理由で window ハンドルは必要） |
+
+`LOCALE` は「テストが触らない」点だけが `DATATYPES` と違い、段階3-4c でモジュール変数にできた。
+Node ハーネスがバンドルの内側に手を届かせる経路は
+[`../tests/node/app-entry.ts`](../tests/node/app-entry.ts) の `window.__grabado`（テスト所有）。
 **クラスの `SQL` 名前空間登録（`SQL.Row = Row;` 等）は段階3-4a で全廃した。** ファイル跨ぎの
 クラス参照は値 import になり、`SqlNamespace` は `{ Designer, designer }` の 2 つまで縮んだ
 （`Designer` は 3-4c で消える。`designer` は §4 の DI 化で消える）。pub/sub と `escape` も
@@ -319,8 +324,11 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 | 3-3a | prototype 方式 7 本（`io` / `toggle` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options`）を class 化（`.js` のまま。§5.4） | 済（2026-08-12） |
 | 3-3b | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` の `.ts` 化 | 済（2026-08-12） |
 | 3-4a | `SQL.X = X` 15 本の撤去と `new SQL.X()` 13 箇所の値 import 化、pub/sub と `escape` の named export 化（`js/` のみ） | 済（2026-08-14） |
-| 3-4b | テスト面の付け替え（node ハーネスを `window.OZ` 依存から外す、page 側を `window.d` に寄せる。`tests/` のみ） | 未 |
-| 3-4c | `window` 登録と `declare global` の撤去、`LOCALE` のモジュール化、`strict` の最終確認 | 未 |
+| 3-4b | テスト面の付け替え（node ハーネスを `window.OZ` 依存から外す、page 側を `window.d` に寄せる。`tests/` のみ） | 済（2026-08-14） |
+| 3-4c | `window` 登録と `declare global` の撤去、`LOCALE` のモジュール化、`strict` の最終確認 | 済（2026-08-14） |
+
+**これで段階3（フロント TS 化）は完了。** `strict` / `noUncheckedIndexedAccess` は段階3-1 から
+一貫して有効で、`js/` `src/` `tests/` のすべてが `.ts`、`npm run typecheck` は 0 error。
 
 段階3-4 のスコープは「**外部から触れる面（`window`）の撤去**」まで。**内部の可変シングルトン
 `SQL.designer`（読み 6 / 書き 1）と `window.DATATYPES` は §4 に繰り越す** — 前者は参照経路の
@@ -344,8 +352,8 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 守る規約は 5 つ。
 
 1. **`.ts` 化 ＝ モジュール化。** 非モジュールのまま `.ts` にすると `class Window` / `Options` / `Key` /
-   `Table` がグローバル型空間に出て `lib.dom` と衝突する。ただし未 `.ts` の参照側のために
-   `window.X = X` と `declare global` は残し、段階3-4 でまとめて撤去する。
+   `Table` がグローバル型空間に出て `lib.dom` と衝突する。移行中は未 `.ts` の参照側のために
+   `window.X = X` と `declare global` を残していたが、**段階3-4c で撤去済み**（残る 2 面は §5.1）。
 2. **読み込み順の先頭から。** 移行用の ambient 宣言ファイルは作らない。例外は実行時インスタンス
    （`SQL.designer`）で、import にすると循環するため `SQL` 名前空間オブジェクト経由のまま。
 3. **実行コードは変えない。** 型は注釈・`as`・オーバーロードで通す。`if (!x) return;` のような

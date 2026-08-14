@@ -1074,6 +1074,66 @@ page 側テストはすべて `waitForFunction` / `goto` 後のポーリング�
 出力が完全一致した（本 PR が出荷コードを変えていないことの機械的な証明。歴代の「意図したハンクだけに
 収束する」判定の、差分ゼロ版）。
 
+### 2026-08-14 HANDOVER §3「フロント TS 化」段階3-4c — `window` 登録を撤去し、段階3 を終えた
+
+段階3-4 の 3 本目。**ほぼ削除だけ**で、消す対象の消費者が 0 であることは 3-4b 完了時点で
+grep により自明になっていた。
+
+| 対象 | 処置 |
+|---|---|
+| [`js/oz.ts`](js/oz.ts) `window.OZ` ＋ `declare global` | 削除（最後の消費者だった Node ハーネスは 3-4b で `window.__grabado` 経由に） |
+| [`js/config.ts`](js/config.ts) `window.CONFIG` ＋ `declare global` | 削除（読み手 0・段階3-3b の時点でデッドだった） |
+| [`js/globals.ts`](js/globals.ts) `window._` / `window.SQL` | 削除 |
+| [`js/globals.ts`](js/globals.ts) `window.LOCALE` | `export const LOCALE` にモジュール化 |
+| [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) `SQL.Designer = Designer` | 削除（`SqlNamespace` は `{ designer }` だけになった） |
+| [`src/main.ts`](src/main.ts) `new window.SQL.Designer()` | 値 import して `new Designer()` |
+| [`js/globals.ts`](js/globals.ts) `window.DATATYPES` ／ [`src/main.ts`](src/main.ts) `window.d` | **残す**（下記） |
+
+**出荷コードが持つ `window` 面は `DATATYPES` と `d` の 2 つになった。**
+段階3-4 の到達点は「`window` 面をゼロにする」ではない — `page.evaluate` と `window.eval` は
+バンドルの外で走るので、テストには window ハンドルが要る（3-4b の記録）。**出荷コードが持つ面を
+ゼロにし、テストのための面はテストが持つ**、が実際の線。`d` は upstream 由来のデバッグハンドルを
+そのまま公開面に昇格させたもので、新しい名前は増やしていない。
+
+**`LOCALE` は判断を更新し、`DATATYPES` は据え置いた。** 段階3-1 の記録（上の
+「`DATATYPES` と `LOCALE` はモジュールローカル変数にしなかった」）は両者を「ハーネスが差し替えるから」で
+同列に扱っていたが、**実際に差し替えられるのは `DATATYPES` だけ**だった（`LOCALE` の消費者は
+`_()` の読み 2 箇所と `localeResponse` の書き 1 箇所のみ）。`LOCALE` はモジュール変数にしても
+到達可能性が `window` から消える以外の差が無いので撤去し、`DATATYPES` は
+「読み書き 14 箇所の実行コード変更」＋「`page.evaluate` からモジュールの setter に届かない」の
+2 つが効くので §4（型パレット層の抽出）に繰り越した。理由は `js/globals.ts` の `declare global` に
+コメントとして残してある。
+
+**検証**。`git diff tests/golden/` は空（untracked も無し）。`npm test` 61 passed / 21 skipped、
+`npm run test:browser` 80 passed、`npm run test:dist` 3 passed、`npm run known-issues` 9 passed、
+`npm run typecheck` 0 error。完了判定は
+**`grep -rn "window\.\(OZ\|CONFIG\|SQL\|LOCALE\)\|window\._" js/ src/ tests/ index.html` が実コード 0 件**
+（一致するのは経緯を書いたコメントだけ）と、**`grep -rn "SQL\." js/` が `SQL.designer` の 7 行に収束**したこと。
+この 7 行がそのまま §4 の作業対象リストになる。
+
+**treeshaking の実測**（3-4c 固有。トップレベル副作用の大半が消える PR なので）。`vite build` の出力に
+各モジュール固有の文字列が全部残っていることを確認した — `rubberband` 3 / `onbeforeunload` 1 /
+`showDropboxAuthenticate` 4 / `alignTables` 3 / `Minimap` 2 / `class extends Visual` 5 /
+`quicksave` 5 / `keyfields` 2 / `optionvector` 3 / `setSelectionRange` 1。
+`src/app.ts` の 18 本の副作用 import は 3-4a 以降そこが無くても値の辺で全モジュールに到達できるが、
+**読み込み順の文書として、また Node ハーネスのエントリとして残す**。
+
+**バンドル diff は 6 種類**（`window.OZ` / `window.CONFIG` / `window._` / `window.LOCALE` / `window.SQL` /
+`SQL.Designer = Designer` の消滅、`var LOCALE = {}` の追加と `_()` の読みの付け替え、
+`window.SQL.Designer` → `Designer`）。**1 件だけソース由来でない差分があった**: `localeResponse` の
+`var v = strings[i].firstChild.nodeValue; window.LOCALE[n] = v;` が
+`LOCALE[n] = strings[i].firstChild.nodeValue;` にインライン化された。代入先が `window` プロパティ
+（getter/setter を持ちうる）から素のオブジェクトになったことで rolldown が畳めるようになったもので、
+`a[b] = c` の評価順（`a` → `b` → `c`）は変わらないので挙動は同値。ソース側は `var v` のまま。
+
+**対話パスの一巡**は 18 項目を `npm run dev` と `npm run preview` の両方で流し、**18/18・pageerror 0 件**
+（評価順とツリーシェイクが変わる PR なので必須）。
+
+**これで HANDOVER §3（フロント TS 化）は完了**。次は §4（IO: serializer 分離 → JSON 化 → 決定論出力＋
+外部変更検知 → XML 読込互換）で、その入力は「`SQL.designer` 7 行」「`window.DATATYPES` 読み 12・書き 2」
+「`escape()` 3 箇所（全て `toXML` 経路なので XML 書き出し撤去で消える可能性が高い）」
+「`publish` / `subscribe` 4 箇所」。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

@@ -15,7 +15,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, _, type SqlDesigner } from "./globals.ts";
+import { SQL, _, subscribe, type SqlDesigner } from "./globals.ts";
 import type { Row } from "./row.ts";
 import type { Table } from "./table.ts";
 
@@ -85,8 +85,8 @@ export class RowManager {
         );
         OZ.Event.add(document, "keydown", this.press.bind(this));
 
-        SQL.subscribe("tableclick", this.tableClick.bind(this));
-        SQL.subscribe("rowclick", this.rowClick.bind(this));
+        subscribe("tableclick", this.tableClick.bind(this));
+        subscribe("rowclick", this.rowClick.bind(this));
     }
 
     select(row: Row | false): void {
@@ -280,5 +280,3 @@ export class RowManager {
         (this.selected as Row).expand();
     }
 }
-
-SQL.RowManager = RowManager;

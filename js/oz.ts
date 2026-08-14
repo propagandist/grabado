@@ -127,8 +127,8 @@ export const OZ = {
     /*
      * grabado: OZ.Class / implement / extend / dispatch を削除した（HANDOVER §3 段階2）。
      * アプリからの参照が 1 件も無く、arguments.callee 依存で strict では動かないため。
-     * 実際に使われている継承は SQL.Visual を頂点とする ES クラス階層（js/visual.js）、
-     * pub/sub は SQL.publish / SQL.subscribe（js/globals.js）。
+     * 実際に使われている継承は Visual を頂点とする ES クラス階層（js/visual.ts）、
+     * pub/sub は js/globals.ts の publish / subscribe。
      */
     DOM: {
         elm: function <K extends keyof HTMLElementTagNameMap>(

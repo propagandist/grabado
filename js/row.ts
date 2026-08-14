@@ -8,7 +8,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, _, type SqlDesigner } from "./globals.ts";
+import { SQL, _, publish, escape, type SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";
@@ -153,7 +153,7 @@ export class Row extends Visual<RowDom> {
 
     click(e: MouseEvent): void {
         /* clicked on row */
-        SQL.publish("rowclick", this);
+        publish("rowclick", this);
         this.owner.owner.rowManager.select(this);
     }
 
@@ -502,7 +502,7 @@ export class Row extends Visual<RowDom> {
             } else if (d != "CURRENT_TIMESTAMP") {
                 d = q + d + q;
             }
-            xml += "<default>" + SQL.escape(d) + "</default>";
+            xml += "<default>" + escape(d) + "</default>";
         }
 
         for (var i = 0; i < this.relations.length; i++) {
@@ -519,7 +519,7 @@ export class Row extends Visual<RowDom> {
         }
 
         if (this.data.comment) {
-            xml += "<comment>" + SQL.escape(this.data.comment) + "</comment>\n";
+            xml += "<comment>" + escape(this.data.comment) + "</comment>\n";
         }
 
         xml += "</row>\n";
@@ -619,5 +619,3 @@ export class Row extends Visual<RowDom> {
         }
     }
 }
-
-SQL.Row = Row;

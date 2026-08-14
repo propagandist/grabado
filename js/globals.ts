@@ -10,28 +10,17 @@
  */
 
 /*
- * ここは必ず import type。値 import にすると globals.ts が 7 本を先に評価しにいって
- * 読み込み順（src/app.ts）が壊れる。型だけの import は verbatimModuleSyntax のもとで
- * emit から完全に消えるので、Rollup の依存グラフに辺が生えない。
+ * ここは必ず import type。値 import にすると globals.ts が wwwsqldesigner を先に
+ * 評価しにいって読み込み順（src/app.ts）が壊れる。型だけの import は
+ * verbatimModuleSyntax のもとで emit から完全に消えるので、Rollup の依存グラフに辺が生えない。
+ *
+ * 段階3-4a まではここに 15 本のクラスが並んでいた（SqlNamespace が全クラスの型を
+ * 持っていたため）。クラス参照が import になって SqlNamespace が縮んだので、
+ * 残るのは Designer 1 本だけになった。
  */
-import type { Visual } from "./visual.ts";
-import type { Row } from "./row.ts";
-import type { Table } from "./table.ts";
-import type { Relation } from "./relation.ts";
-import type { Key } from "./key.ts";
-import type { Rubberband } from "./rubberband.ts";
-import type { Minimap } from "./map.ts";
-import type { Toggle } from "./toggle.ts";
-import type { IO } from "./io.ts";
-import type { TableManager } from "./tablemanager.ts";
-import type { RowManager } from "./rowmanager.ts";
-import type { KeyManager } from "./keymanager.ts";
-/* Window は lib.dom のグローバル型と同名なので改名して受ける */
-import type { Window as SqlWindow } from "./window.ts";
-import type { Options } from "./options.ts";
 import type { Designer } from "./wwwsqldesigner.ts";
 
-/** SQL.subscribe が受け取るハンドラ。SQL.publish が {target, data} を渡す */
+/** subscribe() が受け取るハンドラ。publish() が {target, data} を渡す */
 export type SqlSubscriber = (e: { target: unknown; data: unknown }) => void;
 
 /**
@@ -48,39 +37,23 @@ export type SqlDesigner = Designer;
 /**
  * SQL 名前空間。
  *
- * publish / subscribe / unsubscribe / escape は本ファイルの実体。
- * Designer / designer は js/wwwsqldesigner.js（まだ .js）が後から載せるもので、
- * src/main.ts と tests/ が触るため型だけ先に宣言してある（types/globals.d.ts の
- * Sql interface から移設）。段階3-2 / 3-3 で各クラスが .ts になるたび、ここに
- * 実体の型が増えていく。index signature は書かない（typo が any に化けるため）。
+ * 段階3-4a でクラス 15 個と publish / subscribe / unsubscribe / escape が抜け、
+ * 残るのは実行時インスタンスまわりの 2 つだけになった。クラスはファイル間の
+ * 相互参照が import になったので名前空間に載せる必要がなくなり、pub/sub と escape は
+ * 本ファイルの named export に出した（SQL は 1 個しか存在せず、関数値を取り出して
+ * 渡す呼び出しも無いので this 束縛が消えても同値）。
+ *
+ * designer は「唯一のインスタンス」への参照で、import にすると循環するため
+ * 名前空間オブジェクト経由のまま据え置く。DI 化は HANDOVER §4 の IO 分離と同時
+ * （段階3-4 のスコープは「外部から触れる面＝window の撤去」まで。内部の可変
+ * シングルトンの撤去は「Designer は生涯 1 個」というプログラム不変条件への依存で、
+ * 参照経路の付け替えとは性質が違う）。
+ *
+ * Designer（クラス）は src/main.ts と tests/ が window 越しに触るため残している。
+ * 撤去は段階3-4c（テスト面の付け替えが済んでから）。index signature は書かない
+ * （typo が any に化けるため）。
  */
 export interface SqlNamespace {
-    _subscribers: Record<string, SqlSubscriber[]>;
-    publish(message: string, publisher: unknown, data?: unknown): void;
-    subscribe(message: string, subscriber: SqlSubscriber): void;
-    unsubscribe(message: string, subscriber: SqlSubscriber): void;
-    escape(str: string): string;
-    /*
-     * 描画中核のクラス（段階3-2 で .ts 化した分から順に載せていく）。
-     * .ts 側は import した SQL に代入するので、宣言が無いと代入自体が TS2339 になる
-     * （.js のときのようなグローバル型の合成は起きない）。
-     */
-    Visual: typeof Visual;
-    Row: typeof Row;
-    Table: typeof Table;
-    Relation: typeof Relation;
-    Key: typeof Key;
-    Rubberband: typeof Rubberband;
-    /** 公開名は SQL.Map、クラス名は Minimap（ES 標準 Map との衝突回避。§5.4） */
-    Map: typeof Minimap;
-    Toggle: typeof Toggle;
-    IO: typeof IO;
-    TableManager: typeof TableManager;
-    RowManager: typeof RowManager;
-    KeyManager: typeof KeyManager;
-    /** 公開名は SQL.Window（lib.dom の Window とは別物） */
-    Window: typeof SqlWindow;
-    Options: typeof Options;
     /** クラス。生成すると自身を SQL.designer に登録する */
     Designer: typeof Designer;
     /** 唯一のインスタンス。new SQL.Designer() が走るまでは存在しない */
@@ -104,61 +77,55 @@ export const _ = function _(str: string): string {
  */
 
 /*
- * Designer / designer は後から載るので、リテラルだけでは SqlNamespace を満たさない。
- * 「未 .ts のファイルが生やすプロパティ」を型で表現するためのキャストで、
- * 段階3-3 で js/wwwsqldesigner.ts が実体を持てば不要になる。
+ * 購読者テーブル。段階3-4a まで SQL._subscribers として公開されていたが、
+ * 参照は本ファイル内だけだったのでモジュールプライベートにした。
  */
-export const SQL = {
-    _subscribers: {} as Record<string, SqlSubscriber[]>,
+const _subscribers: Record<string, SqlSubscriber[]> = {};
 
-    publish: function (
-        this: SqlNamespace,
-        message: string,
-        publisher: unknown,
-        data?: unknown,
-    ): void {
-        var subscribers = this._subscribers[message] || [];
-        var obj = {
-            target: publisher,
-            data: data,
-        };
-        subscribers.forEach(function (subscriber) {
-            subscriber(obj);
-        });
-    },
+export function publish(
+    message: string,
+    publisher: unknown,
+    data?: unknown,
+): void {
+    var subscribers = _subscribers[message] || [];
+    var obj = {
+        target: publisher,
+        data: data,
+    };
+    subscribers.forEach(function (subscriber) {
+        subscriber(obj);
+    });
+}
 
-    subscribe: function (
-        this: SqlNamespace,
-        message: string,
-        subscriber: SqlSubscriber,
-    ): void {
-        if (!(message in this._subscribers)) {
-            this._subscribers[message] = [];
-        }
-        var index = this._subscribers[message]!.indexOf(subscriber);
-        if (index == -1) {
-            this._subscribers[message]!.push(subscriber);
-        }
-    },
+export function subscribe(message: string, subscriber: SqlSubscriber): void {
+    if (!(message in _subscribers)) {
+        _subscribers[message] = [];
+    }
+    var index = _subscribers[message]!.indexOf(subscriber);
+    if (index == -1) {
+        _subscribers[message]!.push(subscriber);
+    }
+}
 
-    unsubscribe: function (
-        this: SqlNamespace,
-        message: string,
-        subscriber: SqlSubscriber,
-    ): void {
-        var index = this._subscribers[message]!.indexOf(subscriber);
-        if (index > -1) {
-            this._subscribers[message]!.splice(index, 1);
-        }
-    },
+/*
+ * grabado: SQL.unsubscribe は段階3-4a で撤去した（HANDOVER §3）。js/ src/ tests/
+ * index.html のどこからも参照されておらず、段階3-4c で window.SQL が消えれば
+ * 名前で呼ぶ経路も物理的に無くなる。
+ */
 
-    escape: function (str: string): string {
-        return str
-            .replace(/&/g, "&amp;")
-            .replace(/>/g, "&gt;")
-            .replace(/</g, "&lt;");
-    },
-} as SqlNamespace;
+/* XML 書き出し用（HANDOVER §4 で serializer 側に移る）。lib.dom の非推奨 escape とは別物 */
+export function escape(str: string): string {
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/>/g, "&gt;")
+        .replace(/</g, "&lt;");
+}
+
+/*
+ * Designer / designer は js/wwwsqldesigner.ts が後から載せるので、リテラルだけでは
+ * SqlNamespace を満たさない。段階3-4c で Designer 側が消え、残りは §4 で DI 化される。
+ */
+export const SQL = {} as SqlNamespace;
 
 declare global {
     interface Window {

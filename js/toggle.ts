@@ -5,7 +5,6 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL } from "./globals.ts";
 
 export class Toggle {
     /* 初期値は null で、コンストラクタが呼ぶ _switch() が必ず boolean を入れる */
@@ -39,5 +38,3 @@ export class Toggle {
         this._elm.className = this._state ? "on" : "off";
     }
 }
-
-SQL.Toggle = Toggle;

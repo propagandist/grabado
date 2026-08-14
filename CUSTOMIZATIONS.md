@@ -958,6 +958,79 @@ constructor() {…`）。イディオム E（`declare` 必須）の検算がこ�
 両方で流し、**18/18・pageerror 0 件**。撤去した分岐に触る経路（`clientsql` の XSLT、
 F2 quicksave、テーブル編集ダイアログの `setSelectionRange`、`clientload` の `DOMParser`）を含む。
 
+### 2026-08-14 HANDOVER §3「フロント TS 化」段階3-4a — クラス面を import 化し、`SQL.X = X` を無くした
+
+段階3-4（`window` 登録と `declare global` の撤去）を **3 本の PR に割った**。本 PR はその 1 本目で、
+**`js/` しか触らない**（`tests/` は 1 行も変えていない）。分割の意図は歴代と同じ原因切り分けで、
+3-4a は「最も行数が動くが安全網が完全に無傷」、3-4b は「テストしか変わらない」、3-4c は
+「削除だけ・消す対象の消費者が 0 であることが grep で自明」という順にしてある。
+
+| PR | 触る範囲 | 内容 |
+|---|---|---|
+| **3-4a**（本 PR） | `js/` のみ | `SQL.X = X` 15 本の撤去、`new SQL.X()` 13 箇所の値 import 化、pub/sub と `escape` の named export 化 |
+| 3-4b | `tests/` のみ | node ハーネスを `window.OZ` 依存から外す、page 側を `window.d` に寄せる |
+| 3-4c | `js/` `src/` ＋ docs | `window.OZ` / `CONFIG` / `_` / `SQL` の撤去、`LOCALE` のモジュール化 |
+
+**段階3-4 のスコープを「外部から触れる面＝`window` の撤去」までに切った。** 内部の可変シングルトン
+（`SQL.designer`）の撤去は §4 の DI 化に送る。**前者は参照経路の付け替えで、同一性が言語仕様により
+保証される。後者は「Designer は生涯 1 個」というプログラム不変条件への依存**で、コード上どこにも
+強制がない（コンストラクタは何度でも呼べ、そのたび `SQL.designer` だけが差し替わる）。規約3
+「実行コードは変えない」に照らすと同列に扱えないので、[`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md):484-485 の
+既決（「DI 化は §4 の IO 分離と同時」）をそのまま維持した。3-4c 完了後 `SQL` は `window` から降りるので、
+`SQL.designer` を残しても**外部に露出するグローバルは 1 つも増えない**。むしろ `grep "SQL\." js/` の
+残り 7 行がそのまま §4 の作業対象リストになる。
+
+**循環は生じない（値の辺は 13 本だけ）。** `wwwsqldesigner → 11 本` は読み込み順の最後尾なので
+全て既評価。`table → row` は 1 つ前で既評価。**動くのは `table → key` の 1 本だけ**で、`key` の評価が
+`table` の直前に前倒しになる。逆向き（`row → table`、`key → table/row`、`globals → wwwsqldesigner`）は
+すべて `import type` で、`verbatimModuleSyntax` のもと emit から消えるため Rollup のグラフに辺が生えない。
+`js/key.ts` のトップレベル副作用は `class Key extends Visual` だけ、`visual` は前倒し後も先に評価済み
+なので観測できる差はない。**バンドル diff で `Key` クラス本体 62 行が完全一致（位置だけが移動）**
+していることを実測して裏を取った。
+
+**`SQL.Map` / `SQL.Window` の名前ズレは「公開名」概念ごと消滅した。** `Minimap` は識別子 1 本になり
+（ES 標準 `Map` との衝突は最初から存在しない）、`Window` は参照側が `import { Window as SqlWindow }` で
+受ける形に統一された。[`js/map.ts`](js/map.ts) の「公開名 `SQL.Map` は現行のまま」という注釈は撤回。
+
+**pub/sub は `this` 束縛が消えても同値。** `_subscribers` の参照は [`js/globals.ts`](js/globals.ts) 内だけ
+（＝モジュールプライベートに落とせる）、`SQL` オブジェクトは 1 個しか存在しない、呼び出しは全て
+メソッド呼び出しの形で関数値を取り出して渡す箇所が 0 件 — の 3 つが揃っているため。
+**`escape` は `lib.dom` の非推奨グローバルと同名**だが、`js/` 全体に裸の `escape(` 呼び出しが 0 件なので
+import した 2 ファイル（`row` / `table`）でシャドウして問題ない。`escapeXML` への改名は意味づけごと
+§4 の serializer 抽出で決める。
+
+**`SQL.unsubscribe` は撤去した。** `js/` `src/` `tests/` `index.html` のどこからも参照が無く、
+3-4c で `window.SQL` が消えれば**名前で呼ぶ経路が物理的に無くなる**。規約4 が要求する「一度も
+評価されない」の証明として、名前解決の経路が全滅していることは実行時サンプリングより強い。
+
+**検証**。成功判定は歴代と同じく **`git diff tests/golden/` が空**であること（63 ＋ 7 本すべて無差分。
+untracked も無し＝`npm run golden:update` をこの PR で一度も打っていない）。`npm test` 61 passed /
+21 skipped（件数不変）、`npm run test:browser` 80 passed、`npm run test:dist` 3 passed、
+`npm run known-issues` 9 passed、`npm run typecheck` 0 error。
+
+**バンドル出力の diff は 5 種類に収束した**（`vite build --minify false` を `develop` と本ブランチで
+走らせ、コメント行を除いて比較。差分 221 行の内訳がこれで全部）。
+
+| 差分 | 由来 |
+|---|---|
+| `var SQL = {…}` のメソッド 4 本 → `function publish/subscribe/escape` ＋ `var SQL = {}` | named export 化 |
+| `unsubscribe` 定義の消滅 | 参照 0 の撤去 |
+| `SQL.X = X;` の消滅 ×14 | クラス登録の撤去（`SQL.Designer = Designer` だけ 3-4c まで残す） |
+| `SQL.publish/subscribe/escape(` → `publish/subscribe/escape(` ×7 | 呼び出しの named import 化 |
+| `new SQL.X(` → `new X(` ×13 ／ `Key` クラスの位置移動 | 値 import 化（位置移動は上記のとおり本体一致） |
+
+**インスタンスフィールドの emit は 1 つも増えていない**（規約5 ＝ `declare` 必須の検算。`Designer` /
+`Table` / `Key` いずれも `constructor()` の中身が無差分）。
+
+**対話パスの一巡**は段階3-3a・3-3b と同じ 18 項目を `npm run dev`（4173）と `npm run preview`（4174）の
+両方で流し、**18/18・pageerror 0 件**（生成経路が全部変わる PR なので必須）。今回は検証を
+Playwright の一時 spec に起こして機械実行した（リポジトリには入れていない）。副産物として
+**`#keyleft`（`<<`）が avail → fields の追加、`#keyright`（`>>`）が fields からの削除**であること
+（[`js/keymanager.ts`](js/keymanager.ts) の `left()` / `right()` はボタンの左右と逆の語感になっている）と、
+`clientsql` は `output.xsl` を `OZ.Request` で取りに行くので **`#textarea` が埋まるまで待つ必要がある**
+ことを確認している。一巡で出る console error 2 件（Dropbox CDN の遮断、F2 quicksave の 404）は
+ネットワーク由来で JS 例外ではない。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

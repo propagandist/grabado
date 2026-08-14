@@ -15,7 +15,7 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import { SQL, _, type SqlDesigner } from "./globals.ts";
+import { _, type SqlDesigner } from "./globals.ts";
 
 /* dropbox.js のうち本ファイルが触る面。存廃は §4（上のコメント） */
 interface DropboxError {
@@ -809,5 +809,3 @@ export class IO {
         }
     }
 }
-
-SQL.IO = IO;

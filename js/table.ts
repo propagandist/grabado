@@ -5,19 +5,20 @@
  * _build() が this.owner.map.dom.container を読むので、this.owner の代入より
  * 後でなければならない（＝基底コンストラクタからは呼べない）。
  *
- * Row / Key の生成は new SQL.Row / new SQL.Key のまま据え置く。import に変えると
- * 実行コードが変わるうえ、js/key.ts は本ファイルより後に読む決まりなので値 import は
- * 評価順を逆転させる。型は js/globals.ts の SqlNamespace が供給する（イディオム B の
- * 例外である SQL.designer と同じ論理）。
+ * Row / Key の生成は段階3-4a で値 import になった。js/key.ts は src/app.ts の順序では
+ * 本ファイルより後だが、値の辺が張られると Rollup が key を table の直前に前倒しする。
+ * key のトップレベル副作用は class Key extends Visual だけで、visual は前倒し後も
+ * 先に評価済みなので観測できる差は無い（バンドル diff では位置移動の 1 ハンクとして出る）。
+ * 逆向き（row -> table、key -> table/row）は import type なので辺が生えない。
  *
  * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, type SqlDesigner } from "./globals.ts";
+import { SQL, publish, escape, type SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
-import type { Row, RowData } from "./row.ts";
-import type { Key } from "./key.ts";
+import { Row, type RowData } from "./row.ts";
+import { Key } from "./key.ts";
 import type { Relation } from "./relation.ts";
 
 export interface TableDom extends VisualDom {
@@ -184,7 +185,7 @@ export class Table extends Visual<TableDom> {
             return;
         } /* click on row */
 
-        SQL.publish("tableclick", this);
+        publish("tableclick", this);
         this.owner.rowManager.select(false);
     }
 
@@ -216,7 +217,7 @@ export class Table extends Visual<TableDom> {
     }
 
     addRow(title: string, data?: Partial<RowData>): Row {
-        var r = new SQL.Row(this, title, data);
+        var r = new Row(this, title, data);
         this.rows.push(r);
         this.dom.content.appendChild(r.dom.container);
         this.redraw();
@@ -242,7 +243,7 @@ export class Table extends Visual<TableDom> {
      * なるので結果は同一。是正は同ファイルを .ts 化する段階3-3 で行う。
      */
     addKey(type?: string): Key {
-        var k = new SQL.Key(this, type);
+        var k = new Key(this, type);
         this.keys.push(k);
         return k;
     }
@@ -381,7 +382,7 @@ export class Table extends Visual<TableDom> {
         }
         var c = this.getComment();
         if (c) {
-            xml += "<comment>" + SQL.escape(c) + "</comment>\n";
+            xml += "<comment>" + escape(c) + "</comment>\n";
         }
         xml += "</table>\n";
         return xml;
@@ -499,5 +500,3 @@ export class Table extends Visual<TableDom> {
         this._ec.forEach(OZ.Event.remove, OZ.Event);
     }
 }
-
-SQL.Table = Table;

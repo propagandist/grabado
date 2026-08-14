@@ -220,9 +220,10 @@ oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.
 （`index.html` や外部から触る面の確認と同時に撤去するほうが安全なため）。`DATATYPES` と `LOCALE` は
 [`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts) とテストが `window` 越しに差し替えるので、
 撤去時にその経路の設計が要る。
-クラスは `window` にではなく `SQL` 名前空間に載る（`SQL.Row = Row;` 等）ので、その型は
-`SqlNamespace` が持つ（§5.5）。段階2 の class 化でも段階3 の `.ts` 化でもこの前提は崩していない
-（§5.4 の「2 つの実行系」を参照）。
+**クラスの `SQL` 名前空間登録（`SQL.Row = Row;` 等）は段階3-4a で全廃した。** ファイル跨ぎの
+クラス参照は値 import になり、`SqlNamespace` は `{ Designer, designer }` の 2 つまで縮んだ
+（`Designer` は 3-4c で消える。`designer` は §4 の DI 化で消える）。pub/sub と `escape` も
+[`../js/globals.ts`](../js/globals.ts) の named export になっている。
 
 ### 5.1.1 ビルドと配信
 
@@ -281,7 +282,9 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
   **(ii) は段階3-3b で決着した**：該当する `io` / `keymanager` / `rowmanager` / `tablemanager` は
   `Visual` を継がないので、完成形（`IoDom` ほか）を interface で宣言し、初期化とループ代入の
   2 行にだけキャストを置く（4 本で合計 8 個）。形態 (i) の `Designer` は `Visual<DesignerDom>` に乗った。
-- クラス名 `Minimap` は ES 標準の `Map` との衝突を避けるため。公開名は `SQL.Map` のまま。
+- クラス名 `Minimap` は ES 標準の `Map` との衝突を避けるため。段階3-4a で `SQL` 名前空間が消えて
+  公開名 `SQL.Map` も無くなったので、識別子は `Minimap` の 1 本になった（`Window` は
+  `lib.dom` の型と同名のままなので、参照側が `import { Window as SqlWindow }` で受ける）。
 
 **2 つの実行系の差は §3 段階3-0 でほとんど消えた。** Node ハーネスも
 [`../src/app.ts`](../src/app.ts) を vite で束ねた単一 IIFE を評価する形になり、
@@ -294,12 +297,10 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 | strict | **常に strict** | **`"use strict";` を前置**。ただし暗黙グローバル代入だけは jsdom の Window（vm の contextified global＝Proxy）で素通りする |
 | DOM | 本物 | jsdom。レイアウトしないので `offsetWidth` / `offsetHeight` は常に 0 |
 
-- どちらの実行系でも、`class X { … }` と書いたら**同一ファイル内で必ず `SQL.X = X;`** する。
-  `js/` に import/export が無く、ファイル跨ぎの参照が `SQL.` 経由だから。
-  （段階2 の時点では「`window.eval` では lexical 宣言がグローバルに残らない」ことが直接の理由
-  だったが、バンドル経由になった今は両実行系とも閉じたスコープなので、理由は依存グラフ側に
-  一本化された。**段階3-1 で `.ts` 化した 3 本はこの制約から外れ**、`export` ＋ `window` 登録に
-  移行している。残り 15 本は `.ts` になるまで従来どおり。）
+- **「`class X { … }` を書いたら同一ファイル内で必ず `SQL.X = X;`」という規約は段階3-4a で撤回した。**
+  段階2 の時点では「`window.eval` では lexical 宣言がグローバルに残らない」ことが直接の理由で、
+  段階3-0 でバンドル経由になった後は「ファイル跨ぎの参照が `SQL.` 経由だから」に一本化されていた。
+  3-4a でその参照が全部 import になったので、根拠ごと消えている。
 - 暗黙グローバルは**ブラウザでだけ落ちる**。段階2 で直した 2 件（`js/io.js` の `req`、
   `js/oz.js` の `y`）はこれに当たり、「現行挙動」が実行系で割れていたため挙動不変の例外として修正した。
   段階3-0 の `"use strict"` 前置でも jsdom 側は捕まえられない（上表・実測は
@@ -317,7 +318,15 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 | 3-2 | 描画中核 `visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map` | 済（2026-08-12） |
 | 3-3a | prototype 方式 7 本（`io` / `toggle` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options`）を class 化（`.js` のまま。§5.4） | 済（2026-08-12） |
 | 3-3b | `toggle` / `io` / `tablemanager` / `rowmanager` / `keymanager` / `window` / `options` / `wwwsqldesigner` の `.ts` 化 | 済（2026-08-12） |
-| 3-4 | `window` 登録と `declare global` の撤去、`strict` の最終確認 | 未 |
+| 3-4a | `SQL.X = X` 15 本の撤去と `new SQL.X()` 13 箇所の値 import 化、pub/sub と `escape` の named export 化（`js/` のみ） | 済（2026-08-14） |
+| 3-4b | テスト面の付け替え（node ハーネスを `window.OZ` 依存から外す、page 側を `window.d` に寄せる。`tests/` のみ） | 未 |
+| 3-4c | `window` 登録と `declare global` の撤去、`LOCALE` のモジュール化、`strict` の最終確認 | 未 |
+
+段階3-4 のスコープは「**外部から触れる面（`window`）の撤去**」まで。**内部の可変シングルトン
+`SQL.designer`（読み 6 / 書き 1）と `window.DATATYPES` は §4 に繰り越す** — 前者は参照経路の
+付け替えではなく「Designer は生涯 1 個」というプログラム不変条件への依存、後者は読み書き 14 箇所の
+実行コード変更＋テストが `page.evaluate` 越しに差し替える経路の再設計が要るため。判断の根拠は
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
 
 段階3-3b で **`types/globals.d.ts` は役目を終えて削除**した（最後まで残っていた `window.d` の宣言は
 [`../src/main.ts`](../src/main.ts) へ移した）。[`../tsconfig.json`](../tsconfig.json) の `checkJs` も

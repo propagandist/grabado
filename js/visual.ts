@@ -19,8 +19,6 @@
  * 挙動が変わる（! による definite assignment assertion でも emit される）。
  */
 
-import { SQL } from "./globals.ts";
-
 /** 基底が用意する dom バッグ。_build() が埋めるまでは実行時 null（下の _init を参照） */
 export interface VisualDom {
     container: HTMLElement;
@@ -79,5 +77,3 @@ export class Visual<D = VisualDom> {
 
     redraw(): void {}
 }
-
-SQL.Visual = Visual;

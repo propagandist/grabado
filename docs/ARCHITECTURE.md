@@ -26,6 +26,9 @@ js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS
   toggle/io/tablemanager/rowmanager/keymanager/window/options/wwwsqldesigner .ts
                                     ★ 段階3-3a で class 化 → 3-3b で .ts 化
   io/palette.ts            ★ §4 段階4-0b で追加。型パレット層（旧 window.DATATYPES）
+  io/model.ts              ★ §4 段階4-1a で追加。直列化の中間モデル（型のみ・emit 0）
+  io/extract.ts            ★ §4 段階4-1a で追加。ライブツリー → DesignModel
+  io/xml-serializer.ts     ★ §4 段階4-1a で追加。DesignModel → XML（4-3 で ddl-xml.ts に改名）
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
@@ -191,11 +194,16 @@ import 列に移し、段階3-0 で [`../src/app.ts`](../src/app.ts) に分離�
 Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
 ```
-oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
-      →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.js  →  io.js
-      →  tablemanager.js  →  rowmanager.js  →  keymanager.js  →  window.js  →  options.js
-      →  wwwsqldesigner.js
+io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts  →  io/extract.ts  →  io/xml-serializer.ts
+      →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
+      →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.ts  →  io.ts
+      →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts  →  window.ts  →  options.ts
+      →  wwwsqldesigner.ts
 ```
+
+`io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。`io/extract.ts` と
+`io/xml-serializer.ts` が `globals.ts` の直後なのは、後者が `_` に値依存するため（段階4-1a）。
+型だけの `io/model.ts` は emit が空なので `src/app.ts` には載せない。
 
 **この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本、段階3-2 で
 続く描画中核 7 本、段階3-3b で末尾 8 本が `.ts` になり、**`js/` に `.js` は 1 本も残っていない**。
@@ -204,6 +212,7 @@ oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.
   **§3 段階2 で `OZ.Class` 系（参照 0）と ES5 polyfill 群を撤去**し、
   **段階3-1 で `.ts` 化とともに IE 専用分岐・参照 0 の API（`select` / `gecko` / `webkit` / `khtml`）を撤去**した。
 - `globals.ts` はロケール関数 `_()` と `SQL` 名前空間（`publish` / `subscribe` / `escape`）。
+  **`SQL` 名前空間は段階4-0a で、`escape` は段階4-1a で出た**（現在はロケールと pub/sub だけ）。
   polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。**段階3-2 で
   `SqlDesigner`（`Designer` インスタンスの面）が [`../types/globals.d.ts`](../types/globals.d.ts)
   から移設され、描画中核 7 本の `this.owner` はすべてこの 1 つの宣言を見る**。
@@ -230,8 +239,10 @@ Node ハーネスがバンドルの内側に手を届かせる経路は
 [`../tests/node/app-entry.ts`](../tests/node/app-entry.ts) の `window.__grabado`（テスト所有）。
 **クラスの `SQL` 名前空間登録（`SQL.Row = Row;` 等）は段階3-4a で全廃した。** ファイル跨ぎの
 クラス参照は値 import になり、`SqlNamespace` は `{ Designer, designer }` の 2 つまで縮んだ
-（`Designer` は 3-4c で消える。`designer` は §4 の DI 化で消える）。pub/sub と `escape` も
-[`../js/globals.ts`](../js/globals.ts) の named export になっている。
+（`Designer` は 3-4c で消える。`designer` は §4 の DI 化で消える）。pub/sub は
+[`../js/globals.ts`](../js/globals.ts) の named export で、`escape` は段階4-1a で
+[`../js/io/xml-serializer.ts`](../js/io/xml-serializer.ts) の `escapeXML` になった
+（呼び手 3 か所がすべて `toXML` 経路だったので、書き出しの移設と同時に出た）。
 
 ### 5.1.1 ビルドと配信
 

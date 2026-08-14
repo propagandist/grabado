@@ -1310,6 +1310,131 @@ FK 自動生成（`getFKTypeFor` → `types()`）、`#clientsql` のラベルと
 型パレットが Designer からぶら下がったので、**serializer に「どの Designer のパレットか」を
 渡せる状態**になった（4-1 で `escape()` と併せて `js/io/serializer.ts` へ移す）。
 
+### 2026-08-14 HANDOVER §4「IO」段階4-1a — 書き出し方向をモデル層に載せた
+
+§4 の 3 本目。**`Designer` / `Table` / `Row` / `Key` に散っていた `toXML()` 4 実装が
+[`js/io/`](js/io/) の 3 本に移り、描画クラスから書き出しコードが 1 行も残らなくなった**。
+主張は 4-0a / 4-0b と同じく「出力バイト列が 1 バイトも変わっていない」の 1 点。
+
+**まず 4-1 を 3 本に割った。** 台帳の §4 は 9 本（段階4-0a の記録の表）だったが、実測すると
+`toXML` 側と `fromXML` 側で**証明の性質がまったく違う**。`toXML` 系 4 実装は DOM を一度も読まず
+`data` / `x` / `y` / `relations` / `rows` / `keys` と palette しか見ない（純関数化できる）のに対し、
+`fromXML` は「XML を再生する UI 操作列」で、`clearTables()` の DOM 削除・`moveTo()` の snap・
+`update()` の FK 連鎖・`setTitle()` の関連行リネーム・ff one-pixel shift hack を撒く。
+golden は**結果**を押さえるが副作用の順序と回数は 1 つも押さえていないので、同じ PR に混ぜると
+赤が出たときにどちらの向きが原因か切り分けられない。§4 は 11 本になる。
+
+| # | 中身 | 完了判定 |
+|---|---|---|
+| **4-1a**（本 PR） | 書き出し方向（`model` / `extract` / `xml-serializer`） | golden 70 本無差分 |
+| 4-1b | 読み込み方向（`xml-parser` / `apply`） | 上 ＋ DOM 状態スナップショットの差分 0 |
+| 4-1c | `SqlDesigner` → `Designer` の一本化（13 本） | **バンドル出力が 1 バイトも変わらない** |
+
+書き出しを先にやったのは、**モデルの形を「バイト不変のために何が要るか」から決める**ため
+（読み込みを先にするとモデルがパーサ都合で決まる）。4-1a が入った時点で「読み込みは旧コード・
+書き出しは新コード」の組み合わせが golden 70 本で検証されるので、**抽出が正しいことの独立証明**にもなる。
+
+**決めたこと 1: モデルは描画エンジンが実際に持っている値を写す。**
+[`js/io/model.ts`](js/io/model.ts) の `RowModel.type` は**型パレットの添字のまま**で、sql 名に
+解決しない。現行 `Row.toXML()` は添字から要素を引いてその要素の `sql` と `quote` を読むので、
+モデルを sql 名にすると serializer はパレットを名前で引き直すことになり、同じ `sql` を持つ型が
+2 つあるパレット（known-issue #3 の BIGINT）では**別の要素に当たりうる**。今の postgresql では
+どちらも `quote=""` なので golden は割れないが、「割れないことがテストで保証されない」種類の
+変更になる。添字なら `typeAt(index)` の逐語移動で済む。**パレット依存の解決はすべて
+serializer / parser 側の引数（palette）で行う**、が §4 を通す規約。
+
+**決めたこと 2: relation は `RowModel` にぶら下げ、参照は名前で持つ。**
+計画段階では `DesignModel` 直下の平坦配列 ＋ 位置参照（`{table: number, row: number}`）にする
+案だったが、実装で**逐語に振り直した**。理由は 2 つ。
+
+- 平坦配列にすると「`designer.relations` を走査して child が自分のものを拾う」順序が
+  現行の `row.relations` フィルタと一致することの**証明が要る**（成立はする — `new Relation` は
+  [`Designer.addRelation`](js/wwwsqldesigner.ts#L282) の 1 箇所だけで、コンストラクタが
+  [両 row に push](js/relation.ts#L79) した直後に designer 側にも push されるので、
+  `row.relations` は `designer.relations` の順序を保つ部分列になる）。`row.relations` を
+  そのまま読めば証明そのものが不要になる。
+- 位置参照は `designer.tables.indexOf(row.owner)` が −1 を返す場合に現行と同値な出力を作れない
+  （現行は名前を読むだけなので落ちない）。到達不能ではあるが、**バイト不変が要件の PR で
+  「到達不能だから」を根拠にしたくない**。
+
+XML は元々名前で参照する形式なので、名前で持つことは決定 1 とも整合する。同名テーブルで
+リレーションが壊れる既知の不具合は名前解決に由来するが、**id 参照へ移すかは `formatVersion: 1` を
+決める 4-2 の判断**（段階4-0a の申し送りどおり）。
+
+**決めたこと 3: ファイル名は `serializer.ts` ではなく [`xml-serializer.ts`](js/io/xml-serializer.ts)。**
+HANDOVER §4 の `io/serializer.ts` は「全入出力を JSON に統一。`serialize`/`deserialize` を集約」の
+文脈にある名前なので JSON 用に取っておく。本ファイルは 4-3 で `js/io/ddl-xml.ts` に改名し、
+`output.xsl`（DDL 生成）専用の内部モジュールになる。
+
+**決めたこと 4: 基底 [`Visual.toXML()`](js/visual.ts) の空実装は残さず消した。**
+残すと `table.toXML()` の消し漏れが TypeError にならず `undefined` が黙って返り、
+`xml += undefined` で golden が壊れる。基底ごと消せば消し漏れは即 TypeError で、
+`npm test` の最初の fixture で落ちる。規約4（死にコードの撤去は両実行系で実測してから）に
+対する実測は「同じ PR で jsdom と Chromium の安全網が両方走ること」そのものが満たしている。
+`Designer.toXML()` の `override` はこれに伴って外れた。`fromXML` の空実装は 4 実装が現役なので残す。
+
+**`extractModel()` はクラスに `toModel()` を生やさず serializer 側が走査する形にした。**
+描画中核 3 本の差分が「削除のみ」になって挙動不変の主張が最も強くなること、永続化の知識を
+描画クラスに残さないこと（HANDOVER §4「全入出力は serializer を通す」）、`js/table.ts → js/io/` の
+辺を生やさず**依存を描画 → io の一方向に揃える**ことの 3 つによる。
+
+**検証**。`git diff tests/golden/` と `git status --porcelain tests/golden/` がどちらも空
+（xml 7 ＋ ddl 63 本すべて無差分＝`npm run golden:update` をこの PR で一度も打っていない）。
+`npm test` 61 passed / 21 skipped、`npm run test:browser` 80 passed、`npm run test:dist` 3 passed、
+`npm run known-issues` 9 passed、`npm run typecheck` 0 error（**すべて件数不変**）。完了判定は
+`grep -rn "toXML" js/` が**実コード 11 行**（`Designer.toXML` の宣言と委譲 ＋ `js/io.ts` の呼び出し 8）、
+`grep -rn "escape" js/` が `js/io/xml-serializer.ts` だけ（定義 1 ＋ 呼び出し 3）、
+`grep -n "\.dom\b\|document\." js/io/extract.ts js/io/xml-serializer.ts` が 0 件。
+
+**バンドル差分は 6 ハンク・178 行**（`vite build --minify false` の出力をコメント除去して比較）で、
+内訳は下表の 6 種類だけ。**ソース由来でない差分は 1 件もない**。
+
+| 差分 | 由来 | 行 |
+|---|---|---|
+| 新モジュール 9 関数の追加 | `extract` 4 ＋ `serialize` 4 ＋ `escapeXML` | +112 |
+| `function escape` の消滅 | [`js/globals.ts`](js/globals.ts) | −3 |
+| `Visual.toXML(){}` の消滅 | [`js/visual.ts`](js/visual.ts) | −1 |
+| `Row.toXML` の消滅 | [`js/row.ts`](js/row.ts) | −26 |
+| `Key.toXML` の消滅 | [`js/key.ts`](js/key.ts) | −10 |
+| `Table.toXML` の消滅 | [`js/table.ts`](js/table.ts) | −11 |
+| `Designer.toXML` の 1 行化 | [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) | −12 / +1 |
+
+**インライン展開は起きていない**（`serializeTable` / `serializeRow` / `serializeKey` は呼び出しが
+各 1 箇所だが rolldown は畳まなかった）。位置移動ハンクも無く、新モジュールは `src/app.ts` に
+書いた位置（`globals.ts` の直後）にそのまま入っている。規約5 の検算＝インスタンスフィールドの
+emit は 1 つも増えていない（新設は関数と型だけでクラス本体に触れないので自明）。
+
+**対話パスの一巡は 21 項目を 4 通り流した**（Playwright の使い捨てスクリプト。リポジトリには
+残していない）。`npm run dev`（4173）と `npm run preview`（4174）の**それぞれで develop と本 PR の
+両方**を回し、**4 回とも 21/21・pageerror 0 件**。dialogs 6 件・downloads 2 件・console.error 1 件
+（backend 不在の 404）まで一致した。**preview では develop と本 PR を同じポートで流して、
+`#clientsave` の XML・`#clientsql` の DDL・UI 編集後の `toXML()`・`?backend=` 付き起動の
+4 つのハッシュがすべて一致**している（dev 側はバイト数と件数の一致まで。`<!-- Active URL -->` に
+ポート番号が入るのでハッシュはポートに依存する）。`toXML()` の消費者は
+[`js/io.ts`](js/io.ts) の 8 箇所のうち到達可能な 7 本すべてを踏んだ —— `#clientsave` /
+`#clientcopy` / `#clientdownloadxml` / `#clientdownloadtxt` / `#clientlocalsave`（`#clientlocalload`
+との往復）/ **`#clientsql`（＝`finish()`。XSLT の入力が壊れていないことの確認）** / `#quicksave`。
+`#dropboxsave` は `CONFIG.DROPBOX_KEY` 未設定でボタンが hidden。この過程で確認した現行仕様:
+
+- **`#foreigncreate` は「作成モードに入る」だけで、FK 行と relation は相手テーブルの
+  クリックで生える**（[`RowManager.tableClick`](js/rowmanager.ts#L108)）。`#addtable` が
+  `#area` のクリックで実体化するのと同じパターン。
+- **Chromium のクリップボードは Windows で LF を CRLF に正規化する。** `#clientcopy` の結果を
+  `#clientsave` とバイト比較するときは戻す必要がある（localStorage 経由は生のまま）。
+- `#quicksave` は `serversave(e, this._name)` で、`_name` が空の初回は prompt が出る。
+
+**次段階（4-1b: 読み込み方向）への入力**。`fromXML` 4 実装の DOM 走査規則は**微妙に不揃い**で、
+逐語移設のときに揃えてはいけない。[`Table.fromXML`](js/table.ts#L392) の `<comment>` だけが
+**直下の childNodes 走査で最後の一致が勝つ**（`getElementsByTagName("comment")[0]` にすると
+row 内の comment を拾う）のに対し、[`Row.fromXML`](js/row.ts) は `getElementsByTagName(...)[0]` で
+子孫の先頭が勝つ。relation は [`Designer.fromXML`](js/wwwsqldesigner.ts#L501) が
+**document 順の第 2 パス**で回し、所属を `parentNode` / `parentNode.parentNode` の `name` 属性から
+**引き直す** —— ここが同名テーブルのバグの本体で、「今パースしている row が子側」と書くと
+バグが直ってしまい、テストが 1 本も落ちないまま挙動が変わる。順序依存（`clearTables()` →
+`palette.setRoot()` → 行の型解決）も偶然ではない: `clearTables()` は `removeTable` →
+`rowManager.select(false)` → `Row.deselect()` → `redraw()` → `getColor()` → `getDataType()` と
+たどって**パレットを読む**ので、先に差し替えると古い添字で新パレットを引くことになる。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

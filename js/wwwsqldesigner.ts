@@ -23,7 +23,7 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import { SQL, _ } from "./globals.ts";
+import { SQL, _, LOCALE } from "./globals.ts";
 import { Visual, type VisualDom } from "./visual.ts";
 import { Table } from "./table.ts";
 import type { Row } from "./row.ts";
@@ -162,7 +162,7 @@ export class Designer extends Visual<DesignerDom> {
             for (var i = 0; i < strings.length; i++) {
                 var n = strings[i]!.getAttribute("name")!;
                 var v = strings[i]!.firstChild!.nodeValue!;
-                window.LOCALE[n] = v;
+                LOCALE[n] = v;
             }
         }
         this.flag--;
@@ -576,5 +576,3 @@ export class Designer extends Visual<DesignerDom> {
         return this.fkTypeFor[typeIndex]!;
     }
 }
-
-SQL.Designer = Designer;

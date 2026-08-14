@@ -106,11 +106,7 @@ export const CONFIG = {
     DROPBOX_KEY: null as string | null, // such as: "d6stdscwewhl6sa"
 };
 
-declare global {
-    interface Window {
-        CONFIG: typeof CONFIG;
-    }
-}
-
-/* grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1） */
-window.CONFIG = CONFIG;
+/*
+ * grabado: window.CONFIG と declare global を撤去した（HANDOVER §3 段階3-4c）。
+ * 参照側はすべて import になっており、window 越しに読む者は段階3-3b の時点で 0 件だった。
+ */

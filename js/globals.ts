@@ -1,12 +1,12 @@
 /*
  * grabado: HANDOVER §3 段階3-1 で .ts 化した。
  *
- * export ＋ window 登録の 2 本立て（イディオムは js/oz.ts の冒頭を参照）。
- * 段階3-3b で js/ が全部 .ts になったので裸のグローバルを読む参照側は無くなったが、
- * window 登録の撤去は段階3-4 でまとめて行う（index.html や外部から触る面の確認と
- * 同時にやるほうが安全なため）。DATATYPES と LOCALE は js/wwwsqldesigner.ts と
- * テストが window 越しに差し替える（window.DATATYPES = … / window.LOCALE[n] = …）ので、
- * モジュールローカルの変数にはしない。参照経路を現行と 1 バイトも変えないため。
+ * 段階3-4c で window 登録（_ / LOCALE / SQL）を撤去し、素の ES モジュールになった。
+ * 残る window 面は DATATYPES 1 つだけで、理由はファイル末尾の declare global に書いてある。
+ *
+ * 中身は 3 つ: ロケール辞書と getText（LOCALE / _）、pub/sub（publish / subscribe）、
+ * XML エスケープ（escape）。いずれも HANDOVER §4 で行き先が決まっている
+ * （escape は serializer へ、pub/sub は RowManager 周りへ）。
  */
 
 /*
@@ -49,24 +49,31 @@ export type SqlDesigner = Designer;
  * シングルトンの撤去は「Designer は生涯 1 個」というプログラム不変条件への依存で、
  * 参照経路の付け替えとは性質が違う）。
  *
- * Designer（クラス）は src/main.ts と tests/ が window 越しに触るため残している。
- * 撤去は段階3-4c（テスト面の付け替えが済んでから）。index signature は書かない
+ * Designer（クラス）も段階3-4c で抜けた（src/main.ts と Node ハーネスが値 import と
+ * window.__grabado で直接掴むようになったため）。残りは designer 1 つで、
+ * これが §4 の DI 化の作業対象そのものになる。index signature は書かない
  * （typo が any に化けるため）。
  */
 export interface SqlNamespace {
-    /** クラス。生成すると自身を SQL.designer に登録する */
-    Designer: typeof Designer;
-    /** 唯一のインスタンス。new SQL.Designer() が走るまでは存在しない */
+    /** 唯一のインスタンス。new Designer() が走るまでは存在しない */
     designer: Designer;
 }
 
-/* getText。window.LOCALE を読むのは現行のまま（初期化はこのファイルの下） */
+/*
+ * ロケール辞書。段階3-4c で window.LOCALE からモジュール変数にした。
+ * 消費者は下の _() の読みと js/wwwsqldesigner.ts の LOCALE[n] = v（localeResponse）だけで、
+ * テストは触らない。オブジェクトを丸ごと差し替える代入はこの初期化 1 か所しかないので、
+ * window から到達できなくなる以外の差は無い（DATATYPES との違いはファイル末尾を参照）。
+ */
+export const LOCALE: Record<string, string> = {};
+
+/* getText */
 export const _ = function _(str: string): string {
     /* getText */
-    if (!(str in window.LOCALE)) {
+    if (!(str in LOCALE)) {
         return str;
     }
-    return window.LOCALE[str]!;
+    return LOCALE[str]!;
 };
 
 /*
@@ -109,8 +116,8 @@ export function subscribe(message: string, subscriber: SqlSubscriber): void {
 
 /*
  * grabado: SQL.unsubscribe は段階3-4a で撤去した（HANDOVER §3）。js/ src/ tests/
- * index.html のどこからも参照されておらず、段階3-4c で window.SQL が消えれば
- * 名前で呼ぶ経路も物理的に無くなる。
+ * index.html のどこからも参照されておらず、段階3-4c で window.SQL も消えたので
+ * 名前で呼ぶ経路は物理的に存在しない。
  */
 
 /* XML 書き出し用（HANDOVER §4 で serializer 側に移る）。lib.dom の非推奨 escape とは別物 */
@@ -122,37 +129,37 @@ export function escape(str: string): string {
 }
 
 /*
- * Designer / designer は js/wwwsqldesigner.ts が後から載せるので、リテラルだけでは
- * SqlNamespace を満たさない。段階3-4c で Designer 側が消え、残りは §4 で DI 化される。
+ * designer は js/wwwsqldesigner.ts が後から載せるので、リテラルだけでは
+ * SqlNamespace を満たさない。撤去は HANDOVER §4 の DI 化と同時。
  */
 export const SQL = {} as SqlNamespace;
 
+/*
+ * grabado: 段階3-4c で window 登録を撤去した（OZ / CONFIG / _ / LOCALE / SQL）。
+ * 出荷コードが持つ window 面は、ここに残る DATATYPES と src/main.ts の d の 2 つだけ。
+ *
+ * DATATYPES だけ残るのは、読み 12 箇所（js/wwwsqldesigner.ts / io.ts / row.ts）と
+ * 書き 2 箇所に加えて、**両ハーネスが差し替える**ため（tests/node/harness.ts の
+ * useDatatypes と tests/browser/harness.ts の同名関数。dbResponse() と同じ操作を
+ * 模していて、実経路との同型性がテストの妥当性を支えている）。page.evaluate は
+ * バンドル外なのでモジュールの setter に到達できず、モジュール化するには
+ * 「別のテスト専用グローバルを足す」か「Designer / TypePalette のプロパティにする」の
+ * どちらかが要る。後者は HANDOVER §6.1 の型パレット差し替えと同時にやるのが自然なので、
+ * §4 に繰り越した（LOCALE はテストが触らないので、段階3-4c でモジュール変数にできた）。
+ */
 declare global {
     interface Window {
-        _: typeof _;
         /**
-         * js/globals.ts の初期値は false で、dbResponse() が Element を入れる。
-         * false のままにしてあるのは js/wwwsqldesigner.js の XMLSerializer フォールバックが
+         * 初期値は false で、dbResponse() が Element を入れる。
+         * false のままにしてあるのは js/wwwsqldesigner.ts の XMLSerializer フォールバックが
          * `window.DATATYPES.xml` を評価するため（null にすると TypeError）。
          * 是正は HANDOVER §4 の XML 書き出し撤去でこの分岐ごと消える。
          */
         DATATYPES: Element | false;
-        LOCALE: Record<string, string>;
-        SQL: SqlNamespace;
     }
 }
 
-/* grabado: ESM バンドル後もグローバルであり続けるよう window に載せる（HANDOVER §3 段階1） */
-window._ = _;
 window.DATATYPES = false;
-window.LOCALE = {};
-/*
- * grabado: 段階3-1〜3-2 はここに as unknown as typeof window.SQL を置いていた。
- * まだ .js のファイルがトップレベルで SQL.X = X と生やすと、TS が allowJs のもとで
- * その代入からグローバル型を合成し、window.SQL の型が「SqlNamespace ∩ 合成型」に
- * なっていたため。段階3-3b で js/ から .js が尽きて合成が止まったので、素の代入に戻した。
- */
-window.SQL = SQL;
 
 window.onbeforeunload = function (e) {
     return ""; /* some browsers will show this text, some won't. */

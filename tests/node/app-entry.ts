@@ -21,7 +21,7 @@ import { Designer } from "../../js/wwwsqldesigner.ts";
 export interface GrabadoTestApi {
     /** Request を fs 読みに差し替えるために要る（jsdom で XHR を飛ばさない） */
     OZ: typeof OZ;
-    /** 生成はハーネスが順序を握る。戻り値をそのまま使うので SQL.designer は読まない */
+    /** 生成はハーネスが順序を握り、戻り値をそのまま使う（旧 SQL.designer は段階4-0a で消えた） */
     Designer: typeof Designer;
 }
 

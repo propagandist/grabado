@@ -1134,6 +1134,102 @@ grep により自明になっていた。
 「`escape()` 3 箇所（全て `toXML` 経路なので XML 書き出し撤去で消える可能性が高い）」
 「`publish` / `subscribe` 4 箇所」。
 
+### 2026-08-14 HANDOVER §4「IO」段階4-0a — `SQL.designer` を DI 化した
+
+§4（IO: JSON 統一＋git 前提の決定論出力）の 1 本目。**`js/` と `tests/` のコメントしか触らない**
+最小の PR で、主張は「出力バイト列が 1 バイトも変わっていない」の 1 点だけ。
+
+**§4 を 9 本の PR に割った。** §3 と同じ「1 段階 = 1 PR・挙動不変を機械的に証明できる粒度」で、
+安全網（DDL golden 63 本）が効いたまま IO を作り替えられる順に並べてある。
+
+| # | 目的 | golden への影響 |
+|---|---|---|
+| **4-0a**（本 PR） | `SQL.designer` の DI 化 | 全て不変 |
+| 4-0b | 型パレット層の抽出（`window.DATATYPES` 撤去 → `js/io/palette.ts`） | 全て不変 |
+| 4-1 | モデル層 ＋ serializer の分離（XML のまま・バイト不変） | 全て不変 |
+| 4-2 | JSON serializer 新設（UI には配線しない） | `tests/golden/json/` 7 本を新設 |
+| 4-3 | UI 全経路を JSON に切替（XML は読込専用に・Dropbox 撤去） | 全て不変 |
+| 4-4 | 決定論化 ＋ known-issues #1 / #7 / #8 | `golden/xml/` を `golden/ddl-input/` に改名し再取得。**DDL 不変** |
+| 4-5 | `<default>NULL</default>` 撤去（#2） | **DDL golden 16 本のみ変化** |
+| 4-6 | 外部変更検知（save/load 境界の楽観的並行制御） | 全て不変 |
+| 4-7 | 仕上げ（`docs/FORMAT.md` 新設・known-issues 棚卸し） | 不変 |
+
+**この分割にあたって決めたこと**（CLAUDE.md「迷ったら確認し、決定を記録する」に該当）。
+
+- **新設ファイルは `js/io/` 配下に置く。** HANDOVER §4 の `io/serializer.ts` は物理パスの指定ではなく
+  モジュールパスの表記と解釈する（同じ文中の `db/*.custom.xml` も実在しない）。`src/io/` に置くと
+  [`js/io.ts`](js/io.ts) → `src/` の逆向き辺が生え、それを避けるには IO ダイアログごと `src/` へ移す
+  作業が §4 に乗ってしまう。§2 の `frontend/` 集約でどのみち丸ごと動かす。
+- **Dropbox 連携は 4-3 で撤去する**（段階3-3b からの未決を解消）。[`js/io.ts`](js/io.ts) が 150 行以上
+  減り、[`index.html`](index.html) の CDN 依存（テストが常に遮断している外部依存）も消える。
+  「Docker で各自ローカル稼働・正本は git 管理ファイル・共有は PR」という §2 の形と役割が重複する。
+- **known-issue #2 は §4 で直し、DDL golden の更新も §4 で行う**。JSON 側だけ直して DDL 入力を
+  bug-compatible に残す案は「半移行を放置しない」（CLAUDE.md 制約1）に触れる。他に何も変えない
+  PR 4-5 に分ければ、差分の全行が ` DEFAULT NULL`（cubrid / mysql / sqlite）と vfp9 の ` UL ` ゴミの
+  削除であることが機械的な完了判定になる。
+- **DDL 生成用の XML 書き出しは §6.3 まで `js/io/ddl-xml.ts` に内部専用として隔離する。**
+  ユーザーに見える保存経路からは 4-3 で XML が消えるが、`output.xsl` を TS 実装に置換するのは §6.3 で、
+  それまで XSLT の入力に XML が要る。§6.3 を §4 に前倒しすると「挙動不変が要件の §4」と
+  「house 規約への変更が目的の §6.3」が混ざり、何が壊れたか切り分けられなくなる。
+
+**§4 全体の前提として実測したこと。`db/*/output.xsl` 9 本は `<datatypes>` を一切参照しない。**
+`grep -rn "datatypes" db/*/output.xsl` が 0 件で、`xsl:template match=` は `/sql`（9 本すべて）/
+`table` / `row` / `datatype`（`<row>` 直下の要素であって `<datatypes>` ではない）/ `relation` /
+`comment` のみ。つまり DDL 生成が要求する入力は `<sql><table>…</table></sql>` だけで、
+[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の `toXML()` が埋め込むパレット全文と
+`<!-- Active URL -->` は DDL に影響しない。4-4 で「決定論な DDL 入力 XML」に作り替えても
+DDL golden 63 本が動かないはず、という予測の根拠。**4-4 の完了判定（`git diff tests/golden/ddl/` が空）が
+そのままこの実測の検算になる。**
+
+**本 PR の中身は 7 行の置換と名前空間の削除。**
+
+| 箇所 | 旧 | 新 | 同値である理由 |
+|---|---|---|---|
+| [`js/row.ts:169`](js/row.ts#L169) | `var des = SQL.designer;` | `this.owner.owner` | コンストラクタは `this.owner` 代入の**後**に `update(data)` を呼ぶ |
+| [`js/relation.ts:55`](js/relation.ts#L55) | `SQL.designer.getOption("style")` | `this.owner.…` | 直前の 4 行が同じ `this.owner` を前提に組み立てている |
+| [`js/table.ts:311`](js/table.ts#L311) | `SQL.designer.getOption("snap")` | `this.owner.…` | — |
+| [`js/table.ts:461`](js/table.ts#L461) | `SQL.designer.removeSelection()` | `this.owner.…` | `move` / `up` は `down()` が `this.move.bind(this)` で `document` に張る |
+| [`js/table.ts:484`](js/table.ts#L484) | `var d = SQL.designer;` | `var d = this.owner;` | 同じメソッドの末尾が既に `this.owner.sync()` を呼んでいる |
+| [`js/rowmanager.ts:124`](js/rowmanager.ts#L124) | `SQL.designer.getFKTypeFor(…)` | `this.owner.…` | 6 行上（`:118`）が同じ `this.owner` を読んでいる |
+| [`js/wwwsqldesigner.ts:76`](js/wwwsqldesigner.ts#L76) | `SQL.designer = this;` | 削除 | 読み手が 0 になった |
+
+読み手はすべて Designer に**所有される側**（Row / Table / Relation / RowManager）で、`owner` 鎖の終端は
+唯一の Designer と同一実体。Designer のコンストラクタ実行中に Table / Row が生成される経路でも、
+旧 `SQL.designer` は先頭で `this` を入れていたので参照先は変わらない（どちらも初期化途中の同じ `this`）。
+併せて [`js/globals.ts`](js/globals.ts) から `interface SqlNamespace` と `export const SQL` を削除し、
+5 ファイルの `import { SQL, … }` を整理した。`export type SqlDesigner`（13 本が参照）は残す
+— `Designer` への一本化は描画エンジン側の面が固まる 4-1 で判断する。
+
+**検証**。`git diff tests/golden/` は空（untracked も無し）。`npm test` 61 passed / 21 skipped、
+`npm run test:browser` 80 passed、`npm run test:dist` 3 passed、`npm run known-issues` 9 passed、
+`npm run typecheck` 0 error（**すべて件数不変**）。完了判定は
+`grep -rn "SQL\." js/ src/ tests/ index.html` が**実コード 0 件**（一致するのは経緯を書いたコメントだけ）と、
+`grep -rn "SqlNamespace" js/ src/ tests/` が同じく 0 件。
+
+**バンドル差分は 14 行・8 ハンクで、全行が上表の 7 箇所と `var SQL = {}` の消滅に対応する**
+（`vite build --minify false` の出力比較）。ソース由来でない差分は 1 件もない。なお `up()` の
+`var d = …` は変更前後ともに rolldown がインライン化していて、`if (this.owner.getOption("hide"))` に
+畳まれている（旧側も `if (SQL.designer.getOption("hide"))` だった）。
+
+**対話パスの一巡**は歴代と同じ 18 項目を `npm run dev`（4173）と `npm run preview`（4174）の両方で流し、
+**18/18・pageerror 0 件**。今回は手動ではなく Playwright スクリプトに書き起こして流した（使い捨てで、
+リポジトリには残していない）。置換した参照が実際に走る経路 —— テーブルドラッグ（`snap` / `move` / `up`）、
+リレーション作成（`Relation` の style 読み）、FK 自動生成（`RowManager` の型解決）、row の追加と編集
+（`Row.update`）—— がすべて含まれている。この過程で判明した操作手順を記録しておく:
+`#addtable` は「追加モード」に入るだけで実体は `#area` のクリックで生え、直後に編集ダイアログが開く。
+`#clientload` は `fromXML` の末尾で `window.close()` するので、続けて `#clientsql` を押すには開き直しが要る。
+
+**次段階（4-0b）への入力**。`window.DATATYPES` は読み 11（[`js/row.ts`](js/row.ts) ×4 /
+[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) ×5 / [`js/io.ts`](js/io.ts) ×2）・書き 2
+（`dbResponse()` と `Designer.fromXML`）・初期化 1。両ハーネスが `window.DATATYPES` を直接差し替えて
+いるので（[`tests/browser/harness.ts:60`](tests/browser/harness.ts#L60) /
+[`tests/node/harness.ts:188`](tests/node/harness.ts#L188)）、`page.evaluate` から届く差し替え口
+（`Designer` のメソッド）を同時に用意する必要がある。
+
+**4-2（JSON スキーマ設計）への申し送り**。段階3-2 の記録にある「同名のテーブルが 2 つあると `fromXML` で
+リレーションが復元されない」（`findNamedTable` の名前解決が両端を同じテーブルに解決する）は、
+参照を名前ではなく id で持てば構造的に解消する。`formatVersion: 1` のスキーマを決める時点で判断する。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

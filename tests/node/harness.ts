@@ -170,7 +170,7 @@ export async function createHarness(): Promise<NodeHarness> {
 
     // 段階3-4b まで window.eval("new SQL.Designer();") と書いて結果を window.SQL.designer から
     // 拾っていた。ハンドルを掴んでいるので戻り値をそのまま使える（コンストラクタ内の
-    // SQL.designer への自己登録は残っているが、ハーネスはもう読まない）。
+    // SQL.designer への自己登録も段階4-0a で消え、インスタンスへの経路はこの戻り値だけになった）。
     const designer = new api.Designer();
     if (!designer.map || !designer.io) {
         throw new Error(`Designer の初期化に失敗:\n${alerts.join("\n")}`);

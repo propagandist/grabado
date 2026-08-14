@@ -15,7 +15,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, _, subscribe, type SqlDesigner } from "./globals.ts";
+import { _, subscribe, type SqlDesigner } from "./globals.ts";
 import type { Row } from "./row.ts";
 import type { Table } from "./table.ts";
 
@@ -121,7 +121,8 @@ export class RowManager {
         p = p.replace(/%R/g, r1.getTitle());
 
         var r2 = t2.addRow(p, r1.data);
-        r2.update({ type: SQL.designer.getFKTypeFor(r1.data.type) });
+        /* grabado: 旧 SQL.designer（段階4-0a）。すぐ上の :118 が同じ this.owner を読んでいる */
+        r2.update({ type: this.owner.getFKTypeFor(r1.data.type) });
         r2.update({ ai: false });
         this.owner.addRelation(r1, r2);
     }

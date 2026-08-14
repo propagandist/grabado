@@ -15,7 +15,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, publish, escape, type SqlDesigner } from "./globals.ts";
+import { publish, escape, type SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import { Row, type RowData } from "./row.ts";
 import { Key } from "./key.ts";
@@ -308,7 +308,8 @@ export class Table extends Visual<TableDom> {
     snap(): void {
         /* getOption("snap") の既定は数値 0、cookie 経由なら文字列。
            parseInt(0) は現行も "0" に変換されて 0 になる（挙動不変） */
-        var snap = parseInt(SQL.designer.getOption("snap") as string);
+        /* grabado: 旧 SQL.designer（段階4-0a） */
+        var snap = parseInt(this.owner.getOption("snap") as string);
         if (snap) {
             this.x = Math.round(this.x / snap) * snap;
             this.y = Math.round(this.y / snap) * snap;
@@ -457,7 +458,9 @@ export class Table extends Visual<TableDom> {
     move(e: MouseEvent | TouchEvent): void {
         /* mousemove */
         var t = Table;
-        SQL.designer.removeSelection();
+        /* grabado: 旧 SQL.designer（段階4-0a）。move / up は down() で
+           this.move.bind(this) として document に張られるので this は自テーブル */
+        this.owner.removeSelection();
         if (e.type == "touchmove") {
             if ((e as TouchEvent).touches.length > 1) {
                 return;
@@ -478,7 +481,9 @@ export class Table extends Visual<TableDom> {
 
     up(e: MouseEvent | TouchEvent): void {
         var t = Table;
-        var d = SQL.designer;
+        /* grabado: 旧 SQL.designer（段階4-0a）。同じメソッドの末尾が
+           this.owner.sync() を呼んでいるので、this.owner が有効なのは既存の前提 */
+        var d = this.owner;
         if (d.getOption("hide")) {
             for (var i = 0; i < t.active.length; i++) {
                 t.active[i]!.showRelations();

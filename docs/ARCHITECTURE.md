@@ -25,6 +25,7 @@ js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS
   visual/row/table/relation/key/rubberband/map .ts  ★ 段階3-2 で .ts 化
   toggle/io/tablemanager/rowmanager/keymanager/window/options/wwwsqldesigner .ts
                                     ★ 段階3-3a で class 化 → 3-3b で .ts 化
+  io/palette.ts            ★ §4 段階4-0b で追加。型パレット層（旧 window.DATATYPES）
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
@@ -215,13 +216,15 @@ oz.ts  →  config.ts  →  globals.ts  →  visual.ts  →  row.ts  →  table.
 
 **相互参照はすべて import に置き換わり、定義側の `window` 登録も段階3-4c で撤去した。**
 `OZ` / `CONFIG` / `_` / `LOCALE` / `SQL` は素の ES モジュールになっている。**出荷コードが持つ
-`window` 面は 2 つだけ**。
+`window` 面は段階4-0b で 1 つになった**。
 
 | 残る面 | 置き場所 | なぜ残るか |
 |---|---|---|
-| `window.DATATYPES` | [`../js/globals.ts`](../js/globals.ts) | 読み 12・書き 2 に加えて**両ハーネスが差し替える**（`page.evaluate` はバンドル外なのでモジュールの setter に届かない）。Designer / TypePalette のプロパティにするのは HANDOVER §6.1 の型パレット差し替えと同時が自然なので §4 へ繰り越し |
-| `window.d` | [`../src/main.ts`](../src/main.ts) | upstream 由来のデバッグハンドル。段階3-4b から page 側テストの入口も兼ねる（同上の理由で window ハンドルは必要） |
+| `window.d` | [`../src/main.ts`](../src/main.ts) | upstream 由来のデバッグハンドル。段階3-4b から page 側テストの入口も兼ねる（`page.evaluate` はバンドル外なので window ハンドルが要る） |
 
+`window.DATATYPES` は**段階4-0b で撤去**し、[`../js/io/palette.ts`](../js/io/palette.ts) の
+`TypePalette` を `Designer.palette` として持つ形にした（読み手は owner 鎖で到達。差し替え口は
+node が `designer.palette`、page が `window.d.palette`）。
 `LOCALE` は「テストが触らない」点だけが `DATATYPES` と違い、段階3-4c でモジュール変数にできた。
 Node ハーネスがバンドルの内側に手を届かせる経路は
 [`../tests/node/app-entry.ts`](../tests/node/app-entry.ts) の `window.__grabado`（テスト所有）。
@@ -331,10 +334,11 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 一貫して有効で、`js/` `src/` `tests/` のすべてが `.ts`、`npm run typecheck` は 0 error。
 
 段階3-4 のスコープは「**外部から触れる面（`window`）の撤去**」まで。**内部の可変シングルトン
-`SQL.designer`（読み 6 / 書き 1）と `window.DATATYPES` は §4 に繰り越す** — 前者は参照経路の
+`SQL.designer`（読み 6 / 書き 1）と `window.DATATYPES` は §4 に繰り越した** — 前者は参照経路の
 付け替えではなく「Designer は生涯 1 個」というプログラム不変条件への依存、後者は読み書き 14 箇所の
 実行コード変更＋テストが `page.evaluate` 越しに差し替える経路の再設計が要るため。判断の根拠は
-[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。**どちらも §4 の先頭で解消済み**
+（`SQL.designer` は段階4-0a で owner 鎖に、`window.DATATYPES` は段階4-0b で `Designer.palette` に）。
 
 段階3-3b で **`types/globals.d.ts` は役目を終えて削除**した（最後まで残っていた `window.d` の宣言は
 [`../src/main.ts`](../src/main.ts) へ移した）。[`../tsconfig.json`](../tsconfig.json) の `checkJs` も
@@ -354,8 +358,9 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 1. **`.ts` 化 ＝ モジュール化。** 非モジュールのまま `.ts` にすると `class Window` / `Options` / `Key` /
    `Table` がグローバル型空間に出て `lib.dom` と衝突する。移行中は未 `.ts` の参照側のために
    `window.X = X` と `declare global` を残していたが、**段階3-4c で撤去済み**（残る 2 面は §5.1）。
-2. **読み込み順の先頭から。** 移行用の ambient 宣言ファイルは作らない。例外は実行時インスタンス
-   （`SQL.designer`）で、import にすると循環するため `SQL` 名前空間オブジェクト経由のまま。
+2. **読み込み順の先頭から。** 移行用の ambient 宣言ファイルは作らない。例外だった実行時インスタンス
+   （`SQL.designer`。import にすると循環するため名前空間オブジェクト経由にしていた）は
+   段階4-0a で owner 鎖に置き換わり、`SQL` 名前空間そのものが消えた。
 3. **実行コードは変えない。** 型は注釈・`as`・オーバーロードで通す。`if (!x) return;` のような
    実行時ガードを足さない（挙動が変わる）。`any` で埋めない。
 4. **死にコードの撤去は実測してから。** 「対象実行系（Chromium / jsdom）で一度も評価されない」ことを

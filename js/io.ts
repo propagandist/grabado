@@ -239,7 +239,7 @@ export class IO {
         this.build();
         this.dom.ta.value = "";
         this.dom.clientsql.value =
-            _("clientsql") + " (" + (window.DATATYPES as Element).getAttribute("db") + ")";
+            _("clientsql") + " (" + this.owner.palette.db() + ")";
         this.owner.window.open(_("saveload"), this.dom.container);
     }
 
@@ -640,7 +640,7 @@ export class IO {
 
     clientsql(): void {
         var bp = this.owner.getOption("staticpath");
-        var path = bp + "db/" + (window.DATATYPES as Element).getAttribute("db") + "/output.xsl";
+        var path = bp + "db/" + this.owner.palette.db() + "/output.xsl";
         var h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
         OZ.Request(path, this.finish.bind(this), { xml: true, headers: h });

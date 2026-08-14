@@ -3,7 +3,8 @@
  *
  * 段階3-4c で window 登録（_ / LOCALE / SQL）を撤去し、素の ES モジュールになった。
  * 段階4-0a では SQL 名前空間そのものが消え、値 export は下記 3 つだけになった。
- * 残る window 面は DATATYPES 1 つだけで、理由はファイル末尾の declare global に書いてある。
+ * 段階4-0b で DATATYPES も js/io/palette.ts へ移り、本ファイルの window 面は尽きた
+ * （経緯はファイル末尾のコメント）。
  *
  * 中身は 3 つ: ロケール辞書と getText（LOCALE / _）、pub/sub（publish / subscribe）、
  * XML エスケープ（escape）。いずれも HANDOVER §4 で行き先が決まっている
@@ -122,31 +123,18 @@ export function escape(str: string): string {
 }
 
 /*
- * grabado: 段階3-4c で window 登録を撤去した（OZ / CONFIG / _ / LOCALE / SQL）。
- * 出荷コードが持つ window 面は、ここに残る DATATYPES と src/main.ts の d の 2 つだけ。
+ * grabado: 段階3-4c で window 登録を撤去し（OZ / CONFIG / _ / LOCALE / SQL）、
+ * 段階4-0b で最後に残っていた DATATYPES も消えた。出荷コードが持つ window 面は
+ * src/main.ts の d（テストの入口を兼ねるデバッグハンドル）1 つだけ。
  *
- * DATATYPES だけ残るのは、読み 12 箇所（js/wwwsqldesigner.ts / io.ts / row.ts）と
- * 書き 2 箇所に加えて、**両ハーネスが差し替える**ため（tests/node/harness.ts の
- * useDatatypes と tests/browser/harness.ts の同名関数。dbResponse() と同じ操作を
- * 模していて、実経路との同型性がテストの妥当性を支えている）。page.evaluate は
- * バンドル外なのでモジュールの setter に到達できず、モジュール化するには
- * 「別のテスト専用グローバルを足す」か「Designer / TypePalette のプロパティにする」の
- * どちらかが要る。後者は HANDOVER §6.1 の型パレット差し替えと同時にやるのが自然なので、
- * §4 に繰り越した（LOCALE はテストが触らないので、段階3-4c でモジュール変数にできた）。
+ * DATATYPES が §4 まで残っていたのは、読み書き 14 箇所の実行コード変更に加えて
+ * **両ハーネスが差し替える**ためだった（tests/node/harness.ts の useDatatypes と
+ * tests/browser/harness.ts の同名関数。dbResponse() と同じ操作を模していて、
+ * 実経路との同型性がテストの妥当性を支えている）。page.evaluate はバンドル外なので
+ * モジュールの setter に到達できない。段階4-0b は「Designer のプロパティにする」で
+ * 解いた（js/io/palette.ts。差し替え口は node が designer.palette、page が
+ * window.d.palette）。下の onbeforeunload はグローバル変数ではなくアプリ挙動なので残す。
  */
-declare global {
-    interface Window {
-        /**
-         * 初期値は false で、dbResponse() が Element を入れる。
-         * false のままにしてあるのは js/wwwsqldesigner.ts の XMLSerializer フォールバックが
-         * `window.DATATYPES.xml` を評価するため（null にすると TypeError）。
-         * 是正は HANDOVER §4 の XML 書き出し撤去でこの分岐ごと消える。
-         */
-        DATATYPES: Element | false;
-    }
-}
-
-window.DATATYPES = false;
 
 window.onbeforeunload = function (e) {
     return ""; /* some browsers will show this text, some won't. */

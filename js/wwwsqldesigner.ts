@@ -37,6 +37,7 @@ import { KeyManager } from "./keymanager.ts";
 import { IO } from "./io.ts";
 import { Options } from "./options.ts";
 import { Window as SqlWindow } from "./window.ts";
+import { TypePalette } from "./io/palette.ts";
 
 /** 基底の VisualDom に svg が増える（vector が真のときだけ生える。§5.4 の形態 (i)） */
 export interface DesignerDom extends VisualDom {
@@ -53,6 +54,11 @@ export class Designer extends Visual<DesignerDom> {
     declare minSize: [number, number];
     declare width: number;
     declare height: number;
+    /**
+     * 型パレット（db/<db>/datatypes.xml の <datatypes>）。段階4-0b で window.DATATYPES から移した。
+     * 所有される側（Row / IO）は owner 鎖でここに到達する。
+     */
+    declare palette: TypePalette;
     /** getTypeIndex() が初回に作るキャッシュ。それまでは false */
     declare typeIndex: Record<string, number> | false;
     /** getFKTypeFor() が初回に作るキャッシュ。それまでは false */
@@ -78,6 +84,13 @@ export class Designer extends Visual<DesignerDom> {
         this.tables = [];
         this.relations = [];
         this.title = document.title;
+        /*
+         * 段階4-0b。requestDB() より前であることが必須で、コンストラクタの先頭寄りに置くのは
+         * それより強い理由から: 旧 window.DATATYPES は評価時点で必ず存在し（globals.ts が
+         * false で初期化していた）、未読込を false で表していた。生成が読み手より後になると
+         * 「未読込」が undefined になり TypeError で割れる。ここなら以降のどの行より先。
+         */
+        this.palette = new TypePalette();
 
         this._init();
         this._build();
@@ -183,7 +196,7 @@ export class Designer extends Visual<DesignerDom> {
 
     dbResponse(xmlDoc: unknown): void {
         if (xmlDoc) {
-            window.DATATYPES = (xmlDoc as Document).documentElement;
+            this.palette.setRoot((xmlDoc as Document).documentElement);
         }
         this.flag--;
         if (!this.flag) {
@@ -442,9 +455,11 @@ export class Designer extends Visual<DesignerDom> {
         /* serialize datatypes */
         if (window.XMLSerializer) {
             var s = new XMLSerializer();
-            xml += s.serializeToString(window.DATATYPES as Element);
-        } else if ((window.DATATYPES as unknown as { xml?: string }).xml) {
-            xml += (window.DATATYPES as unknown as { xml: string }).xml;
+            xml += s.serializeToString(this.palette.element());
+        } else if (
+            (this.palette.element() as unknown as { xml?: string }).xml
+        ) {
+            xml += (this.palette.element() as unknown as { xml: string }).xml;
         } else {
             /*
              * grabado: e は未定義（本物のバグ）。到達不能な分岐（XMLSerializer が無い
@@ -468,7 +483,7 @@ export class Designer extends Visual<DesignerDom> {
         this.clearTables();
         var types = node.getElementsByTagName("datatypes");
         if (types.length) {
-            window.DATATYPES = types[0]!;
+            this.palette.setRoot(types[0]!);
         }
         var tables = node.getElementsByTagName("table");
         for (var i = 0; i < tables.length; i++) {
@@ -545,9 +560,7 @@ export class Designer extends Visual<DesignerDom> {
     getTypeIndex(label: string): number {
         if (!this.typeIndex) {
             this.typeIndex = {};
-            var types = (window.DATATYPES as Element).getElementsByTagName(
-                "type"
-            );
+            var types = this.palette.types();
             for (var i = 0; i < types.length; i++) {
                 var l = types[i]!.getAttribute("label");
                 if (l) {
@@ -561,9 +574,7 @@ export class Designer extends Visual<DesignerDom> {
     getFKTypeFor(typeIndex: number): number {
         if (!this.fkTypeFor) {
             this.fkTypeFor = {};
-            var types = (window.DATATYPES as Element).getElementsByTagName(
-                "type"
-            );
+            var types = this.palette.types();
             for (var i = 0; i < types.length; i++) {
                 this.fkTypeFor[i] = i;
                 var fk = types[i]!.getAttribute("fk");

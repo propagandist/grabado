@@ -408,23 +408,20 @@ export class Row extends Visual<RowDom> {
     }
 
     /*
-     * grabado: 裸の DATATYPES を window.DATATYPES にした（HANDOVER §3 段階3-2）。
-     * モジュール化すると裸の識別子は解決できず（declare global の interface Window は
-     * 裸の識別子を作らない）、js/globals.ts も window にだけ載せて値 export していない。
-     * 同一物への参照で、下の :472 相当は現行コード自身が既に window 越しに書いている。
+     * grabado: 型パレットの参照を window.DATATYPES から this.owner.owner.palette に
+     * 移した（HANDOVER §4 段階4-0b）。owner 鎖は Row -> Table -> Designer で、
+     * 段階4-0a が :169 に適用したものと同じ（終端は唯一の Designer と同一実体）。
      *
      * 戻りを non-null の Element で確定させるのは OZ.$ と同じ論法。呼び出し 4 箇所が
      * ガードなしで getAttribute を呼ぶので、undefined を戻り型に出すと全部が
      * イディオム C と衝突する（添字が範囲外なら現行も同じ場所で落ちる）。
-     * window.DATATYPES が false なのは dbResponse() が Element を入れるまでで、
-     * ここに到達する時点では必ず Element（init2 は locale と datatypes が揃ってから走る）。
+     * パレットが未読込なのは dbResponse() が Element を入れるまでで、
+     * ここに到達する時点では必ず読込済み（init2 は locale と datatypes が揃ってから走る）。
      */
     getDataType(): Element {
         var type = this.data.type;
-        var elm = (window.DATATYPES as Element).getElementsByTagName("type")[
-            type
-        ];
-        return elm!;
+        var elm = this.owner.owner.palette.typeAt(type);
+        return elm;
     }
 
     getColor(): string {
@@ -436,7 +433,7 @@ export class Row extends Visual<RowDom> {
     buildTypeSelect(id: number): HTMLSelectElement {
         /* build selectbox with avail datatypes */
         var s = OZ.DOM.elm("select");
-        var gs = (window.DATATYPES as Element).getElementsByTagName("group");
+        var gs = this.owner.owner.palette.groups();
         for (var i = 0; i < gs.length; i++) {
             var g = gs[i]!;
             var og = OZ.DOM.elm("optgroup");
@@ -553,9 +550,7 @@ export class Row extends Visual<RowDom> {
             if (r![3]) {
                 obj.size = r![3]!;
             }
-            var types = (window.DATATYPES as Element).getElementsByTagName(
-                "type"
-            );
+            var types = this.owner.owner.palette.types();
             for (var i = 0; i < types.length; i++) {
                 var sql = types[i]!.getAttribute("sql");
                 var re = types[i]!.getAttribute("re");
@@ -565,14 +560,12 @@ export class Row extends Visual<RowDom> {
             }
         }
 
-        var elm = (window.DATATYPES as Element).getElementsByTagName("type")[
-            obj.type
-        ];
+        var elm = this.owner.owner.palette.typeAt(obj.type);
         var d = node.getElementsByTagName("default");
         if (d.length && d[0]!.firstChild) {
             var def = d[0]!.firstChild!.nodeValue!;
             obj.def = def;
-            var q = elm!.getAttribute("quote");
+            var q = elm.getAttribute("quote");
             if (q) {
                 /* grabado: 元は var re（HANDOVER §3 段階3-2）。上のループの
                    var re が string | null なので、同名だと TS2403（宣言型の不一致）に

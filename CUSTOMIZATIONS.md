@@ -1230,6 +1230,86 @@ DDL golden 63 本が動かないはず、という予測の根拠。**4-4 の完
 リレーションが復元されない」（`findNamedTable` の名前解決が両端を同じテーブルに解決する）は、
 参照を名前ではなく id で持てば構造的に解消する。`formatVersion: 1` のスキーマを決める時点で判断する。
 
+### 2026-08-14 HANDOVER §4「IO」段階4-0b — 型パレット層を抽出し `window.DATATYPES` を撤去した
+
+§4 の 2 本目。**出荷コードが持つ `window` 面が `d`（テストの入口を兼ねるデバッグハンドル）
+1 つだけになった**。4-0a と同じく主張は「出力バイト列が 1 バイトも変わっていない」の 1 点。
+
+`window.DATATYPES` は `db/<db>/datatypes.xml` の `<datatypes>` 要素を丸ごと保持する可変グローバルで、
+段階3-4c が `window` 面を掃除したときに 2 つだけ残ったうちの 1 つ。据え置いた理由は
+「読み書き 14 箇所の実行コード変更」＋「両ハーネスが `page.evaluate` / `window.eval` から直接
+差し替えるので、素のモジュール変数にすると setter に届かない」の 2 つだった。
+
+**決めたこと 1: 保持形態は Designer のプロパティ（DI）。** 4-0a の `SQL.designer` 撤去と同じ論法で、
+可変シングルトンを 1 つも残さない形にした。モジュール singleton（`export const palette`）案は
+呼び出し側の差分こそ最小だが、`page.evaluate` から届かないので結局 Designer に再公開が要り、
+「モジュール変数 ＋ 公開プロパティ」の二重管理になる。差し替え口は node が `designer.palette`
+（ハーネスがコンストラクタの戻り値を掴んでいる）、page が `window.d.palette`。
+
+**決めたこと 2: スコープは要素アクセサのみの薄い抽出。** [`js/io/palette.ts`](js/io/palette.ts) の
+`TypePalette` は `setRoot` / `isLoaded` / `element` / `db` / `types` / `typeAt` / `groups` の 7 メソッドで、
+**キャッシュを一切持たない**。現行コードは参照のたびに `getElementsByTagName` を呼んでおり、
+唯一のキャッシュは `Designer.typeIndex` / `fkTypeFor`。これを palette に寄せると
+**「datatypes を差し替えても消えない」現行の寿命が変わる**（差し替え後も古い型 index を使い続ける
+のは現行の癖だが、挙動不変が要件の §4 では温存する）。型解決そのものの再設計 —
+`getTypeIndex` / `getFKTypeFor` / `Row.fromXML` の `sql`・`re` 照合 — は §6.1 の型パレット差し替えと
+同時に行う。
+
+**内部値は `Element | false` のまま**にした。`null` にすると
+[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) `toXML()` の `XMLSerializer` フォールバック
+（`DATATYPES.xml` を評価する死に分岐）が `undefined` から **TypeError** に変わる。この分岐は
+§4 の XML 書き出し撤去で消えるので、そのとき `null` 化する。
+
+**生成はコンストラクタの先頭寄り（`this.title = document.title;` の直後）。** `requestDB()` より前で
+あることは必須だが、それより強い理由がある — 旧 `window.DATATYPES` は
+[`js/globals.ts`](js/globals.ts) が `false` で初期化していたので**評価時点で必ず存在**し、未読込を
+`false` で表していた。生成が読み手より後になると「未読込」が `undefined` になり TypeError で割れる。
+
+**読み手の付け替えは owner 鎖**（4-0a と同じ）。[`js/row.ts`](js/row.ts) 4 箇所が
+`this.owner.owner.palette`（Row → Table → Designer）、[`js/io.ts`](js/io.ts) 2 箇所が
+`this.owner.palette`、[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) は `this.palette`（読み 3・書き 2）。
+併せて `src/app.ts` の冒頭コメント（段階3-1 当時の「残り 15 本はまだ `.js`」）を現状に更新した。
+
+**検証**。`git diff tests/golden/` は空（63 ＋ 7 本すべて無差分。untracked も無し＝
+`npm run golden:update` をこの PR で一度も打っていない）。`npm test` 61 passed / 21 skipped、
+`npm run test:browser` 80 passed、`npm run test:dist` 3 passed、`npm run known-issues` 9 passed、
+`npm run typecheck` 0 error（**すべて件数不変**）。完了判定は
+`grep -rn "DATATYPES" js/ src/ tests/ index.html` が**実コード 0 件**（一致するのは経緯を書いた
+コメントだけ）。
+
+**バンドル差分は 13 ハンク・50 行**（`vite build --minify false` の出力をコメント除去して比較）で、
+内訳は次の 4 種類だけ。ソース由来でない差分は 1 件もない。
+
+| 差分 | 由来 |
+|---|---|
+| `var TypePalette = class {…}` の追加（24 行） | 新設クラス |
+| `window.DATATYPES = false;` の消滅 | `js/globals.ts` |
+| 参照の付け替え ×12 行（row 4 / io 2 / designer 6） | owner 鎖・`this` 経由へ |
+| `this.palette = new TypePalette();` の追加 1 行 | Designer コンストラクタ |
+
+**インスタンスフィールドの emit は他に 1 つも増えていない**（規約5 ＝ `declare` 必須の検算。
+`Designer` の constructor に増えたのは上記 1 行だけ）。
+
+**対話パスの一巡**は 19 項目を `npm run dev`（4173）と `npm run preview`（4174）の両方で流し、
+**19/19・pageerror 0 件**（Playwright の使い捨てスクリプト。リポジトリには残していない）。
+付け替えた参照が実際に走る経路 —— 型セレクトの生成（`groups()`）、型変更後の色（`typeAt()`）、
+FK 自動生成（`getFKTypeFor` → `types()`）、`#clientsql` のラベルと XSLT パス（`db()` ×2）、
+`toXML()`（`element()`）、`#clientload`（`fromXML` → `setRoot()`）—— をすべて含む。
+この過程で確認した現行仕様を記録しておく（いずれも本 PR の回帰ではなく、`develop` でも同じ）:
+
+- **新規テーブルは既定行 `id`（ai）＋ `PRIMARY` key つきで生える**（`TableManager.click`）。
+- **shift + mousedown で複数選択されるが、続く click が選択を 1 つに戻す**（`Table.down` だけが
+  `shiftKey` を見る。段階3-3a の記録の精密版）。選択が 2 つある間は `#tablekeys` / `#addrow` /
+  `#edittable` が disabled になる（`processSelection`）。
+- **`?backend=` を読むのは `getOption` ではなく `IO.build()`**（`getOption("backend")` は既定値を
+  持たないので常に null）。`?toolbar=hidden` は `Toggle` が `#toggle` を `off` にして `#bar` を畳む。
+- `Table.toXML()` の属性順は `x` → `y` → `name`。
+
+**次段階（4-1: モデル層 ＋ serializer の分離）への入力**。`js/` に残る「モデルと描画と直列化の
+混線」は `toXML()` / `fromXML()` が Designer / Table / Row / Key に分散していること。
+型パレットが Designer からぶら下がったので、**serializer に「どの Designer のパレットか」を
+渡せる状態**になった（4-1 で `escape()` と併せて `js/io/serializer.ts` へ移す）。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

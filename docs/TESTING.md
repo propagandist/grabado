@@ -106,8 +106,10 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 **page 文脈（`test:browser` / `test:dist` / `known-issues`）は別経路**。`page.evaluate` は
 バンドルの外で走るので `import` に置き換えられず、`window` 越しのハンドルが要る。段階3-4b で
 `window.SQL.designer` から **[`../src/main.ts`](../src/main.ts) が置く `window.d`** に寄せた
-（upstream 由来のデバッグハンドルを、そのままテスト API として使う）。`window.DATATYPES` の
-差し替えは HANDOVER §4 まで現行のまま。
+（upstream 由来のデバッグハンドルを、そのままテスト API として使う）。型パレットの差し替えも
+**段階4-0b で `window.DATATYPES` から `window.d.palette.setRoot()` になった**ので、page 側が触る
+出荷コードの面は `d` だけになっている（node 側は `designer.palette`。実体は
+[`../js/io/palette.ts`](../js/io/palette.ts)）。
 
 **この狙いは段階3-1 で実証された**。`js/oz.js` / `config.js` / `globals.js` が `.ts` になり
 `export` を持ったが、[`../tests/node/harness.ts`](../tests/node/harness.ts) の変更は
@@ -172,8 +174,10 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
 ### fixture（`tests/fixtures/`）
 
 すべて手書きの well-formed XML。`toXML()` は非決定的なので **fixture の生成に現行コードを使わない**。
-`<datatypes>` ブロックは持たせず、DB プロファイルはテスト側が `window.DATATYPES` の差し替えで与える
-（`dbResponse()` と同じ操作。[js/wwwsqldesigner.js:108-116](../js/wwwsqldesigner.js#L108-L116)）。
+`<datatypes>` ブロックは持たせず、DB プロファイルはテスト側が型パレットの差し替えで与える
+（`dbResponse()` と同じ操作。[js/wwwsqldesigner.ts の dbResponse](../js/wwwsqldesigner.ts)）。
+差し替え口は段階4-0b から `palette.setRoot()`（page 側は `window.d.palette`、node 側は
+ハーネスが掴んでいる `designer.palette`）。
 
 | fixture | 押さえていること |
 |---|---|

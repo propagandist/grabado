@@ -10,12 +10,13 @@
  * エントリにすることで、読み込み順の定義が 1 か所に集約される（段階3-0 以前はハーネス側に
  * SCRIPT_ORDER として二重に書かれていた）。
  *
- * 先頭 3 本は段階3-1 で .ts になった（.ts 化 = モジュール化。イディオムは js/oz.ts の冒頭）。
- * 残り 15 本はまだ .js で、相互参照も現行どおりグローバル（OZ / CONFIG / SQL / DATATYPES /
- * LOCALE / _）のまま。.ts 側はその参照が生き続けるよう定義を window にも載せている。
- * 参照側の import/export 化は各ファイルの .ts 化と同じ PR で行い、window 登録は
- * 全部が .ts になる段階3-4 でまとめて撤去する。
+ * 18 本は段階3-1〜3-3b で .ts になり（.ts 化 = モジュール化。イディオムは js/oz.ts の冒頭）、
+ * 相互参照は段階3-4 で import 化されて window 登録も尽きた。したがってこの副作用 import は
+ * 値の辺としては冗長だが、読み込み順の文書として、また Node ハーネスのエントリとして残す
+ * （tests/node/app-entry.ts が本ファイルを import する）。
  */
+/* 段階4-0b で新設した型パレット層。js/ のどこにも依存しないので先頭に置く */
+import "../js/io/palette.ts";
 import "../js/oz.ts";
 import "../js/config.ts";
 import "../js/globals.ts";

@@ -309,5 +309,3 @@ export class Relation extends Visual<RelationDom> {
         }
     }
 }
-
-SQL.Relation = Relation;

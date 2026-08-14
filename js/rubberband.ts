@@ -8,7 +8,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, type SqlDesigner } from "./globals.ts";
+import type { SqlDesigner } from "./globals.ts";
 import { Visual } from "./visual.ts";
 
 export class Rubberband extends Visual {
@@ -87,5 +87,3 @@ export class Rubberband extends Visual {
         this.dom.container.style.height = this.height + "px";
     }
 }
-
-SQL.Rubberband = Rubberband;

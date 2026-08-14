@@ -4,7 +4,7 @@
  * grabado: ES クラス化（HANDOVER §3 段階3-3a）。段階3-3b で .ts 化した。
  *
  * this.save の bind 再代入は「プロトタイプのメソッドをインスタンスの own property で
- * 上書きする」現行の形を温存している（SQL.Window.open にコールバックとして渡すため）。
+ * 上書きする」現行の形を温存している（Window.open にコールバックとして渡すため）。
  * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  *
  * dom は container / btn をコンストラクタで、残り 9 個を build() で埋める（キーは固定なので
@@ -13,7 +13,7 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import { SQL, _, type SqlDesigner } from "./globals.ts";
+import { _, type SqlDesigner } from "./globals.ts";
 
 /** 不変条件は「build() を抜けた時点で全キーが埋まっている」 */
 export interface OptionsDom {
@@ -164,5 +164,3 @@ export class Options {
         ) as unknown as boolean;
     }
 }
-
-SQL.Options = Options;

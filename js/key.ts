@@ -8,7 +8,6 @@
  * 宣言する理由は js/visual.ts の冒頭。
  */
 
-import { SQL } from "./globals.ts";
 import { Visual } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Row } from "./row.ts";
@@ -110,5 +109,3 @@ export class Key extends Visual {
         }
     }
 }
-
-SQL.Key = Key;

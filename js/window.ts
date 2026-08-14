@@ -12,7 +12,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, _, type SqlDesigner } from "./globals.ts";
+import { _, type SqlDesigner } from "./globals.ts";
 
 /** ダイアログの DOM。すべてコンストラクタで埋まる（後付けキーは無い） */
 export interface WindowDom {
@@ -144,5 +144,3 @@ export class Window {
         this.dom.background.style.top = scroll[1] + "px";
     }
 }
-
-SQL.Window = Window;

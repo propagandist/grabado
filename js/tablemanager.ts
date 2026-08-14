@@ -4,7 +4,7 @@
  * grabado: ES クラス化（HANDOVER §3 段階3-3a）。段階3-3b で .ts 化した。
  *
  * this.save の bind 再代入は「プロトタイプのメソッドをインスタンスの own property で
- * 上書きする」現行の形を温存している（SQL.Window.open にコールバックとして渡すため）。
+ * 上書きする」現行の形を温存している（Window.open にコールバックとして渡すため）。
  * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  *
  * dom バッグは「文字列キーの動的代入」形態（docs/ARCHITECTURE.md §5.4 の (ii)）。
@@ -12,7 +12,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, _, type SqlDesigner } from "./globals.ts";
+import { _, type SqlDesigner } from "./globals.ts";
 import type { Table } from "./table.ts";
 
 /** 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」（ボタン 7 個はループが埋める） */
@@ -303,5 +303,3 @@ export class TableManager {
         }
     }
 }
-
-SQL.TableManager = TableManager;

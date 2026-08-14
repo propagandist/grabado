@@ -6,9 +6,8 @@
  * sync を bind してインスタンスプロパティで隠す形は class でも同じく動く）。
  *
  * クラス名を Map ではなく Minimap にしてあるのは ES 標準の Map と衝突するため
- * （tsc --checkJs で TS2300 Duplicate identifier が出る）。公開名 SQL.Map は
- * 現行のまま。段階3-2 でモジュール化しても export class Map が標準 Map を
- * 隠さないよう、この名前を保つ。
+ * （tsc --checkJs で TS2300 Duplicate identifier が出る）。段階3-4a で SQL 名前空間が
+ * 消えて公開名 SQL.Map も無くなったので、識別子は Minimap の 1 本になった。
  *
  * dom は container（OZ.$ 由来の HTMLElement）と port（elm("div") 由来の
  * HTMLDivElement）で出所が違う。インスタンスプロパティを declare で宣言する
@@ -16,7 +15,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { SQL, type SqlDesigner } from "./globals.ts";
+import type { SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom } from "./visual.ts";
 
 export interface MinimapDom extends VisualDom {
@@ -177,5 +176,3 @@ export class Minimap extends Visual<MinimapDom> {
         this.dom.port.style.top = this.t + "px";
     }
 }
-
-SQL.Map = Minimap;

@@ -15,26 +15,28 @@
  * やめ、この Designer への型エイリアスになった（参照している 13 本は無改修）。
  * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  *
- * 値 import は extends のための Visual だけ。他のクラス（Table / Map / IO …）は
- * SQL 名前空間経由のまま参照する — 値 import にすると評価順が読み込み順（src/app.ts）と
- * 逆転するため（段階3-2 の判断）。
+ * 生成する 11 クラスは段階3-4a で値 import になった（それまでは new SQL.X 経由で、
+ * 型だけ import type していた）。本ファイルは読み込み順（src/app.ts）の最後尾なので、
+ * 値の辺を張っても参照先はすべて評価済みで順序は動かない。Row は生成しないので
+ * import type のまま。クラス名 Window は lib.dom の型と同名なので SqlWindow に改名して受ける。
  */
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
 import { SQL, _ } from "./globals.ts";
 import { Visual, type VisualDom } from "./visual.ts";
-import type { Table } from "./table.ts";
+import { Table } from "./table.ts";
 import type { Row } from "./row.ts";
-import type { Relation } from "./relation.ts";
-import type { Minimap } from "./map.ts";
-import type { Rubberband } from "./rubberband.ts";
-import type { TableManager } from "./tablemanager.ts";
-import type { RowManager } from "./rowmanager.ts";
-import type { KeyManager } from "./keymanager.ts";
-import type { IO } from "./io.ts";
-import type { Options } from "./options.ts";
-import type { Window as SqlWindow } from "./window.ts";
+import { Relation } from "./relation.ts";
+import { Minimap } from "./map.ts";
+import { Rubberband } from "./rubberband.ts";
+import { Toggle } from "./toggle.ts";
+import { TableManager } from "./tablemanager.ts";
+import { RowManager } from "./rowmanager.ts";
+import { KeyManager } from "./keymanager.ts";
+import { IO } from "./io.ts";
+import { Options } from "./options.ts";
+import { Window as SqlWindow } from "./window.ts";
 
 /** 基底の VisualDom に svg が増える（vector が真のときだけ生える。§5.4 の形態 (i)） */
 export interface DesignerDom extends VisualDom {
@@ -80,7 +82,7 @@ export class Designer extends Visual<DesignerDom> {
 
         this._init();
         this._build();
-        new SQL.Toggle(OZ.$("toggle"));
+        new Toggle(OZ.$("toggle"));
 
         this.dom.container = OZ.$("area");
         this.minSize = [
@@ -209,14 +211,14 @@ export class Designer extends Visual<DesignerDom> {
 
     init2(): void {
         /* secondary init, after locale & datatypes were retrieved */
-        this.map = new SQL.Map(this);
-        this.rubberband = new SQL.Rubberband(this);
-        this.tableManager = new SQL.TableManager(this);
-        this.rowManager = new SQL.RowManager(this);
-        this.keyManager = new SQL.KeyManager(this);
-        this.io = new SQL.IO(this);
-        this.options = new SQL.Options(this);
-        this.window = new SQL.Window(this);
+        this.map = new Minimap(this);
+        this.rubberband = new Rubberband(this);
+        this.tableManager = new TableManager(this);
+        this.rowManager = new RowManager(this);
+        this.keyManager = new KeyManager(this);
+        this.io = new IO(this);
+        this.options = new Options(this);
+        this.window = new SqlWindow(this);
 
         this.sync();
 
@@ -248,7 +250,7 @@ export class Designer extends Visual<DesignerDom> {
 
     addTable(name: string, x: number, y: number): Table {
         var max = this.getMaxZ();
-        var t = new SQL.Table(this, name, x, y, max + 1);
+        var t = new Table(this, name, x, y, max + 1);
         this.tables.push(t);
         this.dom.container.appendChild(t.dom.container);
         return t;
@@ -266,7 +268,7 @@ export class Designer extends Visual<DesignerDom> {
     }
 
     addRelation(row1: Row, row2: Row): Relation {
-        var r = new SQL.Relation(this, row1, row2);
+        var r = new Relation(this, row1, row2);
         this.relations.push(r);
         return r;
     }

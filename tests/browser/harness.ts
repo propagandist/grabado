@@ -8,9 +8,13 @@ import type { Page } from "@playwright/test";
  * 「抽出後のコード」を特性化することになり安全網の意味が消える。
  */
 
-/* window.SQL / window.DATATYPES の型は types/globals.d.ts に集約した（HANDOVER §3 段階2） */
+/*
+ * page.evaluate はバンドルの外で走るので、アプリに触るには window 越しのハンドルが要る。
+ * 段階3-4b で window.SQL.designer から window.d に寄せた（src/main.ts が置く唯一の
+ * 公開ハンドル。window.SQL は段階3-4c で消える）。DATATYPES の差し替えは §4 まで現行のまま。
+ */
 
-/** index.html を開き、SQL.designer の init2() 完了まで待つ */
+/** index.html を開き、Designer の init2() 完了まで待つ */
 export async function openDesigner(page: Page): Promise<void> {
     // index.html:22 は Dropbox を CDN から読む。HANDOVER §2 の「Docker でローカル完結」と
     // 噛み合わない既知の外部依存（存廃は未決）。テストは常に遮断してオフラインで走らせる。
@@ -29,7 +33,7 @@ export async function openDesigner(page: Page): Promise<void> {
     // init2() は locale/*.xml と db/*/datatypes.xml の 2 本が揃ってから走る
     // （js/wwwsqldesigner.js:71-116, 135-157）。map と io が生えたら初期化完了。
     await page.waitForFunction(
-        () => !!window.SQL?.designer?.map && !!window.SQL?.designer?.io && !!window.DATATYPES,
+        () => !!window.d?.map && !!window.d?.io && !!window.DATATYPES,
         undefined,
         { timeout: 15_000 },
     );
@@ -68,7 +72,7 @@ export async function loadFixture(page: Page, xml: string): Promise<void> {
         const originalAlert = window.alert;
         window.alert = (msg?: unknown) => void seen.push(String(msg));
         try {
-            window.SQL.designer.io.fromXMLText(fixtureXml);
+            window.d!.io.fromXMLText(fixtureXml);
         } finally {
             window.alert = originalAlert;
         }
@@ -82,7 +86,7 @@ export async function loadFixture(page: Page, xml: string): Promise<void> {
 
 /** 現行 SQL.designer.toXML() の生出力 */
 export function toXml(page: Page): Promise<string> {
-    return page.evaluate(() => window.SQL.designer.toXML());
+    return page.evaluate(() => window.d!.toXML());
 }
 
 /**

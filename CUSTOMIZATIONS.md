@@ -1031,6 +1031,49 @@ Playwright の一時 spec に起こして機械実行した（リポジトリに
 ことを確認している。一巡で出る console error 2 件（Dropbox CDN の遮断、F2 quicksave の 404）は
 ネットワーク由来で JS 例外ではない。
 
+### 2026-08-14 HANDOVER §3「フロント TS 化」段階3-4b — テストが触る面を `window.d` と自前エントリに寄せた
+
+段階3-4 の 2 本目。**`tests/` しか触らない**（`js/` `src/` は 1 行も変えていない）。
+狙いは「`window.OZ` / `window.SQL` がまだ生きている状態で新経路を検証する」こと — 3-4c で
+それらを消す前に、最もリスクの高い付け替えを安全側で通す。
+
+**`page.evaluate` と `window.eval` はバンドルの外で走るので、window ハンドルは残さざるを得ない。**
+段階3-4 の到達点は「`window` 面をゼロにする」ではなく「**出荷コードが持つ面をゼロにし、
+テストのための面はテストが持つ**」になる。2 つの実行系で置き場所が違う。
+
+| 実行系 | 段階3-4a まで | 3-4b 以降 |
+|---|---|---|
+| Node（`npm test`） | `window.OZ.Request = …` → `window.eval("new SQL.Designer();")` → `window.SQL.designer` | `tests/node/app-entry.ts` が載せる `window.__grabado = { OZ, Designer }` → `api.OZ.Request = …` → `new api.Designer()` の戻り値 |
+| page（`test:browser` / `test:dist` / `known-issues`） | `window.SQL.designer` | [`src/main.ts`](src/main.ts) が置く **`window.d`**（upstream 由来のデバッグハンドルをテスト API に昇格） |
+
+**node 側は「テスト専用エントリ」を 1 本足す形にした。** [`tests/node/app-entry.ts`](tests/node/app-entry.ts) は
+`import "../../src/app.ts"` に続けてハンドルを載せるだけで、**読み込み順の定義は
+[`src/app.ts`](src/app.ts) の 1 か所のまま**。ハーネスの変更は `lib.entry` の 1 行と参照の付け替えだけで、
+**`OZ.Request` を fs 読みに差し替える関数の中身は 1 文字も変えていない**（＝測っているものが変わらない
+ので、golden への影響がゼロだと事前に言い切れる）。`window.eval` の呼び方も不変。
+
+却下した 2 案も記録しておく。**(a) IIFE の完了値を拾う**（`window.eval(bundle + ";GrabadoApp;")` で
+exports を受け、`src/app.ts` に `export { OZ, Designer }` を足す）は新規ファイルが要らない代わりに、
+rolldown の IIFE 出力形（`lib.name` が変数として emit されること）に依存する。**(b) jsdom の
+`XMLHttpRequest` 自体を偽装する**はアプリに一切手を入れずに済み、`OZ.Request` 本体も実測対象に入る
+最も筋のいい案だが、`open`/`send`/`onreadystatechange`/`status`/`responseText`/`responseXML`/
+`getAllResponseHeaders`/`setRequestHeader` の偽装が要り、**ハーネスが測る範囲が広がる**（＝段階3-4 で
+新しい赤を引きうる）。§4 で「フックを 0 にする」ときの本命として申し送る。
+
+**page 側は `window.d` に寄せた。** 新しい名前を発明するより、既に存在するハンドルを公開面として
+文書化するほうが面が増えない（[`src/main.ts`](src/main.ts) のコメントが利用手順として機能している）。
+タイミングは現行が `SQL.designer = this`（コンストラクタ先頭）、新形が `new Designer()` の戻り後だが、
+page 側テストはすべて `waitForFunction` / `goto` 後のポーリングなので観測できない。バンドル内部から
+`SQL.designer` を読む経路（`Table.snap()` などが同期 init 中に読む）は `SQL.designer = this` を
+残しているので不変。
+
+**検証**。`git diff tests/golden/` は空（untracked も無し）。`npm test` 61 passed / 21 skipped
+（件数不変）、`npm run test:browser` 80 passed、`npm run test:dist` 3 passed、
+`npm run known-issues` 9 passed、`npm run typecheck` 0 error。
+**副次判定は「バンドルが 3-4a と 1 バイトも変わらない」こと**で、実際に `vite build --minify false` の
+出力が完全一致した（本 PR が出荷コードを変えていないことの機械的な証明。歴代の「意図したハンクだけに
+収束する」判定の、差分ゼロ版）。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

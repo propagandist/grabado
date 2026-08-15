@@ -18,7 +18,7 @@ npm run test:browser  # 実ブラウザ側（Chromium）。golden の権威
 npm run test:all      # 両方
 npm run known-issues  # 既知の不具合の再現確認（上記いずれにも含まれない）
 npm run test:dist     # build 成果物（dist/）のスモーク。上記いずれにも含まれない
-npm run typecheck     # src/ tests/ types/ の型検査（既存 js/ は checkJs: false で対象外）
+npm run typecheck     # js/ src/ tests/ と *.config.ts（strict / noUncheckedIndexedAccess）
 npm run migrate:design -- <ファイル>  # 設計 JSON を formatVersion 1 -> 2 に移行（§4 段階4-2b）
 ```
 
@@ -115,7 +115,7 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 **この狙いは段階3-1 で実証された**。`js/oz.js` / `config.js` / `globals.js` が `.ts` になり
 `export` を持ったが、[`../tests/node/harness.ts`](../tests/node/harness.ts) の変更は
 `OzRequestCallback` / `OzRequestOptions` を `import type` で受ける 1 行だけで済んだ
-（型の置き場所が [`../types/globals.d.ts`](../types/globals.d.ts) から `js/oz.ts` へ移ったため）。
+（型の置き場所が `types/globals.d.ts`（段階3-3b で削除済み）から `js/oz.ts` へ移ったため）。
 バンドル経路そのものは 1 行も触っていない。
 **段階3-2 では描画中核 7 本が `.ts` になり `extends` が値 import に変わったが、ハーネスは
 1 行も変えていない**（`SqlDesigner` が `types/globals.d.ts` から `js/globals.ts` へ移った分は

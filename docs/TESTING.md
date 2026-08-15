@@ -187,10 +187,30 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
   Chromium と jsdom で共有**できる。relation の色も除外する（`Relation._counter` が
   ページ生涯で単調増加する static なので、同じ設計でもテストの実行順で変わる）。
 
+### 設計 JSON golden — `tests/golden/json/<fixture>.json`
+
+**§4 段階4-2 で追加。**`Designer.toJson()` の出力 7 本（postgresql）。上の 3 つと違い、
+**現行実装の実出力ではなく grabado が決めた新しい正本フォーマット**（`formatVersion: 1`。
+仕様は [`FORMAT.md`](FORMAT.md)）なので、golden だけでは「その形が設計を過不足なく運べるか」を
+何も言っていない。それを言うのが次の 1 本。
+
+- **情報保存**: 同じ fixture を **XML 経由**（`toXML` → `fromXML`）と **JSON 経由**
+  （`toJson` → `fromJson`）で往復させ、`tests/support/state.ts` の状態スナップショットが
+  バイト一致すること。7 fixture すべてで緑。どちらも「2 回目の読み込み」に揃えてあるので
+  履歴依存（z-index 等）は相殺される。**差が出たらそれがそのまま「JSON が落とした情報」の一覧**になる。
+- **形式**: 2 スペース・末尾 LF 1 つ・キー順が [`../js/io/json-format.ts`](../js/io/json-format.ts) の
+  宣言順であること。`JSON.stringify(JSON.parse(actual), null, 2)` に戻して完全一致することで、
+  2 スペース以外の加工が 1 つも入っていないことを見ている。
+- **diff フレンドリー**: テーブルを 1 つ足した設計を読み書きすると、既存部分が 1 バイトも動かず
+  末尾にブロックが 1 つ増えるだけであること（CLAUDE.md 制約3 の実地確認）。
+- **壊れた入力**: `formatVersion` 違い・未知の型 label・必須キー欠落・構文エラーで例外になり、
+  かつ**今開いている設計が消えない**こと。
+
 ### round-trip / 決定論
 
 - **round-trip**: `fixture → toXML → fromXML → toXML → fromXML → toXML` で 1・2・3 回目が完全一致すること。
-- **決定論**: 同一モデルから `toXML()` を 2 回呼んで完全一致すること。
+  JSON も同じ形で `toJson` / `fromJson` を回す。
+- **決定論**: 同一モデルから `toXML()` を 2 回呼んで完全一致すること（`toJson()` も同様）。
 - **非決定性の所在**: `<!-- Active URL: ... -->` に `location.href` が入ることを明示的に固定。
   HANDOVER §4 の決定論要件で撤去される対象で、golden ではこの 1 行だけを `{{ACTIVE_URL}}` に正規化している。
 

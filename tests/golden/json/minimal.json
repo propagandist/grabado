@@ -1,0 +1,17 @@
+{
+  "formatVersion": 1,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "things",
+      "x": 10,
+      "y": 20,
+      "columns": [
+        {
+          "name": "id",
+          "type": "Integer"
+        }
+      ]
+    }
+  ]
+}

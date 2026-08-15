@@ -1,0 +1,163 @@
+{
+  "formatVersion": 1,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "type_samples",
+      "x": 20,
+      "y": 20,
+      "columns": [
+        {
+          "name": "c_integer",
+          "type": "Integer",
+          "nullable": true
+        },
+        {
+          "name": "c_smallint",
+          "type": "Small Integer",
+          "nullable": true
+        },
+        {
+          "name": "c_decimal",
+          "type": "Decimal",
+          "size": "12,2",
+          "nullable": true
+        },
+        {
+          "name": "c_serial",
+          "type": "Serial"
+        },
+        {
+          "name": "c_bigserial",
+          "type": "Big Serial"
+        },
+        {
+          "name": "c_float",
+          "type": "Single precision",
+          "nullable": true
+        },
+        {
+          "name": "c_double",
+          "type": "Double precision",
+          "nullable": true
+        },
+        {
+          "name": "c_char",
+          "type": "Char",
+          "size": "10",
+          "nullable": true
+        },
+        {
+          "name": "c_varchar",
+          "type": "Varchar",
+          "size": "255",
+          "nullable": true
+        },
+        {
+          "name": "c_text",
+          "type": "Text",
+          "nullable": true
+        },
+        {
+          "name": "c_bytea",
+          "type": "Binary",
+          "nullable": true
+        },
+        {
+          "name": "c_boolean",
+          "type": "Boolean",
+          "nullable": true
+        },
+        {
+          "name": "c_date",
+          "type": "Date",
+          "nullable": true
+        },
+        {
+          "name": "c_time",
+          "type": "Time",
+          "size": "3",
+          "nullable": true
+        },
+        {
+          "name": "c_time_tz",
+          "type": "Time w/ TZ",
+          "nullable": true
+        },
+        {
+          "name": "c_interval",
+          "type": "Interval",
+          "size": "6",
+          "nullable": true
+        },
+        {
+          "name": "c_timestamp",
+          "type": "Timestamp",
+          "size": "3",
+          "nullable": true
+        },
+        {
+          "name": "c_timestamp_tz",
+          "type": "Timestamp w/ TZ",
+          "nullable": true
+        },
+        {
+          "name": "c_timestamp_wo_tz",
+          "type": "Timestamp wo/ TZ",
+          "nullable": true
+        },
+        {
+          "name": "c_xml",
+          "type": "XML",
+          "nullable": true
+        },
+        {
+          "name": "c_bit",
+          "type": "Bit",
+          "size": "8",
+          "nullable": true
+        },
+        {
+          "name": "c_varbit",
+          "type": "Bit Varying",
+          "size": "8",
+          "nullable": true
+        },
+        {
+          "name": "c_inet",
+          "type": "Inet Host Addr",
+          "nullable": true
+        },
+        {
+          "name": "c_cidr",
+          "type": "Inet CIDR Addr",
+          "nullable": true
+        },
+        {
+          "name": "c_geometry",
+          "type": "Geometry",
+          "nullable": true
+        },
+        {
+          "name": "c_json",
+          "type": "JSON",
+          "nullable": true
+        },
+        {
+          "name": "c_jsonb",
+          "type": "JSONB",
+          "nullable": true
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "type_samples_pkey",
+          "columns": [
+            "c_serial"
+          ]
+        }
+      ]
+    }
+  ]
+}

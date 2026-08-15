@@ -36,6 +36,10 @@ export interface NodeHarness {
     /** fixture を読み込む。alert が出たら例外にする */
     loadFixture(xml: string): void;
     toXML(): string;
+    /** 設計 JSON の書き出し / 読み込み（段階4-2。UI 未配線なので Designer の面を直接叩く） */
+    toJson(): string;
+    /** 読み込みは alert ではなく例外で落ちる（js/io/json-parser.ts） */
+    loadJson(json: string): void;
     /** 読み込み後の状態スナップショット（page 側と同じ関数。tests/support/state.ts） */
     captureState(): string;
     close(): void;
@@ -205,6 +209,12 @@ export async function createHarness(): Promise<NodeHarness> {
         },
         toXML(): string {
             return designer.toXML();
+        },
+        toJson(): string {
+            return designer.toJson();
+        },
+        loadJson(json: string): void {
+            designer.fromJson(json);
         },
         captureState(): string {
             return captureDesignState(designer);

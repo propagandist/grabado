@@ -10,7 +10,14 @@
 xml/<fixture>.xml        SQL.Designer.toXML() の出力（postgresql の型パレットで解決）
 ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。9 DB × 7 fixture
 state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
+json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
+
+`json/` だけは他の 3 つと性格が違う。**現行実装の実出力ではなく、grabado が決めた新しい正本
+フォーマット**（`formatVersion: 1`。仕様は [`../../docs/FORMAT.md`](../../docs/FORMAT.md)）で、
+現行の癖のうち known-issues #2 / #3 / #4 / #5 は**意図的に持ち込んでいない**。
+「この形が設計を過不足なく運べる」ことの根拠は golden ではなく、XML 経由と JSON 経由で
+状態スナップショットが一致することを見る「情報保存」テストのほう。
 
 `xml/` と `ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
 （選択クラス・型パレット由来の色・relation がどの実体に繋がったか・`clearTables()` の後始末）は

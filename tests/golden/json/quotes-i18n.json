@@ -1,0 +1,44 @@
+{
+  "formatVersion": 1,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "顧客",
+      "x": 20,
+      "y": 20,
+      "comment": "顧客マスタ。'仮登録' の状態も含む",
+      "columns": [
+        {
+          "name": "id",
+          "type": "Integer"
+        },
+        {
+          "name": "氏名",
+          "type": "Text",
+          "comment": "姓と名は分けない"
+        },
+        {
+          "name": "say \"hi\"",
+          "type": "Text",
+          "nullable": true,
+          "comment": "識別子に \" が入る場合の属性エスケープ確認"
+        },
+        {
+          "name": "メモ",
+          "type": "Text",
+          "nullable": true,
+          "comment": "顧客の'愛称'をここに書く"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "顧客_pkey",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ]
+}

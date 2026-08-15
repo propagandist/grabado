@@ -1606,6 +1606,87 @@ import を落とすだけにした。`noUnusedLocals` は入れていないの�
 
 ---
 
+### 2026-08-15 HANDOVER §4「IO」段階4-2 — 設計 JSON（`formatVersion: 1`）を新設した
+
+§4 の 6 本目。**形式側に `json-serializer` / `json-parser` の 2 本を足しただけ**で、4-1 で確定した
+ライブ側（[`js/io/extract.ts`](js/io/extract.ts) / [`js/io/apply.ts`](js/io/apply.ts)）とモデル
+（[`js/io/model.ts`](js/io/model.ts)）には 1 行も触っていない。UI にも配線していない（4-3）ので、
+**既存 golden 78 本は 1 バイトも動かず、バンドル差分は削除 0 行の純粋な追加**。
+
+4-0a から申し送られていた 3 つの未決（型を何で焼くか / relation を名前か id か / パレットを同梱するか）を
+ここで決着させた。決定の内容は [`docs/FORMAT.md`](docs/FORMAT.md) に散文で、キー順の契約は
+[`js/io/json-format.ts`](js/io/json-format.ts) に型として置いてある。**FORMAT.md は 4-0a の表では
+4-7 の予定だったが前倒しした** —— スキーマを決めるのが本段階なので、未文書の期間を作らない
+（CLAUDE.md 制約4「JSON ルートに formatVersion。`docs/` に文書化」）。
+
+**決めたこと 1: 型は `label` で焼く。** 実測すると **`label` は 9 DB すべてで一意**なのに対し、
+**`sql` は postgresql で `BIGINT` が重複**する（Big Integer = 添字 2 / Real = 添字 6。known-issue #3 の本体）。
+型を sql 名で持つ形式にすると Big Integer → `"BIGINT"` → 照合の後勝ちで **Real に化ける**。
+これは `tests/browser/json.spec.ts` の 1 本で機械的に押さえた —— 同じ設計を JSON 経路で往復させると
+`Big Integer` のまま、XML 経路で往復させると `Real` になる、という対比をそのままアサートしている。
+なお known-issues #3 の記述どおりドリフトの向きは **Big Integer → Real**（逆ではない）。
+
+**決めたこと 2: relation は名前参照のまま。** `{table, column}`。id 参照へ移すと描画クラス側に
+id の発番が要り、4-1b / 4-1c の申し送り「4-2 以降はライブ側 2 本を触らない」を破ることになる。
+同名テーブルの不具合は形式では直さず、**「壊れた設計を保存させない」方向の始末を 4-4 に申し送る**。
+
+**決めたこと 3: 型パレットは `db` 名だけ持つ。** 現行 XML はパレット全文を埋め込んでいたが、
+数百行のノイズが全設計ファイルに乗るのは制約3（diff フレンドリー）と噛み合わない。読み込み側は
+`db` を**読んで捨てる** —— 実行中のパレットと食い違うときに fetch し直すか警告するかは UI の
+振る舞いの設計なので 4-3 の判断で、ここで決め打ちするとやり直しになる。
+
+**決めたこと 4: 既定値と同じキーは出さない。`default` は `null` と `""` を区別しない。**
+どちらも「既定値なし」としてキーごと落とす。これで known-issue #2（nullable な行が保存で
+`<default>NULL</default>` を獲得する）と #5（空の `<default>`）が **JSON 経路には最初から無い**。
+読み戻しは `null` を入れ、[`Row.update()`](js/row.ts#L167) の既存規則（`!nll` かつ `def === null` なら `""`）が
+そのまま正規化する。**XML 経路（＝ DDL 入力）の #2 撤去は予定どおり 4-5** で、そちらは DDL golden 16 本が動く。
+
+**決めたこと 5: 壊れた入力は部分的に読み込まない。** parser は未知の型 label・`formatVersion` 違い・
+必須キーの欠落・型違いをすべて例外にする（メッセージに `tables[0].columns[2].name` の形で位置が入る）。
+現行 XML 経路の癖（未知の型は添字 0 ＝ known-issue #4、属性が無ければ実行時 null）は**逆に振った** ——
+読む対象が git 管理の正本ファイルなので、黙って別の型で開くのが最悪の失敗だから。あわせて
+[`Designer.fromJson()`](js/wwwsqldesigner.ts) は **parse を `clearTables()` より先**に置いた
+（`fromXML()` は現行の挙動を保つ要件があるので clear が先のまま）。「例外が出ても今開いている設計が
+消えない」ことはテストで固定してある。
+
+**決めたこと 6: 内部関数に `Json` を冠する**（`serializeJsonTable` / `parseJsonKey` 等）。
+素直に `serializeTable` と書くと [`js/io/xml-serializer.ts`](js/io/xml-serializer.ts) の同名関数と
+バンドル上で衝突し、**rolldown が旧側に `$1` を付ける**。実際に最初はそうなって、差分に
+「既存モジュールのリネーム 8 行」が混ざった。名前を分けたことで**差分が純粋な追加だけ**になり、
+4-1a / 4-1b と同じ強さの判定に戻った。
+
+**見つけたこと: 情報保存テストが 7 fixture すべて一発で緑になった。** 本段階でいちばん効くテストで、
+同じ fixture を XML 経由（`toXML` → `fromXML`）と JSON 経由（`toJson` → `fromJson`）で往復させ、
+[`tests/support/state.ts`](tests/support/state.ts) の状態スナップショットがバイト一致するかを見る
+（どちらも「2 回目の読み込み」に揃えて履歴依存を相殺する）。**golden は「JSON がこう出る」しか
+言わないが、これは「JSON が XML と同じ情報を運ぶ」ことを言う** —— 新形式では golden だけでは
+正しさの根拠にならないので、4-1b で作った state の安全網がそのまま効いた形になる。
+
+**検証**。`git status --porcelain tests/golden/xml tests/golden/ddl tests/golden/state` が空
+（既存 golden 78 本すべて無差分＝`UPDATE_GOLDEN=1` は `tests/browser/json.spec.ts` に対してだけ打った）。
+`npm test` 93 passed / 21 skipped（4-1c から **+23** ＝ 7 fixture × 3 ＋ 2）、
+`npm run test:browser` 119 passed（**+30**）、`npm run test:dist` 3 passed、
+`npm run known-issues` 9 passed、`npm run typecheck` 0 error（後 3 つは件数不変）。
+
+**バンドル差分は 2 ハンク・165 行追加 / 削除 0 行**（`vite build --minify false` の出力比較）。
+
+| ハンク | 中身 | 行 |
+|---|---|---|
+| `657a658,814` | 新モジュール 2 本・19 関数（serializer 5 ＋ parser 14） | +157 |
+| `3007a3165,3172` | `Designer` の `toJson()` / `fromJson()` | +8 |
+
+**インライン展開も位置移動も無い**（19 関数すべてが独立した関数として emit されている）。
+型だけの [`js/io/json-format.ts`](js/io/json-format.ts) は emit が空なので
+[`src/app.ts`](src/app.ts) に載せていない（`js/io/model.ts` と同じ扱い）。
+
+**次段階（4-3）への入力**。UI 全経路を JSON に切り替える（[`js/io.ts`](js/io.ts) の 8 経路・Dropbox 撤去）。
+ここで決めるのは 3 つ —— `db` が実行中のパレットと食い違うときの扱い、parser の例外をユーザーに
+どう見せるか（locale を通すか）、そして [`js/io/xml-serializer.ts`](js/io/xml-serializer.ts) を
+`js/io/ddl-xml.ts` に改名して `output.xsl` 専用の内部モジュールにすること。
+`Designer.toJson()` / `fromJson()` の面は本段階で既にあるので、4-3 は呼び出し側の付け替えになる。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

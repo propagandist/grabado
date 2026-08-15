@@ -1,0 +1,171 @@
+{
+  "formatVersion": 1,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "users",
+      "x": 20,
+      "y": 20,
+      "comment": "ユーザー",
+      "columns": [
+        {
+          "name": "id",
+          "type": "Integer",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "email",
+          "type": "Text",
+          "comment": "ログイン用メールアドレス"
+        },
+        {
+          "name": "display_name",
+          "type": "Text"
+        },
+        {
+          "name": "is_active",
+          "type": "Boolean",
+          "default": "true"
+        },
+        {
+          "name": "preferences",
+          "type": "JSONB",
+          "default": "'{}'::jsonb",
+          "comment": "UI 設定などの任意項目"
+        },
+        {
+          "name": "created_at",
+          "type": "Timestamp w/ TZ",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "Timestamp w/ TZ",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "users_pkey",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "type": "UNIQUE",
+          "name": "users_email_key",
+          "columns": [
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "articles",
+      "x": 420,
+      "y": 20,
+      "comment": "記事",
+      "columns": [
+        {
+          "name": "id",
+          "type": "Integer",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "author_id",
+          "type": "Integer",
+          "comment": "執筆者 (users.id)",
+          "references": [
+            {
+              "table": "users",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "title",
+          "type": "Text"
+        },
+        {
+          "name": "body",
+          "type": "Text",
+          "nullable": true
+        },
+        {
+          "name": "view_count",
+          "type": "Integer",
+          "default": "0"
+        },
+        {
+          "name": "price",
+          "type": "Decimal",
+          "size": "12,2",
+          "nullable": true,
+          "comment": "有料記事の価格。money ではなく numeric を使う"
+        },
+        {
+          "name": "published_on",
+          "type": "Date",
+          "nullable": true
+        },
+        {
+          "name": "created_at",
+          "type": "Timestamp w/ TZ",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "Timestamp w/ TZ",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "articles_pkey",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "article_tags",
+      "x": 820,
+      "y": 20,
+      "comment": "記事とタグの対応",
+      "columns": [
+        {
+          "name": "article_id",
+          "type": "Integer",
+          "references": [
+            {
+              "table": "articles",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "tag",
+          "type": "Text"
+        },
+        {
+          "name": "created_at",
+          "type": "Timestamp w/ TZ",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "pk_article_tags",
+          "columns": [
+            "article_id",
+            "tag"
+          ]
+        }
+      ]
+    }
+  ]
+}

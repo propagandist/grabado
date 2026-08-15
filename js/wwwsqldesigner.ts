@@ -43,6 +43,8 @@ import { extractModel } from "./io/extract.ts";
 import { serializeDesignXml } from "./io/xml-serializer.ts";
 import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
 import { applyDesignModel } from "./io/apply.ts";
+import { serializeDesignJson } from "./io/json-serializer.ts";
+import { parseDesignJson } from "./io/json-parser.ts";
 
 /** 基底の VisualDom に svg が増える（vector が真のときだけ生える。§5.4 の形態 (i)） */
 export interface DesignerDom extends VisualDom {
@@ -489,6 +491,34 @@ export class Designer extends Visual<DesignerDom> {
             this.palette.setRoot(types);
         }
         applyDesignModel(this, parseDesignXml(node, this.palette));
+    }
+
+    /*
+     * grabado: 設計 JSON（HANDOVER §4 段階4-2）。**UI からはまだ呼ばれない** ——
+     * js/io.ts の保存/読込 8 経路を JSON に切り替えるのは 4-3 で、本段階は形式側 2 本を
+     * 足して安全網を張るところまで。現時点の呼び手は両ハーネスだけ。
+     *
+     * toJSON / fromJSON という名前にしない。toJSON は JSON.stringify の特殊フックなので、
+     * Designer が（テストのスナップショットなどで）stringify される経路ができた瞬間に
+     * 黙って発火する。
+     */
+    toJson(): string {
+        return serializeDesignJson(extractModel(this), this.palette);
+    }
+
+    /*
+     * fromXML() と違い 2 行で済む。JSON は型パレットを同梱せず db 名しか持たないので、
+     * 4-1b が守った「clearTables() は旧パレットで、行の型解決は新パレットで」という
+     * 順序制約がそもそも生じない（clear と apply の間にパレットが動かない）。
+     *
+     * parse を clearTables() より先に置いてあるのは、壊れた JSON で例外が出たときに
+     * **今開いている設計を消さない**ため（XML 側は現行の挙動を保つのが要件なので
+     * clear が先のまま）。
+     */
+    fromJson(text: string): void {
+        var model = parseDesignJson(text, this.palette);
+        this.clearTables();
+        applyDesignModel(this, model);
     }
 
     /* 基底の setTitle() は呼ばない（現行どおり）。document.title だけを更新する */

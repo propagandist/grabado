@@ -229,7 +229,7 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
 
 | ファイル | 担当 |
 |---|---|
-| [`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts) | **server 経路の契約** —— URL（`keyword` の `.json`）・`Content-type`・body が serializer の出力とバイト一致・`load` が応答をテキストで受ける・`import` は XML のまま。ハーネスが `OZ.Request`（全通信の唯一の入口）の差し替え先で記録する |
+| [`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts) | **server 経路の契約** —— URL（`keyword` の `.json`）・`Content-type`・body が serializer の出力とバイト一致・`load` が応答をテキストで受ける・`import` は XML のまま。**段階4-6 から外部変更検知**（save の前に load・衝突時に confirm・断れば save を投げない）も。ハーネスが `OZ.Request`（全通信の唯一の入口）の差し替え先で記録する |
 | [`../tests/browser/io-ui.spec.ts`](../tests/browser/io-ui.spec.ts) | **jsdom では見られないもの** —— download の `suggestedFilename`・localStorage・`XSLTProcessor` 経由の DDL 生成（UI ボタンからの実経路 1 本）・ボタンが DOM に実在すること |
 
 両方が押さえるのは「読み込みが JSON と XML の**両方**を受ける」ことと、「読めない入力で
@@ -242,6 +242,29 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
 `clickIo`）。io の container はコンストラクタで DOM から外れているので `page.locator` では拾えず、
 かつ `alert` / `prompt` を**その呼び出しの間だけ**差し替えられる（`openDesigner` が張る
 dialog ハンドラと衝突しない）。
+
+### 仮想 backend（§4 段階4-6）
+
+4-6 で保存が read-before-write（save の前に load を 1 回投げる）になり、**「サーバ上に何が
+置いてあるか」を作り分けられないと一致 / 不一致が試せない**。Node ハーネスの `OZ.Request`
+差し替えは URL をリポジトリ内ファイルに解決するだけなので、`backend/` で始まる URL だけを
+`php-file` の `data/` に相当する Map へ分岐させてある（`locale` / `datatypes` / `output.xsl` の
+fs 経路はそのまま）。
+
+| ハーネスの口 | 用途 |
+|---|---|
+| `setServerFile(keyword, text)` | 仮想 backend に置く / `null` で消す（＝ load が 404） |
+| `getServerFile(keyword)` | save の write-through を検算する |
+| `clearServerFiles()` | テストごとの初期化 |
+| `failNextLoad(status)` | 次の load だけ 500 などにする |
+| `setConfirm(answer)` / `takeConfirms()` | confirm の答えを固定し、出た文言を取り出す |
+
+`confirm` の差し替えが要るのは、jsdom の `confirm` が "not implemented" で常に false を返し、
+**「それでも上書きする」側の経路が試せない**ため（`alert` と同じ形にしてある）。
+判定そのもの（`verdictForSave()`）は純関数なので
+[`../tests/node/conflict.test.ts`](../tests/node/conflict.test.ts) が表で押さえ、
+[`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts) は**通信が起きたか・confirm が出たか・
+サーバ上のファイルが変わったか**だけを見る。
 
 ### round-trip / 決定論
 

@@ -22,12 +22,23 @@
  * output.xsl（XSLT）の入力に XML が要るため（js/io/ddl-xml.ts）。**この 1 か所が
  * Designer.toXML() の唯一の呼び手**で、消えるのは §6.3 で output.xsl を TS 実装に
  * 置き換えるとき。introspection（serverimport）も XML のままで、こちらは §5.2。
+ *
+ * ## 段階4-6（外部変更検知）
+ *
+ * **server への保存は 2 往復になる** —— serversave() が投げるのはまず load（プリフライト）で、
+ * 応答を this.baseline（自分が最後に観測したバイト列）と突き合わせてから sendSave() が
+ * 本番の save を投げる。判定そのものは js/io/conflict.ts の純粋関数で、ここが持つのは
+ * 台帳（baseline）と UI（confirm）だけ。理由と TOCTOU の限界は conflict.ts の冒頭。
+ *
+ * 対象は **server 経路だけ**。localStorage / textarea / クリップボード / ファイルは
+ * 「app 外で変わる正本」ではないので触らない（introspection も同じ）。
  */
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
 import { _ } from "./globals.ts";
 import { detectDesignFormat } from "./io/detect.ts";
+import { verdictForSave, type Baseline } from "./io/conflict.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
 
@@ -84,12 +95,24 @@ export class IO {
     declare lastUsedName: string;
     /** serverload が控える名前。loadresponse が setTitle に渡す */
     declare name: string;
+    /**
+     * 今の編集セッションの派生元（段階4-6）。server から最後に観測したバイト列で、
+     * 保存前のプリフライトはこれと現物を比べる。まだ一度も load / save していなければ null。
+     */
+    declare baseline: Baseline | null;
+    /**
+     * 発行中の save が成功したら baseline になる内容（段階4-6）。応答を待つ間だけ埋まる。
+     * saveresponse は「何を書いたか」を知らないので、ここで橋渡しする。
+     */
+    declare pendingBaseline: Baseline | null;
     declare dom: IoDom;
 
     constructor(owner: Designer) {
         this.owner = owner;
         this._name = ""; /* last used name with server load/save */
         this.lastUsedName = ""; /* last used name with local storage load/save */
+        this.baseline = null;
+        this.pendingBaseline = null;
         /* 型は構築完了後の状態（IoDom）。この行から下の 2 つのループが残りを埋める */
         this.dom = {
             container: OZ.$("io"),
@@ -556,16 +579,87 @@ export class IO {
         this.dom.ta.value = sql.trim();
     }
 
+    /**
+     * server への保存（段階4-6 でプリフライトを挟んだ）。
+     *
+     * ここが投げるのは save ではなく **load**。保存先の現物を読んでから
+     * preflightresponse() が判定し、通れば sendSave() が本番の save を投げる。
+     * setTitle() も保存が確定してから呼ぶ —— 中止したのにタイトルだけ変わると、
+     * 保存できたように見える。
+     */
     serversave(e?: Event, keyword?: string): void {
         var name = keyword || prompt(_("serversaveprompt"), this._name);
         if (!name) {
             return;
         }
         this._name = name;
-        var json = this.toJsonOrAlert();
+        /* const なのは、下のクロージャで string に確定させたままにするため */
+        const json = this.toJsonOrAlert();
         if (json === null) {
             return;
         }
+        var bp = this.owner.getOption("xhrpath");
+        var url =
+            bp +
+            "backend/" +
+            this.dom.backend.value +
+            "/?action=load&keyword=" +
+            encodeURIComponent(jsonKeyword(name));
+        var h = this.owner.getXhrHeaders();
+        var self = this;
+        this.owner.window.showThrobber();
+        /* 応答はテキストで受ける（serverload と同じ理由。段階4-3b） */
+        OZ.Request(
+            url,
+            function (data: unknown, code: number) {
+                self.preflightresponse(name!, json, data, code);
+            },
+            { headers: h }
+        );
+    }
+
+    /**
+     * プリフライト（save 前の load）の応答（段階4-6）。
+     *
+     * 404 を check() に通さないのは、**プリフライトの 404 が正常系**（＝まだ無いファイルへの
+     * 新規保存）だから。通すと textarea に httpresponse の文言が出て、保存に失敗したように
+     * 見える。逆に 500 / 501 / 503 は check() に通して**中止**する —— backend が壊れている
+     * ときに「読めなかったので上書きします」と進むのは、本機能が防ぎたいことそのもの。
+     */
+    preflightresponse(
+        name: string,
+        json: string,
+        data: unknown,
+        code: number
+    ): void {
+        this.owner.window.hideThrobber();
+        if (code !== 404 && !this.check(code)) {
+            return;
+        }
+
+        var file = jsonKeyword(name);
+        var verdict = verdictForSave(this.baseline, file, {
+            status: code,
+            text: typeof data === "string" ? data : null,
+        });
+        switch (verdict) {
+            case "conflict":
+                if (!confirm(file + "\n\n" + _("saveconflict"))) {
+                    return;
+                }
+                break;
+
+            case "exists":
+                if (!confirm(file + "\n\n" + _("saveexists"))) {
+                    return;
+                }
+                break;
+        }
+        this.sendSave(name, json);
+    }
+
+    /** 本番の save。URL / Content-type / body は段階4-3b から 1 バイトも変わらない */
+    sendSave(name: string, json: string): void {
         var bp = this.owner.getOption("xhrpath");
         var url =
             bp +
@@ -578,6 +672,7 @@ export class IO {
         this.owner.window.showThrobber();
         /* タイトルは素の名前のまま（.json はファイル名の都合で、設計の名前ではない） */
         this.owner.setTitle(name);
+        this.pendingBaseline = { name: jsonKeyword(name), text: json };
         /* xml: true は**応答**の解釈指定（backend は XML を返す）。送る body とは無関係 */
         OZ.Request(url, this.saveresponse, {
             xml: true,
@@ -665,13 +760,30 @@ export class IO {
 
     saveresponse(data: unknown, code: number): void {
         this.owner.window.hideThrobber();
+        /* 現行どおり戻り値は使わない（201 も「表示すべき応答」なので save 成功でも文言が出る） */
         this.check(code);
+        /*
+         * 書けた版だけを派生元にする（段階4-6）。php backend の save 成功は **201**
+         * （docs/ARCHITECTURE.md §4.3 の実測）で、200 は移植先の実装を見越して受けてある。
+         */
+        if (this.pendingBaseline && (code === 200 || code === 201)) {
+            this.baseline = this.pendingBaseline;
+        }
+        this.pendingBaseline = null;
     }
 
     loadresponse(data: unknown, code: number): void {
         this.owner.window.hideThrobber();
         if (!this.check(code)) {
             return;
+        }
+        /*
+         * 観測したバイト列を派生元にする（段階4-6）。**読めたかどうかとは独立** ——
+         * 壊れた JSON でも「サーバ上の版はこれ」は事実で、次の保存でそれを黙って
+         * 上書きしないための記録。loadDesignText() の戻り値契約（void）は触らない。
+         */
+        if (typeof data === "string") {
+            this.baseline = { name: jsonKeyword(this.name), text: data };
         }
         /* 読めなくても setTitle するのは現行どおり（fromXML の false も無視していた） */
         this.loadDesignText(data as string);

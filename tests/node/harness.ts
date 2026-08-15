@@ -67,6 +67,21 @@ export interface NodeHarness {
     captureState(): string;
     /** 溜まった alert を取り出して空にする（UI 層は失敗を alert で伝える） */
     takeAlerts(): string[];
+    /**
+     * 仮想 backend の中身を置く / 消す（段階4-6）。`null` で削除 ＝ load が 404 になる。
+     * keyword はフロントが組み立てるファイル名（`orders.json` のように `.json` 付き）。
+     */
+    setServerFile(keyword: string, text: string | null): void;
+    /** 仮想 backend の現在の中身。save の write-through を検算するために読む */
+    getServerFile(keyword: string): string | null;
+    /** 仮想 backend を空にする（テストごとの初期化） */
+    clearServerFiles(): void;
+    /** 次に load が返す HTTP ステータスを 1 回だけ差し替える（500 系の経路用） */
+    failNextLoad(status: number): void;
+    /** confirm の答えを固定する（jsdom の confirm は常に false を返すため。段階4-6） */
+    setConfirm(answer: boolean): void;
+    /** confirm に渡された文言を取り出して空にする */
+    takeConfirms(): string[];
     close(): void;
 }
 
@@ -80,6 +95,16 @@ function readRepoFile(relPath: string): string {
  */
 function resolveRequestUrl(url: string): string {
     return url.replace(/^\/+/, "").split("?")[0] ?? "";
+}
+
+/** クエリ文字列から 1 つ取り出す（`?` の後ろだけを見る） */
+function queryParam(url: string, name: string): string | null {
+    const q = url.indexOf("?");
+    if (q === -1) {
+        return null;
+    }
+    const m = new RegExp("(?:^|&)" + name + "=([^&]*)").exec(url.substring(q + 1));
+    return m ? decodeURIComponent(m[1]!) : null;
 }
 
 /**
@@ -176,6 +201,52 @@ export async function createHarness(): Promise<NodeHarness> {
         throw new Error("バンドルが window.__grabado を載せていない（tests/node/app-entry.ts）");
     }
 
+    /*
+     * 仮想 backend（段階4-6）。php-file の `data/` に相当する。
+     *
+     * 4-6 で保存が read-before-write になり、「サーバ上に何が置いてあるか」を作り分けられないと
+     * 一致 / 不一致が試せない（fs 解決だけだと backend/ は必ず 404 に落ちる）。扱うのは
+     * save / load の 2 つで、それ以外の action は 404 —— fs 解決に落ちていた頃と同じ結果になる。
+     */
+    const serverFiles = new Map<string, string>();
+    let nextLoadStatus: number | null = null;
+
+    function respondAsBackend(
+        url: string,
+        callback: OzRequestCallback,
+        options?: OzRequestOptions,
+    ): void {
+        const action = queryParam(url, "action");
+        const keyword = queryParam(url, "keyword") ?? "";
+
+        if (action === "save") {
+            serverFiles.set(
+                keyword,
+                typeof options?.data === "string" ? options.data : "",
+            );
+            /* php-file の save 成功は 201 + 空 body（docs/ARCHITECTURE.md §4.3） */
+            callback(null, 201, {});
+            return;
+        }
+        if (action === "load") {
+            if (nextLoadStatus !== null) {
+                const status = nextLoadStatus;
+                nextLoadStatus = null;
+                callback(null, status, {});
+                return;
+            }
+            const text = serverFiles.get(keyword);
+            if (text === undefined) {
+                callback(null, 404, {});
+                return;
+            }
+            /* 保存したバイト列をそのまま返す（実測どおり backend は中身を解釈しない） */
+            callback(text, 200, {});
+            return;
+        }
+        callback(null, 404, {});
+    }
+
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
     // new Designer() のうちに init2() まで到達する。
     const requests: RequestRecord[] = [];
@@ -196,6 +267,11 @@ export async function createHarness(): Promise<NodeHarness> {
             return false;
         }
         const path = resolveRequestUrl(url);
+        /* locale / datatypes / output.xsl は今までどおり fs から読む */
+        if (path.indexOf("backend/") === 0) {
+            respondAsBackend(url, callback, options);
+            return false;
+        }
         let text: string;
         try {
             text = readRepoFile(path);
@@ -212,6 +288,17 @@ export async function createHarness(): Promise<NodeHarness> {
 
     const alerts: string[] = [];
     window.alert = (msg?: unknown) => void alerts.push(String(msg));
+
+    /*
+     * confirm（段階4-6）。jsdom は "not implemented" を出して常に false を返すので、
+     * 「上書きする」側の経路が試せない。alert と同じ形で記録し、答えは固定する。
+     */
+    const confirms: string[] = [];
+    let confirmAnswer = false;
+    window.confirm = (msg?: string): boolean => {
+        confirms.push(String(msg));
+        return confirmAnswer;
+    };
 
     // 段階3-4b まで window.eval("new SQL.Designer();") と書いて結果を window.SQL.designer から
     // 拾っていた。ハンドルを掴んでいるので戻り値をそのまま使える（コンストラクタ内の
@@ -258,6 +345,27 @@ export async function createHarness(): Promise<NodeHarness> {
         captureState(): string {
             return captureDesignState(designer);
         },
+        setServerFile(keyword: string, text: string | null): void {
+            if (text === null) {
+                serverFiles.delete(keyword);
+            } else {
+                serverFiles.set(keyword, text);
+            }
+        },
+        getServerFile(keyword: string): string | null {
+            return serverFiles.has(keyword) ? serverFiles.get(keyword)! : null;
+        },
+        clearServerFiles(): void {
+            serverFiles.clear();
+            nextLoadStatus = null;
+        },
+        failNextLoad(status: number): void {
+            nextLoadStatus = status;
+        },
+        setConfirm(answer: boolean): void {
+            confirmAnswer = answer;
+        },
+        takeConfirms: (): string[] => confirms.splice(0, confirms.length),
         close(): void {
             window.close();
         },

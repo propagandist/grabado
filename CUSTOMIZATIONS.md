@@ -2149,13 +2149,92 @@ introspection の出力（外部由来の XML）を直接 XSLT に食わせる�
 **書き出し側の形式の話は終わり**、4-6 は「いつ読み直すか」の話になる。§4 の残りは 4-6 と
 4-7（仕上げ・`docs/FORMAT.md` の総点検・known-issues 棚卸し）の 2 本。
 
+### 2026-08-15 HANDOVER §4「IO」段階4-6 — 外部変更検知を入れた
+
+§4 の 12 本目。**server への保存を read-before-write にした**段階。正本は git 管理のファイルなので、
+他人の PR を `git pull` で取り込んだ後に古い編集状態のまま保存すると相手の変更が黙って消える ——
+HANDOVER §4 の「ファイルが app 外で変化したら検知し再読込を促す。古い編集状態でファイルを
+上書きしない」がこれを指している。**F2（quicksave）が無言で上書きしていた経路が塞がる**のが実際の効き目。
+
+#### 決めたこと 1: 手は read-before-write しかない（backend には触らない）
+
+現行 PHP は `save` が 201 空 body、`load` が保存バイト列をそのまま返すだけで、**ETag も
+Last-Modified も返さない**（ARCHITECTURE §4.3 の実測）。条件付き更新の手がかりが応答に無いので、
+**save の直前に同じ `keyword` で `load` を投げて比べる**のが上限になる。PHP に mtime を返す action を
+足す案は取らない（CLAUDE.md 制約6「捨てる資産に投資しない」。4-3b で `.json` をフロント側で
+付けたのと同じ立場）。
+
+**TOCTOU の窓は残る** —— プリフライトの load と save の間に他者が書けば、そちらが負ける。これは
+backend 側の条件付き更新でしか閉じないので、ETag + `If-Match`（不一致は 412）を §5.1 へ申し送った
+（ARCHITECTURE §4.3 にも書いた）。**プリフライトはそこで 1 往復に畳める**。
+
+#### 決めたこと 2: 判定は純関数、UI と通信は js/io.ts
+
+[`js/io/conflict.ts`](js/io/conflict.ts) が `verdictForSave(baseline, name, server)` を返すだけの
+純関数で（`absent` / `clean` / `exists` / `conflict`）、confirm を出すかどうかも、プリフライトを
+投げるかどうかも知らない。文言は locale を通す必要があるので呼び手側 —— `js/io/` 配下は locale を
+通さない規約（[`js/io/json-parser.ts`](js/io/json-parser.ts) の冒頭）に従った。
+
+台帳（`IO.baseline`）は **keyword ごとの Map にせず 1 本だけ**持つ。「今の編集セッションの派生元」
+という意味づけで、別名へ保存すれば派生元も移る。Map にしても比較相手は毎回サーバの現物なので
+取りこぼしは出ず、状態が 1 つで済むほうがテストが読める。
+
+#### 決めたこと 3: 衝突は既定で中止、`confirm` で強制上書きを許す
+
+「読み直してください」で終わらせると手元の編集を捨てるしかなくなる。正本は git なので上書きしても
+復元できる —— ただし**無言では通さない**。同じ理由で、**まだ一度も読んでいない名前に実体があるとき**
+（＝他人／別セッションのファイルを踏む）も確認を出す。現行は黙って上書きしていたが、プリフライトの
+応答をそのまま使えるので追加コストは 0。
+
+#### 決めたこと 4: プリフライトの 404 は素通し、500 系は中止
+
+404 は正常系（新規保存）なので `check()` に通さない —— 通すと textarea に「Not Found」が出て、
+保存に失敗したように見える。逆に 500 / 501 / 503 は `check()` に通して**中止**する。読めなかったものを
+「無かったこと」にして上書きするのは、本機能が防ぎたいことそのもの。`verdictForSave()` も
+**404 以外はすべて実体ありに倒す**（安全側）ので、万一そこへ落ちても上書きにはならない。
+
+なお **200 で本文を返す壊れた backend**（MySQL に繋がらない `php-mysql` がこれ）は `exists` に倒れ、
+上書き前に confirm が出る。実測で確認した。
+
+#### 決めたこと 5: ベースラインは「観測したバイト列」
+
+`loadresponse` は**読めたかどうかに関わらず**、届いたバイト列を派生元に載せる。壊れた JSON でも
+「サーバ上の版はこれ」は事実で、次の保存でそれを黙って上書きしないための記録になる。`loadDesignText()`
+の戻り値契約（void）を触らずに済むので、読込 5 経路に手が入らないという利点もある。
+
+#### 検証
+
+- `git diff tests/golden/` は空（4-0a の分割表の予測どおり。golden 85 本は
+  [`js/io.ts`](js/io.ts) を通らない）
+- `npm test` **179 passed** / 21 skipped（158 から +21 ＝ `conflict.test.ts` 9 本・
+  `io-ui.test.ts` の 4-6 分 12 本）、`test:browser` **139 passed**・`test:dist` 3 passed・
+  `known-issues` **5 passed**（いずれも件数不変）、`typecheck` 0 error
+- 既存の serversave 3 本は**書き換えた**（削除していない）。save が 2 往復になったので
+  「1 本目が load、2 本目が save」に読み替え、`.json` の二重付与はプリフライトと save の両方で見る
+- **実 PHP backend との一巡 12/12・pageerror 0 件**（使い捨ての Playwright スクリプト）。
+  `php:8.3-cli` を Docker で起こし、`vite build --base=./` した `dist/` を同じ PHP から配信して
+  `xhrpath=../` で `backend/php-file` に繋いだ。実 UI のボタンだけを踏んで確認したのは:
+  新規保存で `data/<name>.json` ができること・**ホスト側でファイルを書き換えてから F2 を押すと
+  confirm が出て、断ればファイルが 1 バイトも変わらないこと**・承諾すれば上書きされること・
+  読み直した後の保存は確認なしで通ること・一度も読んでいない名前に実体があれば確認が出ること
+- dev（4173）/ preview（4174）でも server 経路以外の一巡 **11/11・pageerror 0 件**
+
+この過程で分かった操作手順を 1 つ記録する: **backend セレクタは io ダイアログを開くたびに
+`IO.click()` → `build()` が作り直す**ので、選択は「開いた後」に行わないと `DEFAULT_BACKEND`
+（`php-mysql`）に戻る。4-0a の記録にある `#addtable` / `#clientload` の癖と同じ類。
+
+**次段階（4-7）への入力**。§4 の最後は仕上げ —— `docs/FORMAT.md` の総点検、known-issues の棚卸し、
+`js/io/` 配下の見取り図。4-6 で `js/io/` が 11 本になり、**読み込み方向（detect / xml-parser /
+json-parser / apply）・書き出し方向（json-serializer / json-format / ddl-xml）・その他（model /
+palette / extract / conflict）**の 3 つに割れているので、その線を文書に落とす。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
 |---|---|---|
-| PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4） | Kotlin/Spring Boot へ移植し撤去 |
+| PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事 | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。**段階4-4 で `tests/golden/ddl-input/` に改名し、決定論・well-formed にした** | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |

@@ -33,16 +33,28 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
         h.loadFixture(readFixture("house-defaults"));
         h.takeAlerts();
         h.takeRequests();
+        /* 段階4-6: 仮想 backend・派生元の記録・confirm の答えを初期化する */
+        h.clearServerFiles();
+        h.io.baseline = null;
+        h.io.pendingBaseline = null;
+        h.setConfirm(false);
+        h.takeConfirms();
     });
+
+    /** save 本体だけを取り出す（段階4-6 でプリフライトの load が前に付いた） */
+    function saveRequests(reqs: { url: string }[]) {
+        return reqs.filter((r) => r.url.indexOf("action=save") !== -1);
+    }
 
     describe("serversave", () => {
         test("keyword に .json が付き、Content-type と body が JSON になる", () => {
             const expected = h.toJson();
             h.io.serversave(undefined, "orders");
 
+            /* 段階4-6: 1 本目はプリフライトの load。契約を見るのは 2 本目の save */
             const reqs = h.takeRequests();
-            expect(reqs).toHaveLength(1);
-            const req = reqs[0]!;
+            expect(reqs).toHaveLength(2);
+            const req = reqs[1]!;
             expect(req.url).toBe(
                 "backend/php-mysql/?action=save&keyword=orders.json",
             );
@@ -57,15 +69,19 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
                それをそのまま prompt に貼っても壊れないことが jsonKeyword() の要件 */
             h.io.serversave(undefined, "orders.json");
 
-            const url = h.takeRequests()[0]!.url;
-            expect(url).toContain("keyword=orders.json");
-            expect(url).not.toContain("orders.json.json");
+            /* プリフライトと save の両方が同じファイル名を指す */
+            for (const req of h.takeRequests()) {
+                expect(req.url).toContain("keyword=orders.json");
+                expect(req.url).not.toContain("orders.json.json");
+            }
         });
 
         test("大文字の拡張子も二重付与しない", () => {
             h.io.serversave(undefined, "Orders.JSON");
 
-            expect(h.takeRequests()[0]!.url).toContain("keyword=Orders.JSON");
+            for (const req of h.takeRequests()) {
+                expect(req.url).toContain("keyword=Orders.JSON");
+            }
         });
 
         test("設計の名前（タイトル）には .json を付けない", () => {
@@ -74,6 +90,172 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             /* .json はファイル名の都合で、設計の名前ではない */
             expect(h.window.document.title).toContain("orders");
             expect(h.window.document.title).not.toContain("orders.json");
+        });
+    });
+
+    /*
+     * 外部変更検知（段階4-6）。保存は read-before-write —— save の前に同じ keyword で
+     * load を投げ、返ったバイト列を「自分が最後に観測した版」と比べる。判定そのものは
+     * tests/node/conflict.test.ts が表で押さえるので、ここが見るのは
+     * **通信が起きたか／confirm が出たか／サーバ上のファイルが変わったか**。
+     */
+    describe("外部変更検知（段階4-6）", () => {
+        test("save の前にプリフライトの load を投げる", () => {
+            h.io.serversave(undefined, "orders");
+
+            const reqs = h.takeRequests();
+            expect(reqs).toHaveLength(2);
+            expect(reqs[0]!.url).toBe(
+                "backend/php-mysql/?action=load&keyword=orders.json",
+            );
+            /* 応答はテキストで受ける（xml: true だと JSON が読めない。段階4-3b と同じ理由） */
+            expect(reqs[0]!.xml).toBeFalsy();
+            expect(reqs[1]!.url).toContain("action=save");
+        });
+
+        test("サーバに無ければ確認を出さずに保存する", () => {
+            const expected = h.toJson();
+
+            h.io.serversave(undefined, "orders");
+
+            expect(h.takeConfirms()).toEqual([]);
+            expect(h.getServerFile("orders.json")).toBe(expected);
+        });
+
+        test("読み込んだ後の保存は確認を出さずに通る", () => {
+            /* サーバ上の版を読む -> 派生元が載る -> 同じ名前へ保存 */
+            h.setServerFile("orders.json", h.toJson());
+            h.io.serverload(false, "orders");
+            h.takeRequests();
+
+            h.io.serversave(undefined, "orders");
+
+            expect(h.takeAlerts()).toEqual([]);
+            expect(h.takeConfirms()).toEqual([]);
+            expect(saveRequests(h.takeRequests())).toHaveLength(1);
+        });
+
+        test("外部で変わっていたら確認を出し、断れば save を投げない", () => {
+            const mine = h.toJson();
+            h.setServerFile("orders.json", mine);
+            h.io.serverload(false, "orders");
+            h.takeRequests();
+
+            /* app の外でファイルが変わった（= git pull） */
+            const theirs = mine + "\n";
+            h.setServerFile("orders.json", theirs);
+
+            h.setConfirm(false);
+            h.io.serversave(undefined, "orders");
+
+            const confirms = h.takeConfirms();
+            expect(confirms).toHaveLength(1);
+            /* どのファイルの話かが出る */
+            expect(confirms[0]).toContain("orders.json");
+            /* 断ったら 1 バイトも書かない */
+            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+            expect(h.getServerFile("orders.json")).toBe(theirs);
+        });
+
+        test("外部で変わっていても、承諾すれば上書きする", () => {
+            const mine = h.toJson();
+            h.setServerFile("orders.json", mine);
+            h.io.serverload(false, "orders");
+            h.takeRequests();
+            h.setServerFile("orders.json", mine + "\n");
+
+            h.setConfirm(true);
+            h.io.serversave(undefined, "orders");
+
+            expect(h.takeConfirms()).toHaveLength(1);
+            expect(saveRequests(h.takeRequests())).toHaveLength(1);
+            expect(h.getServerFile("orders.json")).toBe(mine);
+        });
+
+        test("一度も読んでいない名前に実体があれば確認を出す", () => {
+            h.setServerFile("orders.json", '{"formatVersion": 2}\n');
+
+            h.setConfirm(false);
+            h.io.serversave(undefined, "orders");
+
+            expect(h.takeConfirms()).toHaveLength(1);
+            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+            /* 他人のファイルは無傷のまま */
+            expect(h.getServerFile("orders.json")).toBe('{"formatVersion": 2}\n');
+        });
+
+        test("保存に成功した内容が次の派生元になる", () => {
+            h.io.serversave(undefined, "orders");
+            h.takeRequests();
+
+            /* 2 回目は「自分が書いた版」と一致するので確認が出ない */
+            h.io.serversave(undefined, "orders");
+
+            expect(h.takeConfirms()).toEqual([]);
+            expect(saveRequests(h.takeRequests())).toHaveLength(1);
+        });
+
+        test("別名へ保存すると派生元が移る", () => {
+            h.io.serversave(undefined, "orders");
+            h.io.serversave(undefined, "invoices");
+            h.takeRequests();
+            h.takeConfirms();
+
+            /* invoices が派生元になったので、orders へ戻ると確認が出る */
+            h.io.serversave(undefined, "orders");
+
+            expect(h.takeConfirms()).toHaveLength(1);
+            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+        });
+
+        test("プリフライトが 500 なら保存しない", () => {
+            h.setServerFile("orders.json", '{"formatVersion": 2}\n');
+            h.failNextLoad(500);
+
+            h.io.serversave(undefined, "orders");
+
+            /* 読めなかったので「上書きしますか」も聞かない（聞く材料が無い） */
+            expect(h.takeConfirms()).toEqual([]);
+            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+            /* 現行どおり check() が textarea に出す（locale/en.xml の http500） */
+            expect(h.io.dom.ta.value).toContain("Internal Server Error");
+        });
+
+        test("プリフライトの 404 を「読み込み失敗」として表示しない", () => {
+            /* 新規保存は正常系。Not Found が出ると保存に失敗したように見える */
+            h.io.dom.ta.value = "";
+
+            h.io.serversave(undefined, "orders");
+
+            expect(h.io.dom.ta.value).not.toContain("Not Found");
+            /* save 成功（201）の文言は現行どおり出る */
+            expect(h.io.dom.ta.value).toContain("Saved");
+        });
+
+        test("quicksave（F2）も同じ経路を通る", () => {
+            /* 無言で上書きしていた経路を塞ぐのが本段階の主眼の 1 つ */
+            h.setServerFile("orders.json", '{"formatVersion": 2}\n');
+            h.io._name = "orders";
+
+            h.setConfirm(false);
+            h.io.quicksave();
+
+            expect(h.takeConfirms()).toHaveLength(1);
+            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+        });
+
+        test("書き出せない設計ではプリフライトすら投げない", () => {
+            /* serializer が落ちる状態（型パレット未取得）。通信の前に止まる */
+            const palette = (h.io as unknown as { owner: { palette: { setRoot(e: unknown): void } } })
+                .owner.palette;
+            palette.setRoot(h.window.document.createElement("nothing"));
+
+            h.io.serversave(undefined, "orders");
+
+            expect(h.takeAlerts()).toHaveLength(1);
+            expect(h.takeRequests()).toEqual([]);
+
+            h.useDatatypes(SERIALIZER_DB);
         });
     });
 

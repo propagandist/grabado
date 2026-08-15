@@ -99,6 +99,12 @@
     <string name="http500">Internal Server Error</string>
     <string name="http501">Not Implemented</string>
     <string name="http503">Service Unavailable</string>
+    <string name="saveconflict">This file has changed on the server since you loaded it (someone else saved it, or you pulled a newer version). Load it again and redo your edits.
+
+Overwrite it anyway?</string>
+    <string name="saveexists">This file already exists on the server and you have not loaded it in this session.
+
+Overwrite it?</string>
 
     <!-- misc -->
     <string name="xmlerror">XML error</string>

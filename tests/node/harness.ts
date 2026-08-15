@@ -7,6 +7,8 @@ import { captureDesignState } from "../support/state.ts";
 /* OZ の型は js/oz.ts の export に移した（HANDOVER §3 段階3-1）。
    実体は window.eval したバンドルが載せるので、ここでは型だけ借りる。 */
 import type { OzRequestCallback, OzRequestOptions } from "../../js/oz.ts";
+/* UI 層の型（段階4-3b。実体はバンドルの内側） */
+import type { IO } from "../../js/io.ts";
 /* バンドルが window に載せるハンドルの型（実体は tests/node/app-entry.ts） */
 import type { GrabadoTestApi } from "./app-entry.ts";
 
@@ -28,20 +30,43 @@ import type { GrabadoTestApi } from "./app-entry.ts";
  * 本ファイルは designer を api 越しの値として持つだけなので、この型を import していない。
  */
 
+/**
+ * OZ.Request が受けた 1 回分（段階4-3b）。
+ *
+ * server 経路（save / load / list / import）は URL とヘッダと body が backend との契約
+ * そのもので、golden では 1 ビットも押さえられない（golden は Designer のファサード経由で
+ * 採るため js/io.ts を通らない）。OZ.Request は全通信の唯一の入口なので、差し替え先で
+ * 記録するだけで契約が固定できる。
+ */
+export interface RequestRecord {
+    readonly url: string;
+    readonly method: string | undefined;
+    /** 応答を XML として parse するか。段階4-3b で load だけ false になった */
+    readonly xml: boolean | undefined;
+    readonly contentType: string | undefined;
+    readonly data: string | undefined;
+}
+
 export interface NodeHarness {
     readonly dom: JSDOM;
     readonly window: JSDOM["window"];
+    /** UI 層（js/io.ts）。段階4-3b の保存/読込経路を Node からも叩く */
+    readonly io: IO;
+    /** OZ.Request が受けたリクエストを取り出して空にする（発生順） */
+    takeRequests(): RequestRecord[];
     /** 型パレットを差し替える（dbResponse() と同じ操作） */
     useDatatypes(db: string): void;
     /** fixture を読み込む。alert が出たら例外にする */
     loadFixture(xml: string): void;
     toXML(): string;
-    /** 設計 JSON の書き出し / 読み込み（段階4-2。UI 未配線なので Designer の面を直接叩く） */
+    /** 設計 JSON の書き出し / 読み込み（段階4-2 で新設。UI への配線は 4-3b） */
     toJson(): string;
     /** 読み込みは alert ではなく例外で落ちる（js/io/json-parser.ts） */
     loadJson(json: string): void;
     /** 読み込み後の状態スナップショット（page 側と同じ関数。tests/support/state.ts） */
     captureState(): string;
+    /** 溜まった alert を取り出して空にする（UI 層は失敗を alert で伝える） */
+    takeAlerts(): string[];
     close(): void;
 }
 
@@ -153,11 +178,20 @@ export async function createHarness(): Promise<NodeHarness> {
 
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
     // new Designer() のうちに init2() まで到達する。
+    const requests: RequestRecord[] = [];
     api.OZ.Request = (
         url: string,
         callback?: OzRequestCallback,
         options?: OzRequestOptions,
     ) => {
+        /* 段階4-3b: server 経路の契約（URL / Content-type / body）を固定するための記録 */
+        requests.push({
+            url: url,
+            method: options?.method,
+            xml: options?.xml,
+            contentType: options?.headers?.["Content-type"],
+            data: typeof options?.data === "string" ? options.data : undefined,
+        });
         if (!callback) {
             return false;
         }
@@ -189,10 +223,15 @@ export async function createHarness(): Promise<NodeHarness> {
 
     const takeAlerts = (): string[] => alerts.splice(0, alerts.length);
     takeAlerts();
+    /* 初期化中の locale / datatypes の取得は記録から落とす（テストが見るのは操作の分だけ） */
+    requests.length = 0;
 
     return {
         dom,
         window,
+        io: designer.io,
+        takeRequests: (): RequestRecord[] => requests.splice(0, requests.length),
+        takeAlerts: takeAlerts,
         useDatatypes(db: string): void {
             const xml = readRepoFile(`db/${db}/datatypes.xml`);
             const doc = new window.DOMParser().parseFromString(xml, "text/xml");

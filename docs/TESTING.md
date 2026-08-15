@@ -118,7 +118,10 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 バンドル経路そのものは 1 行も触っていない。
 **段階3-2 では描画中核 7 本が `.ts` になり `extends` が値 import に変わったが、ハーネスは
 1 行も変えていない**（`SqlDesigner` が `types/globals.d.ts` から `js/globals.ts` へ移った分は
-`interface Window` の 1 行が `import(...)` を挟む形になっただけ）。
+`interface Window` の 1 行が `import(...)` を挟む形になっただけ）。その `SqlDesigner` は
+**段階4-1c で撤去**され、[`../tests/support/state.ts`](../tests/support/state.ts) は
+`js/wwwsqldesigner.ts` の `Designer` を直接 `import type` する（node / page 両実行系とも
+採取関数の面は変わっていない）。
 
 判断の根拠・却下した 2 案は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ。
 

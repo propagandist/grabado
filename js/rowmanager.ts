@@ -15,9 +15,11 @@
  */
 
 import { OZ } from "./oz.ts";
-import { _, subscribe, type SqlDesigner } from "./globals.ts";
+import { _, subscribe } from "./globals.ts";
 import type { Row } from "./row.ts";
 import type { Table } from "./table.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /** 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」（7 個ともループが埋める） */
 export interface RowManagerDom {
@@ -31,13 +33,13 @@ export interface RowManagerDom {
 }
 
 export class RowManager {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare dom: RowManagerDom;
     declare selected: Row | false | null;
     declare creating: boolean;
     declare connecting: boolean;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         this.owner = owner;
         /* 型は構築完了後の状態。7 キーはこの下のループが埋める */
         this.dom = {} as unknown as RowManagerDom;

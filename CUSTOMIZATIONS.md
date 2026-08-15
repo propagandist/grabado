@@ -1553,6 +1553,59 @@ backend は不在なので `page.route` で fixture を返した。**7 経路す
 
 ---
 
+### 2026-08-15 HANDOVER §4「IO」段階4-1c — `SqlDesigner` を `Designer` に一本化した
+
+§4 の 5 本目で、4-1 の締め。**型の名前が 2 つあった状態を実体 1 本に寄せ、参照 13 本すべてが
+[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の `Designer` を直接見るようにした**。
+出荷コードの挙動には一切触れないので、**主張は「バンドル出力が 1 バイトも変わらない」の 1 点**
+（4-1a / 4-1b の「golden 無差分」より強い判定 —— テストが通る範囲ではなく emit そのものの同一性）。
+
+**なぜ今か。** `SqlDesigner` は段階3-2 の産物で、当時 `js/wwwsqldesigner.js` がまだ `.js` だった
+ため「`Designer` インスタンスの面」を [`js/globals.ts`](js/globals.ts) に構造的 interface として
+書いていた。段階3-3b で実体が `.ts` になった時点で `export type SqlDesigner = Designer;` の
+1 行に縮み、以後は**別名だけが残っていた**。§4 の残り（4-2 以降）はモデル層の型を増やす作業なので、
+「どの型が描画エンジンの実体か」が 2 通りに読める状態を持ち込まないためにここで畳む。
+
+**決めたこと 1: 必ずトップレベル `import type` で書く。** インライン形
+（`import { type Designer } from "./wwwsqldesigner.ts"`）は `verbatimModuleSyntax` のもとで
+**import 文自体が emit に残る**ため、副作用 import として Rollup の依存グラフに辺が生える。
+`wwwsqldesigner` は [`src/app.ts`](src/app.ts) の読み込み順の**最後尾**なので、辺が生えた瞬間に
+順序が壊れる（バイト一致の判定はこれを機械的に検出する）。この警告は 3-1 以来 `globals.ts` の
+冒頭にあったが、置き場所ごと [`js/table.ts`](js/table.ts) の冒頭へ移した —— `src/app.ts` の順序で
+`Designer` 型を最初に使うファイルで、他 9 本は「理由は js/table.ts の冒頭」の 1 行だけを持つ
+（`js/oz.ts` / `js/visual.ts` と同じ「イディオムの正本は 1 か所」の形）。
+
+**決めたこと 2: 型の循環参照はそのまま許容する。** `table.ts` → `wwwsqldesigner.ts` →
+`table.ts` の循環が 10 本ぶん生まれるが、**型だけの辺なので emit には 1 本も出ない**。
+先例は 4-1a / 4-1b で入れた [`js/io/extract.ts`](js/io/extract.ts) /
+[`js/io/apply.ts`](js/io/apply.ts) の `import type { Designer } from "../wwwsqldesigner.ts"` で、
+書き方をそれに揃えた。迂回のために `globals.ts` を経由させ続けるのは、**実体を隠す別名を
+残すこと**と同義で得がない。副作用として `globals.ts` は js/ のどこにも依存しなくなった。
+
+**見つけたこと: [`js/row.ts`](js/row.ts) の `SqlDesigner` は未使用 import だった。**
+本文に使用箇所が 1 つも無い（`this.owner` は基底の `Visual` 側で解決され、Row が `Designer` へ
+届くのは `this.owner.owner` の owner 鎖）。したがって row.ts だけは `Designer` を足さず
+import を落とすだけにした。`noUnusedLocals` は入れていないので `typecheck` では出ず、
+今回のように全参照を機械的にたどって初めて出る類の残骸。**参照 13 本の内訳は
+「型を実際に使う 10 本 ＋ 未使用だった row.ts ＋ 定義側の globals.ts ＋
+[`tests/support/state.ts`](tests/support/state.ts)」**で、`Designer` を足したのは 11 本。
+
+**検証**。`vite build --minify false` の出力を変更前後で `diff -r` して**差分ゼロ**
+（62 ファイル。ハッシュ付きファイル名 `index-DLby1PHE.js` まで同一＝内容ハッシュが一致している）。
+`npm run typecheck` 0 error、`npm test` 70 passed / 21 skipped、`npm run test:browser` 89 passed、
+`npm run test:dist` 3 passed、`npm run known-issues` 9 passed で**すべて 4-1b と同一件数**。
+`git status --porcelain tests/golden` は空（golden 78 本無差分）。
+`grep -rn "SqlDesigner" js/ src/ tests/` はコード 0 件（残るのは経緯を書いたコメント 5 行だけ）。
+
+**次段階（4-2）への入力**。ライブ側 2 本（`extract` / `apply`）とモデル
+（[`js/io/model.ts`](js/io/model.ts)）は 4-1a の形のまま確定したので、4-2 は形式側に
+`json-serializer` / `json-parser` を足す作業になる。判断が要るのは `formatVersion: 1` の内容で、
+4-1b が申し送った **relation の両端を名前で持つか `id` 参照に移すか**（同名テーブルの既知不具合を
+直すかどうか）がその中身。決定論出力（キー順・配列順・2 スペース・1 テーブル 1 ブロック）の
+要件は CLAUDE.md 制約3 のとおり。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

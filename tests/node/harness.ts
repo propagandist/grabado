@@ -22,7 +22,11 @@ import type { GrabadoTestApi } from "./app-entry.ts";
  *      -> toXML() が使うのは x/y だけなのでシリアライズの特性化には影響しない
  */
 
-/* SQL.designer の型は types/globals.d.ts の SqlDesigner に集約した（HANDOVER §3 段階2） */
+/*
+ * Designer インスタンスの型は js/wwwsqldesigner.ts の実体 1 本（HANDOVER §4 段階4-1c）。
+ * 段階3-2 の SqlDesigner（types/globals.d.ts -> js/globals.ts と移った別名）は撤去済み。
+ * 本ファイルは designer を api 越しの値として持つだけなので、この型を import していない。
+ */
 
 export interface NodeHarness {
     readonly dom: JSDOM;

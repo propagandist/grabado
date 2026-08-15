@@ -15,9 +15,10 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import type { SqlDesigner } from "./globals.ts";
 import { Visual } from "./visual.ts";
 import type { Row } from "./row.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /** vector なら path 1 本、非 vector なら div 3 本（constructor を参照） */
 export type RelationNode = SVGPathElement | HTMLDivElement;
@@ -31,7 +32,7 @@ export type RelationDom = [RelationNode, ...RelationNode[]];
 export class Relation extends Visual<RelationDom> {
     static _counter = 0;
 
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare row1: Row;
     declare row2: Row;
     declare color: string;
@@ -40,7 +41,7 @@ export class Relation extends Visual<RelationDom> {
     declare highlighted: boolean | null;
     declare style: string;
 
-    constructor(owner: SqlDesigner, row1: Row, row2: Row) {
+    constructor(owner: Designer, row1: Row, row2: Row) {
         super();
         this.owner = owner;
         this.row1 = row1;

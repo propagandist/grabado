@@ -15,15 +15,16 @@
  */
 
 import { OZ } from "./oz.ts";
-import type { SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom } from "./visual.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 export interface MinimapDom extends VisualDom {
     port: HTMLDivElement;
 }
 
 export class Minimap extends Visual<MinimapDom> {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     /* 表示領域の実寸。jsdom では offsetWidth が常に 0 なので -2 になる（golden が固定済み） */
     declare width: number;
     declare height: number;
@@ -39,7 +40,7 @@ export class Minimap extends Visual<MinimapDom> {
     declare documentMove: number;
     declare documentUp: number;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         super();
         this.owner = owner;
         this._init();

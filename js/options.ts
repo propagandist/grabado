@@ -13,7 +13,9 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import { _, type SqlDesigner } from "./globals.ts";
+import { _ } from "./globals.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /** 不変条件は「build() を抜けた時点で全キーが埋まっている」 */
 export interface OptionsDom {
@@ -31,10 +33,10 @@ export interface OptionsDom {
 }
 
 export class Options {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare dom: OptionsDom;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         this.owner = owner;
         /* 型は構築完了後の状態。残り 9 個は build() が埋める */
         this.dom = {

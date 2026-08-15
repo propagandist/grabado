@@ -1,4 +1,4 @@
-import type { SqlDesigner } from "../../js/globals.ts";
+import type { Designer } from "../../js/wwwsqldesigner.ts";
 
 /**
  * 読み込み後の「ライブツリー＋DOM」の状態スナップショット（HANDOVER §4 段階4-1b）。
@@ -27,7 +27,7 @@ import type { SqlDesigner } from "../../js/globals.ts";
  * - **relation の色**（Relation.color / path の stroke）。Relation._counter が
  *   ページ生涯で単調増加する static なので、同じ設計でもテストの実行順で変わる。
  */
-export function captureDesignState(d: SqlDesigner): string {
+export function captureDesignState(d: Designer): string {
     /* 要素の同定。svg 要素の className は SVGAnimatedString なので getAttribute で読む */
     function describeElement(el: Element): string {
         const tag = el.tagName.toLowerCase();

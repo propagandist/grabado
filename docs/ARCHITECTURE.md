@@ -129,6 +129,20 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 
 `IO.check()`（[`../js/io.ts`](../js/io.ts)）は 201 / 404 / 500 / 501 / 503 を「表示すべき応答」として扱い、textarea にロケール文言を出す。**201 も含まれる**ため、save 成功時もメッセージが出る。
 
+**段階4-6 から、server への保存は `load` → `save` の 2 往復になる。** フロントは save の直前に同じ
+`keyword` で `load` を投げ、返ったバイト列を「自分が最後に観測した版」と比べてから本番の save を出す
+（read-before-write。理由と限界は [`../js/io/conflict.ts`](../js/io/conflict.ts) の冒頭）。**backend は 1 行も変わっていない** ——
+現行 PHP に条件付き更新の手がかり（ETag / Last-Modified）が無いための、フロント側だけの実装。
+
+- プリフライトの **404 は正常系**（＝新規保存）なので `check()` に通さない。textarea を汚さない
+- **500 / 501 / 503 は中止**。読めなかったものを上書きしない
+- 一致すればそのまま save、違えば `confirm` で止める（既定は中止）
+- **200 で本文を返す壊れた backend**（例: MySQL に繋がらない `php-mysql`）は「実体あり」に倒れ、
+  上書き前に confirm が出る。実測で確認済み
+- **移植時（§5.1）はここを畳む**。`load` の応答に ETag（内容ハッシュ）を付け、`save` は `If-Match` を
+  要求して不一致なら **412** を返す。プリフライトが不要になり、read-before-write に残る
+  TOCTOU の窓（load と save の間に他者が書くと勝つ）も閉じる
+
 ### 4.4 backend 実装ごとの差（移植の観点）
 
 | backend | list | save | load | import | 備考 |

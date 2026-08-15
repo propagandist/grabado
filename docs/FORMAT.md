@@ -5,10 +5,13 @@ grabado の**正本フォーマット**。git 管理のファイルとして保�
 [`../js/io/json-parser.ts`](../js/io/json-parser.ts) の 2 本だけを通る。形の定義（キー順の契約を含む）は
 [`../js/io/json-format.ts`](../js/io/json-format.ts) が正本で、本書はその散文版。
 
-> 状態: **§4 段階4-2 で新設、4-2b で型キーを安定 `id` に移し、4-3b で UI の全経路に配線した**
-> —— 保存（textarea / クリップボード / ダウンロード / localStorage / server）はすべてこの形式、
-> 読み込みは JSON と XML の両方を受ける（形式は中身の先頭 1 文字で判別する。
-> [`../js/io/detect.ts`](../js/io/detect.ts)）。本書は 4-7 で仕上げる。
+> 状態: **確定版**（§4 完了時点・段階4-7 で総点検）。4-2 で新設 → 4-2b で型キーを安定 `id` に →
+> 4-3b で UI の全経路に配線 → 4-4 で書き出しの拒否条件（同名テーブル）→ 4-5 で「既定値なし」を
+> `""` の 1 通りに → 4-6 で保存前の外部変更検知。保存（textarea / クリップボード / ダウンロード /
+> localStorage / server）はすべてこの形式で、読み込みは JSON と XML の両方を受ける
+> （形式は中身の先頭 1 文字で判別する。[`../js/io/detect.ts`](../js/io/detect.ts)）。
+> **次に本書が動くのは §6.1（PostgreSQL 18 型パレットへの差し替え）** —— そのとき `id` の
+> 移行表が要る（「パレットを差し替えるときの移行」）。
 
 ## 例
 
@@ -92,9 +95,16 @@ JSON 経路にも持ち込むため。cookie の `db` は変わらないので�
 
 | キー | 型 | 必須 | 既定 |
 |---|---|---|---|
-| `type` | string | ○ | — （`PRIMARY` / `UNIQUE` / `INDEX`） |
+| `type` | string | ○ | — （UI が作るのは `PRIMARY` / `INDEX` / `UNIQUE` / `FULLTEXT` の 4 つ） |
 | `name` | string | — | `""` |
 | `columns` | array of string | ○ | — |
+
+`type` は **parser も serializer も値を検査しない**（文字列であることだけを見る）。選択肢を持つのは
+UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.ts) は falsy を `INDEX` に
+倒す。DDL でどう出るかは `db/<db>/output.xsl` 次第で、**PostgreSQL は `PRIMARY` / `UNIQUE` 以外を
+すべて `ADD CONSTRAINT <table>_pkey KEY (...)` に落とす**（`INDEX` も `FULLTEXT` も同じ。
+制約名の衝突は known-issues #6）。値を列挙して拒む案は §6.3（エクスポート規約）の判断に送る ——
+形式側で拒むと、いま開ける設計が読めなくなる側の変更になる。
 
 ## 決定論と diff フレンドリー（CLAUDE.md 制約3）
 
@@ -212,6 +222,17 @@ parser は**部分的に読み込まない**。次のいずれかで例外を投
 確定した** —— [`../js/io.ts`](../js/io.ts) の `loadDesignText()` が
 `alert(_("jsonerror") + ": " + e.message)` に流す。現行の 18 か所と同じ形。
 
+そもそも parser に渡らない入力が 2 つある（[`../js/io/detect.ts`](../js/io/detect.ts) の判別）。
+どちらも locale 付きの短い alert で終わり、**開いている設計は変わらない**。
+
+| 入力 | 判別 | 出るもの |
+|---|---|---|
+| 空（空白と BOM だけを含む） | `empty` | `_("empty")` |
+| 先頭が `{` でも `<` でもない | `unknown` | `_("unknownformat")` |
+
+「JSON として読んで駄目なら XML」というフォールバックは**作らない**。壊れた JSON を XML として
+読み直すと「Null document」に着地し、ユーザーが直せない位置のメッセージになるため（同ファイル冒頭）。
+
 ## 書き出せない設計
 
 serializer 側にも拒否条件がある。いずれも **1 バイトも書かずに例外**で、受け止めは
@@ -247,6 +268,38 @@ npm run migrate:design -- schema/*.json
 紛れ込むため）。変換されるのは `formatVersion` の行と `columns[].type` の行だけで、それ以外は
 キーの位置も値も動かない。
 
+## 保存の前に読む（外部変更検知・段階4-6）
+
+正本が git 管理のファイルである以上、**他人の PR を `git pull` で取り込んだ後に古い編集状態のまま
+保存すると、相手の変更が黙って消える**。HANDOVER §4 はこれを「ファイルが app 外で変化したら検知し
+再読込を促す。古い編集状態でファイルを上書きしない」と定義していて、**server 経路の save
+（`#serversave` と F2 の `#quicksave`）は保存の前に同じ名前を 1 回 load する**。
+
+判定は [`verdictForSave()`](../js/io/conflict.ts)（純関数）の 4 値で、confirm を出すかどうかは
+[`../js/io.ts`](../js/io.ts) の `preflightresponse()` が決める。
+
+| 判定 | 状況 | 挙動 |
+|---|---|---|
+| `absent` | サーバに無い（404） | そのまま保存（新規保存の正常系） |
+| `clean` | 最後に観測した版と一致 | そのまま保存 |
+| `exists` | 派生元を持たない名前に実体がある | **confirm**（他人／別セッションのファイルを踏む） |
+| `conflict` | 観測した後に外部で変わった | **confirm**（本機能の主眼） |
+
+- 台帳（派生元）は **keyword ごとの Map ではなく 1 本**。「今の編集セッションの派生元」という
+  意味づけで、別名で保存すれば派生元も移る。載せるのは load / save で**実際に観測したバイト列**。
+- **500 / 501 / 503 は中止**する。読めなかったものを「無かったこと」にして上書きするのは、
+  本機能が防ぎたいことそのもの。
+- 衝突しても**上書きの道は残す**（confirm で承諾すれば保存される）。正本は git なので復元できる ——
+  ただし無言では通さない。
+- **TOCTOU の窓は残る**（プリフライトと save の間に他者が書けば、そちらが負ける）。閉じるには
+  backend 側の条件付き更新が要るので、ETag ＋ `If-Match`（不一致は 412）を Kotlin 実装
+  （HANDOVER §5.1）へ申し送ってある。**そこでプリフライトは 1 往復に畳める。**
+- **時間駆動にしない**（CLAUDE.md 制約2）。定期ポーリングも自動再読込も入れない ——
+  編集中に勝手に読み直すと、pull 上書き事故を「編集の消失」という別の形で作り直すことになる。
+
+対象は **server 経路だけ**。localStorage・ダウンロード・クリップボードは app の外で書き換わる
+経路を持たない（あるいは書き換わっても上書き先が無い）ので、プリフライトを投げない。
+
 ## テスト
 
 [`../tests/browser/json.spec.ts`](../tests/browser/json.spec.ts)（golden の権威）と
@@ -262,3 +315,9 @@ npm run migrate:design -- schema/*.json
 **「JSON が XML と同じ情報を運ぶ」ことの根拠は「情報保存」テスト** —— 同じ fixture を
 XML 経由（`toXML` → `fromXML`）と JSON 経由（`toJson` → `fromJson`）で往復させ、
 ライブツリー＋DOM の状態スナップショットがバイト一致することを 7 fixture すべてで確認している。
+
+形式の外側 2 つは別のテストが見る。判別（`{` / `<` / 空 / それ以外）は
+[`../tests/node/detect.test.ts`](../tests/node/detect.test.ts)、外部変更検知は
+[`../tests/node/conflict.test.ts`](../tests/node/conflict.test.ts)（判定の純関数）と
+[`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts)（仮想 backend を相手に
+プリフライト → confirm → save の往復を通す）。

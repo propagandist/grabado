@@ -69,12 +69,12 @@
 
     <!-- io -->
     <string name="saveload">保存／読み込み</string>
-    <string name="empty">下の入出力欄にXMLデータを貼りつけてから実行してください。</string>
+    <string name="empty">下の入出力欄にJSONデータを貼りつけてから実行してください。</string>
     <string name="client">クライアント</string>
     <string name="server">サーバ</string>
     <string name="output">入出力欄</string>
-    <string name="clientsave">XMLを出力</string>
-    <string name="clientload">XMLを読込</string>
+    <string name="clientsave">JSONを出力</string>
+    <string name="clientload">JSONを読込</string>
     <string name="clientsql">SQLを生成</string>
     <string name="clientlocalsave">ブラウザに保存</string>
     <string name="clientlocalload">ブラウザから読込</string>
@@ -97,6 +97,8 @@
 
     <!-- misc -->
     <string name="xmlerror">XMLエラー</string>
+    <string name="jsonerror">JSONエラー</string>
+    <string name="unknownformat">読み取れないデータです。設計JSON（{...}）かXML（&lt;sql&gt;...）を入れてください。</string>
     <string name="docs">ドキュメント</string>
 
 </locale>

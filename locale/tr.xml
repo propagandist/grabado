@@ -70,12 +70,12 @@
 
     <!-- io -->
     <string name="saveload">Kaydet / Yükle</string>
-    <string name="empty">Lütfen XML verilerini aşağıdaki metin alanına yapıştırın ve tekrar deneyin.</string>
+    <string name="empty">Lütfen JSON verilerini aşağıdaki metin alanına yapıştırın ve tekrar deneyin.</string>
     <string name="client">İstemci</string>
     <string name="server">Sunucu</string>
     <string name="output">Giriş / Çıkış</string>
-    <string name="clientsave">XML Kaydet</string>
-    <string name="clientload">XML Yükle</string>
+    <string name="clientsave">JSON Kaydet</string>
+    <string name="clientload">JSON Yükle</string>
     <string name="clientlocalsave">Browser'a Kaydet</string>
     <string name="clientlocalload">Browser'a Yükle</string>
     <string name="clientlocallist">Browser'da Listele</string>

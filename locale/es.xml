@@ -70,12 +70,12 @@
 
     <!-- io -->
     <string name="saveload">Guardar / Cargar</string>
-    <string name="empty">Por favor, pega los datos XML dentro del área de texto de abajo y vuelve a intentar.</string>
+    <string name="empty">Por favor, pega los datos JSON dentro del área de texto de abajo y vuelve a intentar.</string>
     <string name="client">Cliente</string>
     <string name="server">Servidor</string>
     <string name="output">Entrada / Salida</string>
-    <string name="clientsave">Guardar XML</string>
-    <string name="clientload">Cargar XML</string>
+    <string name="clientsave">Guardar JSON</string>
+    <string name="clientload">Cargar JSON</string>
     <string name="clientlocalsave">Guardar en el Navegador</string>
     <string name="clientlocalload">Cargar desde el Navegador</string>
     <string name="clientlocallist">Listar desde el Navegador</string>

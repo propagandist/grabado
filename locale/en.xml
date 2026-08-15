@@ -70,20 +70,19 @@
 
     <!-- io -->
     <string name="saveload">Save / Load</string>
-    <string name="empty">Please paste XML data into the text area below and try again.</string>
+    <string name="empty">Please paste JSON data into the text area below and try again.</string>
     <string name="client">Client</string>
     <string name="server">Server</string>
     <string name="output">Input / Output</string>
-    <string name="clientsave">Save XML</string>
-    <string name="clientload">Load XML</string>
+    <string name="clientsave">Save JSON</string>
+    <string name="clientload">Load JSON</string>
     <string name="clientlocalsave">Save in Browser</string>
     <string name="clientlocalload">Load from Browser</string>
     <string name="clientlocallist">List from Browser</string>
     <string name="clientsql">Generate SQL</string>
     <string name="clientcopy">Copy Output</string>
     <string name="clientpaste">Paste from Clipboard</string>
-    <string name="clientdownloadxml">Download as XML</string>
-    <string name="clientdownloadtxt">Download as TXT</string>
+    <string name="clientdownload">Download as JSON</string>
     <string name="clientloadfromfile">Load Database from file</string>
     <string name="backendlabel">Server backend:</string>
     <string name="serversave">Save</string>
@@ -103,6 +102,8 @@
 
     <!-- misc -->
     <string name="xmlerror">XML error</string>
+    <string name="jsonerror">JSON error</string>
+    <string name="unknownformat">Unrecognized data: expected a design JSON ({...}) or XML (&lt;sql&gt;...).</string>
     <string name="docs">Documentation</string>
 
 </locale>

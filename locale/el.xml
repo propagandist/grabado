@@ -69,12 +69,12 @@
 
     <!-- io -->
     <string name="saveload">Αποθήκ./Άνοιγμα</string>
-    <string name="empty">Κάντε επικόλληση των δεδομένων XML στο πεδίο κειμένου παρακάτω και δοκιμάστε ξανά.</string>
+    <string name="empty">Κάντε επικόλληση των δεδομένων JSON στο πεδίο κειμένου παρακάτω και δοκιμάστε ξανά.</string>
     <string name="client">Πελάτης</string>
     <string name="server">Διακομιστής</string>
     <string name="output">Εισαγωγή/Εξαγωγή</string>
-    <string name="clientsave">Αποθήκευση XML</string>
-    <string name="clientload">Άνοιγμα XML</string>
+    <string name="clientsave">Αποθήκευση JSON</string>
+    <string name="clientload">Άνοιγμα JSON</string>
     <string name="clientsql">Δημιουργία SQL</string>
     <string name="backendlabel">Διακομιστής:</string>
     <string name="serversave">Αποθήκευση</string>

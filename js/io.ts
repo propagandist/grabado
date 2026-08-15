@@ -12,6 +12,16 @@
  * CONFIG.DROPBOX_KEY・ボタン 3 つ・locale 21 行ごと）。「Docker で各自ローカル稼働・正本は
  * git 管理ファイル・共有は PR」という HANDOVER §2 の形と役割が重複し、これで index.html の
  * 外部依存が 0 になる。判断の根拠は CUSTOMIZATIONS.md の決定ログ。
+ *
+ * ## 段階4-3b（形式の切り替え）
+ *
+ * **保存はすべて JSON、読み込みは JSON と XML の両方**（HANDOVER §4 / CLAUDE.md 制約4）。
+ * 書き出し 5 経路は toJsonOrAlert()、読込 5 経路は loadDesignText() を通る。
+ *
+ * XML の書き出しが残る場所は 1 つだけ —— clientsql() -> finish() の DDL 生成で、
+ * output.xsl（XSLT）の入力に XML が要るため（js/io/ddl-xml.ts）。**この 1 か所が
+ * Designer.toXML() の唯一の呼び手**で、消えるのは §6.3 で output.xsl を TS 実装に
+ * 置き換えるとき。introspection（serverimport）も XML のままで、こちらは §5.2。
  */
 
 import { OZ } from "./oz.ts";
@@ -22,9 +32,26 @@ import { detectDesignFormat } from "./io/detect.ts";
 import type { Designer } from "./wwwsqldesigner.ts";
 
 /**
+ * server 経路の keyword に `.json` をちょうど 1 つ付ける（段階4-3b）。
+ *
+ * 現行 backend の保存先は拡張子なし（`data/<keyword>`）で、これだと `.gitattributes` /
+ * `.prettierignore` / 移行 glob のいずれもファイルを名指しできない（4-2b の申し送り）。
+ * backend は body を解釈せずに `basename($keyword)` でファイル名を作るだけなので、
+ * **フロントが keyword に付けるだけで済む**（PHP には 1 行も触らない。捨てる資産に
+ * 投資しない ＝ 制約6）。拡張子の**強制**（.json 以外の save を拒む・list が *.json だけを
+ * 返す）は正本ディレクトリの責務なので Kotlin 実装の §5.1 に送る。
+ *
+ * 二重付与を防ぐのは、serverlist の出力（backend が返すファイル名。`.json` 付き）を
+ * そのまま prompt に貼り付けても壊れないようにするため。
+ */
+function jsonKeyword(name: string): string {
+    return name.toLowerCase().endsWith(".json") ? name : name + ".json";
+}
+
+/**
  * 保存/読込ダイアログの DOM。
  *
- * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン 17 個は
+ * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン 16 個は
  * id 配列のループが埋め、直後に elm.value を書くのでいずれも input 要素。
  */
 export interface IoDom {
@@ -44,8 +71,7 @@ export interface IoDom {
     serverlist: HTMLInputElement;
     clientcopy: HTMLInputElement;
     clientpaste: HTMLInputElement;
-    clientdownloadxml: HTMLInputElement;
-    clientdownloadtxt: HTMLInputElement;
+    clientdownload: HTMLInputElement;
     clientloadfromfile: HTMLInputElement;
     serverimport: HTMLInputElement;
 }
@@ -83,8 +109,7 @@ export class IO {
             "serverlist",
             "clientcopy",
             "clientpaste",
-            "clientdownloadxml",
-            "clientdownloadtxt",
+            "clientdownload",
             "clientloadfromfile",
             "serverimport",
         ];
@@ -144,8 +169,7 @@ export class IO {
         OZ.Event.add(this.dom.serverimport, "click", this.serverimport.bind(this));
         OZ.Event.add(this.dom.clientcopy, "click", this.clientcopy.bind(this));
         OZ.Event.add(this.dom.clientpaste, "click", this.clientpaste.bind(this));
-        OZ.Event.add(this.dom.clientdownloadxml, "click", this.clientdownloadxml.bind(this));
-        OZ.Event.add(this.dom.clientdownloadtxt, "click", this.clientdownloadtxt.bind(this));
+        OZ.Event.add(this.dom.clientdownload, "click", this.clientdownload.bind(this));
         OZ.Event.add(this.dom.clientloadfromfile, "click", this.clientloadfromfile.bind(this));
         OZ.Event.add(document, "keydown", this.press.bind(this));
         this.build();
@@ -264,9 +288,29 @@ export class IO {
         }
     }
 
+    /**
+     * 書き出しの入口（HANDOVER §4 段階4-3b）。
+     *
+     * js/io/json-serializer.ts は「型パレットが読めていない」「型 id が無い」ときに
+     * **1 バイトも書かずに例外で落ちる**契約。書き出し 5 経路がそれぞれ try を書くと
+     * 文言がばらけるので、受け止めをここに集約する。失敗したら null を返し、
+     * 呼び手は何もしない（textarea を空で上書きしたり空ファイルを保存したりしない）。
+     */
+    toJsonOrAlert(): string | null {
+        try {
+            return this.owner.toJson();
+        } catch (e) {
+            alert(_("jsonerror") + ": " + (e as Error).message);
+            return null;
+        }
+    }
+
     clientsave(): void {
-        var xml = this.owner.toXML();
-        this.dom.ta.value = xml;
+        var json = this.toJsonOrAlert();
+        if (json === null) {
+            return;
+        }
+        this.dom.ta.value = json;
     }
 
     clientload(): void {
@@ -275,8 +319,11 @@ export class IO {
     }
 
     clientcopy(): void {
-        var xml = this.owner.toXML();
-        navigator.clipboard.writeText(xml).then(function() {
+        var json = this.toJsonOrAlert();
+        if (json === null) {
+            return;
+        }
+        navigator.clipboard.writeText(json).then(function() {
             alert(_("clientsave") + " - Copied to clipboard!");
         }).catch(function(err) {
             alert("Failed to copy: " + err);
@@ -292,14 +339,17 @@ export class IO {
         });
     }
 
-    clientdownloadxml(): void {
-        var xml = this.owner.toXML();
-        this.downloadFile(xml, "new-database.xml", "application/xml");
-    }
-
-    clientdownloadtxt(): void {
-        var xml = this.owner.toXML();
-        this.downloadFile(xml, "new-database.txt", "text/plain");
+    /*
+     * grabado: 段階4-3b で clientdownloadxml / clientdownloadtxt の 2 本を 1 本に統合した。
+     * 中身が JSON になった以上「.txt でも落とせる」ことに意味が無く、id に xml を残すと
+     * 落ちるファイルと名前が食い違う。
+     */
+    clientdownload(): void {
+        var json = this.toJsonOrAlert();
+        if (json === null) {
+            return;
+        }
+        this.downloadFile(json, "new-database.json", "application/json");
     }
     downloadFile(content: string, filename: string, mimeType: string): void {
         var blob = new Blob([content], { type: mimeType });
@@ -367,8 +417,11 @@ export class IO {
             return;
         }
 
-        var xml = this.owner.toXML();
-        if (xml.length >= (5 * 1024 * 1024) / 2) {
+        var json = this.toJsonOrAlert();
+        if (json === null) {
+            return;
+        }
+        if (json.length >= (5 * 1024 * 1024) / 2) {
             /* this is a very big db structure... */
             alert(
                 "Warning: your database structure is above 5 megabytes in size, this is above the localStorage single key limit allowed by some browsers, example Mozilla Firefox 10"
@@ -381,11 +434,13 @@ export class IO {
             return;
         }
 
+        /* grabado: キーの接頭辞は据え置く（段階4-3b）。改名すると既存のエントリが
+           行方不明になる。中身が XML から JSON に変わっても読み手は形式で判別する */
         key = "wwwsqldesigner_databases_" + (key || "default");
 
         try {
-            localStorage.setItem(key, xml);
-            if (localStorage.getItem(key) != xml) {
+            localStorage.setItem(key, json);
+            if (localStorage.getItem(key) != json) {
                 throw new Error("Content verification failed");
             }
         } catch (e) {
@@ -507,22 +562,27 @@ export class IO {
             return;
         }
         this._name = name;
-        var xml = this.owner.toXML();
+        var json = this.toJsonOrAlert();
+        if (json === null) {
+            return;
+        }
         var bp = this.owner.getOption("xhrpath");
         var url =
             bp +
             "backend/" +
             this.dom.backend.value +
             "/?action=save&keyword=" +
-            encodeURIComponent(name);
+            encodeURIComponent(jsonKeyword(name));
         var h = this.owner.getXhrHeaders();
-        h["Content-type"] = "application/xml";
+        h["Content-type"] = "application/json";
         this.owner.window.showThrobber();
+        /* タイトルは素の名前のまま（.json はファイル名の都合で、設計の名前ではない） */
         this.owner.setTitle(name);
+        /* xml: true は**応答**の解釈指定（backend は XML を返す）。送る body とは無関係 */
         OZ.Request(url, this.saveresponse, {
             xml: true,
             method: "post",
-            data: xml,
+            data: json,
             headers: h,
         });
     }
@@ -543,7 +603,7 @@ export class IO {
             "backend/" +
             this.dom.backend.value +
             "/?action=load&keyword=" +
-            encodeURIComponent(name);
+            encodeURIComponent(jsonKeyword(name));
         var h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
         this.name = name;

@@ -455,8 +455,12 @@ export class Designer extends Visual<DesignerDom> {
     /*
      * grabado: 本体は段階4-1a で js/io/extract.ts と js/io/ddl-xml.ts に分けた。
      * このメソッド自体は残す —— 両ハーネス（node は new Designer() の戻り値、page は
-     * window.d）と js/io.ts の 8 か所が触る面で、名前と到達性が変わるとテストが要改修に
-     * なる。override が外れたのは基底 Visual の空 toXML() を同時に撤去したため。
+     * window.d）が触る面で、名前と到達性が変わるとテストが要改修になる。
+     * override が外れたのは基底 Visual の空 toXML() を同時に撤去したため。
+     *
+     * **段階4-3b で出荷側の呼び手は js/io.ts の finish()（DDL 生成）1 か所になった。**
+     * 保存/読込 8 経路は toJson() / loadDesignText() に移り、ここに残る XML は
+     * output.xsl（XSLT）への入力だけ。メソッドごと消えるのは §6.3。
      *
      * location.href の評価がここに残るのは、serializer を純関数にするために唯一の
      * 環境依存を引数へ押し出した結果（4-4 の決定論化でこの引数ごと消える）。

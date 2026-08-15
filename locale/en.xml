@@ -79,9 +79,6 @@
     <string name="clientlocalsave">Save in Browser</string>
     <string name="clientlocalload">Load from Browser</string>
     <string name="clientlocallist">List from Browser</string>
-    <string name="dropboxsave">Save to Dropbox</string>
-    <string name="dropboxload">Load from Dropbox</string>
-    <string name="dropboxlist">List from Dropbox</string>
     <string name="clientsql">Generate SQL</string>
     <string name="clientcopy">Copy Output</string>
     <string name="clientpaste">Paste from Clipboard</string>

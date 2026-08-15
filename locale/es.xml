@@ -79,9 +79,6 @@
     <string name="clientlocalsave">Guardar en el Navegador</string>
     <string name="clientlocalload">Cargar desde el Navegador</string>
     <string name="clientlocallist">Listar desde el Navegador</string>
-    <string name="dropboxsave">Guardar en Dropbox</string>
-    <string name="dropboxload">Cargar desde Dropbox</string>
-    <string name="dropboxlist">Listar desde Dropbox</string>
     <string name="clientsql">Generar SQL</string>
     <string name="backendlabel">Servidor de fondo:</string>
     <string name="serversave">Guardar</string>

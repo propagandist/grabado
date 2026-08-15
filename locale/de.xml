@@ -84,9 +84,6 @@
     <string name="clientlocalsave">In Browser speichern</string>
     <string name="clientlocalload">Von Browser laden</string>
     <string name="clientlocallist">Von Browser auflisten</string>
-    <string name="dropboxsave">In Dropbox speichern</string>
-    <string name="dropboxload">Von Dropbox laden</string>
-    <string name="dropboxlist">Von Dropbox auflisten</string>
     <string name="clientsql">SQL generieren</string>
     <string name="backendlabel">Server Basis:</string>
     <string name="serversave">Speichern</string>

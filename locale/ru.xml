@@ -79,9 +79,6 @@
     <string name="clientlocalsave">Сохранить в браузере</string>
     <string name="clientlocalload">Загрузить из браузера</string>
     <string name="clientlocallist">Получить список схем из браузера</string>
-    <string name="dropboxsave">Сохранить в Dropbox</string>
-    <string name="dropboxload">Загрузить из Dropbox</string>
-    <string name="dropboxlist">Получить список из Dropbox</string>
     <string name="clientsql">Генерировать SQL</string>
     <string name="backendlabel">Серверные технологии:</string>
     <string name="serversave">Сохранить</string>

@@ -79,9 +79,6 @@
     <string name="clientlocalsave">Зберегти в переглядачі</string>
     <string name="clientlocalload">Завантажити з переглядача</string>
     <string name="clientlocallist">Список з переглядача</string>
-    <string name="dropboxsave">Зберегти у Dropbox</string>
-    <string name="dropboxload">Завантажити з Dropbox'а</string>
-    <string name="dropboxlist">Список із Dropbox'а</string>
     <string name="clientsql">Згенерувати SQL</string>
     <string name="backendlabel">Серверна частина:</string>
     <string name="serversave">Зберегти</string>

@@ -25,7 +25,7 @@ export class TypePalette {
      * 新規に書くクラスには保存すべき現行 emit が無い。
      *
      * 現行の window.DATATYPES と同じく、読み込み前は false。
-     * null にしないのは js/io/xml-serializer.ts が持つ XMLSerializer フォールバック
+     * null にしないのは js/io/ddl-xml.ts が持つ XMLSerializer フォールバック
      * （`element().xml` を評価する死に分岐。段階4-1a まで Designer.toXML() にあった）と
      * 同値を保つため —
      * false なら undefined、null なら TypeError で挙動が割れる。

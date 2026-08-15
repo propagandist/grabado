@@ -79,9 +79,6 @@
     <string name="clientlocalsave">Browser'a Kaydet</string>
     <string name="clientlocalload">Browser'a Yükle</string>
     <string name="clientlocallist">Browser'da Listele</string>
-    <string name="dropboxsave">Dropbox Kaydet</string>
-    <string name="dropboxload">Dropbox Yükle</string>
-    <string name="dropboxlist">Dropbox Listele</string>
     <string name="clientsql">SQL oluştur</string>
     <string name="backendlabel">Sunucu Kısmı:</string>
     <string name="serversave">Kaydet</string>

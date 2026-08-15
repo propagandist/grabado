@@ -8,9 +8,10 @@
  * dom バッグは「文字列キーの動的代入」形態（docs/ARCHITECTURE.md §5.4 の (ii)）。
  * 型は完成形（IoDom）を宣言し、嘘は初期化とループ代入の 2 行に閉じ込める（段階3-2 の原理）。
  *
- * Dropbox 連携は index.html が CDN から読む dropbox.js に依存する。存廃は未決で、判断は
- * HANDOVER §4 の IO 作り替えと同時（CUSTOMIZATIONS.md の決定ログ）。ここでは本ファイルが
- * 触る面だけを宣言し、実装には触れていない。
+ * Dropbox 連携は段階4-3a で撤去した（dropbox.js の CDN 依存・dropbox-oauth-receiver.html・
+ * CONFIG.DROPBOX_KEY・ボタン 3 つ・locale 21 行ごと）。「Docker で各自ローカル稼働・正本は
+ * git 管理ファイル・共有は PR」という HANDOVER §2 の形と役割が重複し、これで index.html の
+ * 外部依存が 0 になる。判断の根拠は CUSTOMIZATIONS.md の決定ログ。
  */
 
 import { OZ } from "./oz.ts";
@@ -19,50 +20,10 @@ import { _ } from "./globals.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
 
-/* dropbox.js のうち本ファイルが触る面。存廃は §4（上のコメント） */
-interface DropboxError {
-    status: number;
-}
-interface DropboxClient {
-    reset(): void;
-    authDriver(driver: unknown): void;
-    authenticate(
-        cb: (error: DropboxError | null, client: unknown) => void
-    ): void;
-    writeFile(
-        name: string,
-        data: string,
-        cb: (error: DropboxError | null, stat: unknown) => void
-    ): void;
-    readFile(
-        name: string,
-        cb: (error: DropboxError | null, data: string) => void
-    ): void;
-    readdir(
-        path: string,
-        cb: (error: DropboxError | null, entries: string[]) => void
-    ): void;
-}
-declare const Dropbox: {
-    Client: new (options: { key: string }) => DropboxClient;
-    ApiError: Record<
-        | "INVALID_TOKEN"
-        | "NOT_FOUND"
-        | "OVER_QUOTA"
-        | "RATE_LIMITED"
-        | "NETWORK_ERROR"
-        | "INVALID_PARAM"
-        | "OAUTH_ERROR"
-        | "INVALID_METHOD",
-        number
-    >;
-    AuthDriver: { Popup: new (options: { receiverUrl: string }) => unknown };
-};
-
 /**
  * 保存/読込ダイアログの DOM。
  *
- * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン 20 個は
+ * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン 17 個は
  * id 配列のループが埋め、直後に elm.value を書くのでいずれも input 要素。
  */
 export interface IoDom {
@@ -76,9 +37,6 @@ export interface IoDom {
     clientlocallist: HTMLInputElement;
     clientload: HTMLInputElement;
     clientsql: HTMLInputElement;
-    dropboxsave: HTMLInputElement;
-    dropboxload: HTMLInputElement;
-    dropboxlist: HTMLInputElement;
     quicksave: HTMLInputElement;
     serversave: HTMLInputElement;
     serverload: HTMLInputElement;
@@ -95,19 +53,16 @@ export class IO {
     declare owner: Designer;
     /** server load/save で最後に使った名前 */
     declare _name: string;
-    /** localStorage / Dropbox で最後に使った名前 */
+    /** localStorage で最後に使った名前 */
     declare lastUsedName: string;
     /** serverload が控える名前。loadresponse が setTitle に渡す */
     declare name: string;
     declare dom: IoDom;
-    /** CONFIG.DROPBOX_KEY が未設定なら null（dropBoxInit） */
-    declare dropboxClient: DropboxClient | null;
 
     constructor(owner: Designer) {
         this.owner = owner;
         this._name = ""; /* last used name with server load/save */
-        this.lastUsedName =
-            ""; /* last used name with local storage or dropbox load/save */
+        this.lastUsedName = ""; /* last used name with local storage load/save */
         /* 型は構築完了後の状態（IoDom）。この行から下の 2 つのループが残りを埋める */
         this.dom = {
             container: OZ.$("io"),
@@ -121,9 +76,6 @@ export class IO {
             "clientlocallist",
             "clientload",
             "clientsql",
-            "dropboxsave",
-            "dropboxload",
-            "dropboxlist",
             "quicksave",
             "serversave",
             "serverload",
@@ -157,9 +109,6 @@ export class IO {
         this.dom.ta = OZ.$<HTMLTextAreaElement>("textarea");
         this.dom.backend = OZ.$<HTMLSelectElement>("backend");
 
-        /* init dropbox before hiding the container so it can adjust its buttons */
-        this.dropBoxInit();
-
         this.dom.container.parentNode!.removeChild(this.dom.container);
         this.dom.container.style.visibility = "";
 
@@ -186,9 +135,6 @@ export class IO {
             this.clientlocallist.bind(this)
         );
         OZ.Event.add(this.dom.clientload, "click", this.clientload.bind(this));
-        OZ.Event.add(this.dom.dropboxload, "click", this.dropboxload.bind(this));
-        OZ.Event.add(this.dom.dropboxsave, "click", this.dropboxsave.bind(this));
-        OZ.Event.add(this.dom.dropboxlist, "click", this.dropboxlist.bind(this));
         OZ.Event.add(this.dom.clientsql, "click", this.clientsql.bind(this));
         OZ.Event.add(this.dom.quicksave, "click", this.quicksave.bind(this));
         OZ.Event.add(this.dom.serversave, "click", this.serversave.bind(this));
@@ -328,16 +274,17 @@ export class IO {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
-    promptName(title: string, suffix?: string): string | null {
+    /*
+     * grabado: suffix 引数は段階4-3a で撤去した。唯一の呼び手が Dropbox（".xml" を
+     * 剥がしてから付け直す経路）で、しかも実装が name.length - 4 の決め打ちだったので
+     * suffix の長さが 4 でなければ壊れる。撤去する側に呼び手ごとあるので直さず消した。
+     */
+    promptName(title: string): string | null {
         var lastUsedName = (this.owner.getOption("lastUsedName") ||
             this.lastUsedName) as string;
         var name = prompt(_(title), lastUsedName);
         if (!name) {
             return null;
-        }
-        if (suffix && name.endsWith(suffix)) {
-            // remove suffix from name
-            name = name.substr(0, name.length - 4);
         }
         this.owner.setOption("lastUsedName", name);
         this.lastUsedName = name; // save this also in variable in case cookies are disabled
@@ -481,164 +428,6 @@ export class IO {
         }
         this.listresponse(data, code);
     }
-
-    /* ------------------------- Dropbox start ------------------------ */
-
-    /**
-     * The following code uses this lib: https://github.com/dropbox/dropbox-js
-     */
-    dropBoxInit(): void {
-        if (CONFIG.DROPBOX_KEY) {
-            this.dropboxClient = new Dropbox.Client({ key: CONFIG.DROPBOX_KEY });
-        } else {
-            this.dropboxClient = null;
-            // Hide the Dropbox buttons
-            var elems = document.querySelectorAll("[id^=dropbox]"); // gets all tags whose id start with "dropbox"
-            ([] as HTMLElement[]).slice.call(elems).forEach(function (elem) {
-                elem.style.display = "none";
-            });
-        }
-    }
-
-    showDropboxError(error: DropboxError): void {
-        var prefix = _("Dropbox error") + ": ";
-        var msg: string | number = error.status;
-
-        switch (error.status) {
-            case Dropbox.ApiError.INVALID_TOKEN:
-                // If you're using dropbox.js, the only cause behind this error is that
-                // the user token expired.
-                // Get the user through the authentication flow again.
-                msg = _(
-                    "Token expired - retry the operation, authenticating again with Dropbox"
-                );
-                this.dropboxClient!.reset();
-                break;
-
-            case Dropbox.ApiError.NOT_FOUND:
-                // The file or folder you tried to access is not in the user's Dropbox.
-                // Handling this error is specific to your application.
-                msg = _("File not found");
-                break;
-
-            case Dropbox.ApiError.OVER_QUOTA:
-                // The user is over their Dropbox quota.
-                // Tell them their Dropbox is full. Refreshing the page won't help.
-                msg = _("Dropbox is full");
-                break;
-
-            case Dropbox.ApiError.RATE_LIMITED:
-                // Too many API requests. Tell the user to try again later.
-                // Long-term, optimize your code to use fewer API calls.
-                break;
-
-            case Dropbox.ApiError.NETWORK_ERROR:
-                // An error occurred at the XMLHttpRequest layer.
-                // Most likely, the user's network connection is down.
-                // API calls will not succeed until the user gets back online.
-                msg = _("Network error");
-                break;
-
-            case Dropbox.ApiError.INVALID_PARAM:
-            case Dropbox.ApiError.OAUTH_ERROR:
-            case Dropbox.ApiError.INVALID_METHOD:
-            default:
-            // Caused by a bug in dropbox.js, in your application, or in Dropbox.
-            // Tell the user an error occurred, ask them to refresh the page.
-        }
-
-        alert(prefix + msg);
-    }
-
-    showDropboxAuthenticate(connectedCallBack: () => void): boolean {
-        if (!this.dropboxClient) return false;
-
-        // We want to use a popup window for authentication as the default redirection won't work for us as it'll make us lose our schema data
-        var href = window.location.href;
-        var prefix = href.substring(0, href.lastIndexOf("/")) + "/";
-        this.dropboxClient.authDriver(
-            new Dropbox.AuthDriver.Popup({
-                receiverUrl: prefix + "dropbox-oauth-receiver.html",
-            })
-        );
-
-        // Now let's authenticate us
-        var sql_io = this;
-        sql_io.dropboxClient!.authenticate(function (error, client) {
-            if (error) {
-                sql_io.showDropboxError(error);
-            } else {
-                // We're authenticated
-                connectedCallBack();
-            }
-            return;
-        });
-
-        return true;
-    }
-
-    dropboxsave(): void {
-        var sql_io = this;
-        sql_io.showDropboxAuthenticate(function () {
-            var key = sql_io.promptName("serversaveprompt", ".xml");
-            if (!key) {
-                return;
-            }
-
-            var filename = (key || "default") + ".xml";
-
-            sql_io.listresponse("Saving...", 200);
-            var xml = sql_io.owner.toXML();
-            sql_io.dropboxClient!.writeFile(filename, xml, function (error, stat) {
-                if (error) {
-                    sql_io.listresponse("", 200);
-                    return sql_io.showDropboxError(error);
-                }
-                sql_io.listresponse(
-                    filename + " " + _("was saved to Dropbox"),
-                    200
-                );
-            });
-        });
-    }
-
-    dropboxload(): void {
-        var sql_io = this;
-        sql_io.showDropboxAuthenticate(function () {
-            var key = sql_io.promptName("serverloadprompt", ".xml");
-            if (!key) {
-                return;
-            }
-
-            var filename = (key || "default") + ".xml";
-
-            sql_io.listresponse("Loading...", 200);
-            sql_io.dropboxClient!.readFile(filename, function (error, data) {
-                sql_io.listresponse("", 200);
-                if (error) {
-                    return sql_io.showDropboxError(error);
-                }
-                sql_io.fromXMLText(data);
-            });
-        });
-    }
-
-    dropboxlist(): void {
-        var sql_io = this;
-        sql_io.showDropboxAuthenticate(function () {
-            sql_io.listresponse("Loading...", 200);
-            sql_io.dropboxClient!.readdir("/", function (error, entries) {
-                if (error) {
-                    sql_io.listresponse("", 200);
-                    return sql_io.showDropboxError(error);
-                }
-                var data = entries.join("\n") + "\n";
-                sql_io.listresponse(data, 200);
-            });
-        });
-    }
-
-    /* ------------------------- Dropbox end ------------------------ */
 
     clientsql(): void {
         var bp = this.owner.getOption("staticpath");

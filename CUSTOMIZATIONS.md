@@ -1802,6 +1802,75 @@ parser が持つ後方互換は **例外メッセージ 1 つだけ**にし、�
 
 ---
 
+### 2026-08-15 HANDOVER §4「IO」段階4-3a — Dropbox を撤去し、XML 書き出しを `ddl-xml.ts` に隔離した
+
+**§4 の分割表の 4-3 を 2 本に割った。本段階は削除と改名だけで、JSON 化の判断を 1 つも含まない。**
+4-1 を 3 本に割ったのと同じ論法 —— 1 本でやると「Dropbox 215 行の削除」「保存/読込 8 経路の
+書き換え」「ファイル改名」「`.json` 拡張子」「例外の見せ方」「locale の文言」が 1 つの diff に
+同居し、赤が出たときに切り分けられない。加えて **4-3a は「バンドル差分が削除に収束する」ことを
+完了判定にできる**ので、証明の性質が 4-3b（UI の振る舞いが変わる段階）と根本的に違う。
+§4 はこれで 13 本になる。
+
+#### 決めたこと 1: Dropbox は「隠す」ではなく機能ごと撤去する
+
+段階4-0a の決定（本書の §4 分割表）どおり実行した。撤去したのは
+[`js/io.ts`](js/io.ts) の 6 メソッド ＋ 型宣言（約 215 行）、[`index.html`](index.html) の CDN
+`<script>` とボタン 3 つ、`dropbox-oauth-receiver.html`（ファイルごと）、`CONFIG.DROPBOX_KEY`、
+locale 7 言語 × 3 行。
+
+役割が §2 と重複しているのが理由。「Docker で各自ローカル稼働・正本は git 管理ファイル・
+共有は PR」という形では、クラウドストレージ経由の受け渡しは**正本を 2 つ作る導線**にしかならない
+（制約2）。`CONFIG.DROPBOX_KEY` が未設定なら `dropBoxInit()` がボタンを `display: none` にする
+実装だったので「既定では見えないから残しても無害」に見えるが、**CDN からの `dropbox.js` 読み込みは
+キーの有無と無関係に毎回走る**。分類 B のリポジトリで出荷物に外部オリジンの実行コードを引く
+価値がゼロなので、隠すのではなく消した。これで **index.html の外部依存は 0 本**になった。
+
+#### 決めたこと 2: ファイルは改名するが、関数名は変えない
+
+[`js/io/xml-serializer.ts`](js/io/xml-serializer.ts) → [`js/io/ddl-xml.ts`](js/io/ddl-xml.ts)。
+4-3b でユーザーに見える保存経路が JSON になると、この XML は「設計の保存形式」ではなくなり
+**`output.xsl` への入力＝ DDL パイプラインの中間表現**だけになるので、名前をその役目に合わせた
+（モジュールごと消えるのは §6.3）。
+
+一方 `serializeDesignXml` の関数名は据え置いた。改名するとバンドル差分に「関数リネーム」の
+ハンクが混ざり、本段階が主張したい「差分が削除に収束する」が濁る。名前の再検討は
+`golden/xml/` → `golden/ddl-input/` の改名と同じ 4-4 が適所。
+
+#### 決めたこと 3: `promptName()` の `suffix` は直さずに消す
+
+`suffix` の実装は `name.substr(0, name.length - 4)` の決め打ちで、**長さ 4 以外の suffix では
+壊れる**（`.json` は 5 文字）。呼び手は Dropbox の 2 か所だけだったので、4-3b で `.json` を扱う
+前に「直す」のではなく引数ごと撤去した。4-3b の `.json` 付与は別関数（keyword の正規化）で行う。
+
+#### 決めたこと 4: テストの外部依存対策を「遮断」から「検出」に変える
+
+[`tests/browser/harness.ts`](tests/browser/harness.ts) は `page.route(/cdnjs/, abort)` で CDN を
+遮断していた。遮断すべきものが無くなったので、**「アプリのオリジン外へリクエストが 1 本でも
+出たら初期化エラーで落ちる」**検査に置き換えた。撤去したものが戻ってきたら赤くなる
+（`data:` / `blob:` は除外）。オリジンは baseURL 設定ではなく `page.url()` から取るので、
+dev（4173）と preview（4174）の両方でそのまま効く。
+
+#### 検証
+
+- **バンドル差分が削除に収束した**（`vite build --minify false` を `develop` と本ブランチで
+  走らせて比較）。**3 insertions / 106 deletions** で、追加 3 行の内訳は次で全部：
+  `XHR_PATH: ""`（`DROPBOX_KEY` が消えて末尾カンマが落ちた）/ `//#region js/io/ddl-xml.ts`
+  （改名）/ `promptName(title) {`（`suffix` 撤去）。**削除 106 行はすべて Dropbox 由来か
+  上の 3 点の旧側**で、それ以外のハンクは 1 つも無い。
+- `git status --porcelain tests/golden/` が空（**85 本すべて無差分**）。golden は Designer の
+  ファサード経由で採るので、本段階が `js/io/` の入出力 4 本と `Designer.{toXML,fromXML,toJson,fromJson}`
+  を触らない限り構造的に不変（この非対称は 4-3b の完了判定でも使う）。
+- `grep -rn -i "dropbox"` が**実コード 0 件**（一致するのは撤去の経緯を書いたコメントと本書だけ）。
+- `js/io.ts` が **813 → 552 行**。
+- `npm test` **133 passed** / 21 skipped、`test:browser` **121 passed**、`test:dist` 3 passed、
+  `known-issues` 9 passed、`typecheck` 0 error（**すべて件数不変**）。
+
+**次段階（4-3b）への入力**は 4-2b の申し送りのまま（`db` 不一致の UI 導線と `.json` 拡張子）。
+本段階で `promptName()` が `suffix` を持たなくなったので、拡張子の付与は 4-3b が
+**keyword を組む直前の 1 か所**に置ける。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -1812,7 +1881,7 @@ parser が持つ後方互換は **例外メッセージ 1 つだけ**にし、�
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立） | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`） |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
-| `index.html` の Dropbox CDN 読み込み | 保持（テストでは遮断） | 存廃を未決（上記決定ログ参照） |
+| ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。
 

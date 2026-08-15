@@ -18,10 +18,6 @@ import { captureDesignState } from "../support/state.ts";
 
 /** index.html を開き、Designer の init2() 完了まで待つ */
 export async function openDesigner(page: Page): Promise<void> {
-    // index.html:22 は Dropbox を CDN から読む。HANDOVER §2 の「Docker でローカル完結」と
-    // 噛み合わない既知の外部依存（存廃は未決）。テストは常に遮断してオフラインで走らせる。
-    await page.route(/cdnjs\.cloudflare\.com/, (route) => route.abort());
-
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     // 現行コードは失敗を alert() で伝える。握り潰さず、テスト側で例外にする。
@@ -29,6 +25,15 @@ export async function openDesigner(page: Page): Promise<void> {
         errors.push(`alert: ${d.message()}`);
         await d.dismiss();
     });
+
+    /*
+     * 段階4-3a まで、ここは index.html:22 の dropbox.js（//cdnjs.cloudflare.com/…）を
+     * page.route で遮断してオフラインを保っていた。Dropbox 連携ごと撤去して外部依存が
+     * 0 本になったので、遮断のかわりに**検出**に置き換える —— 外部へのリクエストが
+     * 1 本でも出たら初期化エラーとして落ちる。撤去が戻ってきたらここが赤くなる。
+     */
+    const requested: string[] = [];
+    page.on("request", (req) => requested.push(req.url()));
 
     await page.goto("/index.html");
 
@@ -39,6 +44,15 @@ export async function openDesigner(page: Page): Promise<void> {
         undefined,
         { timeout: 15_000 },
     );
+
+    /* goto の後に判定するのは、オリジンを baseURL 設定ではなく実際に開いた URL から取るため */
+    const origin = new URL(page.url()).origin;
+    const external = requested.filter(
+        (url) => !url.startsWith(origin) && !/^(data|blob):/.test(url),
+    );
+    if (external.length) {
+        errors.push(`外部へのリクエスト:\n${external.join("\n")}`);
+    }
 
     if (errors.length) {
         throw new Error(`初期化中にエラー:\n${errors.join("\n")}`);

@@ -52,7 +52,7 @@ export class Visual<D = VisualDom> {
 
     /*
      * grabado: 空の toXML() / fromXML() は段階4-1a / 4-1b で撤去した
-     * （入出力は js/io/ の extract / xml-serializer / xml-parser / apply）。
+     * （入出力は js/io/ の extract / ddl-xml / xml-parser / apply）。
      * 残すと消し漏れが TypeError にならず、toXML は undefined を返して
      * xml += undefined で golden を壊し、fromXML は黙って何もしない。
      * 基底ごと消せば消し漏れは即 TypeError で、npm test の最初の fixture で落ちる。

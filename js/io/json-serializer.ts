@@ -6,16 +6,17 @@
  * （js/io/extract.ts / js/io/apply.ts）とモデル（js/io/model.ts）には 1 行も触らない。
  *
  *            ライブ側（描画エンジンを触る）      形式側（バイト列を知る）
- *      出    extract.ts                        xml-serializer.ts / 本ファイル
+ *      出    extract.ts                        ddl-xml.ts / 本ファイル
  *      入    apply.ts                          xml-parser.ts / json-parser.ts
  *
- * xml-serializer.ts と違って**逐語移設ではない**（保存すべき現行の emit が無い新規実装）
- * ので、const / for-of / map で書く。先例は js/io/palette.ts。
+ * ddl-xml.ts（段階4-3a まで xml-serializer.ts）と違って**逐語移設ではない**
+ * （保存すべき現行の emit が無い新規実装）ので、const / for-of / map で書く。
+ * 先例は js/io/palette.ts。
  *
  * 環境依存の入力は 1 つも無い —— XML 側が持っていた location.href（`<!-- Active URL -->`）に
  * 相当するものを最初から入れないので、4-4 の決定論化を待たずにここは決定論。
  *
- * 内部関数に Json を冠しているのは、js/io/xml-serializer.ts の同名関数（serializeTable /
+ * 内部関数に Json を冠しているのは、js/io/ddl-xml.ts の同名関数（serializeTable /
  * serializeKey）とバンドル上で衝突させないため。衝突すると rolldown は**旧側**に $1 を付けるので、
  * 本段階のバンドル差分が「新モジュールの純粋な追加」でなくなり、挙動不変の判定が濁る。
  * js/io/json-parser.ts も同じ理由で parseJsonTable / parseJsonKey。

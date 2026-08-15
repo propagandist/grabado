@@ -17,6 +17,7 @@
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
 import { _ } from "./globals.ts";
+import { detectDesignFormat } from "./io/detect.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
 
@@ -207,6 +208,11 @@ export class IO {
         this.fromXML(xmlDoc);
     }
 
+    /*
+     * grabado: 段階4-3b 以降、Document を直に受けるこの面の呼び手は importresponse()
+     * だけになった（introspection は backend が XML を返すため。JSON 化は HANDOVER §5.2）。
+     * 保存/読込の 5 経路はテキストで受けて loadDesignText() を通る。
+     */
     fromXML(xmlDoc: Document | null): boolean {
         if (!xmlDoc || !xmlDoc.documentElement) {
             alert(_("xmlerror") + ": Null document");
@@ -217,19 +223,55 @@ export class IO {
         return true;
     }
 
+    /**
+     * 読み込みの入口（HANDOVER §4 段階4-3b）。
+     *
+     * textarea / クリップボード / ファイル / localStorage / server の 5 経路がすべて
+     * ここを通る。形式は js/io/detect.ts の先頭 1 文字判定で決め、**行き先が決まったら
+     * 他方は試さない**（フォールバックを作らない理由は detect.ts の冒頭）。
+     *
+     * XML 側は fromXMLText() にそのまま委譲する —— 現行の癖（alert で伝えて戻る）を
+     * 1 バイトも変えない。JSON 側は js/io/json-parser.ts が例外で落とすので、**ここが
+     * 唯一の受け止め口**になる。例外の message は locale を通さない（開発者向けで、
+     * 価値の本体は位置情報 tables[0].columns[2].name。docs/FORMAT.md が宣言済み）。
+     *
+     * 成功時に window.close() するのは XML 経路の fromXML() と揃えるため
+     * （ダイアログが閉じることが「読めた」の合図になっている）。
+     */
+    loadDesignText(text: string): void {
+        switch (detectDesignFormat(text)) {
+            case "empty":
+                alert(_("empty"));
+                return;
+
+            case "xml":
+                this.fromXMLText(text);
+                return;
+
+            case "json":
+                try {
+                    this.owner.fromJson(text);
+                } catch (e) {
+                    alert(_("jsonerror") + ": " + (e as Error).message);
+                    return;
+                }
+                this.owner.window.close();
+                return;
+
+            case "unknown":
+                alert(_("unknownformat"));
+                return;
+        }
+    }
+
     clientsave(): void {
         var xml = this.owner.toXML();
         this.dom.ta.value = xml;
     }
 
     clientload(): void {
-        var xml = this.dom.ta.value;
-        if (!xml) {
-            alert(_("empty"));
-            return;
-        }
-
-        this.fromXMLText(xml);
+        /* 空の判定は loadDesignText() が持つ（detect が "empty" を返す。文言も同じ） */
+        this.loadDesignText(this.dom.ta.value);
     }
 
     clientcopy(): void {
@@ -243,12 +285,8 @@ export class IO {
 
     clientpaste(): void {
         var self = this;
-        navigator.clipboard.readText().then(function(xml) {
-            if (!xml) {
-                alert(_("empty"));
-                return;
-            }
-            self.fromXMLText(xml);
+        navigator.clipboard.readText().then(function(text) {
+            self.loadDesignText(text);
         }).catch(function(err) {
             alert("Failed to paste: " + err);
         });
@@ -295,28 +333,25 @@ export class IO {
         var self = this;
         var input = document.createElement("input");
         input.type = "file";
-        input.accept = ".xml,.txt";
+        /* grabado: 段階4-3b で .json を先頭に足した（保存が JSON になったため）。
+           .xml / .txt は読込互換で残す —— 拡張子で行き先は決めず、中身で判別する */
+        input.accept = ".json,.xml,.txt";
         input.onchange = function(e) {
             var file = (e.target as HTMLInputElement).files![0];
             if (!file) {
                 return;
             }
-            
+
             // Check file extension
             var fileName = file.name.toLowerCase();
-            if (!fileName.endsWith(".xml") && !fileName.endsWith(".txt")) {
-                alert(_("clientloadfromfile") + ": Please select an XML or TXT file.");
+            if (!fileName.endsWith(".json") && !fileName.endsWith(".xml") && !fileName.endsWith(".txt")) {
+                alert(_("clientloadfromfile") + ": Please select a JSON, XML or TXT file.");
                 return;
             }
-            
+
             var reader = new FileReader();
             reader.onload = function(e) {
-                var xml = (e.target as FileReader).result as string;
-                if (!xml || xml.trim() === "") {
-                    alert(_("empty"));
-                    return;
-                }
-                self.fromXMLText(xml);
+                self.loadDesignText((e.target as FileReader).result as string);
             };
             reader.onerror = function(e) {
                 alert(_("xmlerror") + ": Failed to read file.");
@@ -376,8 +411,8 @@ export class IO {
         key = "wwwsqldesigner_databases_" + (key || "default");
 
         try {
-            var xml = localStorage.getItem(key);
-            if (!xml) {
+            var text = localStorage.getItem(key);
+            if (!text) {
                 throw new Error("No data available");
             }
         } catch (e) {
@@ -389,7 +424,8 @@ export class IO {
             return;
         }
 
-        this.fromXMLText(xml);
+        /* grabado: 段階4-3b より前に保存した XML のエントリもそのまま読める（形式で判別する） */
+        this.loadDesignText(text);
     }
 
     clientlocallist(): void {
@@ -511,7 +547,12 @@ export class IO {
         var h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
         this.name = name;
-        OZ.Request(url, this.loadresponse, { xml: true, headers: h });
+        /*
+         * grabado: 段階4-3b で xml: true を外した。responseText をそのまま受けて
+         * loadDesignText() が形式を判別する —— backend は保存されたバイト列を
+         * 解釈せずに返すので、JSON と 4-3b 以前に保存した XML の両方が来うる。
+         */
+        OZ.Request(url, this.loadresponse, { headers: h });
     }
 
     serverlist(e?: Event): void {
@@ -522,6 +563,13 @@ export class IO {
         OZ.Request(url, this.listresponse, { headers: h });
     }
 
+    /*
+     * grabado: introspection は段階4-3b でも XML のまま据え置く（xml: true と
+     * importresponse の fromXML）。ここが受けるのは「保存した設計」ではなく
+     * **backend が information_schema から組み立てた XML** で、JSON 化は backend を
+     * Kotlin に移す HANDOVER §5.2 の仕事。フロントだけ先に JSON を期待させると
+     * 現行 backend との契約が切れる。
+     */
     serverimport(e?: Event): void {
         var name = prompt(_("serverimportprompt"), "");
         if (!name) {
@@ -565,7 +613,8 @@ export class IO {
         if (!this.check(code)) {
             return;
         }
-        this.fromXML(data as Document | null);
+        /* 読めなくても setTitle するのは現行どおり（fromXML の false も無視していた） */
+        this.loadDesignText(data as string);
         this.owner.setTitle(this.name);
     }
 

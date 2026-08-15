@@ -1,6 +1,6 @@
 CREATE TABLE '顧客' (
 'id' INTEGER NOT NULL  PRIMARY KEY,
 '氏名' TEXT NOT NULL ,
-'say "hi"' TEXT DEFAULT NULL,
-'メモ' TEXT DEFAULT NULL
+'say "hi"' TEXT,
+'メモ' TEXT
 );

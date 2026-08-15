@@ -19,8 +19,8 @@ ERASE '顧客.tbk'
 CREATE TABLE (m.tcPath + '顧客') &lcFreeOrName ( ;
 id INTEGER NOT NULL , ;
 氏名 INTEGER NOT NULL , ;
-say "hi" INTEGER NULL UL , ;
-メモ INTEGER NULL UL  ;
+say "hi" INTEGER NULL , ;
+メモ INTEGER NULL  ;
 )
 
 lcTableComment = '顧客マスタ。''仮登録'' の状態も含む'

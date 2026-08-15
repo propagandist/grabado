@@ -35,10 +35,10 @@ CREATE TABLE `articles` (
   `id` INTEGER NOT NULL DEFAULT uuidv7(),
   `author_id` INTEGER NOT NULL COMMENT '執筆者 (users.id)',
   `title` MEDIUMTEXT NOT NULL,
-  `body` MEDIUMTEXT NULL DEFAULT NULL,
+  `body` MEDIUMTEXT NULL,
   `view_count` INTEGER NOT NULL DEFAULT 0,
-  `price` DECIMAL(12,2) NULL DEFAULT NULL COMMENT '有料記事の価格。money ではなく numeric を使う',
-  `published_on` DATE NULL DEFAULT NULL,
+  `price` DECIMAL(12,2) NULL COMMENT '有料記事の価格。money ではなく numeric を使う',
+  `published_on` DATE NULL,
   `created_at` INTEGER NOT NULL DEFAULT now(),
   `updated_at` INTEGER NOT NULL DEFAULT now(),
   PRIMARY KEY (`id`)

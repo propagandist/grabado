@@ -122,6 +122,10 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
 
     /*
      * 旧 known-issue #8。<default> だけ末尾に改行が無く、1 行に 2 要素が並んでいた。
+     *
+     * 段階4-5 まではここが <default>NULL</default> を読んでいた。#2 を直して
+     * 「既定なし」の行から <default> が消えたので、実在する既定値へ寄せた
+     * （users.id の uuidv7()。INTEGER は quote 属性が空なので生値のまま出る）。
      */
     test("<default> の後にも改行が入る（1 要素 1 行）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
@@ -129,8 +133,67 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
 
         const xml = await toXml(page);
 
-        expect(xml).toContain("<default>NULL</default>\n");
+        expect(xml).toContain("<default>uuidv7()</default>\n");
         expect(xml).not.toContain("</default><");
+    });
+
+    /*
+     * 旧 known-issue #2。段階4-5 で「既定 NULL」の内部表現（def === null）を撤去したので、
+     * 既定値を持たない行は保存しても <default> を獲得しない（＝保存で情報が増えない）。
+     */
+    test("既定値の無い行は保存しても <default> を獲得しない", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture("house-defaults"));
+
+        const xml = await toXml(page);
+
+        // fixture の articles.body は <default> を持たない。保存しても持たないまま
+        expect(readFixture("house-defaults")).toContain(
+            '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>'
+        );
+        expect(xml).toContain(
+            '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>'
+        );
+        expect(xml).not.toContain("<default>NULL</default>");
+    });
+
+    /*
+     * 段階4-5 の決めたこと 1。UI の default 欄に "NULL" と打っても既定なしに潰れる
+     * （nullable 列の DEFAULT NULL は SQL 上も暗黙の既定と同義）。正規化は
+     * Row.update() の 1 箇所だけにあるので、ここでは UI 経路（collapse）を通す。
+     */
+    test("nullable な行の default 欄に NULL と打っても <default> は出ない", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture("house-defaults"));
+
+        const typed = await page.evaluate(() => {
+            /* articles.body（null="1"・既定なし） */
+            const table = (
+                window.d!.tables as { getTitle(): string; rows: unknown[] }[]
+            ).find((t) => t.getTitle() === "articles")!;
+            const row = table.rows.find(
+                (r) => (r as { getTitle(): string }).getTitle() === "body"
+            ) as {
+                expand(): void;
+                collapse(): void;
+                dom: { def: HTMLInputElement };
+                data: { def: string };
+            };
+
+            row.expand();
+            /* 展開直後の表示。段階4-4 までは "NULL" が入っていた */
+            const shown = row.dom.def.value;
+            row.dom.def.value = "NULL";
+            row.collapse();
+            return { shown, stored: row.data.def };
+        });
+
+        expect(typed.shown).toBe("");
+        expect(typed.stored).toBe("");
+        /* 他の行の既定値（uuidv7() など）は出るので、body の行だけを見る */
+        expect(await toXml(page)).toContain(
+            '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>'
+        );
     });
 
     /*

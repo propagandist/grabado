@@ -9,7 +9,7 @@
 CREATE TABLE `employees` (
   `id` INTEGER NOT NULL,
   `name` SHORT NOT NULL,
-  `manager_id` INTEGER DEFAULT NULL,
+  `manager_id` INTEGER,
   PRIMARY KEY (`id`)
 );
 
@@ -21,7 +21,7 @@ CREATE TABLE `projects` (
   `id` INTEGER NOT NULL,
   `title` SHORT NOT NULL,
   `owner_id` INTEGER NOT NULL,
-  `team_id` INTEGER DEFAULT NULL,
+  `team_id` INTEGER,
   PRIMARY KEY (`id`)
 );
 

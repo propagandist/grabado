@@ -140,11 +140,11 @@ function parseColumn(
         ),
         size: asOptionalString(obj["size"], `${where}.size`),
         /*
-         * キーが無ければ null（＝ Row のコンストラクタ既定と同じ）。"NULL" -> null の
-         * 正規化は Row.update() の中で起きるので、ここでは何もしない（4-1b の決めたこと 3
-         * と同じ立場 —— 2 つの規則を離さない）。
+         * キーが無ければ ""（＝ Row のコンストラクタ既定と同じ。段階4-5 で null を
+         * 撤去した）。"NULL" -> "" の正規化は Row.update() の中で起きるので、ここでは
+         * 何もしない（4-1b の決めたこと 3 と同じ立場 —— 2 つの規則を離さない）。
          */
-        def: def === undefined ? null : asString(def, `${where}.default`),
+        def: def === undefined ? "" : asString(def, `${where}.default`),
         nll: asOptionalBoolean(obj["nullable"], `${where}.nullable`),
         ai: asOptionalBoolean(obj["autoincrement"], `${where}.autoincrement`),
         comment: asOptionalString(obj["comment"], `${where}.comment`),

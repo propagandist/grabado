@@ -53,7 +53,6 @@
 </row>
 <row name="body" null="1" autoincrement="0">
 <datatype>TEXT</datatype>
-<default>NULL</default>
 </row>
 <row name="view_count" null="0" autoincrement="0">
 <datatype>INTEGER</datatype>
@@ -61,12 +60,10 @@
 </row>
 <row name="price" null="1" autoincrement="0">
 <datatype>DECIMAL(12,2)</datatype>
-<default>NULL</default>
 <comment>有料記事の価格。money ではなく numeric を使う</comment>
 </row>
 <row name="published_on" null="1" autoincrement="0">
 <datatype>DATE</datatype>
-<default>NULL</default>
 </row>
 <row name="created_at" null="0" autoincrement="0">
 <datatype>TIMESTAMP WITH TIME ZONE</datatype>

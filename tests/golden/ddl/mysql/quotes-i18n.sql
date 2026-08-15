@@ -15,8 +15,8 @@ DROP TABLE IF EXISTS `顧客`;
 CREATE TABLE `顧客` (
   `id` INTEGER NOT NULL,
   `氏名` MEDIUMTEXT NOT NULL COMMENT '姓と名は分けない',
-  `say "hi"` MEDIUMTEXT NULL DEFAULT NULL COMMENT '識別子に " が入る場合の属性エスケープ確認',
-  `メモ` MEDIUMTEXT NULL DEFAULT NULL COMMENT '顧客の''愛称''をここに書く',
+  `say "hi"` MEDIUMTEXT NULL COMMENT '識別子に " が入る場合の属性エスケープ確認',
+  `メモ` MEDIUMTEXT NULL COMMENT '顧客の''愛称''をここに書く',
   PRIMARY KEY (`id`)
 ) COMMENT '顧客マスタ。''仮登録'' の状態も含む';
 

@@ -48,7 +48,12 @@ export interface RowDom extends VisualDom, RowEditDom {
 export interface RowData extends VisualData {
     type: number;
     size: string;
-    def: string | null;
+    /**
+     * 既定値。**"" が「既定なし」**で、それ以外に「既定 NULL」を表す内部表現は無い
+     * （段階4-5 で null を撤去した。known-issue #2）。nullable な行に "NULL" と
+     * 打った場合は update() が "" に潰す。
+     */
+    def: string;
     nll: boolean;
     ai: boolean;
     comment: string;
@@ -75,7 +80,7 @@ export class Row extends Visual<RowDom> {
 
         this.data.type = 0;
         this.data.size = "";
-        this.data.def = null;
+        this.data.def = "";
         this.data.nll = true;
         this.data.ai = false;
         this.data.comment = "";
@@ -169,17 +174,24 @@ export class Row extends Visual<RowDom> {
         /* grabado: 旧 SQL.designer（段階4-0a）。コンストラクタは this.owner の代入後に
            update() を呼ぶので、ここで owner 鎖は必ず張れている */
         var des = this.owner.owner;
+        /*
+         * grabado: 段階4-5（known-issue #2）。潰し先を null から "" に替えた。
+         * nullable 列の DEFAULT NULL は SQL 上も暗黙の既定と同義なので情報は失われず、
+         * これで「保存すると <default>NULL</default> が生える」経路が塞がる。
+         * 条件（data.nll）は現行のまま —— NOT NULL 行に "NULL" と打った場合は
+         * 従来どおり文字列として残る。
+         *
+         * この正規化は **ここ 1 箇所だけ**にある（parser は読んだ生値を渡す）。
+         * 詳細は js/io/model.ts の RowModel.def。
+         */
         if (data.nll && data.def && data.def.match(/^null$/i)) {
-            data.def = null;
+            data.def = "";
         }
 
         for (var p in data) {
             (this.data as unknown as Record<string, unknown>)[p] = (
                 data as unknown as Record<string, unknown>
             )[p];
-        }
-        if (!this.data.nll && this.data.def === null) {
-            this.data.def = "";
         }
 
         var elm = this.getDataType();
@@ -340,12 +352,9 @@ export class Row extends Visual<RowDom> {
     load(): void {
         /* put data to expanded form */
         this.dom.name.value = this.getTitle();
-        var def = this.data.def;
-        if (def === null) {
-            def = "NULL";
-        }
-
-        this.dom.def.value = def;
+        /* grabado: 段階4-5。null を "NULL" と表示する分岐を落とした（known-issue #2）。
+           既定値を持たない行を開くと、"NULL" ではなく空欄が出る */
+        this.dom.def.value = this.data.def;
         this.dom.size.value = this.data.size;
         this.dom.nll.checked = this.data.nll;
         this.dom.ai.checked = this.data.ai;

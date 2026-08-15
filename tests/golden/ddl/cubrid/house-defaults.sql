@@ -26,10 +26,10 @@ CREATE TABLE `articles` (
   `id` SHORT NOT NULL DEFAULT uuidv7(),
   `author_id` SHORT NOT NULL,
   `title` SHORT NOT NULL,
-  `body` SHORT DEFAULT NULL,
+  `body` SHORT,
   `view_count` INTEGER NOT NULL DEFAULT 0,
-  `price` DECIMAL(12,2) DEFAULT NULL,
-  `published_on` DATE DEFAULT NULL,
+  `price` DECIMAL(12,2),
+  `published_on` DATE,
   `created_at` SHORT NOT NULL DEFAULT now(),
   `updated_at` SHORT NOT NULL DEFAULT now(),
   PRIMARY KEY (`id`)

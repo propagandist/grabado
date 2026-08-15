@@ -118,7 +118,7 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
     /*
      * 現行 Row.fromXML の obj をそのまま持つ。現行は comment / def を「見つかったときだけ」
      * 足す Partial だったが、ここでは 6 キーを常に持たせている。Row のコンストラクタが
-     * 入れる既定（type 0 / size "" / def null / comment ""）と本オブジェクトの初期値が
+     * 入れる既定（type 0 / size "" / def "" / comment ""）と本オブジェクトの初期値が
      * 一致するので、update() の for-in が余分にコピーしても結果は同じ。
      */
     var obj = {
@@ -127,7 +127,7 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
         nll: node.getAttribute("null") == "1",
         ai: node.getAttribute("autoincrement") == "1",
         comment: "",
-        def: null as string | null,
+        def: "",
     };
 
     var cs = node.getElementsByTagName("comment");
@@ -175,11 +175,13 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
         type: obj.type,
         size: obj.size,
         /*
-         * "NULL" -> null の正規化はここでやらない。現行は Row.update() の中
-         * （data.nll && data.def.match(/^null$/i)）で起きていて、その相方の
-         * 「!nll && def === null なら ""」も同じ関数にある。片方だけ持ち出すと
-         * 2 つの規則が離れる。したがって読み込みモデルの def は「XML が言った値」で、
-         * extract が作るモデル（＝ツリーが保持している値）とは一致しないことがある。
+         * "NULL" -> "" の正規化はここでやらない（段階4-5 でも同じ立場を保った）。
+         * 正規化は Row.update() の中（data.nll && data.def.match(/^null$/i)）にあり、
+         * ここにも書くと同じ規則が 2 箇所に分かれて片方だけ直す事故の余地が残る。
+         * したがって読み込みモデルの def は「XML が言った値」—— 4-3b 以前に
+         * 書き出されたファイルの <default>NULL</default> は "NULL" のまま渡り、
+         * apply -> update() が "" に潰す。extract が作るモデル（＝ツリーが保持して
+         * いる値）とは一致しないことがある（js/io/model.ts の非対称 2）。
          */
         def: obj.def,
         nll: obj.nll,

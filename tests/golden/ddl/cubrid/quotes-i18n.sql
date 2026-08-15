@@ -9,8 +9,8 @@
 CREATE TABLE `顧客` (
   `id` INTEGER NOT NULL,
   `氏名` SHORT NOT NULL,
-  `say "hi"` SHORT DEFAULT NULL,
-  `メモ` SHORT DEFAULT NULL,
+  `say "hi"` SHORT,
+  `メモ` SHORT,
   PRIMARY KEY (`id`)
 );
 

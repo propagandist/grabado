@@ -78,8 +78,8 @@ function applyRow(table: Table, model: RowModel): void {
 
     /*
      * 新しいオブジェクトに詰め替えるのは、update() が受け取った data を書き換えるため
-     * （data.def = null）。モデルを直接渡すとスナップショットであるはずのモデルが変わる。
-     * "NULL" -> null の正規化はその update() の中で起きる（js/io/xml-parser.ts の def を参照）。
+     * （data.def = ""）。モデルを直接渡すとスナップショットであるはずのモデルが変わる。
+     * "NULL" -> "" の正規化はその update() の中で起きる（js/io/xml-parser.ts の def を参照）。
      */
     var obj: Partial<RowData> = {
         type: model.type,

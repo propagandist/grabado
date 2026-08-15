@@ -19,7 +19,7 @@ ERASE 'employees.tbk'
 CREATE TABLE (m.tcPath + 'employees') &lcFreeOrName ( ;
 id INTEGER NOT NULL , ;
 name INTEGER NOT NULL , ;
-manager_id INTEGER NULL UL  ;
+manager_id INTEGER NULL  ;
 )
 
 lcTableComment = ''
@@ -45,7 +45,7 @@ CREATE TABLE (m.tcPath + 'projects') &lcFreeOrName ( ;
 id INTEGER NOT NULL , ;
 title INTEGER NOT NULL , ;
 owner_id INTEGER NOT NULL , ;
-team_id INTEGER NULL UL  ;
+team_id INTEGER NULL  ;
 )
 
 lcTableComment = ''

@@ -7,7 +7,13 @@ import {
 } from "../support/fixtures.ts";
 import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";
-import { loadFixture, openDesigner, toXml, useDatatypes } from "./harness.ts";
+import {
+    loadFixture,
+    openDesigner,
+    toJson,
+    toXml,
+    useDatatypes,
+} from "./harness.ts";
 
 // 1 ページを beforeAll で作って使い回す（現行アプリはページ単位のグローバル SQL.designer 1 個で動く）。
 // serial モードにはしない — 1 件落ちた時点で残りが skip され、影響範囲が見えなくなるため。
@@ -155,6 +161,32 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
             '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>'
         );
         expect(xml).not.toContain("<default>NULL</default>");
+    });
+
+    /*
+     * 段階4-5 の読み込み互換。4-3b 以前に保存されたファイルは既定値の無い行にも
+     * <default>NULL</default> を持つ（それが known-issue #2 そのもの）。parser は
+     * 生値のまま渡し、apply -> Row.update() が "" に潰すので、読み直すと消える。
+     */
+    test("4-3b 以前の <default>NULL</default> を読むと既定なしになる", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        const legacy =
+            [
+                '<?xml version="1.0" encoding="utf-8" ?>',
+                "<sql>",
+                '<table x="20" y="20" name="legacy">',
+                '<row name="c" null="1" autoincrement="0">',
+                "<datatype>TEXT</datatype>",
+                "<default>NULL</default>",
+                "</row>",
+                "</table>",
+                "</sql>",
+            ].join("\n") + "\n";
+
+        await loadFixture(page, legacy);
+
+        expect(await toXml(page)).not.toContain("<default>");
+        expect(await toJson(page)).not.toContain('"default"');
     });
 
     /*

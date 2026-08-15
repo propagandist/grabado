@@ -164,6 +164,26 @@ UI の `#textarea` に入る値と一致する。
 7 fixture。`SQL.Designer.toXML()` の出力を postgresql の型パレットで解決したもの。
 serializer は型解決以外 DB 非依存なので DB 横断はしない（その根拠自体もテストで固定してある）。
 
+### 状態スナップショット golden — `tests/golden/state/<fixture>.json`
+
+**§4 段階4-1b で追加。読み込み方向（`fromXML`）の安全網。** 上の 2 つは `toXML()` の**結果**しか
+押さえておらず、`fromXML` は「XML を再生する UI 操作列」なので、XML に出ない状態が丸ごと
+素通りしていた —— 選択クラス・型パレット由来の色・z-index・relation がどの**実体**に繋がったか・
+`clearTables()` の後始末。8 本（fixture 7 × postgresql ＋ `house-defaults` × mysql）。
+
+- 採取関数は [`../tests/support/state.ts`](../tests/support/state.ts) の 1 本だけ。**module スコープを
+  参照しない自己完結関数**にしてあり、page 側はテンプレートリテラルで関数を展開して
+  `(<関数のソース>)(window.d)` という式を `page.evaluate` に渡す＝**ソース文字列として注入**する
+  （`page.evaluate` はバンドル外なので import を解決できない）。
+  Node 側は jsdom の designer をそのまま渡す。
+- **relation は名前ではなく添字**（`designer.tables.indexOf` / `table.rows.indexOf`）で採る。
+  同名テーブルで両端が先頭のテーブルへ解決される既知の不具合は、名前で採ると
+  「名前は合っているが実体が違う」状態が素通りする。
+- **レイアウト由来の値は採らない**（`offsetWidth` 系・relation path の `d`・mini のサイズ・
+  `designer.width/height`）。jsdom はレイアウトしないので、除外して初めて **1 本の golden を
+  Chromium と jsdom で共有**できる。relation の色も除外する（`Relation._counter` が
+  ページ生涯で単調増加する static なので、同じ設計でもテストの実行順で変わる）。
+
 ### round-trip / 決定論
 
 - **round-trip**: `fixture → toXML → fromXML → toXML → fromXML → toXML` で 1・2・3 回目が完全一致すること。

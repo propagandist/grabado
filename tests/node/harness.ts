@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { JSDOM, VirtualConsole } from "jsdom";
 import { build } from "vite";
 import { REPO_ROOT } from "../support/fixtures.ts";
+import { captureDesignState } from "../support/state.ts";
 /* OZ の型は js/oz.ts の export に移した（HANDOVER §3 段階3-1）。
    実体は window.eval したバンドルが載せるので、ここでは型だけ借りる。 */
 import type { OzRequestCallback, OzRequestOptions } from "../../js/oz.ts";
@@ -31,6 +32,8 @@ export interface NodeHarness {
     /** fixture を読み込む。alert が出たら例外にする */
     loadFixture(xml: string): void;
     toXML(): string;
+    /** 読み込み後の状態スナップショット（page 側と同じ関数。tests/support/state.ts） */
+    captureState(): string;
     close(): void;
 }
 
@@ -198,6 +201,9 @@ export async function createHarness(): Promise<NodeHarness> {
         },
         toXML(): string {
             return designer.toXML();
+        },
+        captureState(): string {
+            return captureDesignState(designer);
         },
         close(): void {
             window.close();

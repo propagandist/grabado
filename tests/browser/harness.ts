@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { captureDesignState } from "../support/state.ts";
 
 /**
  * 実ブラウザ（Chromium）で現行アプリを起こし、現行コードそのものから挙動を採取する。
@@ -89,6 +90,17 @@ export async function loadFixture(page: Page, xml: string): Promise<void> {
 /** 現行 SQL.designer.toXML() の生出力 */
 export function toXml(page: Page): Promise<string> {
     return page.evaluate(() => window.d!.toXML());
+}
+
+/**
+ * 読み込み後の状態スナップショット（HANDOVER §4 段階4-1b）。
+ *
+ * page.evaluate はバンドルの外で走り import を解決できないので、採取関数を
+ * **ソース文字列として注入**する（tests/support/state.ts の冒頭を参照）。
+ * Node 側は同じ関数を直接呼ぶので、採取ロジックの正本は 1 本のまま。
+ */
+export function captureState(page: Page): Promise<string> {
+    return page.evaluate<string>(`(${captureDesignState})(window.d)`);
 }
 
 /**

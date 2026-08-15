@@ -1435,6 +1435,122 @@ row 内の comment を拾う）のに対し、[`Row.fromXML`](js/row.ts) は `ge
 `rowManager.select(false)` → `Row.deselect()` → `redraw()` → `getColor()` → `getDataType()` と
 たどって**パレットを読む**ので、先に差し替えると古い添字で新パレットを引くことになる。
 
+### 2026-08-15 HANDOVER §4「IO」段階4-1b — 読み込み方向を parser / apply に分けた
+
+§4 の 4 本目。**`Designer` / `Table` / `Row` / `Key` に散っていた `fromXML()` 4 実装が
+[`js/io/`](js/io/) の 2 本に移り、描画クラスから入出力コードが 1 行も残らなくなった**。
+これで 4-1a の格子（ライブ側 = `extract` / `apply`、形式側 = `xml-serializer` / `xml-parser`）が
+4 本とも揃い、4-2 以降の JSON は**形式側 2 本を足すだけ**になる。
+
+**2 コミットに割った。** 4-1a の主張は「golden 70 本が無差分」の 1 点で済んだが、読み込み方向には
+それが効かない —— golden は `toXML()` の**結果**しか押さえておらず、`fromXML` が撒く副作用
+（`clearTables()` の DOM 削除・`moveTo()` の snap・`update()` の FK 連鎖・`setTitle()` の関連行
+リネーム・ff one-pixel shift hack）は 1 つも写らない。出荷コードを触る前に安全網を置くのが
+CLAUDE.md 制約1 なので、**コミット1 = 状態スナップショット golden の採取（`js/` `src/` 無改修）、
+コミット2 = 移設**にした。「コミット2 が golden データを 1 バイトも触っていない」が
+`git diff HEAD~1 -- tests/golden/xml tests/golden/ddl tests/golden/state` で機械的に検証できる。
+
+**安全網の設計（コミット1）。** [`tests/support/state.ts`](tests/support/state.ts) の
+`captureDesignState()` が読み込み後のライブツリーと DOM を決定論 JSON に落とす。8 本
+（fixture 7 × postgresql ＋ `house-defaults` × mysql）。3 つ決めた。
+
+- **relation は名前ではなく添字**（`designer.tables.indexOf` / `table.rows.indexOf`）で採る。
+  同名テーブルで両端が先頭のテーブルへ解決される既知の不具合は、名前で採ると
+  「名前は合っているが実体が違う」状態がそのまま素通りする。**本段階でいちばん効く 1 項目**で、
+  下の「決めたこと 2」を守れているかを唯一検出できるのがここ。
+- **レイアウト由来の値を採らない**（`offsetWidth` 系・relation path の `d`・mini のサイズ・
+  `designer.width/height`）。jsdom はレイアウトしないので、除外して初めて **1 本の golden を
+  Chromium と jsdom で共有**できる。実際に共有して両実行系がバイト一致した。
+  relation の色も除外する（`Relation._counter` がページ生涯で単調増加する static なので、
+  同じ設計でもテストの実行順で変わる）。
+- **採取関数は自己完結**にして正本を 1 本に保つ。page 側は `page.evaluate` がバンドル外で
+  import を解決できないので、関数を**ソース文字列として注入**する。
+
+`titleTooltip` を `getAttribute("title")` で採っているのは効いた —— 無コメントのテーブルでは
+属性が**存在しない**（`null`）ことが記録され、apply 側で `if (c)` を外して `setComment("")` を
+呼ぶと `""` に変わって赤くなる。
+
+**決めたこと 1: モデルの形は 4-1a のまま変えない。** `RowModel.relations`（子側にぶら下がる
+親の名前）を parser が埋め、apply が読む。平坦配列に作り替えると 4-1a が避けた
+「`designer.relations` の順序と `row.relations` の順序が一致することの証明」が戻ってくる。
+
+**決めたこと 2: relation は両端とも名前で引き直す。** apply は「今作ったばかりの `Row`」を
+子側に渡さない。現行が `findNamedTable(parentNode.parentNode.name)` で引き直しているためで、
+オブジェクト参照に変えると**同名テーブルのバグが直ってしまい、テストが 1 本も落ちないまま
+挙動が変わる**。`id` 参照へ移すかは `formatVersion: 1` を決める 4-2 の判断。
+
+**決めたこと 3: `"NULL"` → `null` の正規化は parser に持ち込まない。** 現行は `Row.update()` の
+中（`data.nll && data.def.match(/^null$/i)`）で起き、その相方の「`!nll` かつ `def === null` なら
+`""`」も同じ関数にある。片方だけ持ち出すと 2 つの規則が離れる。結果として**モデルは入りと出で
+完全には対称でない** —— 読み込みモデルの `def` は「XML が言った値」、`extract` のそれは
+「ツリーが保持している値」。同様に `title` / `KeyModel.type` / `name` / `RelationRef` は parser 側
+だけ実行時 `null` がありうる（現行 4 実装の `!` と早期 return をそのまま持っている）。
+どちらも 4-4 / 4-5 で消す既知の逸脱として [`js/io/model.ts`](js/io/model.ts) に書いた。
+
+**決めたこと 4: 「テーブル 1 件ごとに parse→生成」ではなく全 parse → 全 apply。** parse は
+ソース XML（`DOMParser` が作った別 Document）だけを読み palette を書き換えないので、
+交互実行と同値。ただし**例外の位置は変わる**（空の `<part>` などで落ちる場合、現行は途中まで
+テーブルを作ってから、移設後は 1 つも作らずに落ちる）。どちらも `IO.fromXMLText` が捕まえない
+未処理例外で、アプリは壊れた状態になる点は同じ。
+
+**決めたこと 5: `<relation>` は `<row>` の直下だけを走る。** 現行は文書順の全走査で所属を
+`parentNode` 鎖から引き直すので、`<row>` の**孫**にある `<relation>`（例: `<key>` の中。
+serializer は出さない）は親名が `<key>` 由来になって `findNamedTable` が落ち、スキップされる。
+`getElementsByTagName` にすると拾ってしまい、手書き XML で挙動が変わる。直下走査ならこれと一致する。
+
+**決めたこと 6: `Designer.fromXML()` は 1 行委譲にせず 4 行残す。** `toXML()` と非対称だが、
+**この 4 行の順序が本段階でいちばん危険**だから —— `clearTables()` は**旧パレット**で走らねば
+ならず（`removeTable` → … → `getDataType()` でパレットを読む）、行の型解決は**新パレット**で
+走る。したがって clear → `setRoot` → parse → apply は入れ替えられない。両方を所有する唯一の
+場所に見える形で置くのが安い。`<datatypes>` をモデルに入れず `Element` のまま渡すのも同じ理由
+（これは DOM ノードそのものでモデルデータではない）。
+
+**揃えなかった不揃い**（4-1a の申し送りどおり）: `<comment>` の走査規則（table = 直下
+childNodes・最後が勝つ / row = `getElementsByTagName` の子孫先頭が勝つ）、型解決ループに
+`break` が無く**最後の一致が勝つ**（known-issue #3 の BIGINT ドリフト）、`<part>` の `nodeValue` を
+ガードなしで読む。基底 [`Visual.fromXML()`](js/visual.ts) の空実装は 4-1a の `toXML()` と同じ論法で
+残さず消した（残すと消し漏れが TypeError にならず黙って何もしない）。
+
+**検証**。`git status --porcelain tests/golden/xml tests/golden/ddl tests/golden/state` が
+コミット2 の後も空（golden 78 本すべて無差分＝`npm run golden:update` をコミット2 で一度も
+打っていない。同ディレクトリで動くのは README だけ）。`npm test` 70 passed / 21 skipped、
+`npm run test:browser` 89 passed、
+`npm run test:dist` 3 passed、`npm run known-issues` 9 passed、`npm run typecheck` 0 error
+（**コミット1 で +9 した以外は件数不変**）。層の分離は `grep '\.dom\|document\.\|getAttribute'
+js/io/apply.ts` が 0 件、`js/io/xml-parser.ts` の `Designer` / `addTable` / `setTitle` はコメント 5 行だけ。
+
+**バンドル差分は 7 ハンク・184 行追加 / 96 行削除**（`vite build --minify false`）。内訳は下表の
+7 種類だけで、**ソース由来でない差分は 1 件もない**。新設 11 関数はすべて独立した関数として
+emit されていて**インライン展開は起きていない**。位置移動ハンクも無い。
+
+| 差分 | 由来 | ハンク |
+|---|---|---|
+| 新モジュール 11 関数の追加 | `parse` 6 ＋ `apply` 5 | +180 |
+| `Visual.fromXML(){}` の消滅 | [`js/visual.ts`](js/visual.ts) | −1 |
+| `Row.fromXML` の消滅 | [`js/row.ts`](js/row.ts) | −37 |
+| `Key.fromXML` の消滅 | [`js/key.ts`](js/key.ts) | −10 |
+| `Table.fromXML` の消滅 | [`js/table.ts`](js/table.ts) | −21 |
+| `findNamedTable` の JSDoc 1 行 | [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) | ±1 |
+| `Designer.fromXML` の 4 行化 | 同上 | 28 → 5 |
+
+**対話パスは読み込みの 7 経路を移設前後で流した**（Playwright の使い捨てスクリプト。
+リポジトリには残していない）。`#clientload` / `#clientpaste`（クリップボード）/
+`#clientloadfromfile`（`FileReader`）/ `#clientlocalsave`→`#clientlocalload`（localStorage 往復）/
+`#serverload`（**XHR が作った `Document` を `DOMParser` を通さず直接 `IO.fromXML` へ**）/
+`#serverimport`（`fromXML` → `alignTables`）/ `?keyword=` 付き起動（`init2()` からの `serverload`）。
+backend は不在なので `page.route` で fixture を返した。**7 経路すべてで状態スナップショットと
+`toXML()` がバイト一致し、pageerror は両方 0 件**。この過程で確認した現行仕様:
+
+- **`#clientlocalsave` は IO ウィンドウを閉じない**（`IO.fromXML` の `window.close()` を通らないため）。
+  以降 `#saveload` は overlay に隠れてクリックできない。
+- `#serverimport` の `alignTables()` はテーブルを関係数の降順に並べ替えて再配置するので、
+  座標とテーブル順が fixture と一致しなくなる（known-issue #7 のとおり）。
+
+**次段階（4-1c）への入力**。残るのは `SqlDesigner` → `Designer` の一本化（13 本）で、完了判定は
+**バンドル出力が 1 バイトも変わらない**こと（型エイリアスの置換だけなので emit は不変）。
+[`js/globals.ts`](js/globals.ts) の `export type SqlDesigner = Designer` は 3-2 の経緯コメントごと
+消える。§4 の残り（4-2 以降）は形式側 2 本の追加なので、ライブ側 2 本は原則もう触らない。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

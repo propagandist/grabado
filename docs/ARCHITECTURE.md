@@ -29,6 +29,8 @@ js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS
   io/model.ts              ★ §4 段階4-1a で追加。直列化の中間モデル（型のみ・emit 0）
   io/extract.ts            ★ §4 段階4-1a で追加。ライブツリー → DesignModel
   io/xml-serializer.ts     ★ §4 段階4-1a で追加。DesignModel → XML（4-3 で ddl-xml.ts に改名）
+  io/xml-parser.ts         ★ §4 段階4-1b で追加。XML → DesignModel（形式側・ライブツリーに触らない）
+  io/apply.ts              ★ §4 段階4-1b で追加。DesignModel → ライブツリー（形式を知らない）
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
@@ -194,16 +196,20 @@ import 列に移し、段階3-0 で [`../src/app.ts`](../src/app.ts) に分離�
 Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
 ```
-io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts  →  io/extract.ts  →  io/xml-serializer.ts
+io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
+      →  io/extract.ts  →  io/xml-serializer.ts  →  io/xml-parser.ts  →  io/apply.ts
       →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
       →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.ts  →  io.ts
       →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts  →  window.ts  →  options.ts
       →  wwwsqldesigner.ts
 ```
 
-`io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。`io/extract.ts` と
-`io/xml-serializer.ts` が `globals.ts` の直後なのは、後者が `_` に値依存するため（段階4-1a）。
-型だけの `io/model.ts` は emit が空なので `src/app.ts` には載せない。
+`io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。`io/` の 4 本が
+`globals.ts` の直後なのは、`io/xml-serializer.ts` が `_` に値依存するため（段階4-1a）。
+残る 3 本（`extract` / `xml-parser` / `apply`）は `import type` だけなので位置の制約は無いが、
+io/ の 4 本を離さない（段階4-1b）。型だけの `io/model.ts` は emit が空なので `src/app.ts` には
+載せない。**入出力の 4 本は 2x2 の格子**で、ライブ側（`extract` / `apply`）は形式非依存、
+形式側（`xml-serializer` / `xml-parser`）だけが形式ごとに増える（4-2 / 4-3 の JSON）。
 
 **この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本、段階3-2 で
 続く描画中核 7 本、段階3-3b で末尾 8 本が `.ts` になり、**`js/` に `.js` は 1 本も残っていない**。

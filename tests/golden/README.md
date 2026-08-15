@@ -9,7 +9,14 @@
 ```
 xml/<fixture>.xml        SQL.Designer.toXML() の出力（postgresql の型パレットで解決）
 ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。9 DB × 7 fixture
+state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 ```
+
+`xml/` と `ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
+（選択クラス・型パレット由来の色・relation がどの実体に繋がったか・`clearTables()` の後始末）は
+1 つも写らない。`state/` はその穴を埋める。採取項目と**意図的に採らないもの**（レイアウト由来の値と
+relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
+[`../support/state.ts`](../support/state.ts) にある。
 
 ## 生成元は実ブラウザだけ
 

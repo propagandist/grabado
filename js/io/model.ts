@@ -8,15 +8,28 @@
  *
  *            ライブ側（描画エンジンを触る）      バイト側（形式を知る）
  *      出    extract.ts の extractModel()       xml-serializer.ts / 4-2 の json
- *      入    4-1b の apply.ts                   4-1b の xml-parser.ts / 4-3 の json
+ *      入    apply.ts の applyDesignModel()     xml-parser.ts / 4-3 の json
  *
  * ライブ側は形式非依存なので一度だけ書く。形式が増えるとバイト側だけが増える。
+ * 4 本すべてが揃ったのが段階4-1b。
  *
  * 本ファイルは型だけで emit が空なので、src/app.ts（読み込み順の文書）には載せない。
  *
  * 規約: モデルは「描画エンジンが実際に保持している値」を写す。型パレットに依存する
  * 解決（添字 -> sql 名 / quote）は serializer と parser が palette 引数を使って行う。
  * 詳細は下の RowModel.type と CUSTOMIZATIONS.md の段階4-1a の記録。
+ *
+ * 段階4-1b の追補 —— **入りと出でモデルは完全には対称でない**。
+ *
+ *   1. 型が嘘をつく箇所が入り側だけにある。TableModel.title / RowModel.title /
+ *      KeyModel.type / KeyModel.name / RelationRef.table / RelationRef.row は
+ *      parser が getAttribute の生値を入れるので、属性が無ければ**実行時 null**。
+ *      現行の 4 実装がそれぞれ !（non-null assertion）や早期 return で受けていた癖を
+ *      そのまま持っている。extract 側は必ず string を入れる。
+ *   2. RowModel.def は入り側では「XML が言った値」で、出側では「ツリーが保持している値」。
+ *      "NULL" -> null の正規化が Row.update() の中で起きるため（js/io/xml-parser.ts を参照）。
+ *
+ * どちらも 4-4 / 4-5 で消す既知の逸脱で、いま揃えると挙動が変わる。
  */
 
 /**

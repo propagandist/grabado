@@ -468,63 +468,11 @@ export class Row extends Visual<RowDom> {
         }
     }
 
-    fromXML(node: Element): void {
-        var name = node.getAttribute("name");
-
-        /* Pick を交差させてあるのは、下の :482 相当（添字に obj.type を使う行）で
-           optional 由来の undefined を出さないため */
-        var obj: Partial<RowData> & Pick<RowData, "type" | "size"> = {
-            type: 0,
-            size: "",
-        };
-        obj.nll = node.getAttribute("null") == "1";
-        obj.ai = node.getAttribute("autoincrement") == "1";
-
-        var cs = node.getElementsByTagName("comment");
-        if (cs.length && cs[0]!.firstChild) {
-            obj.comment = cs[0]!.firstChild!.nodeValue!;
-        }
-
-        var d = node.getElementsByTagName("datatype");
-        if (d.length && d[0]!.firstChild) {
-            var s = d[0]!.firstChild!.nodeValue!;
-            var r = s.match(/^([^\(]+)(\((.*)\))?.*$/);
-            var type = r![1]!;
-            if (r![3]) {
-                obj.size = r![3]!;
-            }
-            var types = this.owner.owner.palette.types();
-            for (var i = 0; i < types.length; i++) {
-                var sql = types[i]!.getAttribute("sql");
-                var re = types[i]!.getAttribute("re");
-                if (sql == type || (re && new RegExp(re).exec(type))) {
-                    obj.type = i;
-                }
-            }
-        }
-
-        var elm = this.owner.owner.palette.typeAt(obj.type);
-        var d = node.getElementsByTagName("default");
-        if (d.length && d[0]!.firstChild) {
-            var def = d[0]!.firstChild!.nodeValue!;
-            obj.def = def;
-            var q = elm.getAttribute("quote");
-            if (q) {
-                /* grabado: 元は var re（HANDOVER §3 段階3-2）。上のループの
-                   var re が string | null なので、同名だと TS2403（宣言型の不一致）に
-                   なる。改名は 2 行（宣言とすぐ下の match）で、旧束縛はここから先で
-                   読まれない＝挙動同値 */
-                var quoteRe = new RegExp("^" + q + "(.*)" + q + "$");
-                var r = def.match(quoteRe);
-                if (r) {
-                    obj.def = r[1]!;
-                }
-            }
-        }
-
-        this.update(obj);
-        this.setTitle(name!);
-    }
+    /*
+     * grabado: fromXML() は段階4-1b で撤去した（読み込みは js/io/xml-parser.ts と
+     * js/io/apply.ts）。型パレット依存の解決（sql / re 照合と <default> の quote 剥がし）は
+     * parser 側が palette 引数で行う —— 4-1a で決めた §4 の規約。
+     */
 
     isPrimary(): boolean {
         for (var i = 0; i < this.keys.length; i++) {

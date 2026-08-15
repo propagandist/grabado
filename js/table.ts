@@ -370,36 +370,11 @@ export class Table extends Visual<TableDom> {
         this.documentUp = OZ.Event.add(document, upEvent, this.up.bind(this));
     }
 
-    fromXML(node: Element): void {
-        var name = node.getAttribute("name");
-        this.setTitle(name!);
-        var x = parseInt(node.getAttribute("x")!) || 0;
-        var y = parseInt(node.getAttribute("y")!) || 0;
-        this.moveTo(x, y);
-        var rows = node.getElementsByTagName("row");
-        for (var i = 0; i < rows.length; i++) {
-            var row = rows[i]!;
-            var r = this.addRow("");
-            r.fromXML(row);
-        }
-        var keys = node.getElementsByTagName("key");
-        for (var i = 0; i < keys.length; i++) {
-            var key = keys[i]!;
-            var k = this.addKey();
-            k.fromXML(key);
-        }
-        for (var i = 0; i < node.childNodes.length; i++) {
-            /* テキストノードも来るので Element として読む（tagName が無ければ短絡する） */
-            var ch = node.childNodes[i] as Element;
-            if (
-                ch.tagName &&
-                ch.tagName.toLowerCase() == "comment" &&
-                ch.firstChild
-            ) {
-                this.setComment(ch.firstChild.nodeValue!);
-            }
-        }
-    }
+    /*
+     * grabado: fromXML() は段階4-1b で撤去した（読み込みは js/io/xml-parser.ts と
+     * js/io/apply.ts）。<comment> の「直下 childNodes・最後の一致が勝つ」という
+     * Row 側と違う走査規則は parser にそのまま移してある。
+     */
 
     getZ(): number {
         return this.zIndex;
@@ -412,11 +387,11 @@ export class Table extends Visual<TableDom> {
     }
 
     /*
-     * false を戻り型に出すのは、js/wwwsqldesigner.js が if (!r1) { continue; } で
+     * false を戻り型に出すのは、js/io/apply.ts が if (!r1) { continue; } で
      * 実際に消費しているため（Row と偽ると段階3-3 でその分岐が型上ありえなくなる）。
-     * 唯一ガードなしで受ける js/key.ts 側を 1 キャストで通す。
+     * 唯一ガードなしで受ける key の <part> 側を 1 キャストで通す。
      */
-    /* n が null になりうるのは Designer.fromXML の relation 属性経由（属性が無いとき） */
+    /* n が null になりうるのは relation の table / row 属性経由（属性が無いとき） */
     findNamedRow(n: string | null): Row | false {
         /* return row with a given name */
         for (var i = 0; i < this.rows.length; i++) {

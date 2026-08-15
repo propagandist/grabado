@@ -36,7 +36,7 @@ export class Key extends Visual {
         return this.name;
     }
 
-    /* null を受けるのは、下の fromXML が getAttribute の結果をそのまま渡すため
+    /* null を受けるのは、js/io/apply.ts が type 属性の生値をそのまま渡すため
        （ガードが実在するので型に出しても呼び出し側の負担にならない） */
     setType(t: string | null): void {
         if (!t) {
@@ -80,16 +80,8 @@ export class Key extends Visual {
         return this.name || this.type;
     }
 
-    fromXML(node: Element): void {
-        this.setType(node.getAttribute("type"));
-        this.setName(node.getAttribute("name")!);
-        var parts = node.getElementsByTagName("part");
-        for (var i = 0; i < parts.length; i++) {
-            var name = parts[i]!.firstChild!.nodeValue!;
-            /* <part> には自テーブルの row 名しか書かれない前提（IO の不変条件）。
-               外れれば現行も addRow の r.owner で TypeError になる */
-            var row = this.owner.findNamedRow(name) as Row;
-            this.addRow(row);
-        }
-    }
+    /*
+     * grabado: fromXML() は段階4-1b で撤去した（読み込みは js/io/xml-parser.ts と
+     * js/io/apply.ts）。<part> の nodeValue をガードなしで読む現行の癖も含めて逐語で移した。
+     */
 }

@@ -40,6 +40,8 @@ import { Window as SqlWindow } from "./window.ts";
 import { TypePalette } from "./io/palette.ts";
 import { extractModel } from "./io/extract.ts";
 import { serializeDesignXml } from "./io/xml-serializer.ts";
+import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
+import { applyDesignModel } from "./io/apply.ts";
 
 /** 基底の VisualDom に svg が増える（vector が真のときだけ生える。§5.4 の形態 (i)） */
 export interface DesignerDom extends VisualDom {
@@ -436,7 +438,7 @@ export class Designer extends Visual<DesignerDom> {
         this.sync();
     }
 
-    /** 見つからなければ undefined を返す（fromXML が if (!t1) continue で消費する） */
+    /** 見つからなければ undefined を返す（js/io/apply.ts が if (!t1) continue で消費する） */
     findNamedTable(name: string | null): Table | undefined {
         /* find row specified as table(row) */
         for (var i = 0; i < this.tables.length; i++) {
@@ -464,57 +466,28 @@ export class Designer extends Visual<DesignerDom> {
         );
     }
 
-    override fromXML(node: Element): void {
+    /*
+     * grabado: 本体は段階4-1b で js/io/xml-parser.ts と js/io/apply.ts に分けた。
+     * toXML() のような 1 行委譲にせず 4 行残しているのは、**この 4 行の順序が
+     * 本段階でいちばん危険**だから —— 両方を所有する唯一の場所に見える形で置く。
+     *
+     * clearTables() は**旧パレット**で走らなければならない。removeTable ->
+     * rowManager.select(false) -> Row.deselect() -> redraw() -> getColor() ->
+     * getDataType() とたどってパレットを読むので、先に差し替えると古い添字で
+     * 新パレットを引くことになる。逆に parse（行の型解決）は**新パレット**で走る。
+     * したがって clear -> setRoot -> parse -> apply の順は入れ替えられない。
+     *
+     * 基底 Visual の空 fromXML() は同時に撤去した（4-1a の toXML() と同じ論法。
+     * 残すと table.fromXML() の消し漏れが TypeError にならず黙って何もしない）。
+     * override が外れたのはそのため。
+     */
+    fromXML(node: Element): void {
         this.clearTables();
-        var types = node.getElementsByTagName("datatypes");
-        if (types.length) {
-            this.palette.setRoot(types[0]!);
+        var types = parseDatatypes(node);
+        if (types) {
+            this.palette.setRoot(types);
         }
-        var tables = node.getElementsByTagName("table");
-        for (var i = 0; i < tables.length; i++) {
-            var t = this.addTable("", 0, 0);
-            t.fromXML(tables[i]!);
-        }
-
-        for (var i = 0; i < this.tables.length; i++) {
-            /* ff one-pixel shift hack */
-            this.tables[i]!.select();
-            this.tables[i]!.deselect();
-        }
-
-        /* relations */
-        var rs = node.getElementsByTagName("relation");
-        for (var i = 0; i < rs.length; i++) {
-            var rel = rs[i]!;
-            var tname = rel.getAttribute("table");
-            var rname = rel.getAttribute("row");
-
-            var t1 = this.findNamedTable(tname);
-            if (!t1) {
-                continue;
-            }
-            var r1 = t1.findNamedRow(rname);
-            if (!r1) {
-                continue;
-            }
-
-            tname = (rel.parentNode!.parentNode as Element).getAttribute(
-                "name"
-            );
-            rname = (rel.parentNode as Element).getAttribute("name");
-            var t2 = this.findNamedTable(tname);
-            if (!t2) {
-                continue;
-            }
-            var r2 = t2.findNamedRow(rname);
-            if (!r2) {
-                continue;
-            }
-
-            this.addRelation(r1, r2);
-        }
-
-        this.sync();
+        applyDesignModel(this, parseDesignXml(node, this.palette));
     }
 
     /* 基底の setTitle() は呼ばない（現行どおり）。document.title だけを更新する */

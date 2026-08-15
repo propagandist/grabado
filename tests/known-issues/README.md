@@ -26,7 +26,6 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 
 | # | 現象 | 原因 | 直る予定 |
 |---|---|---|---|
-| 2 | nullable かつ default 未指定の行が、保存すると `<default>NULL</default>` を獲得する（情報が増える） | コンストラクタ既定 `def = null`（[js/row.js:21](../../js/row.js#L21)）を `toXML` が `NULL` として書き出す（[js/row.js:420-429](../../js/row.js#L420-L429)） | §4 |
 | 3 | `BIGINT` が Big Integer ではなく **Real** に解決される | [db/postgresql/datatypes.xml](../../db/postgresql/datatypes.xml) が `sql="BIGINT"` を 2 か所に持ち、照合ループが `break` しないので後勝ち（[js/row.js:472-479](../../js/row.js#L472-L479)）。`re` もアンカー無しの部分一致 | §6.1 |
 | 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/row.js:455](../../js/row.js#L455)）。現行 PG パレットに uuid が無い | §6.1 |
 | 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る壊れた SQL が出る | [db/postgresql/output.xsl:58-64](../../db/postgresql/output.xsl#L58-L64) が要素の存在だけを見る。現行 introspection は値の無いカラムにも空の `<default>` を出す（[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.5） | §6.3 |
@@ -40,6 +39,7 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 | # | 現象 | 直した段階 | 移設先（[`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)） |
 |---|---|---|---|
 | 1 | 識別子に `&` を含めると `toXML()` が well-formed でない XML を吐き、保存したファイルを二度と開けない | §4 段階4-4 | 「識別子に `&` を含んでも well-formed な XML を吐く」 |
+| 2 | nullable かつ default 未指定の行が、保存すると `<default>NULL</default>` を獲得する（情報が増える） | §4 段階4-5 | 「既定値の無い行は保存しても `<default>` を獲得しない」＋「nullable な行の default 欄に NULL と打っても `<default>` は出ない」 |
 | 7 | `alignTables()` が `tables` を破壊的ソートし、テーブル順と座標を変える | §4 段階4-4 | 「`alignTables()` はテーブル順を変えない」 |
 | 8 | `<default>` だけ末尾に改行が付かず diff が読みにくい | §4 段階4-4 | 「`<default>` の後にも改行が入る」 |
 

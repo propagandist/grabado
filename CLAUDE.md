@@ -1,13 +1,18 @@
 # CLAUDE.md — grabado 作業ルール
 
-**grabado**（ER 設計ツール、ドメイン grabado.dev）。`ondras/wwwsqldesigner` 由来。house 標準（Kotlin/Spring Boot + PostgreSQL 18 DDL）へ寄せ、**Docker で各自ローカル稼働**、**設計データは git 管理の JSON ファイルを正本**とする社内版。根拠は `HANDOVER.md`。
+**grabado**（ER 設計ツール、ドメイン grabado.dev）。`ondras/wwwsqldesigner` 由来。
+
+**目的 = 会社のブランディングとして無料公開する OSS**（収益化しない）＋ **自社でも使う**。
+**社内ツールではない。** house 標準（Kotlin/Spring Boot + PostgreSQL 18 DDL）へ寄せ、**Docker で各自ローカル稼働**、**設計データは git 管理の JSON ファイルを正本**とする。
+根拠は `HANDOVER.md`。ただし **HANDOVER は社内版前提のまま**（§2 配布・§2.3 Railway・§6.2/§6.3 の house 規約・§8 ドキュメント）。齟齬の一覧は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
 
 ## プロジェクト概要
 - frontend: 描画エンジンを温存しつつ**完全 TypeScript 化**（Vite / strict）。
 - backend: PHP を廃し **Kotlin/Spring Boot**。save/load は**マウント済みファイルの I/O**、introspection は `information_schema`→JSON、AI proxy を提供。
 - 正本: **git 管理の JSON ファイル**（`/data/schema` に mount）。共有は PR。編集ストアは **DB レス**（ブラウザ内 / IndexedDB）。
 - 配布: マルチステージ Docker（フロント dist を Spring Boot static に同梱）。app 単一コンテナ＋mount。
-- Railway: 任意・`READONLY=true` の読み取り専用ビューア（正本にしない）。
+- **対応 DB は 8 本**: `postgresql`（house 標準）/ `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` は撤去（6-1）。決定は `CUSTOMIZATIONS.md` の段階6-0。
+- 公開デモ（grabado.dev）は **`READONLY=true` 一択** — AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。編集体験はブラウザ内ストアで成立する。
 
 ## 絶対に守る制約（Hard Constraints）
 1. **特性化テストが緑であることが移植の前提**。DDL golden ＋ serializer round-trip/決定論テストを先に用意し、挙動不変を保証してから内部を作り替える。半移行を放置しない。
@@ -40,6 +45,8 @@
 ## 迷ったら
 - スキーマ既定や上記制約を覆す提案（単数形化・native enum・PG 正本化・時間駆動同期・UI framework 化・AI 自動適用等）は勝手に進めず確認し、決定を `CUSTOMIZATIONS.md` に記録する。
 - 特性化テストを通らない変更、決定論出力を壊す変更はマージしない。
+- **対応 DB を絞る・PG だけ整えて他を放置する判断はしない。** 公開プロダクトなので対応 DB の幅と出力品質が製品価値。
+- **決定は必ず `CUSTOMIZATIONS.md` に記録する。** 目的・対応 DB のような**セッションをまたぐ前提はプロジェクトメモリにも**書く —— 記録されていない決定は次のセッションでは存在しないのと同じ（2026-08-15 に目的と対応 DB の 2 つが実際に失われ、誤った計画を組みかけた）。
 
 ## CI / ワークフロー
 

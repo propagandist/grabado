@@ -1,0 +1,562 @@
+{
+  "tables": [
+    {
+      "title": "users",
+      "x": 20,
+      "y": 20,
+      "zIndex": 1,
+      "comment": "ユーザー",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "20px",
+        "styleTop": "20px",
+        "styleZIndex": "1",
+        "titleHtml": "users",
+        "titleTooltip": "ユーザー",
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "uuidv7()",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "email",
+          "type": 11,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "ログイン用メールアドレス",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            1
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "ログイン用メールアドレス",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title key",
+            "titleHtml": "email",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "display_name",
+          "type": 11,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "display_name",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "is_active",
+          "type": 13,
+          "size": "",
+          "def": "true",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "is_active",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "preferences",
+          "type": 28,
+          "size": "",
+          "def": "'{}'::jsonb",
+          "nll": false,
+          "ai": false,
+          "comment": "UI 設定などの任意項目",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "UI 設定などの任意項目",
+            "backgroundColor": "rgb(200, 200, 255)",
+            "borderColor": "rgb(200, 200, 255)",
+            "titleClass": "title",
+            "titleHtml": "preferences",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "created_at",
+          "type": 19,
+          "size": "",
+          "def": "now()",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
+            "titleClass": "title",
+            "titleHtml": "created_at",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "updated_at",
+          "type": 19,
+          "size": "",
+          "def": "now()",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
+            "titleClass": "title",
+            "titleHtml": "updated_at",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "users_pkey",
+          "parts": [
+            "id"
+          ]
+        },
+        {
+          "type": "UNIQUE",
+          "name": "users_email_key",
+          "parts": [
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "articles",
+      "x": 420,
+      "y": 20,
+      "zIndex": 2,
+      "comment": "記事",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "420px",
+        "styleTop": "20px",
+        "styleZIndex": "2",
+        "titleHtml": "articles",
+        "titleTooltip": "記事",
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "uuidv7()",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "author_id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "執筆者 (users.id)",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "執筆者 (users.id)",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "author_id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "title",
+          "type": 11,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "title",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "body",
+          "type": 11,
+          "size": "",
+          "def": null,
+          "nll": true,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "body",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "view_count",
+          "type": 0,
+          "size": "",
+          "def": "0",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "view_count",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "price",
+          "type": 3,
+          "size": "12,2",
+          "def": null,
+          "nll": true,
+          "ai": false,
+          "comment": "有料記事の価格。money ではなく numeric を使う",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "有料記事の価格。money ではなく numeric を使う",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "price",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "published_on",
+          "type": 14,
+          "size": "",
+          "def": null,
+          "nll": true,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
+            "titleClass": "title",
+            "titleHtml": "published_on",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "created_at",
+          "type": 19,
+          "size": "",
+          "def": "now()",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
+            "titleClass": "title",
+            "titleHtml": "created_at",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "updated_at",
+          "type": 19,
+          "size": "",
+          "def": "now()",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
+            "titleClass": "title",
+            "titleHtml": "updated_at",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "articles_pkey",
+          "parts": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "article_tags",
+      "x": 820,
+      "y": 20,
+      "zIndex": 3,
+      "comment": "記事とタグの対応",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "820px",
+        "styleTop": "20px",
+        "styleZIndex": "3",
+        "titleHtml": "article_tags",
+        "titleTooltip": "記事とタグの対応",
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "article_id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "article_id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "tag",
+          "type": 11,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title primary key",
+            "titleHtml": "tag",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "created_at",
+          "type": 19,
+          "size": "",
+          "def": "now()",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
+            "titleClass": "title",
+            "titleHtml": "created_at",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "pk_article_tags",
+          "parts": [
+            "article_id",
+            "tag"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "parent": [
+        0,
+        0
+      ],
+      "child": [
+        1,
+        1
+      ]
+    },
+    {
+      "parent": [
+        1,
+        0
+      ],
+      "child": [
+        2,
+        0
+      ]
+    }
+  ],
+  "area": [
+    "svg",
+    "div.table",
+    "div.table",
+    "div.table"
+  ],
+  "svg": [
+    "path",
+    "path"
+  ],
+  "minimap": [
+    "div.port",
+    "div.mini",
+    "div.mini",
+    "div.mini"
+  ]
+}

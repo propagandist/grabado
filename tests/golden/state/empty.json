@@ -1,0 +1,11 @@
+{
+  "tables": [],
+  "relations": [],
+  "area": [
+    "svg"
+  ],
+  "svg": [],
+  "minimap": [
+    "div.port"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "tables": [
+    {
+      "title": "things",
+      "x": 10,
+      "y": 20,
+      "zIndex": 1,
+      "comment": "",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "10px",
+        "styleTop": "20px",
+        "styleZIndex": "1",
+        "titleHtml": "things",
+        "titleTooltip": null,
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": []
+    }
+  ],
+  "relations": [],
+  "area": [
+    "svg",
+    "div.table"
+  ],
+  "svg": [],
+  "minimap": [
+    "div.port",
+    "div.mini"
+  ]
+}

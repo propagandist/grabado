@@ -70,12 +70,12 @@
 
     <!-- io -->
     <string name="saveload">Zapisz / Otwórz</string>
-    <string name="empty">Proszę wklej kod XML w poniższe pole tekstowe i spróbuj ponownie.</string>
+    <string name="empty">Proszę wklej kod JSON w poniższe pole tekstowe i spróbuj ponownie.</string>
     <string name="client">Klient</string>
     <string name="server">Serwer</string>
     <string name="output">Wejście / Wyjście</string>
-    <string name="clientsave">Zapisz XML</string>
-    <string name="clientload">Załaduj XML</string>
+    <string name="clientsave">Zapisz JSON</string>
+    <string name="clientload">Załaduj JSON</string>
     <string name="clientsql">Generuj SQL</string>
     <string name="backendlabel">Serwer wejściowy:</string>
     <string name="serversave">Zapisz</string>

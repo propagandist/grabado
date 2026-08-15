@@ -66,7 +66,7 @@ node -e "process.chdir('d:/projects/grabado'); require('child_process').spawnSyn
 ## なぜ 2 系統あるのか
 
 DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**
-したもの（[js/io.js:530-562](../js/io.js#L530-L562)）。Node に `XSLTProcessor` は無い。
+したもの（[js/io.ts](../js/io.ts) の `clientsql()` / `finish()`）。Node に `XSLTProcessor` は無い。
 モデル層も描画 DOM と密結合で、DOM 無しでは動かない（[ARCHITECTURE.md](ARCHITECTURE.md) §5）。
 
 そこで役割を分けた。
@@ -159,7 +159,7 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 
 ### DDL golden — `tests/golden/ddl/<db>/<fixture>.sql`
 
-7 fixture × 9 DB = **63 本**。[js/io.js:538-562](../js/io.js#L538-L562) の `finish()` と同じ経路
+7 fixture × 9 DB = **63 本**。[js/io.ts](../js/io.ts) の `finish()` と同じ経路
 （`toXML()` → `DOMParser` → `XSLTProcessor` → `documentElement.textContent` → `trim`）で採る。
 UI の `#textarea` に入る値と一致する。
 
@@ -215,6 +215,29 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
 **移行ツール**の規則は [`../tests/node/migrate-design.test.ts`](../tests/node/migrate-design.test.ts)。
 ツールが serializer と同じバイト列を書くことは、`tests/golden/json/` の 7 本が
 **ツールで移行したもの**であることをもって golden テストが毎回確認している。
+
+### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
+
+**golden はここを 1 ビットも押さえない。** 上の golden 85 本はすべて Designer のファサード
+（`toXML` / `toJson` / `fromXML` / `fromJson`）経由で採るので [`../js/io.ts`](../js/io.ts) を通らず、
+**「UI が JSON に切り替わったこと」は golden 不変と両立してしまう**。だから 4-3b の完了判定は
+「golden 85 本が無差分」＋この 2 本の 2 本立てになっている。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts) | **server 経路の契約** —— URL（`keyword` の `.json`）・`Content-type`・body が serializer の出力とバイト一致・`load` が応答をテキストで受ける・`import` は XML のまま。ハーネスが `OZ.Request`（全通信の唯一の入口）の差し替え先で記録する |
+| [`../tests/browser/io-ui.spec.ts`](../tests/browser/io-ui.spec.ts) | **jsdom では見られないもの** —— download の `suggestedFilename`・localStorage・`XSLTProcessor` 経由の DDL 生成（UI ボタンからの実経路 1 本）・ボタンが DOM に実在すること |
+
+両方が押さえるのは「読み込みが JSON と XML の**両方**を受ける」ことと、「読めない入力で
+今開いている設計が壊れない」こと。特に**壊れた JSON を XML として読み直さない**（フォールバックが
+無い）ことを明示的に見ている —— あると例外が `Null document` に着地して位置情報が消える
+（[`../js/io/detect.ts`](../js/io/detect.ts)）。判別関数そのものは
+[`../tests/node/detect.test.ts`](../tests/node/detect.test.ts) が fixture と golden の実バイト列で見る。
+
+ボタンを押すのは `page.evaluate` の中（[`../tests/browser/harness.ts`](../tests/browser/harness.ts) の
+`clickIo`）。io の container はコンストラクタで DOM から外れているので `page.locator` では拾えず、
+かつ `alert` / `prompt` を**その呼び出しの間だけ**差し替えられる（`openDesigner` が張る
+dialog ハンドラと衝突しない）。
 
 ### round-trip / 決定論
 

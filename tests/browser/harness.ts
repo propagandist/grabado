@@ -101,6 +101,60 @@ export async function loadFixture(page: Page, xml: string): Promise<void> {
     }
 }
 
+/**
+ * io ダイアログのボタンを押す（HANDOVER §4 段階4-3b）。返り値は出た alert の一覧。
+ *
+ * page.evaluate の中で押すのには理由が 2 つある。(1) io の container はコンストラクタで
+ * DOM から外れているので `page.locator` では拾えない（dom バッグ越しならダイアログを
+ * 開かずに押せる）。(2) alert / prompt を**この呼び出しの間だけ**差し替えられるので、
+ * openDesigner が張る dialog ハンドラと衝突しない（loadFixture と同じイディオム）。
+ *
+ * 非同期の経路（clientsql / clientcopy / serverload）は click から戻った時点では
+ * 終わっていない。呼び手が結果を待つこと。
+ */
+export function clickIo(
+    page: Page,
+    id: string,
+    promptAnswer: string | null = null,
+): Promise<string[]> {
+    return page.evaluate(
+        ([buttonId, answer]) => {
+            const seen: string[] = [];
+            const originalAlert = window.alert;
+            const originalPrompt = window.prompt;
+            window.alert = (msg?: unknown) => void seen.push(String(msg));
+            window.prompt = () => answer;
+            try {
+                const buttons = window.d!.io.dom as unknown as Record<
+                    string,
+                    HTMLInputElement | undefined
+                >;
+                const button = buttons[buttonId];
+                if (!button) {
+                    throw new Error(`io にボタンが無い: ${buttonId}`);
+                }
+                button.click();
+            } finally {
+                window.alert = originalAlert;
+                window.prompt = originalPrompt;
+            }
+            return seen;
+        },
+        [id, promptAnswer] as const,
+    );
+}
+
+/** io ダイアログの #textarea（入出力欄） */
+export function ioTextarea(page: Page): Promise<string> {
+    return page.evaluate(() => window.d!.io.dom.ta.value);
+}
+
+export async function setIoTextarea(page: Page, value: string): Promise<void> {
+    await page.evaluate((text) => {
+        window.d!.io.dom.ta.value = text;
+    }, value);
+}
+
 /** 現行 SQL.designer.toXML() の生出力 */
 export function toXml(page: Page): Promise<string> {
     return page.evaluate(() => window.d!.toXML());

@@ -92,7 +92,7 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 
 ### 4.2 URL の組み立て（フロント側）
 
-[`../js/io.js`](../js/io.js) が発行する URL は次の形。
+[`../js/io.ts`](../js/io.ts) が発行する URL は次の形。
 
 ```
 <xhrpath>backend/<backend名>/?action=<action>[&keyword=<name>|&database=<name>]
@@ -100,7 +100,11 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 
 - `<xhrpath>` = `CONFIG.XHR_PATH || ""`（[`../js/config.js`](../js/config.js) の実値は **空文字**）。cookie `wwwsqldesigner` で上書き可。
 - `<backend名>` は画面の backend セレクタの値（`CONFIG.AVAILABLE_BACKENDS`、既定 `php-mysql`）。URL クエリ `?backend=<name>` でも選択できる。
-- `keyword` は `encodeURIComponent` 済み。
+- `keyword` は `encodeURIComponent` 済み。**段階4-3b から `.json` が付く**（`save` / `load` の
+  両方。`jsonKeyword()` が二重付与を防ぐ）。backend は body を解釈せず `basename($keyword)` で
+  ファイル名を作るだけなので、フロントが付けるだけで `data/<name>.json` ができる。
+  拡張子の**強制**（`.json` 以外の save を拒む・`list` が `*.json` だけを返す）は正本ディレクトリの
+  責務なので Kotlin 実装（§5.1）に送ってある。`setTitle` に渡す設計の名前は素のまま。
 - **XHR 追加ヘッダは既定で無し**（`SQL.Designer` の `xhrheaders` 初期値は `{}`）。`setXhrHeaders()` は `index.html` にコメントアウトされた例（`Authorization` / `X-CSRF-TOKEN`）があるだけの拡張ポイントで、**現行に CSRF トークンの仕組みは存在しない**。
 
 ### 4.3 action 一覧（実測）
@@ -110,8 +114,8 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 | action | method | 追加パラメータ | リクエスト Content-Type / body | 成功時ステータス | レスポンス Content-Type | レスポンス body |
 |---|---|---|---|---|---|---|
 | `list` | GET | — | — | 200 | `text/html; charset=UTF-8`（**未指定＝PHP 既定**） | 名前を `\n` 区切り（末尾にも改行） |
-| `save` | POST | `keyword` | `application/xml` / 設計 XML | **201 Created** | `text/html; charset=UTF-8` | 空 |
-| `load` | GET | `keyword` | — | 200 | `text/xml;charset=UTF-8` | 保存した XML（**バイト単位で同一**） |
+| `save` | POST | `keyword` | `application/json` / 設計 JSON（段階4-3b まで `application/xml` / 設計 XML） | **201 Created** | `text/html; charset=UTF-8` | 空 |
+| `load` | GET | `keyword` | — | 200 | `text/xml;charset=UTF-8`（PHP は常にこれを返すが、フロントは段階4-3b から**テキストで受けて中身で判別**する） | 保存したバイト列（**バイト単位で同一**） |
 | `import` | GET | `database`（php-postgresql では**未使用**） | — | 200 | `text/xml;charset=UTF-8` | introspection XML（§4.5） |
 | 上記以外 / 指定なし | — | — | — | **501 Not Implemented** | — | 空 |
 
@@ -123,7 +127,7 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 - 日本語 `keyword` は URL エンコードで往復し、ファイル名も UTF-8 でそのまま作られる。
 - **`keyword` 省略時は 200 + PHP の Fatal error 本文**を返す（`fopen("data/")` が失敗 → `fwrite(false, ...)` で TypeError）。移植先では 400 を返すべき。
 
-`SQL.IO.prototype.check`（[`../js/io.js`](../js/io.js)）は 201 / 404 / 500 / 501 / 503 を「表示すべき応答」として扱い、textarea にロケール文言を出す。**201 も含まれる**ため、save 成功時もメッセージが出る。
+`IO.check()`（[`../js/io.ts`](../js/io.ts)）は 201 / 404 / 500 / 501 / 503 を「表示すべき応答」として扱い、textarea にロケール文言を出す。**201 も含まれる**ため、save 成功時もメッセージが出る。
 
 ### 4.4 backend 実装ごとの差（移植の観点）
 
@@ -268,7 +272,7 @@ Node ハーネスがバンドルの内側に手を届かせる経路は
 
 ### 5.2 DDL 生成が XSLT である点（特性化テストへの影響）
 
-SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.js`](../js/io.js) の `clientsql()`（:530）と `finish()`（:538-562））。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立て、`.trim()` して `#textarea` に入れる。
+SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.ts`](../js/io.ts) の `clientsql()` と `finish()`）。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立て、`.trim()` して `#textarea` に入れる。**段階4-3b 以降、`Designer.toXML()` を呼ぶ出荷コードはこの `finish()` 1 か所だけ**（保存/読込は JSON に移った）。
 
 > 旧版の本書はこのメソッドを `sql()` と書いていたが、実装名は **`clientsql()`**。
 

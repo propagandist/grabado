@@ -70,12 +70,12 @@
 
     <!-- io -->
     <string name="saveload">Uložit / Načíst</string>
-    <string name="empty">Prosím vložte XML data do textového pole níže.</string>
+    <string name="empty">Prosím vložte JSON data do textového pole níže.</string>
     <string name="client">Klient</string>
     <string name="server">Server</string>
     <string name="output">Vstup / Výstup</string>
-    <string name="clientsave">Uložit XML</string>
-    <string name="clientload">Načíst XML</string>
+    <string name="clientsave">Uložit JSON</string>
+    <string name="clientload">Načíst JSON</string>
     <string name="clientlocalsave">Uložit v prohlížeči</string>
     <string name="clientlocalload">Načíst z prohlížeče</string>
     <string name="clientsql">Generovat SQL</string>

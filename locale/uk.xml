@@ -70,12 +70,12 @@
 
     <!-- io -->
     <string name="saveload">Зберегти / Завантажити</string>
-    <string name="empty">Прошу вставити дані XML у текстову область нижче і спробувати повторно.</string>
+    <string name="empty">Прошу вставити дані JSON у текстову область нижче і спробувати повторно.</string>
     <string name="client">Клієнт</string>
     <string name="server">Сервер</string>
     <string name="output">Ввід / Вивід</string>
-    <string name="clientsave">Зберегти XML</string>
-    <string name="clientload">Завантажити XML</string>
+    <string name="clientsave">Зберегти JSON</string>
+    <string name="clientload">Завантажити JSON</string>
     <string name="clientlocalsave">Зберегти в переглядачі</string>
     <string name="clientlocalload">Завантажити з переглядача</string>
     <string name="clientlocallist">Список з переглядача</string>

@@ -1871,13 +1871,117 @@ dev（4173）と preview（4174）の両方でそのまま効く。
 
 ---
 
+### 2026-08-15 HANDOVER §4「IO」段階4-3b — UI の全経路を JSON に切り替えた
+
+**これで CLAUDE.md 制約4（フォーマットは JSON 固定・XML は読込専用・書き出しは撤去）が
+満たされた。** 保存 5 経路（textarea / クリップボード / ダウンロード / localStorage / server）は
+すべて設計 JSON を書き、読込 5 経路は JSON と XML の両方を受ける。出荷コードで
+`Designer.toXML()` を呼ぶのは **DDL 生成（`finish()`）の 1 か所だけ**になった。
+
+#### 前提: golden はこの段階を 1 ビットも押さえない
+
+golden 85 本はすべて Designer のファサード（`toXML` / `toJson` / `fromXML` / `fromJson`）経由で
+採るので [`js/io.ts`](js/io.ts) を通らない。つまり **「UI が JSON に切り替わったこと」は
+golden 不変と両立してしまう**。歴代の段階が「golden 無差分」を主たる完了判定にできたのは
+変更対象が golden の経路上にあったからで、本段階はそこが構造的に違う。
+
+そこで完了判定を 2 本立てにした —— 「golden 85 本が無差分」（＝**描画エンジンと形式側に
+触っていない**ことの証明）＋ **UI 経路を固定する新規テスト 2 本**（＝切り替わったことの証明）。
+この非対称は本段階でいちばん重要な設計判断で、[`docs/TESTING.md`](docs/TESTING.md) に節を足した。
+
+#### 決めたこと 1: 形式の判別は先頭 1 文字。フォールバックは作らない
+
+[`js/io/detect.ts`](js/io/detect.ts)（export 1 本）。BOM と先行空白を飛ばした最初の 1 文字が
+`{` なら json、`<` なら xml、無ければ empty、それ以外は unknown。
+
+**拡張子で決めない**のは、読込 5 経路のうち拡張子を持つのが `clientloadfromfile` だけだから
+（textarea / クリップボード / localStorage / server には無い）。別ボタンを立てる案も却下 ——
+ボタンが倍になるうえ、ファイルと server は結局中身で判別することになる。
+
+**「試して駄目なら他方」を書かない**ことが本ファイルの要件。書くと壊れた JSON を XML として
+読み直して `xmlerror: Null document` に着地し、**ユーザーが直せない位置に例外が落ちる**。
+先頭 1 文字で行き先を確定させると、`{` で始まる入力は必ず json-parser の位置つきメッセージ
+（`tables[0].columns[2].name`）だけを出す。判別を厳しくしない（`{"formatVersion"` まで見ない）
+のも同じ理由で、中身の妥当性は parser の仕事。
+
+#### 決めたこと 2: `db` 不一致は拒む。ただし例外メッセージに導線を持たせる
+
+4-2b が形式側を「例外」に確定させたので、本段階が決めるのは UI の導線だけだった。
+**パレットを取り直して開き直す案は却下**した ——
+
+- 読込 5 経路すべての非同期化が要る（`requestDB()` / `dbResponse()` は `flag--` と `init2()` を
+  持つ初期化専用の副作用で、そのままでは再利用できない）
+- `typeIndex` / `fkTypeFor` の古いキャッシュを新パレットに当てる既知の癖（4-0b で意図的に温存）を
+  **JSON 経路にも持ち込む**ことになる
+- cookie の `db` は変わらないので、リロードすると元に戻る半端な状態を作る
+- 現行 UI は「db の変更にはリロードが要る」という契約を locale の `optionsnotice` で明示している
+
+そのぶん例外に「Options の db を "<ファイル側の db>" に変えてページを再読み込みすること」を
+足した。**locale は通さない**（形式側の規約）ので、Options の項目名は訳語ではなく設定キーの
+`db` で指す —— 訳語を焼くと 21 言語のどれか 1 つと必ず食い違う。
+
+#### 決めたこと 3: `.json` 拡張子はフロントだけで完結させ、PHP には触らない
+
+`serversave` / `serverload` の keyword に `.json` を付ける（4-2b の申し送り）。現行 backend は
+body を解釈せず `basename($keyword)` でファイル名を作るだけなので、**PHP には 1 行も要らない**
+（捨てる資産に投資しない ＝ 制約6）。`jsonKeyword()` は二重付与を防ぐので、`list` が返した
+名前をそのまま prompt に貼っても壊れない。設計の名前（`setTitle`）には付けない。
+
+拡張子の**強制**（`.json` 以外の save を拒む・`list` が `*.json` だけを返す・keyword 省略時 400）は
+正本ディレクトリの責務なので **Kotlin 実装の §5.1 に送った**。
+
+**副作用**: `backend/php-file/data/default`（upstream のサンプル XML・2833 バイト）が
+`serverload` から到達できなくなる。§5 の PHP 撤去と同時に消える upstream 資産なので、
+削除も救済もせず記録だけに留める。
+
+#### 決めたこと 4: ダウンロードは 1 本に統合し、introspection は XML のまま据え置く
+
+`clientdownloadxml` / `clientdownloadtxt` → `clientdownload`（`new-database.json` /
+`application/json`）。中身が JSON になった以上「`.txt` でも落とせる」ことに意味が無く、
+id に `xml` を残すと落ちるファイルと名前が食い違う。
+
+一方 `serverimport` は `xml: true` のまま。ここが受けるのは「保存した設計」ではなく
+**backend が `information_schema` から組み立てた XML** で、JSON 化は backend を Kotlin に移す
+§5.2 の仕事。フロントだけ先に JSON を期待させると現行 backend との契約が切れる。
+
+#### 決めたこと 5: 危険な境界を独立したコミットにする
+
+PR 内のコミットを 5 つに割り、**「読みは新・書きは旧」の状態を一度だけ通した**（コミット 2）。
+この状態で既存テストが全緑であること自体が「判別ロジックが XML を落としていない」ことの
+独立証明になる（4-1a が「読み込みは旧・書き出しは新」で抽出を独立検証したのと同じ論法）。
+実際に 142 passed / 121 passed で通っている。
+
+#### 検証
+
+- **`git status --porcelain tests/golden/` が空**（85 本すべて無差分）
+- **`git grep "toXML" -- js/` の実コードが 2 行に収束**（`js/wwwsqldesigner.ts` の定義と
+  `js/io.ts` の `finish()`）。§6.3 まではこの 1 か所が `output.xsl` の入力を作る
+- **`git diff -U0 -- locale/` の変更行が `clientsave` / `clientload` / `empty` の
+  `XML` → `JSON` 置換だけ**（21 言語 × 3 行 = 63 行。例外 0 件）＋ `clientdownload` への統合
+  （en / de）＋ `jsonerror` / `unknownformat` の追加（en / ja）
+- `npm test` **157 passed** / 21 skipped（4-3a の 133 から +24 ＝ `detect.test.ts` 9 ＋
+  `io-ui.test.ts` 15）、`test:browser` **133 passed**（+12 ＝ `io-ui.spec.ts`）、
+  `test:dist` 3 passed、`known-issues` 9 passed、`typecheck` 0 error
+- **対話パスの手動一巡は行っていない。** 保存/読込の全経路を実ブラウザで押さえる
+  [`tests/browser/io-ui.spec.ts`](tests/browser/io-ui.spec.ts) を新設したことで置き換えた
+  （描画系は本段階で 1 行も触っていない）
+
+**次段階（4-4）への入力**。決定論化（`<!-- Active URL -->` の `location.href` 撤去）と
+known-issues #1 / #7 / #8。`golden/xml/` → `golden/ddl-input/` の改名は**本段階で前提が整った** ——
+ユーザーに見える保存経路から XML が消えたので、あの 7 本は「設計の保存形式の golden」ではなく
+「DDL パイプラインの入力の golden」になった。`js/io/ddl-xml.ts` の `serializeDesignXml` を
+役目に合った名前にするのも 4-4 の同じ PR が適所。あわせて **同名テーブルで relation が壊れる件の
+始末**（4-2 からの申し送り）も 4-4 のまま。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
 |---|---|---|
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
-| XML 永続化（`toXML()` / `save` の body） | 保持。**§7 で golden 固定済み**（`tests/golden/xml/`） | JSON 統一。XML は読込専用に。書き出しは撤去（§4） |
+| XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。golden は `tests/golden/xml/` で固定済み | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化）。`golden/xml/` → `golden/ddl-input/` の改名は 4-4 |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立） | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`） |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |

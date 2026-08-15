@@ -70,12 +70,12 @@
 
     <!-- io -->
     <string name="saveload">Opslaan / laden</string>
-    <string name="empty">Please paste XML data into the text area below and try again.</string>
+    <string name="empty">Please paste JSON data into the text area below and try again.</string>
     <string name="client">Lokaal</string>
     <string name="server">Server</string>
     <string name="output">Input / Output</string>
-    <string name="clientsave">XML Opslaan</string>
-    <string name="clientload">XML Laden</string>
+    <string name="clientsave">JSON Opslaan</string>
+    <string name="clientload">JSON Laden</string>
     <string name="clientlocalsave">Opslaan in Browser</string>
     <string name="clientlocalload">Laden uit Browser</string>
     <string name="clientsql">Genereer SQL</string>

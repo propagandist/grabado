@@ -14,7 +14,8 @@
  * 先例は js/io/palette.ts。
  *
  * 環境依存の入力は 1 つも無い —— XML 側が持っていた location.href（`<!-- Active URL -->`）に
- * 相当するものを最初から入れないので、4-4 の決定論化を待たずにここは決定論。
+ * 相当するものを最初から入れていないので、4-4 の決定論化を待たずにここは決定論だった
+ * （4-4 で XML 側も追いついたので、今は両形式とも同一モデル→同一バイト列）。
  *
  * 内部関数に Json を冠しているのは、js/io/ddl-xml.ts の同名関数（serializeTable /
  * serializeKey）とバンドル上で衝突させないため。衝突すると rolldown は**旧側**に $1 を付けるので、
@@ -38,6 +39,8 @@ export function serializeDesignJson(
     model: DesignModel,
     palette: TypePalette
 ): string {
+    assertUniqueTableNames(model);
+
     const tables = model.tables.map((t) => serializeJsonTable(t, palette));
 
     /*
@@ -60,6 +63,35 @@ export function serializeDesignJson(
 
     /* 2 スペース・末尾 LF。tests/support/state.ts と同じ形 */
     return `${JSON.stringify(design, null, 2)}\n`;
+}
+
+/*
+ * grabado: 同名テーブルを持つ設計は保存させない（段階4-4。4-2 からの申し送り）。
+ *
+ * 設計 JSON は relation の両端を**名前**で持つ（js/io/json-format.ts の references）。
+ * 4-2 で id 参照へ移さなかったのは、id の発番が描画クラス側に要り「4-2 以降は
+ * ライブ側 2 本を触らない」という 4-1c の申し送りを破るからで、そのぶん
+ * **形式では直さず「壊れた設計を保存させない」方向で始末する**と決めてあった。
+ *
+ * 同名テーブルがあると、読み戻したとき findNamedTable() が常に先頭に当たり、
+ * relation の両端が別の実体に繋がる —— 名前は合っているのに設計が変わる、という
+ * 一番たちの悪い壊れ方をする。正本が git 管理のファイルである以上、その状態を
+ * ファイルに書かせない。db 無し / 型 id 無しと同じく **1 バイトも書かずに落ちる**。
+ */
+function assertUniqueTableNames(model: DesignModel): void {
+    const seen = new Set<string>();
+    for (let i = 0; i < model.tables.length; i++) {
+        const name = model.tables[i]!.title;
+        if (seen.has(name)) {
+            throw new Error(
+                `テーブル名 "${name}" が重複している（tables[${i}]）。` +
+                    `設計 JSON は relation を名前で参照するため、` +
+                    `同名テーブルがあると読み戻したときに参照先が入れ替わる。` +
+                    `どちらかの名前を変えてから保存すること`
+            );
+        }
+        seen.add(name);
+    }
 }
 
 function serializeJsonTable(table: TableModel, palette: TypePalette): JsonTable {

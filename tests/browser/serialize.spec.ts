@@ -1,18 +1,25 @@
 import { test, expect, type Page } from "@playwright/test";
-import { FIXTURES, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
-import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
 import {
-    ACTIVE_URL_PLACEHOLDER,
-    assertNoCarriageReturn,
-    hasActiveUrlComment,
-    normalizeDesignXml,
-} from "../support/normalize.ts";
+    FIXTURES,
+    SERIALIZER_DB,
+    readFixture,
+    readKnownIssueFixture,
+} from "../support/fixtures.ts";
+import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
+import { assertNoCarriageReturn } from "../support/normalize.ts";
 import { loadFixture, openDesigner, toXml, useDatatypes } from "./harness.ts";
 
 // 1 ページを beforeAll で作って使い回す（現行アプリはページ単位のグローバル SQL.designer 1 個で動く）。
 // serial モードにはしない — 1 件落ちた時点で残りが skip され、影響範囲が見えなくなるため。
 
 let page: Page;
+
+/** 出力 XML に現れる <table name="..."> を出現順に取り出す */
+function tableNamesOf(xml: string): string[] {
+    return [...xml.matchAll(/<table x="[^"]*" y="[^"]*" name="([^"]*)">/g)].map(
+        (m) => m[1]!
+    );
+}
 
 test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
@@ -30,10 +37,13 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
             await useDatatypes(page, SERIALIZER_DB);
             await loadFixture(page, readFixture(fixture.name));
 
-            const actual = normalizeDesignXml(await toXml(page));
+            const actual = await toXml(page);
             assertNoCarriageReturn(actual, `toXML(${fixture.name})`);
 
-            const expected = writeOrReadGolden(goldenPath("xml", `${fixture.name}.xml`), actual);
+            const expected = writeOrReadGolden(
+                goldenPath("ddl-input", `${fixture.name}.xml`),
+                actual
+            );
             expect(actual).toBe(expected);
         });
 
@@ -61,22 +71,110 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         expect(await toXml(page)).toBe(await toXml(page));
     });
 
-    test("非決定性の所在: Active URL コメントに location.href が入る（§4 で撤去する対象）", async () => {
+    /*
+     * 段階4-4 まではこれが「非決定性の所在」テスト —— Active URL コメントに
+     * location.href が入ることを固定していた。撤去したので主張を反転させる。
+     * テストを消さないのは、撤去したこと自体を記録として残すため。
+     */
+    test("環境依存が無い: Active URL コメントも location.href も出力に現れない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readFixture("minimal"));
 
         const raw = await toXml(page);
         const href = await page.evaluate(() => location.href);
 
-        expect(hasActiveUrlComment(raw)).toBe(true);
-        expect(raw).toContain(`<!-- Active URL: ${href} -->`);
-        // golden はこの 1 行だけを正規化している。他に環境依存が無いことの確認。
-        expect(normalizeDesignXml(raw)).toContain(`<!-- Active URL: ${ACTIVE_URL_PLACEHOLDER} -->`);
-        expect(normalizeDesignXml(raw)).not.toContain(href);
+        expect(raw).not.toContain("Active URL");
+        expect(raw).not.toContain(href);
+        // 残る http は upstream のクレジット行だけ（＝環境依存ではない）
+        expect(raw.match(/http\S*/g)).toEqual([
+            "https://github.com/ondras/wwwsqldesigner/",
+        ]);
+        // golden はもう 1 バイトも正規化していない（tests/support/normalize.ts）
+        expect(raw).toBe(await toXml(page));
     });
 
+    /*
+     * 旧 known-issue #1。段階4-4 で属性値とテキストノードのエスケープを全経路に
+     * 通したので、`&` を含む識別子でも読み直せる XML になった。fixture は
+     * known-issues 側のものをそのまま使う（正常系に昇格させると DDL golden の
+     * 母集団が 63 -> 72 に増え、本段階の完了判定「DDL golden 無差分」がぼやける）。
+     */
+    test("識別子に & を含んでも well-formed な XML を吐く", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readKnownIssueFixture("amp-in-name"));
+
+        const xml = await toXml(page);
+
+        expect(xml).toContain('name="R&amp;D"');
+        expect(xml).toContain('name="a&amp;b"');
+        expect(xml).not.toContain('name="R&D"');
+
+        const parseFailed = await page.evaluate((source) => {
+            const doc = new DOMParser().parseFromString(source, "text/xml");
+            return doc.getElementsByTagName("parsererror").length > 0;
+        }, xml);
+        expect(parseFailed).toBe(false);
+
+        // 読み直すと元の識別子に戻る（二重エスケープしていない）
+        await loadFixture(page, xml);
+        expect(await toXml(page)).toBe(xml);
+    });
+
+    /*
+     * 旧 known-issue #8。<default> だけ末尾に改行が無く、1 行に 2 要素が並んでいた。
+     */
+    test("<default> の後にも改行が入る（1 要素 1 行）", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture("house-defaults"));
+
+        const xml = await toXml(page);
+
+        expect(xml).toContain("<default>NULL</default>\n");
+        expect(xml).not.toContain("</default><");
+    });
+
+    /*
+     * 旧 known-issue #7。段階4-4 で alignTables() が this.tables を破壊的ソートするのを
+     * やめたので、ここで「直った後の挙動」を固定する（tests/known-issues/README.md の運用 3）。
+     * 保存順の安定性そのものなので known-issues ではなく serializer の特性化に置く。
+     */
+    test("alignTables() はテーブル順を変えない（座標だけを動かす）", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture("relations"));
+
+        const before = await page.evaluate(() =>
+            (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle())
+        );
+        const xmlBefore = await toXml(page);
+
+        await page.evaluate(() =>
+            (window.d! as unknown as { alignTables(): void }).alignTables()
+        );
+
+        const after = await page.evaluate(() =>
+            (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle())
+        );
+        const xmlAfter = await toXml(page);
+
+        expect(before).toEqual([
+            "employees",
+            "projects",
+            "teams",
+            "employee_projects",
+        ]);
+        expect(after).toEqual(before);
+        // 座標の再配置は仕様なので出力自体は変わってよい。変わってはいけないのは順序。
+        expect(tableNamesOf(xmlAfter)).toEqual(tableNamesOf(xmlBefore));
+    });
+
+    /*
+     * 段階4-4 まではこのテストが <datatypes db="..."> ブロックの差で「パレット依存」を
+     * 示していた。ブロックごと撤去したので、根拠を型解決の結果そのものに移す
+     * （minimal では INTEGER が両 DB で同じ SQL 名に解決されるため、PG 固有の型を
+     * 並べた types-matrix を使う）。
+     */
     test("型解決は型パレット依存（DB 横断 golden を持たない根拠）", async () => {
-        const xml = readFixture("minimal");
+        const xml = readFixture("types-matrix");
 
         await useDatatypes(page, "postgresql");
         await loadFixture(page, xml);
@@ -86,9 +184,11 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         await loadFixture(page, xml);
         const my = await toXml(page);
 
-        // 同じ入力・同じ serializer でも <datatypes> ブロックと型解決結果が変わる
-        expect(pg).toContain('<datatypes db="postgresql">');
-        expect(my).toContain('<datatypes db="mysql">');
+        // 同じ入力・同じ serializer でも解決結果が変わる。mysql に BYTEA / JSONB は
+        // 無いので、一致が無いときの初期値 0（＝先頭の型 INTEGER）に落ちる
+        // ——known-issue #4 そのもの。
+        expect(pg).toContain("<datatype>BYTEA</datatype>");
+        expect(my).not.toContain("<datatype>BYTEA</datatype>");
         expect(pg).not.toBe(my);
     });
 });

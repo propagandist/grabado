@@ -55,3 +55,17 @@ export const DDL_FIXTURES = FIXTURES.filter((f) => f.ddl);
 export function readFixture(name: string): string {
     return readFileSync(join(FIXTURE_DIR, `${name}.xml`), "utf8");
 }
+
+/**
+ * tests/known-issues/fixtures/ の fixture。
+ *
+ * 不具合が直っても fixture は動かさない（§4 段階4-4 で #1 を直したときの判断）。
+ * 正常系へ昇格させると FIXTURES の母集団が増えて DDL golden が 63 -> 72 になり、
+ * 「DDL golden が無差分」という段階の完了判定がぼやける。
+ */
+export function readKnownIssueFixture(name: string): string {
+    return readFileSync(
+        join(REPO_ROOT, "tests", "known-issues", "fixtures", `${name}.xml`),
+        "utf8",
+    );
+}

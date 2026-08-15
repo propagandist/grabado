@@ -12,50 +12,40 @@
  * xml-serializer.ts から本名に改名したのは段階4-3a。ユーザーに見える保存経路は
  * 4-3b で JSON になり、この XML は output.xsl（DDL 生成）への入力としてだけ残る
  * ——「設計の保存形式」ではなく「DDL パイプラインの中間表現」なので、名前をその
- * 役目に合わせた。関数名 serializeDesignXml は改名していない（バンドル差分に
- * 関数リネームを混ぜないため。名前の再検討は 4-4）。モジュールごと消えるのは
- * §6.3 で output.xsl を TS 実装に置き換えるとき。
+ * 役目に合わせた。関数名を buildDdlInputXml にしたのは段階4-4。モジュールごと
+ * 消えるのは §6.3 で output.xsl を TS 実装に置き換えるとき。
  *
- * activeUrl を引数で受けるのは、書き出し経路で唯一の環境依存（location.href）を
- * 関数の外へ押し出して純関数にするため。評価タイミングは Designer.toXML() の
- * 呼び出し時のままなので値は同一。4-4 の決定論化でこの引数ごと消える。
+ * **段階4-4 で決定論になった**（CLAUDE.md 制約3 / HANDOVER §4）。撤去したのは 2 つ:
+ *
+ * - `<!-- Active URL: location.href -->`。書き出し経路で唯一の環境依存だった
+ *   （4-1a で引数に押し出してあったので、ここでは引数ごと落とすだけ）。
+ * - `<datatypes>` の全文埋め込み。**db 配下の output.xsl 9 本はこれを一切参照しない**
+ *   （4-0a の実測。datatypes を grep して 0 件）ので、DDL には
+ *   1 バイトも影響しない。数百行のノイズが消え、XMLSerializer の実行系依存も
+ *   同時に無くなる。読み込み側は元から実行中のパレットで型を解決していて
+ *   （js/io/xml-parser.ts）、同梱 <datatypes> を読む Designer.fromXML() は
+ *   「無ければ null」なので、4-3b 以前に保存された XML はこれまでどおり読める。
+ *
+ * **段階4-4 で well-formed になった**（known-issue #1）。属性値のエスケープが
+ * `"` -> `&quot;` の 1 つだけで、`&` を含む識別子を書くと二度と読めない XML が
+ * できていた。属性値は escapeAttr、テキストノードは escapeXML を全経路に通す。
+ * あわせて <default> の末尾に改行を足した（known-issue #8）。
  *
  * export は 1 本だけにしてある。未使用の export を出すと、ツリーシェイクを切って
  * いる Node ハーネス（tests/node/harness.ts）の束と dist の束が構造的にずれる。
  */
 
-import { _ } from "../globals.ts";
 import type { TypePalette } from "./palette.ts";
 import type { DesignModel, TableModel, RowModel, KeyModel } from "./model.ts";
 
-export function serializeDesignXml(
+export function buildDdlInputXml(
     model: DesignModel,
-    palette: TypePalette,
-    activeUrl: string
+    palette: TypePalette
 ): string {
     var xml = '<?xml version="1.0" encoding="utf-8" ?>\n';
     xml +=
         "<!-- SQL XML created by WWW SQL Designer, https://github.com/ondras/wwwsqldesigner/ -->\n";
-    xml += "<!-- Active URL: " + activeUrl + " -->\n";
     xml += "<sql>\n";
-
-    /* serialize datatypes */
-    if (window.XMLSerializer) {
-        var s = new XMLSerializer();
-        xml += s.serializeToString(palette.element());
-    } else if ((palette.element() as unknown as { xml?: string }).xml) {
-        xml += (palette.element() as unknown as { xml: string }).xml;
-    } else {
-        /*
-         * grabado: e は未定義（本物のバグ）。到達不能な分岐（XMLSerializer が無い
-         * 実行系のみ）で、直すには「何を表示すべきか」を発明することになるため、
-         * 段階2 の判断どおりマーカーとして残す。@ts-expect-error は「エラーが
-         * 消えたらそれ自体がエラーになる」ので、§4 の XML 書き出し撤去でこの分岐が
-         * 消えたときに気づける。
-         */
-        // @ts-expect-error 未定義の識別子（js/wwwsqldesigner.js から持ち越した既知のバグ）
-        alert(_("errorxml") + ": " + e.message);
-    }
 
     for (var i = 0; i < model.tables.length; i++) {
         xml += serializeTable(model.tables[i]!, palette);
@@ -65,7 +55,7 @@ export function serializeDesignXml(
 }
 
 function serializeTable(table: TableModel, palette: TypePalette): string {
-    var t = table.title.replace(/"/g, "&quot;");
+    var t = escapeAttr(table.title);
     var xml = "";
     xml += '<table x="' + table.x + '" y="' + table.y + '" name="' + t + '">\n';
     for (var i = 0; i < table.rows.length; i++) {
@@ -85,7 +75,7 @@ function serializeTable(table: TableModel, palette: TypePalette): string {
 function serializeRow(row: RowModel, palette: TypePalette): string {
     var xml = "";
 
-    var t = row.title.replace(/"/g, "&quot;");
+    var t = escapeAttr(row.title);
     var nn = row.nll ? "1" : "0";
     var ai = row.ai ? "1" : "0";
     xml +=
@@ -98,7 +88,7 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
     if (row.size.length) {
         t += "(" + row.size + ")";
     }
-    xml += "<datatype>" + t + "</datatype>\n";
+    xml += "<datatype>" + escapeXML(t) + "</datatype>\n";
 
     if (row.def || row.def === null) {
         /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
@@ -109,13 +99,19 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
         } else if (d != "CURRENT_TIMESTAMP") {
             d = q + d + q;
         }
-        /* 末尾に改行を付けないのはここだけ（known-issue #8。4-4 で直す） */
-        xml += "<default>" + escapeXML(d) + "</default>";
+        /* 段階4-4 で末尾に改行を足した（known-issue #8）。ここだけ改行が無く、
+           1 行に 2 要素が並んで diff が読みにくかった */
+        xml += "<default>" + escapeXML(d) + "</default>\n";
     }
 
     for (var i = 0; i < row.relations.length; i++) {
         var r = row.relations[i]!;
-        xml += '<relation table="' + r.table + '" row="' + r.row + '" />\n';
+        xml +=
+            '<relation table="' +
+            escapeAttr(r.table) +
+            '" row="' +
+            escapeAttr(r.row) +
+            '" />\n';
     }
 
     if (row.comment) {
@@ -128,28 +124,48 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
 
 function serializeKey(key: KeyModel): string {
     var xml = "";
-    xml += '<key type="' + key.type + '" name="' + key.name + '">\n';
+    /* String() を挟むのは、name 属性の無い <key> を読むと実行時 null が入るため
+       （js/io/model.ts の KeyModel 参照）。現行は name="null" と書くので、その嘘を
+       そのまま保つ —— escapeAttr に直接渡すと TypeError になり挙動が変わる */
+    xml +=
+        '<key type="' +
+        escapeAttr(key.type) +
+        '" name="' +
+        escapeAttr(String(key.name)) +
+        '">\n';
     for (var i = 0; i < key.parts.length; i++) {
         var r = key.parts[i]!;
-        /* <part> は escapeXML も " の置換も通らない（現行どおり） */
-        xml += "<part>" + r + "</part>\n";
+        xml += "<part>" + escapeXML(r) + "</part>\n";
     }
     xml += "</key>\n";
     return xml;
 }
 
 /*
- * grabado: js/globals.ts の escape を改名して移設した（段階4-1a）。本体は 1 文字も
- * 変えていない。置換順（& -> > -> <）を入れ替えると二重エスケープになる。
+ * grabado: js/globals.ts の escape を改名して移設した（段階4-1a）。置換順
+ * （& -> > -> <）を入れ替えると二重エスケープになる。
  *
- * 適用先は <comment>（table / row）と <default> の 3 か所だけで、属性値は通らない
- * （name は " -> &quot; のみ、<relation> の属性と <part> は素通し）。これは
- * known-issue #1 として記録済みの逸脱で、直すのは 4-4。ここで適用範囲を広げると
- * npm run known-issues が赤くなる。
+ * **段階4-4 で適用範囲を全テキストノードに広げた**（known-issue #1）。4-1a 時点の
+ * 適用先は <comment>（table / row）と <default> の 3 か所だけで、<datatype> と
+ * <part> は素通しだった。属性値は下の escapeAttr が担う。
  */
 function escapeXML(str: string): string {
     return str
         .replace(/&/g, "&amp;")
         .replace(/>/g, "&gt;")
         .replace(/</g, "&lt;");
+}
+
+/*
+ * grabado: 属性値のエスケープ（段階4-4・known-issue #1）。
+ *
+ * 4-4 まで属性値に掛かっていたのは `"` -> `&quot;` の 1 つだけで、`&` を含む識別子
+ * （`R&D` など）を書くと well-formed でない XML ができ、DOMParser が parsererror に
+ * 落ちた —— 保存したファイルを二度と開けない、という形で表に出ていた不具合。
+ *
+ * escapeXML と同じ順で `&` を先に潰してから `"` を足す。`"` を先にすると
+ * `&quot;` の `&` を後段が拾って `&amp;quot;` になる。
+ */
+function escapeAttr(str: string): string {
+    return escapeXML(str).replace(/"/g, "&quot;");
 }

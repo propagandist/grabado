@@ -7,7 +7,7 @@
 **意図しない挙動変化が起きたら赤くする**こと。CLAUDE.md の Hard Constraint 1 が言う安全網の実体。
 
 ```
-xml/<fixture>.xml        SQL.Designer.toXML() の出力（postgresql の型パレットで解決）
+ddl-input/<fixture>.xml  Designer.toXML() の出力＝output.xsl への入力（postgresql の型パレットで解決）
 ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。9 DB × 7 fixture
 state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
@@ -19,7 +19,7 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 「この形が設計を過不足なく運べる」ことの根拠は golden ではなく、XML 経由と JSON 経由で
 状態スナップショットが一致することを見る「情報保存」テストのほう。
 
-`xml/` と `ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
+`ddl-input/` と `ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
 （選択クラス・型パレット由来の色・relation がどの実体に繋がったか・`clearTables()` の後始末）は
 1 つも写らない。`state/` はその穴を埋める。採取項目と**意図的に採らないもの**（レイアウト由来の値と
 relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
@@ -39,14 +39,18 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 - `UUID` が型パレットに無く `INTEGER` に落ちている（known-issues #4）
 - `users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る（known-issues #6）
 - `DEFAULT 'now()'` のように式が引用符で囲まれる（型の `quote` 属性をそのまま適用するため）
-- nullable な行に `<default>NULL</default>` が生えている（known-issues #2）
-- `<default>` の後だけ改行が無い（known-issues #8）
+- nullable な行に `<default>NULL</default>` が生えている（known-issues #2。撤去は 4-5）
+
+§4 段階4-4 で `<default>` の後だけ改行が無い癖（旧 known-issues #8）は消えた。
 
 ## 正規化しているもの
 
-`xml/` の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけ。
-現行 `toXML()` は `location.href` を埋め込むため出力が環境依存になる
-（[js/wwwsqldesigner.js:346](../../js/wwwsqldesigner.js#L346)）。
-行ごと消すと HANDOVER §4 でこれを撤去したときに diff に現れないので、URL 部分だけ差し替えている。
+**無い。§4 段階4-4 以降、golden は 1 バイトも加工していない。**
 
-それ以外は一切加工していない。**改行コードを含めてバイト一致で比較する。**
+4-4 までは `ddl-input/`（当時 `xml/`）の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけを
+正規化していた。現行 `toXML()` が `location.href` を埋め込んで出力が環境依存になるためで、
+「§4 でこれを撤去した」ことが diff に現れるよう行ごとは消さずに残していた。
+4-4 でその行と `<datatypes>` の全文埋め込みを撤去し、書き出し側の環境依存が 0 になったので、
+[`../support/normalize.ts`](../support/normalize.ts) から正規化関数ごと落とした。
+
+**改行コードを含めてバイト一致で比較する。**

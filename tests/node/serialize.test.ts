@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { FIXTURES, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
 import { goldenPath, readGolden } from "../support/golden.ts";
-import { assertNoCarriageReturn, normalizeDesignXml } from "../support/normalize.ts";
+import { assertNoCarriageReturn } from "../support/normalize.ts";
 import { createHarness, type NodeHarness } from "./harness.ts";
 
 // golden はブラウザ側が採ったものが唯一の正。ここでは読むだけ（書かない）。
@@ -21,10 +21,10 @@ describe("serializer 特性化（Node / jsdom）", () => {
             h.useDatatypes(SERIALIZER_DB);
             h.loadFixture(readFixture(fixture.name));
 
-            const actual = normalizeDesignXml(h.toXML());
+            const actual = h.toXML();
             assertNoCarriageReturn(actual, `toXML(${fixture.name})`);
 
-            expect(actual).toBe(readGolden(goldenPath("xml", `${fixture.name}.xml`)));
+            expect(actual).toBe(readGolden(goldenPath("ddl-input", `${fixture.name}.xml`)));
         });
 
         test(`round-trip: ${fixture.name}`, () => {

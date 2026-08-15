@@ -129,4 +129,37 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
         h.useDatatypes(SERIALIZER_DB);
         expect(() => h.loadJson(mysqlDesign)).toThrow(/db/);
     });
+
+    // ---- 段階4-4 で足した 1 本（4-2 からの申し送り）----
+
+    test("同名テーブルがある設計は 1 バイトも書かずに例外", () => {
+        // 設計 JSON は relation を名前で参照するので、同名テーブルがあると
+        // 読み戻したとき参照先が入れ替わる。形式では直さず保存を拒む（4-2 の決めごと）。
+        const duplicated = [
+            '<?xml version="1.0" encoding="utf-8" ?>',
+            "<sql>",
+            '<table x="10" y="10" name="users">',
+            '<row name="id" null="0" autoincrement="0">',
+            "<datatype>INTEGER</datatype>",
+            "</row>",
+            "</table>",
+            '<table x="200" y="10" name="users">',
+            '<row name="id" null="0" autoincrement="0">',
+            "<datatype>INTEGER</datatype>",
+            "</row>",
+            "</table>",
+            "</sql>",
+            "",
+        ].join("\n");
+
+        h.useDatatypes(SERIALIZER_DB);
+        h.loadFixture(duplicated);
+
+        expect(() => h.toJson()).toThrow(/users/);
+        expect(() => h.toJson()).toThrow(/重複/);
+
+        // 名前を分ければ通る（拒んでいるのが重複そのものであることの確認）
+        h.loadFixture(duplicated.replace('name="users">\n<row name="id" null="0"', 'name="accounts">\n<row name="id" null="0"'));
+        expect(h.toJson()).toContain('"name": "accounts"');
+    });
 });

@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect, type Page } from "@playwright/test";
-import { REPO_ROOT, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
+import {
+    REPO_ROOT,
+    SERIALIZER_DB,
+    readFixture,
+    readKnownIssueFixture,
+} from "../support/fixtures.ts";
 import {
     generateDdl,
     loadFixture,
@@ -24,10 +29,6 @@ import {
  */
 let page: Page;
 
-function readKnownFixture(name: string): string {
-    return readFileSync(join(REPO_ROOT, "tests", "known-issues", "fixtures", `${name}.xml`), "utf8");
-}
-
 test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
     await openDesigner(page);
@@ -38,23 +39,11 @@ test.afterAll(async () => {
     await page.close();
 });
 
-test("#1 識別子に & を含めると toXML() が well-formed でない XML を吐く", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readKnownFixture("amp-in-name"));
-
-    const xml = await toXml(page);
-
-    // 属性値のエスケープは " -> &quot; だけ（js/table.js:303, js/row.js:405）
-    expect(xml).toContain('name="R&D"');
-    expect(xml).toContain('name="a&b"');
-
-    // 吐いた XML を読み直せない = 保存したファイルを二度と開けない
-    const parseFailed = await page.evaluate((source) => {
-        const doc = new DOMParser().parseFromString(source, "text/xml");
-        return doc.getElementsByTagName("parsererror").length > 0;
-    }, xml);
-    expect(parseFailed).toBe(true);
-});
+/*
+ * #1（属性値のエスケープ不足）と #8（<default> の末尾に改行が無い）は §4 段階4-4 で
+ * 直した。「直った後の挙動」のアサートは tests/browser/serialize.spec.ts に移してある
+ * （README の運用 3）。
+ */
 
 test("#2 nullable かつ default 未指定の行が、保存すると <default>NULL</default> を獲得する", async () => {
     await useDatatypes(page, SERIALIZER_DB);
@@ -70,7 +59,7 @@ test("#2 nullable かつ default 未指定の行が、保存すると <default>N
 
 test("#3 BIGINT が Big Integer ではなく Real に解決される（sql 重複・最後の一致が勝つ）", async () => {
     await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readKnownFixture("bigint-drift"));
+    await loadFixture(page, readKnownIssueFixture("bigint-drift"));
 
     const label = await page.evaluate(() => {
         const row = (window.d!.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
@@ -103,7 +92,7 @@ test("#4 型パレットに無い型は黙って先頭の型になる（UUID -> 
 });
 
 test("#5 空の <default></default> で ` DEFAULT ` だけが残る（introspection 出力を食わせた場合）", async () => {
-    const ddl = await transformXml(page, "postgresql", readKnownFixture("empty-default"));
+    const ddl = await transformXml(page, "postgresql", readKnownIssueFixture("empty-default"));
 
     // db/postgresql/output.xsl:58-64 は要素の存在だけを見るので、値が空でも DEFAULT を出す
     expect(ddl).toContain(" note TEXT DEFAULT \n");
@@ -125,39 +114,10 @@ test("#6 key が複数あると制約名が <table>_pkey で衝突する", async
     expect(ddl).not.toContain("users_email_key");
 });
 
-test("#7 alignTables() が tables を破壊的ソートし、テーブル順と座標を変える", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readFixture("relations"));
-
-    const before = await page.evaluate(() =>
-        (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
-    );
-    await page.evaluate(() =>
-        (window.d! as unknown as { alignTables(): void }).alignTables(),
-    );
-    const after = await page.evaluate(() =>
-        (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
-    );
-
-    // js/wwwsqldesigner.js:310-312 が this.tables.sort() で配列そのものを並べ替える。
-    // js/io.js:676 の importresponse がロード後にこれを呼ぶため、
-    // サーバ import 経由で開くと保存 XML のテーブル順が変わる。
-    expect(before).toEqual(["employees", "projects", "teams", "employee_projects"]);
-    expect(after).not.toEqual(before);
-    expect([...after].sort()).toEqual([...before].sort());
-});
-
-test("#8 <default> だけ改行が付かず diff が読みにくい", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readFixture("house-defaults"));
-
-    const xml = await toXml(page);
-
-    // js/row.js:428 は他の要素と違い末尾に \n を付けない。
-    // HANDOVER §4 の「1テーブル=独立ブロック・diff フレンドリー」に反する。
-    expect(xml).toContain("<default>NULL</default></row>");
-    expect(xml).toContain("<default>NULL</default><comment>");
-});
+/*
+ * #7（alignTables() の破壊的ソート）は §4 段階4-4 で直した。「直った後の挙動」の
+ * アサートは tests/browser/serialize.spec.ts に移してある（README の運用 3）。
+ */
 
 test("#9 introspection サンプル（PG18 実出力）が well-formed でなく index も出ない", async () => {
     const sample = readFileSync(

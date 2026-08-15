@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- SQL XML created by WWW SQL Designer, https://github.com/ondras/wwwsqldesigner/ -->
+<sql>
+<table x="20" y="20" name="counters">
+<row name="id" null="0" autoincrement="1">
+<datatype>INTEGER</datatype>
+</row>
+<row name="label" null="0" autoincrement="0">
+<datatype>VARCHAR(64)</datatype>
+</row>
+<row name="hits" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+<default>0</default>
+</row>
+<key type="PRIMARY" name="counters_pkey">
+<part>id</part>
+</key>
+</table>
+</sql>

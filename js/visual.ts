@@ -50,8 +50,12 @@ export class Visual<D = VisualDom> {
 
     _build(): void {}
 
-    toXML(): void {}
-
+    /*
+     * grabado: 空の toXML() は段階4-1a で撤去した（書き出しは js/io/xml-serializer.ts）。
+     * 残すと table.toXML() の消し漏れが TypeError にならず undefined が黙って返り、
+     * xml += undefined で golden が壊れる。基底ごと消せば消し漏れは即 TypeError。
+     * fromXML は 4 実装が現役なので 4-1b まで残す。
+     */
     fromXML(node: Element): void {}
 
     destroy(): void {

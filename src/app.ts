@@ -20,6 +20,13 @@ import "../js/io/palette.ts";
 import "../js/oz.ts";
 import "../js/config.ts";
 import "../js/globals.ts";
+/*
+ * 段階4-1a で新設した書き出し層。xml-serializer が globals の _ に値依存するので
+ * globals より後に置く（extract は import type だけなので位置の制約は無いが、
+ * io/ の書き出し 2 本を離さない）。型だけの js/io/model.ts は emit が空なので載せない。
+ */
+import "../js/io/extract.ts";
+import "../js/io/xml-serializer.ts";
 import "../js/visual.ts";
 import "../js/row.ts";
 import "../js/table.ts";

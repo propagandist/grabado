@@ -15,7 +15,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { publish, escape, type SqlDesigner } from "./globals.ts";
+import { publish, type SqlDesigner } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import { Row, type RowData } from "./row.ts";
 import { Key } from "./key.ts";
@@ -368,25 +368,6 @@ export class Table extends Visual<TableDom> {
             this.move.bind(this)
         );
         this.documentUp = OZ.Event.add(document, upEvent, this.up.bind(this));
-    }
-
-    toXML(): string {
-        var t = this.getTitle().replace(/"/g, "&quot;");
-        var xml = "";
-        xml +=
-            '<table x="' + this.x + '" y="' + this.y + '" name="' + t + '">\n';
-        for (var i = 0; i < this.rows.length; i++) {
-            xml += this.rows[i]!.toXML();
-        }
-        for (var i = 0; i < this.keys.length; i++) {
-            xml += this.keys[i]!.toXML();
-        }
-        var c = this.getComment();
-        if (c) {
-            xml += "<comment>" + escape(c) + "</comment>\n";
-        }
-        xml += "</table>\n";
-        return xml;
     }
 
     fromXML(node: Element): void {

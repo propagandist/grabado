@@ -38,6 +38,8 @@ import { IO } from "./io.ts";
 import { Options } from "./options.ts";
 import { Window as SqlWindow } from "./window.ts";
 import { TypePalette } from "./io/palette.ts";
+import { extractModel } from "./io/extract.ts";
+import { serializeDesignXml } from "./io/xml-serializer.ts";
 
 /** 基底の VisualDom に svg が増える（vector が真のときだけ生える。§5.4 の形態 (i)） */
 export interface DesignerDom extends VisualDom {
@@ -445,38 +447,21 @@ export class Designer extends Visual<DesignerDom> {
         return undefined;
     }
 
-    override toXML(): string {
-        var xml = '<?xml version="1.0" encoding="utf-8" ?>\n';
-        xml +=
-            "<!-- SQL XML created by WWW SQL Designer, https://github.com/ondras/wwwsqldesigner/ -->\n";
-        xml += "<!-- Active URL: " + location.href + " -->\n";
-        xml += "<sql>\n";
-
-        /* serialize datatypes */
-        if (window.XMLSerializer) {
-            var s = new XMLSerializer();
-            xml += s.serializeToString(this.palette.element());
-        } else if (
-            (this.palette.element() as unknown as { xml?: string }).xml
-        ) {
-            xml += (this.palette.element() as unknown as { xml: string }).xml;
-        } else {
-            /*
-             * grabado: e は未定義（本物のバグ）。到達不能な分岐（XMLSerializer が無い
-             * 実行系のみ）で、直すには「何を表示すべきか」を発明することになるため、
-             * 段階2 の判断どおりマーカーとして残す。@ts-expect-error は「エラーが
-             * 消えたらそれ自体がエラーになる」ので、§4 の XML 書き出し撤去でこの分岐が
-             * 消えたときに気づける。
-             */
-            // @ts-expect-error 未定義の識別子（js/wwwsqldesigner.js から持ち越した既知のバグ）
-            alert(_("errorxml") + ": " + e.message);
-        }
-
-        for (var i = 0; i < this.tables.length; i++) {
-            xml += this.tables[i]!.toXML();
-        }
-        xml += "</sql>\n";
-        return xml;
+    /*
+     * grabado: 本体は段階4-1a で js/io/extract.ts と js/io/xml-serializer.ts に分けた。
+     * このメソッド自体は残す —— 両ハーネス（node は new Designer() の戻り値、page は
+     * window.d）と js/io.ts の 8 か所が触る面で、名前と到達性が変わるとテストが要改修に
+     * なる。override が外れたのは基底 Visual の空 toXML() を同時に撤去したため。
+     *
+     * location.href の評価がここに残るのは、serializer を純関数にするために唯一の
+     * 環境依存を引数へ押し出した結果（4-4 の決定論化でこの引数ごと消える）。
+     */
+    toXML(): string {
+        return serializeDesignXml(
+            extractModel(this),
+            this.palette,
+            location.href
+        );
     }
 
     override fromXML(node: Element): void {

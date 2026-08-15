@@ -54,7 +54,8 @@ test("#3 BIGINT が Big Integer ではなく Real に解決される（sql 重�
     });
 
     // db/postgresql/datatypes.xml は sql="BIGINT" を Big Integer と Real の 2 か所に持ち、
-    // js/row.js:472-479 のループは break しないので後勝ちになる
+    // js/io/xml-parser.ts:147-153 のループは break しないので後勝ちになる（§4 段階4-1b で
+    // js/row.js から移設。設計 JSON は 4-2b の id 照合なのでこの経路を持たない）
     expect(label).toBe("Real");
     expect(label).not.toBe("Big Integer");
 });
@@ -69,7 +70,8 @@ test("#4 型パレットに無い型は黙って先頭の型になる（UUID -> 
     });
 
     // fixture の users.id は UUID。現行 db/postgresql/datatypes.xml に uuid 型が無く、
-    // js/row.js:455 の初期値 type:0 が残るため Integer になる。
+    // js/io/xml-parser.ts:125 の初期値 type:0 が残るため Integer になる（§4 段階4-1b で
+    // js/row.js から移設。設計 JSON は未知の id を throw するのでこの経路を持たない）。
     // HANDOVER §6.1 の型パレット差し替えで解消される想定。
     expect(label).toBe("Integer");
 

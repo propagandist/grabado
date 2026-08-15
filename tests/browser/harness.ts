@@ -92,6 +92,22 @@ export function toXml(page: Page): Promise<string> {
     return page.evaluate(() => window.d!.toXML());
 }
 
+/** 設計 JSON の書き出し（HANDOVER §4 段階4-2。UI 未配線なので Designer の面を直接叩く） */
+export function toJson(page: Page): Promise<string> {
+    return page.evaluate(() => window.d!.toJson());
+}
+
+/**
+ * 設計 JSON の読み込み。
+ *
+ * loadFixture() のような alert の収集はしない —— js/io/json-parser.ts は現行 XML 経路と違って
+ * **例外で落ちる**（alert を出すのは js/io.ts の UI 層で、その配線は 4-3）。例外はそのまま
+ * page.evaluate の reject として伝わるので、テスト側で rejects として受ける。
+ */
+export async function loadJson(page: Page, json: string): Promise<void> {
+    await page.evaluate((text) => window.d!.fromJson(text), json);
+}
+
 /**
  * 読み込み後の状態スナップショット（HANDOVER §4 段階4-1b）。
  *

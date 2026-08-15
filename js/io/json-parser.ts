@@ -1,0 +1,232 @@
+/* ------------------------- json parser ------------------------ */
+/*
+ * grabado: 設計 JSON -> DesignModel（HANDOVER §4 段階4-2）。
+ *
+ * js/io/json-serializer.ts の鏡。ライブツリー（描画クラスのインスタンス）には一切
+ * 触らない —— 触る側は js/io/apply.ts（4-1b で確定。本段階では 1 行も触らない）。
+ *
+ * ## xml-parser.ts と規則が違うところ（意図的）
+ *
+ * xml-parser.ts は「現行の挙動を 1 バイトも変えない」ことが要件の逐語移設なので、
+ * 壊れた入力を黙って受け流す癖（未知の型は添字 0 / 最後の一致が勝つ / 属性が無ければ
+ * 実行時 null）をそのまま持っている。本ファイルは**新しい形式**の読み手で、しかも
+ * 読む対象は **git 管理の正本ファイル**（CLAUDE.md 制約2）なので、逆に振る:
+ *
+ *   - 未知の型 label は **throw**（known-issue #4 の「一致が無ければ添字 0」を持ち込まない。
+ *     正本を黙って別の型で開くのが最悪の失敗）。
+ *   - label の照合は **最初の一致が勝つ**（known-issue #3 の後勝ちを持ち込まない。
+ *     label は 9 DB すべてで一意なので実際には差が出ない）。
+ *   - 型・必須キーが食い違えば throw。**壊れた JSON は部分的に読み込まない。**
+ *
+ * 例外の message は開発者向けで locale を通さない。ユーザーへの見せ方（alert か
+ * ダイアログか）は UI を配線する 4-3 の判断。
+ *
+ * 内部関数の parseJsonTable / parseJsonKey は js/io/xml-parser.ts の同名関数との
+ * バンドル上の衝突を避けるための命名（理由の正本は js/io/json-serializer.ts の冒頭）。
+ *
+ * 形式の定義とキー順の契約は js/io/json-format.ts、散文は docs/FORMAT.md。
+ */
+
+import type { TypePalette } from "./palette.ts";
+import type {
+    DesignModel,
+    TableModel,
+    RowModel,
+    KeyModel,
+    RelationRef,
+} from "./model.ts";
+
+export function parseDesignJson(
+    text: string,
+    palette: TypePalette
+): DesignModel {
+    /* 構文エラーは JSON.parse の SyntaxError がそのまま出る（位置が入るので包まない） */
+    const root = asObject(JSON.parse(text), "ルート");
+
+    const version = root["formatVersion"];
+    if (version !== 1) {
+        throw new Error(
+            `設計 JSON: formatVersion が 1 ではない（${JSON.stringify(version)}）`
+        );
+    }
+
+    /*
+     * db は読んで捨てる。実行中のパレットと食い違うときに何をするか
+     * （fetch し直す / 警告する / 拒む）は UI 配線の 4-3 の判断で、ここで決め打ちすると
+     * やり直しになる。型の解決は下の typeIndex が**実行中のパレット**で行う。
+     */
+
+    const tables = asArray(root["tables"], "tables").map((t, i) =>
+        parseJsonTable(t, `tables[${i}]`, palette)
+    );
+    return { tables: tables };
+}
+
+function parseJsonTable(
+    value: unknown,
+    where: string,
+    palette: TypePalette
+): TableModel {
+    const obj = asObject(value, where);
+    return {
+        title: asString(obj["name"], `${where}.name`),
+        x: asNumber(obj["x"], `${where}.x`),
+        y: asNumber(obj["y"], `${where}.y`),
+        comment: asOptionalString(obj["comment"], `${where}.comment`),
+        rows: asArray(obj["columns"], `${where}.columns`).map((c, i) =>
+            parseColumn(c, `${where}.columns[${i}]`, palette)
+        ),
+        keys: asOptionalArray(obj["keys"], `${where}.keys`).map((k, i) =>
+            parseJsonKey(k, `${where}.keys[${i}]`)
+        ),
+    };
+}
+
+function parseColumn(
+    value: unknown,
+    where: string,
+    palette: TypePalette
+): RowModel {
+    const obj = asObject(value, where);
+    const def = obj["default"];
+    return {
+        title: asString(obj["name"], `${where}.name`),
+        type: typeIndex(
+            asString(obj["type"], `${where}.type`),
+            palette,
+            `${where}.type`
+        ),
+        size: asOptionalString(obj["size"], `${where}.size`),
+        /*
+         * キーが無ければ null（＝ Row のコンストラクタ既定と同じ）。"NULL" -> null の
+         * 正規化は Row.update() の中で起きるので、ここでは何もしない（4-1b の決めたこと 3
+         * と同じ立場 —— 2 つの規則を離さない）。
+         */
+        def: def === undefined ? null : asString(def, `${where}.default`),
+        nll: asOptionalBoolean(obj["nullable"], `${where}.nullable`),
+        ai: asOptionalBoolean(obj["autoincrement"], `${where}.autoincrement`),
+        comment: asOptionalString(obj["comment"], `${where}.comment`),
+        relations: asOptionalArray(
+            obj["references"],
+            `${where}.references`
+        ).map((r, i) => parseReference(r, `${where}.references[${i}]`)),
+    };
+}
+
+function parseReference(value: unknown, where: string): RelationRef {
+    const obj = asObject(value, where);
+    return {
+        table: asString(obj["table"], `${where}.table`),
+        row: asString(obj["column"], `${where}.column`),
+    };
+}
+
+function parseJsonKey(value: unknown, where: string): KeyModel {
+    const obj = asObject(value, where);
+    return {
+        type: asString(obj["type"], `${where}.type`),
+        /* 省略時は ""（Key のコンストラクタ既定と同じ。setName("") は既定と同値） */
+        name: asOptionalString(obj["name"], `${where}.name`),
+        parts: asArray(obj["columns"], `${where}.columns`).map((p, i) =>
+            asString(p, `${where}.columns[${i}]`)
+        ),
+    };
+}
+
+/*
+ * 型パレットの label -> 添字。**最初の一致が勝つ**（xml-parser.ts の後勝ちとは逆。
+ * ファイル冒頭の理由）。見つからなければ throw する。
+ *
+ * §6.1 で PostgreSQL 18 パレットに差し替えると、旧 label で書かれた既存ファイルが
+ * ここで落ちる。その移行は §6.1 の仕事（この例外がそれを可視化する）。
+ */
+function typeIndex(label: string, palette: TypePalette, where: string): number {
+    const types = palette.types();
+    for (let i = 0; i < types.length; i++) {
+        if (types[i]!.getAttribute("label") === label) {
+            return i;
+        }
+    }
+    throw new Error(
+        `設計 JSON ${where}: 型 "${label}" が現在の型パレット（db=${palette.db()}）に無い`
+    );
+}
+
+/* --------------------------- 検証ヘルパー --------------------------- */
+/*
+ * どれも「型が違えば where 付きで throw」の 1 パターン。unknown から降ろす箇所を
+ * ここに集約してあるので、上の parse* は as を 1 つも持たない。
+ */
+
+function asObject(value: unknown, where: string): Record<string, unknown> {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new Error(
+            `設計 JSON ${where}: オブジェクトが必要（${describe(value)}）`
+        );
+    }
+    return value as Record<string, unknown>;
+}
+
+function asArray(value: unknown, where: string): unknown[] {
+    if (!Array.isArray(value)) {
+        throw new Error(`設計 JSON ${where}: 配列が必要（${describe(value)}）`);
+    }
+    return value;
+}
+
+/** 省略可の配列。無ければ空配列（既定 []） */
+function asOptionalArray(value: unknown, where: string): unknown[] {
+    if (value === undefined) {
+        return [];
+    }
+    return asArray(value, where);
+}
+
+function asString(value: unknown, where: string): string {
+    if (typeof value !== "string") {
+        throw new Error(`設計 JSON ${where}: 文字列が必要（${describe(value)}）`);
+    }
+    return value;
+}
+
+/** 省略可の文字列。無ければ ""（既定） */
+function asOptionalString(value: unknown, where: string): string {
+    if (value === undefined) {
+        return "";
+    }
+    return asString(value, where);
+}
+
+function asNumber(value: unknown, where: string): number {
+    if (typeof value !== "number" || !isFinite(value)) {
+        throw new Error(
+            `設計 JSON ${where}: 有限の数値が必要（${describe(value)}）`
+        );
+    }
+    return value;
+}
+
+/** 省略可の真偽値。無ければ false（既定） */
+function asOptionalBoolean(value: unknown, where: string): boolean {
+    if (value === undefined) {
+        return false;
+    }
+    if (typeof value !== "boolean") {
+        throw new Error(`設計 JSON ${where}: 真偽値が必要（${describe(value)}）`);
+    }
+    return value;
+}
+
+/** 例外メッセージ用。値そのものではなく「何が来たか」を短く出す */
+function describe(value: unknown): string {
+    if (value === undefined) {
+        return "未指定";
+    }
+    if (value === null) {
+        return "null";
+    }
+    if (Array.isArray(value)) {
+        return "配列";
+    }
+    return typeof value;
+}

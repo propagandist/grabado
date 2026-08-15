@@ -1,0 +1,148 @@
+{
+  "formatVersion": 1,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "employees",
+      "x": 20,
+      "y": 20,
+      "columns": [
+        {
+          "name": "id",
+          "type": "Integer"
+        },
+        {
+          "name": "name",
+          "type": "Text"
+        },
+        {
+          "name": "manager_id",
+          "type": "Integer",
+          "nullable": true,
+          "comment": "直属の上長（自己参照）",
+          "references": [
+            {
+              "table": "employees",
+              "column": "id"
+            }
+          ]
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "employees_pkey",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "projects",
+      "x": 360,
+      "y": 20,
+      "columns": [
+        {
+          "name": "id",
+          "type": "Integer"
+        },
+        {
+          "name": "title",
+          "type": "Text"
+        },
+        {
+          "name": "owner_id",
+          "type": "Integer",
+          "references": [
+            {
+              "table": "employees",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "team_id",
+          "type": "Integer",
+          "nullable": true,
+          "references": [
+            {
+              "table": "teams",
+              "column": "id"
+            }
+          ]
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "projects_pkey",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "teams",
+      "x": 700,
+      "y": 20,
+      "columns": [
+        {
+          "name": "id",
+          "type": "Integer"
+        },
+        {
+          "name": "name",
+          "type": "Text"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "teams_pkey",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "employee_projects",
+      "x": 360,
+      "y": 320,
+      "columns": [
+        {
+          "name": "employee_id",
+          "type": "Integer",
+          "references": [
+            {
+              "table": "employees",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "project_id",
+          "type": "Integer",
+          "references": [
+            {
+              "table": "projects",
+              "column": "id"
+            }
+          ]
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "employee_projects_pkey",
+          "columns": [
+            "employee_id",
+            "project_id"
+          ]
+        }
+      ]
+    }
+  ]
+}

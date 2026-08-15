@@ -11,7 +11,6 @@ import {
     generateDdl,
     loadFixture,
     openDesigner,
-    toXml,
     transformXml,
     useDatatypes,
 } from "../browser/harness.ts";
@@ -40,22 +39,10 @@ test.afterAll(async () => {
 });
 
 /*
- * #1（属性値のエスケープ不足）と #8（<default> の末尾に改行が無い）は §4 段階4-4 で
- * 直した。「直った後の挙動」のアサートは tests/browser/serialize.spec.ts に移してある
- * （README の運用 3）。
+ * #1（属性値のエスケープ不足）と #8（<default> の末尾に改行が無い）は §4 段階4-4 で、
+ * #2（保存で <default>NULL</default> が生える）は §4 段階4-5 で直した。「直った後の挙動」の
+ * アサートは tests/browser/serialize.spec.ts に移してある（README の運用 3）。
  */
-
-test("#2 nullable かつ default 未指定の行が、保存すると <default>NULL</default> を獲得する", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readFixture("house-defaults"));
-
-    const xml = await toXml(page);
-
-    // fixture の articles.body は <default> を持たないが、保存すると生える
-    // （js/row.js:21 の既定 null -> js/row.js:420 で NULL として出力）
-    expect(readFixture("house-defaults")).toContain('<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>');
-    expect(xml).toContain('<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n<default>NULL</default>');
-});
 
 test("#3 BIGINT が Big Integer ではなく Real に解決される（sql 重複・最後の一致が勝つ）", async () => {
     await useDatatypes(page, SERIALIZER_DB);

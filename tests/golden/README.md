@@ -14,8 +14,9 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 ```
 
 `json/` だけは他の 3 つと性格が違う。**現行実装の実出力ではなく、grabado が決めた新しい正本
-フォーマット**（`formatVersion: 1`。仕様は [`../../docs/FORMAT.md`](../../docs/FORMAT.md)）で、
-現行の癖のうち known-issues #2 / #3 / #4 / #5 は**意図的に持ち込んでいない**。
+フォーマット**（`formatVersion: 2`。仕様は [`../../docs/FORMAT.md`](../../docs/FORMAT.md)）で、
+現行の癖のうち known-issues #2 / #3 / #4 / #5 は**意図的に持ち込んでいない**
+（#2 は §4 段階4-5 で本体ごと消えたので、いまは XML 側にも無い）。
 「この形が設計を過不足なく運べる」ことの根拠は golden ではなく、XML 経由と JSON 経由で
 状態スナップショットが一致することを見る「情報保存」テストのほう。
 
@@ -39,9 +40,11 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 - `UUID` が型パレットに無く `INTEGER` に落ちている（known-issues #4）
 - `users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る（known-issues #6）
 - `DEFAULT 'now()'` のように式が引用符で囲まれる（型の `quote` 属性をそのまま適用するため）
-- nullable な行に `<default>NULL</default>` が生えている（known-issues #2。撤去は 4-5）
 
 §4 段階4-4 で `<default>` の後だけ改行が無い癖（旧 known-issues #8）は消えた。
+**§4 段階4-5 で「既定値の無い行に `<default>NULL</default>` が生える」癖（旧 known-issues #2）も
+消えた** —— このとき `ddl/` の 16 本から ` DEFAULT NULL`（cubrid / mysql / sqlite）と vfp9 の
+` UL ` ゴミが、`state/` の 5 本から `"def": null` が落ちている。
 
 ## 正規化しているもの
 

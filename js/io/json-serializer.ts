@@ -131,8 +131,10 @@ function serializeColumn(row: RowModel, palette: TypePalette): JsonColumn {
         out.autoincrement = true;
     }
     /*
-     * null（＝ DEFAULT NULL）と ""（＝既定なし）をどちらも落とす。この 1 行が
-     * known-issue #2 / #5 を JSON 経路に持ち込まない箇所（js/io/json-format.ts の default）。
+     * ""（＝既定なし）を落とす。段階4-2 の時点では null（＝ DEFAULT NULL）も同じ 1 行で
+     * 落としていて、それが known-issue #2 / #5 を JSON 経路に持ち込まない箇所だった。
+     * 段階4-5 で内部表現から null が消えたので、いまは "" だけを見ている
+     * （js/io/json-format.ts の default）。
      */
     if (row.def) {
         out.default = row.def;

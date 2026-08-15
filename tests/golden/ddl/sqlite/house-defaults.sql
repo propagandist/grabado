@@ -13,10 +13,10 @@ CREATE TABLE 'articles' (
 'id' TEXT NOT NULL  DEFAULT 'uuidv7()' PRIMARY KEY,
 'author_id' TEXT NOT NULL  REFERENCES 'users' ('id'),
 'title' TEXT NOT NULL ,
-'body' TEXT DEFAULT NULL,
+'body' TEXT,
 'view_count' INTEGER NOT NULL  DEFAULT 0,
-'price' TEXT(12,2) DEFAULT NULL,
-'published_on' TEXT DEFAULT NULL,
+'price' TEXT(12,2),
+'published_on' TEXT,
 'created_at' TEXT NOT NULL  DEFAULT 'now()',
 'updated_at' TEXT NOT NULL  DEFAULT 'now()'
 );

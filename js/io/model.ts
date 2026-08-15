@@ -26,10 +26,15 @@
  *      parser が getAttribute の生値を入れるので、属性が無ければ**実行時 null**。
  *      現行の 4 実装がそれぞれ !（non-null assertion）や早期 return で受けていた癖を
  *      そのまま持っている。extract 側は必ず string を入れる。
- *   2. RowModel.def は入り側では「XML が言った値」で、出側では「ツリーが保持している値」。
- *      "NULL" -> null の正規化が Row.update() の中で起きるため（js/io/xml-parser.ts を参照）。
+ *   2. RowModel.def は入り側では「XML / JSON が言った値」で、出側では「ツリーが保持して
+ *      いる値」。"NULL" -> "" の正規化が Row.update() の中で起きるため。
  *
- * どちらも 4-4 / 4-5 で消す既知の逸脱で、いま揃えると挙動が変わる。
+ * 1 は 4-4 で消す予定だったが残っている（KeyModel.name の実行時 null は段階4-4 の
+ * 決めたこと 3 のとおり、serializer が String() で受けて "null" を書く現行仕様を保つ）。
+ * 2 は **意図して残す** —— 段階4-5 で「既定 NULL」の内部表現（null）は撤去したが、
+ * 正規化そのものは Row.update() の 1 箇所に置いたままにした。parser 側にも同じ規則を
+ * 書くと、同じ規則が 2 箇所に分かれて片方だけ直す事故の余地が残る（4-1b の決めたこと 3
+ * と同じ立場）。したがって parser は読んだ生値を渡し、正規化は update() だけが行う。
  */
 
 /**
@@ -64,8 +69,14 @@ export interface RowModel {
      */
     readonly type: number;
     readonly size: string;
-    /** null は「既定 NULL」を表す現行の内部表現（known-issue #2。4-5 で撤去する） */
-    readonly def: string | null;
+    /**
+     * 既定値。**"" が「既定なし」**（段階4-5 で「既定 NULL」の内部表現を撤去した）。
+     *
+     * 出側（extract）は必ずツリーの値＝正規化済みの文字列。入り側（parser）は読んだ
+     * 生値なので、4-3b 以前に書き出された <default>NULL</default> を読むと "NULL" が
+     * 入りうる。それを "" に潰すのは apply -> Row.update()（上の非対称 2）。
+     */
+    readonly def: string;
     readonly nll: boolean;
     readonly ai: boolean;
     readonly comment: string;

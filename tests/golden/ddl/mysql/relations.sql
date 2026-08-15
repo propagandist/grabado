@@ -15,7 +15,7 @@ DROP TABLE IF EXISTS `employees`;
 CREATE TABLE `employees` (
   `id` INTEGER NOT NULL,
   `name` MEDIUMTEXT NOT NULL,
-  `manager_id` INTEGER NULL DEFAULT NULL COMMENT '直属の上長（自己参照）',
+  `manager_id` INTEGER NULL COMMENT '直属の上長（自己参照）',
   PRIMARY KEY (`id`)
 );
 
@@ -30,7 +30,7 @@ CREATE TABLE `projects` (
   `id` INTEGER NOT NULL,
   `title` MEDIUMTEXT NOT NULL,
   `owner_id` INTEGER NOT NULL,
-  `team_id` INTEGER NULL DEFAULT NULL,
+  `team_id` INTEGER NULL,
   PRIMARY KEY (`id`)
 );
 

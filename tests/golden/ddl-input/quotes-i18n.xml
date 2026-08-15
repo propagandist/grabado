@@ -11,12 +11,10 @@
 </row>
 <row name="say &quot;hi&quot;" null="1" autoincrement="0">
 <datatype>TEXT</datatype>
-<default>NULL</default>
 <comment>識別子に " が入る場合の属性エスケープ確認</comment>
 </row>
 <row name="メモ" null="1" autoincrement="0">
 <datatype>TEXT</datatype>
-<default>NULL</default>
 <comment>顧客の'愛称'をここに書く</comment>
 </row>
 <key type="PRIMARY" name="顧客_pkey">

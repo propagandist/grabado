@@ -17,33 +17,33 @@ ERASE 'type_samples.bak'
 ERASE 'type_samples.tbk'
 
 CREATE TABLE (m.tcPath + 'type_samples') &lcFreeOrName ( ;
-c_integer INTEGER NULL UL , ;
-c_smallint INTEGER NULL UL , ;
-c_decimal INTEGER(12,2) NULL UL , ;
+c_integer INTEGER NULL , ;
+c_smallint INTEGER NULL , ;
+c_decimal INTEGER(12,2) NULL , ;
 c_serial INTEGER NOT NULL , ;
 c_bigserial INTEGER NOT NULL , ;
-c_float INTEGER NULL UL , ;
-c_double INTEGER NULL UL , ;
-c_char INTEGER(10) NULL UL , ;
-c_varchar INTEGER(255) NULL UL , ;
-c_text INTEGER NULL UL , ;
-c_bytea INTEGER NULL UL , ;
-c_boolean INTEGER NULL UL , ;
-c_date INTEGER NULL UL , ;
-c_time INTEGER(3) NULL UL , ;
-c_time_tz INTEGER NULL UL , ;
-c_interval INTEGER(6) NULL UL , ;
-c_timestamp INTEGER(3) NULL UL , ;
-c_timestamp_tz INTEGER NULL UL , ;
-c_timestamp_wo_tz INTEGER NULL UL , ;
-c_xml INTEGER NULL UL , ;
-c_bit INTEGER(8) NULL UL , ;
-c_varbit INTEGER(8) NULL UL , ;
-c_inet INTEGER NULL UL , ;
-c_cidr INTEGER NULL UL , ;
-c_geometry INTEGER NULL UL , ;
-c_json INTEGER NULL UL , ;
-c_jsonb INTEGER NULL UL  ;
+c_float INTEGER NULL , ;
+c_double INTEGER NULL , ;
+c_char INTEGER(10) NULL , ;
+c_varchar INTEGER(255) NULL , ;
+c_text INTEGER NULL , ;
+c_bytea INTEGER NULL , ;
+c_boolean INTEGER NULL , ;
+c_date INTEGER NULL , ;
+c_time INTEGER(3) NULL , ;
+c_time_tz INTEGER NULL , ;
+c_interval INTEGER(6) NULL , ;
+c_timestamp INTEGER(3) NULL , ;
+c_timestamp_tz INTEGER NULL , ;
+c_timestamp_wo_tz INTEGER NULL , ;
+c_xml INTEGER NULL , ;
+c_bit INTEGER(8) NULL , ;
+c_varbit INTEGER(8) NULL , ;
+c_inet INTEGER NULL , ;
+c_cidr INTEGER NULL , ;
+c_geometry INTEGER NULL , ;
+c_json INTEGER NULL , ;
+c_jsonb INTEGER NULL  ;
 )
 
 lcTableComment = ''

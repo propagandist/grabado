@@ -57,10 +57,10 @@ CREATE TABLE (m.tcPath + 'articles') &lcFreeOrName ( ;
 id INTEGER NOT NULL uidv7( , ;
 author_id INTEGER NOT NULL , ;
 title INTEGER NOT NULL , ;
-body INTEGER NULL UL , ;
+body INTEGER NULL , ;
 view_count INTEGER NOT NULL  , ;
-price INTEGER(12,2) NULL UL , ;
-published_on INTEGER NULL UL , ;
+price INTEGER(12,2) NULL , ;
+published_on INTEGER NULL , ;
 created_at INTEGER NOT NULL ow( , ;
 updated_at INTEGER NOT NULL ow(  ;
 )

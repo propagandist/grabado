@@ -90,11 +90,11 @@ export interface JsonColumn {
     /**
      * 既定 = 既定値なし。**引用符は付けない**（XML は型の quote 属性で囲んでいた）。
      *
-     * モデルの def は null（＝ DEFAULT NULL）と ""（＝既定なし）の 2 つを持つが、
-     * JSON はどちらも「キーを出さない」に潰す。known-issue #2（nullable な行が保存で
-     * <default>NULL</default> を獲得する）と #5（空の <default>）を JSON 経路に
-     * 最初から持ち込まないため。読み戻しは null を入れ、Row.update() の既存規則
-     * （!nll かつ def === null なら ""）がそのまま正規化する。
+     * モデルの def は段階4-2 の時点では null（＝ DEFAULT NULL）と ""（＝既定なし）の
+     * 2 つを持ち、JSON はどちらも「キーを出さない」に潰していた。known-issue #2
+     * （nullable な行が保存で <default>NULL</default> を獲得する）と #5（空の <default>）を
+     * JSON 経路に最初から持ち込まないため。**段階4-5 で内部表現から null が消えた**ので、
+     * いま潰しているのは "" だけ。読み戻しもキーが無ければ "" を入れる。
      */
     readonly default?: string;
     /** 既定 "" */

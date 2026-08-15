@@ -90,13 +90,13 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
     }
     xml += "<datatype>" + escapeXML(t) + "</datatype>\n";
 
-    if (row.def || row.def === null) {
+    /* 段階4-5: 「既定なし」（""）では要素ごと出さない。以前はここに || row.def === null が
+       あり、既定を持たない行すべてに <default>NULL</default> が生えていた（known-issue #2） */
+    if (row.def) {
         /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
         var q = elm.getAttribute("quote")!;
         var d = row.def;
-        if (d === null) {
-            d = "NULL";
-        } else if (d != "CURRENT_TIMESTAMP") {
+        if (d != "CURRENT_TIMESTAMP") {
             d = q + d + q;
         }
         /* 段階4-4 で末尾に改行を足した（known-issue #8）。ここだけ改行が無く、

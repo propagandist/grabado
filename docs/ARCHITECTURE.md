@@ -98,7 +98,7 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 <xhrpath>backend/<backend名>/?action=<action>[&keyword=<name>|&database=<name>]
 ```
 
-- `<xhrpath>` = `CONFIG.XHR_PATH || ""`（[`../js/config.js`](../js/config.js) の実値は **空文字**）。cookie `wwwsqldesigner` で上書き可。
+- `<xhrpath>` = `CONFIG.XHR_PATH || ""`（[`../js/config.ts`](../js/config.ts) の実値は **空文字**）。cookie `wwwsqldesigner` で上書き可。
 - `<backend名>` は画面の backend セレクタの値（`CONFIG.AVAILABLE_BACKENDS`、既定 `php-mysql`）。URL クエリ `?backend=<name>` でも選択できる。
 - `keyword` は `encodeURIComponent` 済み。**段階4-3b から `.json` が付く**（`save` / `load` の
   両方。`jsonKeyword()` が二重付与を防ぐ）。backend は body を解釈せず `basename($keyword)` で
@@ -240,7 +240,7 @@ io/ の 4 本を離さない（段階4-1b）。型だけの `io/model.ts` は em
 - `globals.ts` はロケール関数 `_()` と `SQL` 名前空間（`publish` / `subscribe` / `escape`）。
   **`SQL` 名前空間は段階4-0a で、`escape` は段階4-1a で出た**（現在はロケールと pub/sub だけ）。
   polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。段階3-2 で
-  `SqlDesigner`（`Designer` インスタンスの面）が [`../types/globals.d.ts`](../types/globals.d.ts)
+  `SqlDesigner`（`Designer` インスタンスの面）が `types/globals.d.ts`（段階3-3b で削除済み）
   から移設されたが、**段階4-1c で撤去し、`this.owner` を持つ 10 本は
   [`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts) の `Designer` を直接 `import type` する**
   （本ファイルは js/ のどこにも依存しなくなった）。
@@ -442,6 +442,51 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 | `SqlDesigner`（4-1c で撤去） | — （参照 13 本を `import type { Designer } from "./wwwsqldesigner.ts"` に置換） | 3-3b 以降は名前が 2 つあるだけの状態だった。§4 でモデル層の型が増える前に実体 1 本へ寄せた。**必ずトップレベル `import type`**（インライン形は `verbatimModuleSyntax` で import 文が emit に残り、副作用 import として読み込み順を壊す）。書き方の正本は [`../js/table.ts`](../js/table.ts) の冒頭 |
 | `dom` 形態 (ii)（3-3b） | 完成形を `IoDom` / `TableManagerDom` / `RowManagerDom` / `KeyManagerDom` で宣言 | 初期化に `as unknown as XxxDom` 1 個、ループ代入に `(this.dom as unknown as Record<string, HTMLInputElement>)[id]` 1 個。4 本で計 8 個のキャストと引き換えに読み出しが全部注釈ゼロで通る |
 | `SqlNamespace`（3-3b） | 残り 8 クラスを追加し、`Designer: typeof Designer` / `designer: Designer` に | `SQL.Window` は `lib.dom` の `Window` と同名なので、import 側で `import type { Window as SqlWindow }` と改名して受ける |
+
+### 5.6 `js/io/` の構成（§4）
+
+§4（IO）は入出力を `js/io/` の **11 本**に集め、描画クラスから `toXML()` / `fromXML()` を
+1 行も残さず抜いた。組み方は **2×2 の格子**で、これが分割の原理そのもの
+（[`../js/io/model.ts`](../js/io/model.ts) のヘッダが正本）。
+
+```
+             ライブ側（描画エンジンを触る）   形式側（バイト列を知る）
+   出        extract.ts                     json-serializer.ts / ddl-xml.ts
+   入        apply.ts                       json-parser.ts / xml-parser.ts
+```
+
+**ライブ側は形式非依存なので一度だけ書く。形式が増えると形式側だけが増える。**
+JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済んだのが、この形の実利。
+
+| ファイル | 位置 | 役割 |
+|---|---|---|
+| [`detect.ts`](../js/io/detect.ts) | 入・前段 | 中身の先頭 1 文字で JSON / XML / 空 / 不明を決める。フォールバックは作らない |
+| [`json-parser.ts`](../js/io/json-parser.ts) | 入・形式 | 設計 JSON → `DesignModel`。壊れた入力は `tables[0].columns[2].name` の位置つきで throw |
+| [`xml-parser.ts`](../js/io/xml-parser.ts) | 入・形式 | 設計 XML → `DesignModel`。**逐語移設**なので現行の受け流す癖（未知の型は添字 0・最後の一致が勝つ）ごと保つ |
+| [`apply.ts`](../js/io/apply.ts) | 入・ライブ | `DesignModel` → ライブツリー。**純関数ではない** —— `moveTo()` の snap・`update()` の FK 連鎖・ff hack の**順序**が挙動 |
+| [`extract.ts`](../js/io/extract.ts) | 出・ライブ | ライブツリー → `DesignModel`。描画エンジンを知っている唯一の出力側 |
+| [`json-serializer.ts`](../js/io/json-serializer.ts) | 出・形式 | `DesignModel` → 設計 JSON（決定論。書けない設計は 1 バイトも書かずに throw） |
+| [`ddl-xml.ts`](../js/io/ddl-xml.ts) | 出・形式 | `DesignModel` → **DDL 入力 XML**。`output.xsl` 専用の中間表現で、ユーザーに見える保存経路にはもう出ない |
+| [`json-format.ts`](../js/io/json-format.ts) | 形式の定義 | 設計 JSON の形とキー順の契約（型だけ・emit 空）。散文は [`FORMAT.md`](FORMAT.md) |
+| [`model.ts`](../js/io/model.ts) | モデルの定義 | `DesignModel` の型（型だけ・emit 空）。上の格子の説明もここ |
+| [`palette.ts`](../js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |
+| [`conflict.ts`](../js/io/conflict.ts) | 保存境界 | 保存前の外部変更検知の判定（純関数。`absent` / `clean` / `exists` / `conflict`） |
+
+守る規約は 4 つ。
+
+1. **依存は描画 → io の一方向。** io 側が描画クラスから受け取るのは `import type` だけで
+   （`verbatimModuleSyntax` で emit から消える）、値の辺は 1 本も生えない。描画クラスに
+   `toModel()` / `fromModel()` を生やさないのはこのため（§4 段階4-1a / 4-1b）。
+2. **型パレット依存の解決は引数で渡す。** モデルが持つ型は**パレットの添字**のままで、
+   sql 名にも id にも解決しない。解決するのは形式側 2 本が受け取る `palette` 引数（4-1a）。
+3. **`js/io/` は locale を通さない。** 例外 message は開発者向けで、価値の本体が位置情報。
+   ユーザーへの見せ方（見出しだけ locale・詳細は素通し）は呼び手の [`../js/io.ts`](../js/io.ts) が決める（4-3b）。
+4. **UI と通信は `js/io.ts` に残す。** ダイアログの組み立て・`alert` / `confirm` / `prompt`・
+   `OZ.Request`・localStorage・ダウンロードはすべてこちら側で、`js/io/` は形式とモデルしか知らない。
+
+`ddl-xml.ts` は **§6.3 で `output.xsl` を TS 実装へ置き換えるときにモジュールごと消える**
+（それまで XSLT の入力に XML が要る）。`palette.ts` の型解決の再設計（`getTypeIndex` /
+`getFKTypeFor` の sql・re 照合）は §6.1 の型パレット差し替えと同時に行う。
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

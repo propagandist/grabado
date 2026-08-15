@@ -2228,6 +2228,111 @@ backend 側の条件付き更新でしか閉じないので、ETag + `If-Match`�
 json-parser / apply）・書き出し方向（json-serializer / json-format / ddl-xml）・その他（model /
 palette / extract / conflict）**の 3 つに割れているので、その線を文書に落とす。
 
+### 2026-08-15 HANDOVER §4「IO」段階4-7 — §4 を閉じた（仕上げ）
+
+§4 の 13 本目で最後の 1 本。**`js/` を 1 行も触らず、文書を実測に合わせた**段階
+（4-0a の分割表の「仕上げ・golden 不変」）。中身は 4-6 の申し送りどおり 3 つ ——
+`docs/FORMAT.md` の総点検・known-issues の棚卸し・`js/io/` 11 本の見取り図。
+これに **§4 を機械的に閉じる表**（下記）を足した。
+
+#### HANDOVER §4 の要件はすべて実装に落ちている
+
+| # | HANDOVER §4 の要求 | 実装 | 根拠になるテスト | 入った段階 |
+|---|---|---|---|---|
+| 1 | 全入出力を JSON に統一（YAML 不採用） | 保存 5 経路すべてが [`js/io/json-serializer.ts`](js/io/json-serializer.ts)、読み込みは [`js/io/detect.ts`](js/io/detect.ts) が振り分け | `tests/node/io-ui.test.ts` / `tests/browser/io-ui.spec.ts` | 4-3b |
+| 2 | `serialize` / `deserialize` を `io/` に集約 | `js/io/` 11 本。描画クラスに `toXML` / `fromXML` は 1 つも残っていない | 状態スナップショット golden 8 本 | 4-1a / 4-1b |
+| 3 | 決定論出力（キー順・配列順・2 スペース・改行区切り） | キー順の契約は [`js/io/json-format.ts`](js/io/json-format.ts) の宣言順。**DDL 入力 XML も 4-4 で決定論になった**（`<!-- Active URL -->` と `<datatypes>` 全文の撤去） | 「同一モデル → 2 回の出力が一致」／「環境依存が出力に現れない」 | 4-2 / 4-4 |
+| 4 | round-trip ＋「同じモデル → 同じ文字列」 | `toJson` / `fromJson` を 3 周させて 1・2・3 回目が一致 | `tests/node/json.test.ts` / `tests/browser/json.spec.ts` | 4-2 |
+| 5 | diff フレンドリー（1 テーブル = 独立ブロック） | テーブル追加で既存部分が 1 バイトも動かない | `tests/browser/json.spec.ts` の diff テスト | 4-2 |
+| 6 | 外部変更検知（古い編集状態で上書きしない） | server 経路の save が read-before-write。判定は [`js/io/conflict.ts`](js/io/conflict.ts) の純関数 | `tests/node/conflict.test.ts` ＋ 仮想 backend の往復 | 4-6 |
+| 7 | XML は読込専用（書き出しは撤去） | ユーザーに見える保存経路から消え、[`js/io/ddl-xml.ts`](js/io/ddl-xml.ts) は `output.xsl` への中間表現としてだけ残る | DDL golden 63 本 ＋ DDL 入力 golden 7 本 | 4-3a / 4-3b |
+| 8 | `formatVersion` を付け `docs/` に文書化 | `formatVersion: 2`（版 1 は移行コマンドを名指しして拒む）。散文は [`docs/FORMAT.md`](docs/FORMAT.md) | `tests/node/migrate-design.test.ts` ほか | 4-2 / 4-2b |
+
+**未着手の要求は 1 つも無い。** §4 が引き受けなかったもの（条件付き更新・型パレットの現代化・
+`output.xsl` の TS 化）はいずれも HANDOVER が別の節に置いているもので、下の申し送りに集めた。
+
+#### 決めたこと 1: 見取り図は `ARCHITECTURE.md` §5.6 に置く（`FORMAT.md` ではない）
+
+2 つの文書の役割が違う。`FORMAT.md` は**正本フォーマットの仕様**（他プロダクトのリポジトリで
+`schema/*.json` を読む人が見る）で、`ARCHITECTURE.md` は**この作業リポジトリの構成**
+（§5.5 が §3 の `.ts` 化進捗を持っている）。`js/io/` の内部分割は後者で、しかも
+§6.3 で `ddl-xml.ts` が消えるように**これから動く**情報なので、外向きの仕様書に混ぜない。
+
+各ファイルの散文はヘッダコメントが既に持っているので、§5.6 は**役割 1 行と境界の規約 4 つ**に絞った
+（複製すると必ず片方が腐る）。規約は 4-1a / 4-1b / 4-3b で決めたものを言い直しただけで、新しい決定は無い。
+
+#### 決めたこと 2: known-issues の表に「経路」列を足す（テストは触らない）
+
+残る 5 本はどれも現象が消えていないが、**§4 を通したことで 3 本は届く範囲が狭まっている**。
+これが表から読めないと、§6 で直すときに「まだ全経路で起きる」前提の作業見積りになる。
+
+- **#3 / #4 は設計 JSON では起きない。** 型キーが安定 `id` になり（4-2b）、
+  [`js/io/json-parser.ts`](js/io/json-parser.ts) はパレットに無い id を throw する。
+  残るのは互換で読む XML 経路（[`js/io/xml-parser.ts`](js/io/xml-parser.ts)）だけで、そこは
+  「現行の挙動を 1 バイトも変えない」逐語移設が要件なので**意図して直していない**。
+- **#5 は書き出し側では構造的に起きない**（4-5。`if (row.def)` が `""` を落とす）。残るのは
+  introspection の出力を直接 XSLT に食わせる経路。
+
+テストのアサートは 1 つも変えていない（現象は生きているので緑のまま）。触ったのは**原因を指す
+コメント 2 行**で、`js/row.js:472-479` / `js/row.js:455` を
+`js/io/xml-parser.ts:147-153` / `:125` に貼り直した —— 4-1b の移設で 2 世代古くなっていた。
+
+#### 決めたこと 3: 過去の決定ログのリンクは直さない
+
+本書の相対リンクは 25 本が実在しないパスを指している（`js/oz.js` / `js/table.js` /
+`types/globals.d.ts` / `js/io/xml-serializer.ts` など）。**直さない。** 本書は時系列の決定ログで、
+段階3-1 の記録が `js/oz.js` を指すのは**当時それが事実だった**から。現行ファイルに貼り替えると
+行番号アンカーが別の場所を指し、記録としては嘘になる。
+
+そのかわり**「現在を説明する文書」では 0 本にする** —— `docs/` 3 本と
+`tests/known-issues/README.md` 4 本を直した（下記）。以後リンクの実在確認は
+「`docs/` と `tests/` で欠落 0、`CUSTOMIZATIONS.md` は対象外」で回す。
+
+#### 総点検で見つかった食い違い 3 件（いずれも文書側を直した）
+
+| # | 文書 | 書いてあったこと | 実測 |
+|---|---|---|---|
+| 1 | `docs/FORMAT.md` | `keys[].type` は `PRIMARY` / `UNIQUE` / `INDEX` の 3 つ | **UI が作るのは 4 つ**（`FULLTEXT` がある。[`js/keymanager.ts`](js/keymanager.ts)）。しかも parser も serializer も**値を検査しない**（文字列であることだけ見る） |
+| 2 | `docs/TESTING.md` | `npm run typecheck` は「`src/ tests/ types/`、`js/` は `checkJs: false` で対象外」 | [`tsconfig.json`](tsconfig.json) の `include` は `js/ src/ tests/ *.config.ts`。**`types/` は段階3-3b で削除済み**で、`js/` は全部 `.ts` なので当然対象 |
+| 3 | 3 文書 | `js/row.js` / `js/config.js` / `types/globals.d.ts` へのリンク 7 本 | §3 で `.ts` 化・削除済み |
+
+1 について、`FULLTEXT` と `INDEX` は PostgreSQL では `ADD CONSTRAINT <table>_pkey KEY (...)` に
+落ちる（不正な SQL）。**known-issue には足していない** —— #6（制約名の衝突）と同じ
+`db/postgresql/output.xsl` の同じ `xsl:for-each` の粗さで、#6 の fixture が既にこの経路を踏んでおり、
+§6.3 で制約名を直す作業が必ずここを通る。テストを 1 本足すより `docs/FORMAT.md` の
+`tables[].keys[]` に書いておくほうが、直す人の目に入る。
+
+#### §5 / §6 への申し送り（§4 が送ったものを 1 か所に集める）
+
+| 送り先 | 中身 | 出所 |
+|---|---|---|
+| §5.1（backend） | **ETag ＋ `If-Match`（不一致は 412）**。プリフライトの load と save の間の TOCTOU はフロントでは閉じない。入れば**保存は 1 往復に畳める** | 4-6 |
+| §5.1 | **`.json` 拡張子の強制**（`.json` 以外の save を拒む・`list` は `*.json` だけを返す）。正本ディレクトリの責務 | 4-3b |
+| §5.2（introspection） | JSON 化。known-issue #9（PG18 実出力が well-formed でない・index が出ない） | 4-0a の実測 / ARCHITECTURE §4.6 |
+| §6.1（型パレット） | known-issues #3 / #4。**パレット差し替えと設計ファイルの移行は同じ PR で**（分けるとリポジトリの設計ファイルが読めない期間ができる＝制約1 違反）。移行表の形は 6-1 の着手時に決める | 4-2b |
+| §6.1 | `palette.ts` の型解決の再設計（`getTypeIndex` / `getFKTypeFor` の sql・re 照合）。4-0b は**意図してキャッシュ寿命を変えなかった** | 4-0b |
+| §6.3（エクスポート規約） | `output.xsl` の TS 化。これで [`js/io/ddl-xml.ts`](js/io/ddl-xml.ts) が**モジュールごと消える**。known-issues #5 / #6 ＋ 上の key type の `KEY (` 落ち | 4-0a / 4-1a |
+| §2（Docker） | `js/io.ts`（823 行の UI・通信層）を含む `js/` の `frontend/` への集約 | 4-0a |
+
+#### 検証
+
+- **`js/` の差分は 0 行**（`git diff --stat` の対象は `docs/*.md` 3 本・`CUSTOMIZATIONS.md`・
+  `tests/known-issues/` 2 本だけ）
+- `git diff tests/golden/` と `git status --porcelain tests/golden/` がどちらも空
+- `npm test` **179 passed** / 21 skipped、`test:browser` **139 passed**、`test:dist` 3 passed、
+  `known-issues` **5 passed**、`typecheck` 0 error（**すべて 4-6 から件数不変**）
+- リンクの実在確認（使い捨てスクリプト。リポジトリには残していない）: 着手前 32 本欠落 →
+  完了時 **`docs/` と `tests/` で 0 本**、残る 25 本はすべて本書の過去エントリ（決めたこと 3）
+- **対話パスの一巡は行っていない。** `js/` を 1 行も触らないため（4-4 と同じ立場）
+
+**次段階への入力 —— §4 はここで終わり、次は §6.1（PostgreSQL 18 型パレット）**。
+HANDOVER §9 の順序（`§4 IO → §6 機能 → §5 backend`）どおり。§6.1 が最初に踏むのは
+上の申し送り表の 2 行で、**known-issues #3 / #4 がそこで赤くなる**（`tests/known-issues/README.md`
+の運用 1〜4 に従い、直ったことを本書に記録してからテストを書き換える）。
+`uuid` が入ると house 既定の PK（`id uuid DEFAULT uuidv7()`）が INTEGER に落ちなくなるので、
+**DDL golden が §4 全体より大きく動く段階**になる —— 4-5（16 ファイル・128 行）が
+「説明できる差分だけ」で通ったのと同じやり方で、差分の全行に根拠を付けられる粒度に割ること。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

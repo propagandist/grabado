@@ -411,6 +411,17 @@ export class Designer extends Visual<DesignerDom> {
         this.setTitle(false);
     }
 
+    /*
+     * grabado: 段階4-4 で known-issue #7 を直した。現行は this.tables を直接 sort() して
+     * いたので、再配置するだけのつもりが**保存されるテーブル順まで変わって**いた
+     * （js/io.ts の importresponse がロード直後に呼ぶため、サーバ import 経由で開くと
+     * 保存内容の順序が入れ替わる）。
+     *
+     * 不具合は「配列を破壊すること」で、「関係数の降順に座標を割り当てること」は仕様。
+     * そこで並べ替えた**コピー**を配置順としてだけ使う。this.tables の順序は入力のまま
+     * 保たれ、moveTo() が動かす座標は従来と 1 ピクセルも変わらない
+     * （sort は安定なので、関係数が同じテーブル同士の相対順も現行と同じ）。
+     */
     alignTables(): void {
         var win = OZ.DOM.win();
         var avail = win[0] - OZ.$("bar").offsetWidth;
@@ -418,12 +429,12 @@ export class Designer extends Visual<DesignerDom> {
         var y = 10;
         var max = 0;
 
-        this.tables.sort(function (a, b) {
+        var order = this.tables.slice().sort(function (a, b) {
             return b.getRelations().length - a.getRelations().length;
         });
 
-        for (var i = 0; i < this.tables.length; i++) {
-            var t = this.tables[i]!;
+        for (var i = 0; i < order.length; i++) {
+            var t = order[i]!;
             var w = t.dom.container.offsetWidth;
             var h = t.dom.container.offsetHeight;
             if (x + w > avail) {

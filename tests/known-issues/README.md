@@ -32,9 +32,16 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 | 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/row.js:455](../../js/row.js#L455)）。現行 PG パレットに uuid が無い | §6.1 |
 | 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る壊れた SQL が出る | [db/postgresql/output.xsl:58-64](../../db/postgresql/output.xsl#L58-L64) が要素の存在だけを見る。現行 introspection は値の無いカラムにも空の `<default>` を出す（[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.5） | §6.3 |
 | 6 | key が複数あると制約名が `<table>_pkey` で衝突する | [db/postgresql/output.xsl:90-92](../../db/postgresql/output.xsl#L90-L92) が `key/@name` を無視してテーブル名から生成する | §6.3 |
-| 7 | `alignTables()` が `tables` を破壊的ソートし、テーブル順と座標を変える | [js/wwwsqldesigner.js:310-312](../../js/wwwsqldesigner.js#L310-L312)。[js/io.js:676](../../js/io.js#L676) の `importresponse` がロード後に呼ぶため、サーバ import 経由で開くと保存 XML の順序が変わる | §4 |
 | 8 | `<default>` だけ末尾に改行が付かず diff が読みにくい | [js/row.js:428](../../js/row.js#L428)。HANDOVER §4「1テーブル=独立ブロック・diff フレンドリー」に反する | §4 |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | §5.2 |
+
+### 直したもの（このディレクトリから出た不具合）
+
+運用 3 に従い、テストは消さずに「直った後の挙動」のアサートへ書き換えて移設してある。
+
+| # | 現象 | 直した段階 | 移設先 |
+|---|---|---|---|
+| 7 | `alignTables()` が `tables` を破壊的ソートし、テーブル順と座標を変える | §4 段階4-4 | [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts) の「`alignTables()` はテーブル順を変えない」 |
 
 ### ここに無いが記録済みのもの
 

@@ -80,8 +80,9 @@ export async function useDatatypes(page: Page, db: string): Promise<void> {
 
 /**
  * fixture を読み込む。
- * importresponse（js/io.js:676）は使わない — alignTables() が this.tables を
- * 破壊的ソートしてテーブル順と座標を変えてしまうため（known-issues に隔離済み）。
+ * importresponse（js/io.ts の同名メソッド）は使わない — 直後に呼ばれる alignTables() が
+ * テーブルを再配置して座標を fixture と食い違わせるため。段階4-4 でテーブル順までは
+ * 変わらなくなった（旧 known-issue #7）が、座標を動かすのは仕様なのでここは避けたまま。
  */
 export async function loadFixture(page: Page, xml: string): Promise<void> {
     const failures = await page.evaluate((fixtureXml) => {

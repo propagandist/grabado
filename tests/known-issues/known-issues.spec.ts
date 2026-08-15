@@ -125,27 +125,10 @@ test("#6 key が複数あると制約名が <table>_pkey で衝突する", async
     expect(ddl).not.toContain("users_email_key");
 });
 
-test("#7 alignTables() が tables を破壊的ソートし、テーブル順と座標を変える", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readFixture("relations"));
-
-    const before = await page.evaluate(() =>
-        (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
-    );
-    await page.evaluate(() =>
-        (window.d! as unknown as { alignTables(): void }).alignTables(),
-    );
-    const after = await page.evaluate(() =>
-        (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle()),
-    );
-
-    // js/wwwsqldesigner.js:310-312 が this.tables.sort() で配列そのものを並べ替える。
-    // js/io.js:676 の importresponse がロード後にこれを呼ぶため、
-    // サーバ import 経由で開くと保存 XML のテーブル順が変わる。
-    expect(before).toEqual(["employees", "projects", "teams", "employee_projects"]);
-    expect(after).not.toEqual(before);
-    expect([...after].sort()).toEqual([...before].sort());
-});
+/*
+ * #7（alignTables() の破壊的ソート）は §4 段階4-4 で直した。「直った後の挙動」の
+ * アサートは tests/browser/serialize.spec.ts に移してある（README の運用 3）。
+ */
 
 test("#8 <default> だけ改行が付かず diff が読みにくい", async () => {
     await useDatatypes(page, SERIALIZER_DB);

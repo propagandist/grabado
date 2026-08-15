@@ -30,9 +30,11 @@ import "../js/io/extract.ts";
 import "../js/io/ddl-xml.ts";
 import "../js/io/xml-parser.ts";
 import "../js/io/apply.ts";
-/* 段階4-2 の JSON 形式側 2 本（UI にはまだ配線していない） */
+/* 段階4-2 の JSON 形式側 2 本。段階4-3b で js/io.ts の保存/読込経路に配線した */
 import "../js/io/json-serializer.ts";
 import "../js/io/json-parser.ts";
+/* 段階4-3b で新設した形式判別。js/ のどこにも依存しないが io/ の並びから離さない */
+import "../js/io/detect.ts";
 import "../js/visual.ts";
 import "../js/row.ts";
 import "../js/table.ts";

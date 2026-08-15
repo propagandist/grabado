@@ -24,7 +24,7 @@ describe("serializer 特性化（Node / jsdom）", () => {
             const actual = normalizeDesignXml(h.toXML());
             assertNoCarriageReturn(actual, `toXML(${fixture.name})`);
 
-            expect(actual).toBe(readGolden(goldenPath("xml", `${fixture.name}.xml`)));
+            expect(actual).toBe(readGolden(goldenPath("ddl-input", `${fixture.name}.xml`)));
         });
 
         test(`round-trip: ${fixture.name}`, () => {

@@ -436,7 +436,7 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 | 何を固定するか | どこで採るか | 出力 |
 |---|---|---|
 | DDL（`db/<db>/output.xsl` の適用結果） | 実ブラウザ（Chromium の `XSLTProcessor`）。§5.2 の `finish()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 9 DB = 63 本） |
-| `SQL.Designer.toXML()` の出力 | 同上 | `tests/golden/xml/<fixture>.xml`（7 本） |
+| `Designer.toXML()` の出力＝`output.xsl` への入力 | 同上 | `tests/golden/ddl-input/<fixture>.xml`（7 本。段階4-4 で `golden/xml/` から改名） |
 | round-trip / 決定論 | 同上 | アサートのみ（golden なし） |
 | 高速回帰 | Node（jsdom ＋ `xslt-processor`）。同じ fixture・**同じ golden**を読むだけ | — |
 | 既知の不具合 | 実ブラウザ。golden を持たず「現在こう壊れている」を直接アサート | `tests/known-issues/` |

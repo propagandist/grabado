@@ -163,10 +163,14 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 （`toXML()` → `DOMParser` → `XSLTProcessor` → `documentElement.textContent` → `trim`）で採る。
 UI の `#textarea` に入る値と一致する。
 
-### serializer golden — `tests/golden/xml/<fixture>.xml`
+### DDL 入力 golden — `tests/golden/ddl-input/<fixture>.xml`
 
-7 fixture。`SQL.Designer.toXML()` の出力を postgresql の型パレットで解決したもの。
+7 fixture。`Designer.toXML()` の出力を postgresql の型パレットで解決したもの。
 serializer は型解決以外 DB 非依存なので DB 横断はしない（その根拠自体もテストで固定してある）。
+
+**§4 段階4-4 で `golden/xml/` から改名した。** 4-3b でユーザーに見える保存経路が JSON に
+なったので、この 7 本が押さえているのは「設計の保存形式」ではなく
+**`db/<db>/output.xsl` への入力**（＝上の DDL golden の一段手前）である。
 
 ### 状態スナップショット golden — `tests/golden/state/<fixture>.json`
 

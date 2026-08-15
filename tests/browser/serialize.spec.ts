@@ -40,7 +40,10 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
             const actual = normalizeDesignXml(await toXml(page));
             assertNoCarriageReturn(actual, `toXML(${fixture.name})`);
 
-            const expected = writeOrReadGolden(goldenPath("xml", `${fixture.name}.xml`), actual);
+            const expected = writeOrReadGolden(
+                goldenPath("ddl-input", `${fixture.name}.xml`),
+                actual
+            );
             expect(actual).toBe(expected);
         });
 

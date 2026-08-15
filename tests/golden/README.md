@@ -7,7 +7,7 @@
 **意図しない挙動変化が起きたら赤くする**こと。CLAUDE.md の Hard Constraint 1 が言う安全網の実体。
 
 ```
-xml/<fixture>.xml        SQL.Designer.toXML() の出力（postgresql の型パレットで解決）
+ddl-input/<fixture>.xml  Designer.toXML() の出力＝output.xsl への入力（postgresql の型パレットで解決）
 ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。9 DB × 7 fixture
 state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
@@ -19,7 +19,7 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 「この形が設計を過不足なく運べる」ことの根拠は golden ではなく、XML 経由と JSON 経由で
 状態スナップショットが一致することを見る「情報保存」テストのほう。
 
-`xml/` と `ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
+`ddl-input/` と `ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
 （選択クラス・型パレット由来の色・relation がどの実体に繋がったか・`clearTables()` の後始末）は
 1 つも写らない。`state/` はその穴を埋める。採取項目と**意図的に採らないもの**（レイアウト由来の値と
 relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
@@ -44,7 +44,7 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 
 ## 正規化しているもの
 
-`xml/` の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけ。
+`ddl-input/` の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけ。
 現行 `toXML()` は `location.href` を埋め込むため出力が環境依存になる
 （[js/wwwsqldesigner.js:346](../../js/wwwsqldesigner.js#L346)）。
 行ごと消すと HANDOVER §4 でこれを撤去したときに diff に現れないので、URL 部分だけ差し替えている。

@@ -11,31 +11,21 @@
  * pub/sub も HANDOVER §4 で RowManager 周りへ移る予定。
  */
 
-/*
- * ここは必ず import type。値 import にすると globals.ts が wwwsqldesigner を先に
- * 評価しにいって読み込み順（src/app.ts）が壊れる。型だけの import は
- * verbatimModuleSyntax のもとで emit から完全に消えるので、Rollup の依存グラフに辺が生えない。
- *
- * 段階3-4a まではここに 15 本のクラスが並んでいた（SqlNamespace が全クラスの型を
- * 持っていたため）。クラス参照が import になって SqlNamespace が縮んだので、
- * 残るのは Designer 1 本だけになった。
- */
-import type { Designer } from "./wwwsqldesigner.ts";
-
 /** subscribe() が受け取るハンドラ。publish() が {target, data} を渡す */
 export type SqlSubscriber = (e: { target: unknown; data: unknown }) => void;
 
-/**
- * Designer インスタンスの型。
+/*
+ * grabado: Designer インスタンスの型（SqlDesigner）は段階4-1c で撤去した（HANDOVER §4）。
  *
- * 段階3-2 まではここに構造的 interface を書いていた（当時 js/wwwsqldesigner.js は
- * まだ .js で、描画中核 7 本の this.owner が同じ面を参照する必要があったため）。
- * 段階3-3b で実体が .ts になったので、実体への型エイリアスにした。参照している
- * 13 本は import を変えずに本物の型を見る（3-2 で予告したとおり、7 ファイルを
- * 回って書き換える作業は発生しない）。名前を Designer に一本化するかは、
- * §4 のモデル層分離（段階4-1）で描画エンジン側の面が確定してから判断する。
+ * 段階3-2 まではここに構造的 interface があった（当時 js/wwwsqldesigner.js はまだ .js で、
+ * 描画中核 7 本の this.owner が同じ面を参照する必要があったため）。段階3-3b で実体が .ts に
+ * なって export type SqlDesigner = Designer の 1 行に縮み、以後は名前が 2 つある状態だけが
+ * 残っていた。§4 のモデル層分離（4-1a / 4-1b）で描画エンジン側の面が確定したので、参照 13 本を
+ * import type { Designer } に置き換えて実体 1 本に寄せた。書き方の正本は js/table.ts の冒頭。
+ *
+ * これで本ファイルは js/ のどこにも依存しなくなった（段階3-4a まではここに 15 本のクラスが
+ * 並んでいた。SqlNamespace が全クラスの型を持っていたため）。
  */
-export type SqlDesigner = Designer;
 
 /*
  * grabado: SQL 名前空間（interface SqlNamespace と export const SQL）は

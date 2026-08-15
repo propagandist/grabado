@@ -12,8 +12,10 @@
  */
 
 import { OZ } from "./oz.ts";
-import { _, type SqlDesigner } from "./globals.ts";
+import { _ } from "./globals.ts";
 import type { Table } from "./table.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /** 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」（ボタン 7 個はループが埋める） */
 export interface TableManagerDom {
@@ -30,14 +32,14 @@ export interface TableManagerDom {
 }
 
 export class TableManager {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare dom: TableManagerDom;
     declare selection: Table[];
     declare adding: boolean;
     /** 追加モードに入る前の #addtable のラベル（preAdd が控える） */
     declare oldvalue: string;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         this.owner = owner;
         /* 型は構築完了後の状態。残りはこの下のループが埋める */
         this.dom = {

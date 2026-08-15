@@ -8,11 +8,12 @@
  */
 
 import { OZ } from "./oz.ts";
-import type { SqlDesigner } from "./globals.ts";
 import { Visual } from "./visual.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 export class Rubberband extends Visual {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare x: number;
     declare y: number;
     declare x0: number;
@@ -22,7 +23,7 @@ export class Rubberband extends Visual {
     declare documentMove: number;
     declare documentUp: number;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         super();
         this.owner = owner;
         this._init();

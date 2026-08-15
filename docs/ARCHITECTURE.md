@@ -219,9 +219,11 @@ io/ の 4 本を離さない（段階4-1b）。型だけの `io/model.ts` は em
   **段階3-1 で `.ts` 化とともに IE 専用分岐・参照 0 の API（`select` / `gecko` / `webkit` / `khtml`）を撤去**した。
 - `globals.ts` はロケール関数 `_()` と `SQL` 名前空間（`publish` / `subscribe` / `escape`）。
   **`SQL` 名前空間は段階4-0a で、`escape` は段階4-1a で出た**（現在はロケールと pub/sub だけ）。
-  polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。**段階3-2 で
+  polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。段階3-2 で
   `SqlDesigner`（`Designer` インスタンスの面）が [`../types/globals.d.ts`](../types/globals.d.ts)
-  から移設され、描画中核 7 本の `this.owner` はすべてこの 1 つの宣言を見る**。
+  から移設されたが、**段階4-1c で撤去し、`this.owner` を持つ 10 本は
+  [`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts) の `Designer` を直接 `import type` する**
+  （本ファイルは js/ のどこにも依存しなくなった）。
 - `visual.ts` → `row.ts` / `table.ts` / `relation.ts` / `key.ts` が描画中核（Tier 2 で温存）。
   **段階2 で ES クラス階層になり、段階3-2 で `.ts` 化した**（§5.4）。
 - `wwwsqldesigner.js` の `SQL.Designer` が全体のオーナー（オプション・cookie・XHR ヘッダ・`toXML()`）。
@@ -409,6 +411,7 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 | `SqlDesigner`（3-2） | [`../js/globals.ts`](../js/globals.ts) の `export interface` | 描画中核 7 本の `this.owner` の面を 1 か所に集約。7 本にローカル interface を書くと面がずれても気づけず、削除コストも 7 倍。段階3-3 で `import type { Designer }` に置き換わる |
 | `SqlNamespace`（3-2） | `Visual` / `Row` / `Table` / `Relation` / `Key` / `Rubberband` / `Map` を追加 | `.ts` 側は import した `SQL` に代入するので、宣言が無いと代入自体が TS2339（`.js` のようなグローバル型の合成は起きない）。同時にこれが `new SQL.Row(...)` を import に書き換えずに済む根拠でもある |
 | `SqlDesigner`（3-3b） | `export type SqlDesigner = Designer;`（実体への型エイリアス） | 3-2 の構造的 interface を実体に置き換えた。参照している 13 本は無改修。近似で書いていた面は実体との食い違いが `typecheck` で出る（`getOption` の戻りが `string \| number \| boolean` だったのはこれで判明） |
+| `SqlDesigner`（4-1c で撤去） | — （参照 13 本を `import type { Designer } from "./wwwsqldesigner.ts"` に置換） | 3-3b 以降は名前が 2 つあるだけの状態だった。§4 でモデル層の型が増える前に実体 1 本へ寄せた。**必ずトップレベル `import type`**（インライン形は `verbatimModuleSyntax` で import 文が emit に残り、副作用 import として読み込み順を壊す）。書き方の正本は [`../js/table.ts`](../js/table.ts) の冒頭 |
 | `dom` 形態 (ii)（3-3b） | 完成形を `IoDom` / `TableManagerDom` / `RowManagerDom` / `KeyManagerDom` で宣言 | 初期化に `as unknown as XxxDom` 1 個、ループ代入に `(this.dom as unknown as Record<string, HTMLInputElement>)[id]` 1 個。4 本で計 8 個のキャストと引き換えに読み出しが全部注釈ゼロで通る |
 | `SqlNamespace`（3-3b） | 残り 8 クラスを追加し、`Designer: typeof Designer` / `designer: Designer` に | `SQL.Window` は `lib.dom` の `Window` と同名なので、import 側で `import type { Window as SqlWindow }` と改名して受ける |
 

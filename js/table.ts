@@ -11,15 +11,23 @@
  * 先に評価済みなので観測できる差は無い（バンドル diff では位置移動の 1 ハンクとして出る）。
  * 逆向き（row -> table、key -> table/row）は import type なので辺が生えない。
  *
+ * this.owner の型を wwwsqldesigner から直接 import する 10 本のイディオムはここが正本
+ * （段階4-1c で js/globals.ts の SqlDesigner エイリアスを撤去した）。**必ずトップレベルの
+ * import type で書く。** インライン形（import { type Designer }）にすると
+ * verbatimModuleSyntax のもとで import 文が emit に残り、副作用 import として Rollup の
+ * 依存グラフに辺が生える。wwwsqldesigner は src/app.ts の読み込み順の最後尾なので、
+ * 辺が生えた時点で順序が壊れる（型だけの import は emit から完全に消えるので辺も生えない）。
+ *
  * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  */
 
 import { OZ } from "./oz.ts";
-import { publish, type SqlDesigner } from "./globals.ts";
+import { publish } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import { Row, type RowData } from "./row.ts";
 import { Key } from "./key.ts";
 import type { Relation } from "./relation.ts";
+import type { Designer } from "./wwwsqldesigner.ts";
 
 export interface TableDom extends VisualDom {
     container: HTMLDivElement;
@@ -50,7 +58,7 @@ export class Table extends Visual<TableDom> {
     static y: number[];
 
     declare data: TableData;
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare rows: Row[];
     declare keys: Key[];
     declare zIndex: number;
@@ -66,7 +74,7 @@ export class Table extends Visual<TableDom> {
     declare documentUp: number;
 
     constructor(
-        owner: SqlDesigner,
+        owner: Designer,
         name: string,
         x: number | undefined,
         y: number | undefined,

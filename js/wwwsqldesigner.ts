@@ -12,7 +12,8 @@
  * this.owner / this.owner.owner に置換できた。詳細は js/globals.ts の該当コメント。
  *
  * 本ファイルが .ts になったことで js/globals.ts の SqlDesigner は構造的 interface を
- * やめ、この Designer への型エイリアスになった（参照している 13 本は無改修）。
+ * やめて型エイリアスに縮み、段階4-1c で撤去された。this.owner の型を必要とする 10 本は
+ * この Designer を直接 import type する（書き方の正本は js/table.ts の冒頭）。
  * インスタンスプロパティを declare で宣言する理由は js/visual.ts の冒頭。
  *
  * 生成する 11 クラスは段階3-4a で値 import になった（それまでは new SQL.X 経由で、

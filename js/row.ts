@@ -8,7 +8,7 @@
  */
 
 import { OZ } from "./oz.ts";
-import { _, publish, type SqlDesigner } from "./globals.ts";
+import { _, publish } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";

@@ -15,7 +15,9 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
-import { _, type SqlDesigner } from "./globals.ts";
+import { _ } from "./globals.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /* dropbox.js のうち本ファイルが触る面。存廃は §4（上のコメント） */
 interface DropboxError {
@@ -90,7 +92,7 @@ export interface IoDom {
 }
 
 export class IO {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     /** server load/save で最後に使った名前 */
     declare _name: string;
     /** localStorage / Dropbox で最後に使った名前 */
@@ -101,7 +103,7 @@ export class IO {
     /** CONFIG.DROPBOX_KEY が未設定なら null（dropBoxInit） */
     declare dropboxClient: DropboxClient | null;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         this.owner = owner;
         this._name = ""; /* last used name with server load/save */
         this.lastUsedName =

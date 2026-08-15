@@ -12,7 +12,9 @@
  */
 
 import { OZ } from "./oz.ts";
-import { _, type SqlDesigner } from "./globals.ts";
+import { _ } from "./globals.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /** ダイアログの DOM。すべてコンストラクタで埋まる（後付けキーは無い） */
 export interface WindowDom {
@@ -26,14 +28,14 @@ export interface WindowDom {
 }
 
 export class Window {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare dom: WindowDom;
     /** 0 = 閉じている / 1 = 開いている */
     declare state: number;
     /** open() が受け取る OK 時のコールバック。省略時は cancel ボタンを隠す */
     declare callback: (() => void) | undefined;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         this.owner = owner;
         this.dom = {
             container: OZ.$("window"),

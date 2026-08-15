@@ -12,10 +12,12 @@
  */
 
 import { OZ } from "./oz.ts";
-import { _, type SqlDesigner } from "./globals.ts";
+import { _ } from "./globals.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";
 import type { Row } from "./row.ts";
+/* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
+import type { Designer } from "./wwwsqldesigner.ts";
 
 /** 不変条件は「build() を抜けた時点で全キーが埋まっている」（keyadd / keyremove はループが埋める） */
 export interface KeyManagerDom {
@@ -33,7 +35,7 @@ export interface KeyManagerDom {
 }
 
 export class KeyManager {
-    declare owner: SqlDesigner;
+    declare owner: Designer;
     declare dom: KeyManagerDom;
     /** open() / sync() が対象テーブルを入れる。それ以前に読む経路は無い */
     declare table: Table;
@@ -42,7 +44,7 @@ export class KeyManager {
     /** 選択中キーに対応する <option>。redrawListItem がラベルを書き換える */
     declare option: HTMLOptionElement;
 
-    constructor(owner: SqlDesigner) {
+    constructor(owner: Designer) {
         this.owner = owner;
         /* 型は構築完了後の状態。残りは build() が埋める */
         this.dom = {

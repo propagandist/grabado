@@ -2076,6 +2076,79 @@ sqlite）と vfp9 の ` UL ` ゴミの削除であることが機械的な完了
 [`js/io/model.ts`](js/io/model.ts) の型注釈もそこで直す。§4 の残りは 4-5 / 4-6
 （外部変更検知）/ 4-7（仕上げ）の 3 本。
 
+### 2026-08-15 HANDOVER §4「IO」段階4-5 — `<default>NULL</default>` を撤去した
+
+§4 の 11 本目。**「既定 NULL」の内部表現（`Row.data.def === null`）を撤去し、「既定なし」を
+`""` の 1 通りにした**段階。これで既定値を持たない行が保存で `<default>NULL</default>` を
+獲得する（＝情報が増える）known-issue #2 が消える。
+
+**§4 で唯一 DDL golden が動く段階**（4-0a の分割表）。完了判定は 4-0a の予測どおり
+**「差分の全行が ` DEFAULT NULL` と vfp9 の ` UL ` ゴミの削除であること」**で、
+16 ファイル・128 行のうち **説明できない差分は 0 行**だった（内訳は下記）。
+
+#### 決めたこと 1: 潰し先を `null` から `""` に替える。条件は動かさない
+
+`Row.update()` の正規化（`data.nll && data.def.match(/^null$/i)`）は残し、代入先だけ
+`null` → `""` にした。**nullable 列の `DEFAULT NULL` は SQL 上も暗黙の既定と同義**なので
+情報は失われない。条件（`data.nll`）を残したのは、NOT NULL 行に "NULL" と打った場合の扱い
+（文字列としてそのまま残る）を現行のままにするため —— そこまで潰すと「意図して書いた既定値を
+勝手に消す」側の変更になり、#2 の範囲を超える。相方の「`!nll` かつ `null` なら `""`」は
+`null` が入らなくなったので削除した。
+
+`Row.load()` の「`null` を "NULL" と表示する」分岐も落とした。**既定値を持たない行を展開すると
+空欄が出る**（従来は "NULL"）。ここが #2 の UI 側の入口で、ユーザーが何も触らず閉じるだけで
+既定値が生えていた。
+
+#### 決めたこと 2: 正規化は `Row.update()` の 1 箇所に残す
+
+`RowModel.def` の型からは `null` が消えるが、**「入り側＝ファイルが言った値／出側＝ツリーが
+持つ値」という非対称は残す**。parser 側にも同じ規則を書くと、同じ規則が 2 箇所に分かれて
+片方だけ直す事故の余地ができる（4-1b の決めたこと 3 と同じ立場）。[`js/io/model.ts`](js/io/model.ts)
+のヘッダは「4-5 で消す既知の逸脱」から**「意図して残す理由」**に書き換えた。
+
+4-3b 以前に保存されたファイルの `<default>NULL</default>` は、parser を "NULL" のまま通って
+`apply` → `update()` が `""` に潰す。**読み直すと XML からも JSON からも既定値が消える**ことは
+コミット4 でテストに固定した（旧ファイルは今までどおり開ける）。
+
+#### 決めたこと 3: 動かない DB は「予測に無い」ではなく「実測して根拠を書く」
+
+4-0a の予測は cubrid / mysql / sqlite と vfp9 の 4 つを挙げていて、**web2py が入っていない**。
+実測すると web2py の golden には `default=None` がびっしり出ているので、確認して根拠を残した ——
+`db/web2py/output.xsl` は `<default>` が**無い**行にも `xsl:otherwise` で `default=None` を出すので、
+`<default>NULL</default>` が消えても出力は 1 バイトも変わらない。他の 4 つも同様に確認した:
+postgresql は `default != 'NULL'`、oracle は `not(default = 'NULL')` で既に除外済み、
+mssql / sqlalchemy は `default` を一切参照しない。
+
+#### 検証
+
+- **`tests/golden/ddl/` は 16 ファイル・128 行**。内訳は ` DEFAULT NULL` の削除 **96**
+  （cubrid / mysql / sqlite × 4 fixture）と vfp9 の `UL ` ゴミの削除 **32**（引用符剥がしの
+  `substring` が "NULL" から作っていたもの）。**説明できない差分 0 行**（使い捨ての検算
+  スクリプトで 1 行ずつ突き合わせた。リポジトリには残していない）
+- `tests/golden/ddl-input/` 4 本は `<default>NULL</default>` の **32 行削除のみ**、
+  `tests/golden/state/` 5 本は `"def": null` → `"def": ""` の **35 箇所のみ**、
+  **`tests/golden/json/` は無差分**（4-2 が #2 を JSON 経路に持ち込んでいないことの検算）
+- `npm test` **158 passed** / 21 skipped（node 側は golden 比較なので件数不変）、
+  `test:browser` **139 passed**（136 から +3 ＝ 反転 1・UI 正規化 1・旧ファイル互換 1）、
+  `test:dist` 3 passed、`known-issues` **5 passed**（6 から -1）、`typecheck` 0 error
+- **対話パスの一巡は `npm run dev`（4173）と `npm run preview`（4174）の両方で 8/8・
+  pageerror 0 件**（使い捨ての Playwright スクリプト）。実 UI のボタンだけを踏んで、
+  展開直後の default 欄が空欄であること・空のまま閉じても "NULL" と打っても保存 JSON に
+  `default` キーが出ないこと・NOT NULL 行の `now()` は従来どおり出ること・`#clientsql` の
+  DDL に ` DEFAULT NULL` が出ないことを確認した
+
+#### known-issues の残り
+
+**§4 が引き受けた known-issue はこれで尽きた**（#1 / #7 / #8 が 4-4、#2 が 4-5）。残る 5 本は
+#3 / #4 が §6.1（型パレット差し替え）、#5 / #6 が §6.3（`output.xsl` の TS 化）、#9 が §5.2
+（introspection）。なお **#5（空の `<default>` で ` DEFAULT ` だけが残る）は、書き出し側では
+本段階で構造的に起きなくなった** —— `if (row.def)` は `""` を落とすため。残っているのは
+introspection の出力（外部由来の XML）を直接 XSLT に食わせる経路だけで、直すのは §6.3 のまま。
+
+**次段階（4-6）への入力**。外部変更検知（save/load 境界の楽観的並行制御）。本段階までで
+**書き出し側の形式の話は終わり**、4-6 は「いつ読み直すか」の話になる。§4 の残りは 4-6 と
+4-7（仕上げ・`docs/FORMAT.md` の総点検・known-issues 棚卸し）の 2 本。
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

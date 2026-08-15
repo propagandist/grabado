@@ -2335,6 +2335,235 @@ HANDOVER §9 の順序（`§4 IO → §6 機能 → §5 backend`）どおり。�
 
 ---
 
+### 2026-08-15 プロジェクトの目的を記録する —— 公開プロダクト（無料 OSS）であること
+
+**本書に目的が書かれていなかった。** grabado は **会社のブランディングとして無料公開する OSS**
+（収益化しない）であり、同時に自社でも使う道具。しかし本書にも [`docs/HANDOVER.md`](docs/HANDOVER.md)
+にも [`CLAUDE.md`](CLAUDE.md) にもこれが無く、逆に**社内ツール前提の記述が正本として残っていた**。
+
+#### 何が起きたか
+
+§6.1（型パレット）の計画を組む際、リポジトリに残る記録だけを読むと対応 DB の根拠は
+**本書 §7 の 1 行**（「golden の対象は全 9 DB プロファイル。house 到達点は PostgreSQL のみだが、
+…他プロファイルの撤去判断を後回しにできるため」）しか無い。ここから
+**「PG だけ現代化して非 PG 8 本は撤去する」という誤った計画**を組みかけた。
+
+別セッションで決めていた **「主要 DB を対象にする」「`sql-standard` / `mariadb` / `h2` を追加する」**
+は本書にもプロジェクトメモリにも記録されておらず、全文検索で 0 件だった。
+
+**記録されていない決定は、セッションをまたぐと存在しないのと同じ。** CLAUDE.md は「迷ったら…決定を
+`CUSTOMIZATIONS.md` に記録する」と定めているが、**目的そのものと対応 DB の 2 つがこれを免れていた**。
+再発を防ぐため、今回は本書に加えて**プロジェクトメモリにも書いた**（本書はリポジトリの記録、
+メモリはセッション横断の記録で、役割が違う）。
+
+#### 目的から導かれる前提の転換
+
+| 論点 | 社内ツール前提（誤った最適化） | 公開プロダクト前提（正） |
+|---|---|---|
+| 対応 DB | house が使う PG だけ整えれば十分 | **対応を謳う DB はすべて同じ品質水準**。幅が製品価値 |
+| 非 PG の壊れた出力 | 撤去の根拠になる | **修正すべき欠陥**（公開すればバグ報告が来る） |
+| DB 別 fixture | 見送り可 | 製品品質の必須要件 |
+| §6.3 `output.xsl` の TS 化 | 保守の都合・後回し | **対応 DB を増やす基盤＝製品価値の源泉**。優先度が上がる |
+| README / docs | 日本語の内部文書でよい | 英語の公開ドキュメントが要る |
+| Railway | 任意・従 | 公開デモ＝ブランディングの主戦場 |
+
+#### 1 世代古くなっていた決定 3 つ（本書の中で更新する）
+
+| 記録 | 内容 | 更新 |
+|---|---|---|
+| 2026-08-09「リポジトリの起点と公開範囲」 | 「**社内ツールとして private が必要**」を private 化の理由に挙げていた | 公開が目的なので前提が変わる。**公開範囲の選別**が要る（本書には org 名・house 標準・社内運用が含まれる） |
+| 2026-08-09「§7 特性化テスト」 | 「house 到達点は PostgreSQL のみ／他プロファイルの撤去判断は後回し」 | 対応 DB は下のエントリで確定 |
+| 2026-08-09「ライセンス」 | 「自社改変部分の権利表記は**今後の配布形態確定時に追記**」 | **無料公開の確定＝その時**。`license.txt` は Copyright が `2005-2012 Ondrej Zara` のみで自社改変部分が無い |
+
+#### 無料公開が決めること
+
+- **ライセンスは BSD-3-Clause 継承のまま**（デュアルライセンス・商用制限は不要）。ただし 3 条項目
+  「派生物の宣伝に元の作者名を使わない」が効く —— **ベースにしている事実の記載は必須**
+  （著作権表示の保持義務）だが、**upstream 作者の公認と読める書き方はできない**
+- **公開デモは `READONLY` 一択**。AI 機能（§11）を有効にすると API 費用が自社の垂れ流しになり、
+  introspection（§5.2）は任意ホストへ接続を試みるので **SSRF の踏み台**になる。両方 `READONLY=true`
+  で無効化される既存設計は正しい
+- **それでもデモは成立する** —— 編集ストアはブラウザ内なので READONLY でも「描いて DDL を出す」体験は
+  完全に提供できる。落ちるのはファイル保存・introspection・AI だけ。**サーバにユーザーデータが
+  残らない**ためプライバシーポリシーが簡潔に書ける
+- **特定商取引法の表記は不要**（無料・対価なし）
+
+#### 必要な文書
+
+| 層 | 文書 | 要否 |
+|---|---|---|
+| 利用者向け | README（全面書き直し・英語）、起動手順、対応 DB と型の一覧、`FORMAT.md` の公開版 | **必須** |
+| 法務 | `LICENSE`（BSD 継承 ＋ 自社改変の表記）、第三者ライセンス表記 | **必須** |
+| 法務 | `SECURITY.md`（脆弱性報告窓口） | **必須**（org 分類 B） |
+| OSS 運営 | `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / Issue・PR テンプレート | 推奨 |
+| デモ公開時 | 利用規約・プライバシーポリシー・Cookie ポリシー | **デモを出すなら必須・要法務確認** |
+
+Cookie は現行コードが実際に使っている（db 選択・locale）。`.dev` で世界公開する以上 EU からの
+アクセスがありうるので、Cookie とアクセスログ（IP）の扱いは開示対象。**法令判断は法務に確認する**
+（本書では要否の洗い出しまで）。
+
+#### 公開の 3 段階
+
+| Phase | 内容 | 前提 |
+|---|---|---|
+| 1 | リポジトリ公開（README / LICENSE / SECURITY / CONTRIBUTING） | **今すぐ可能**（テスト緑・コードは動く）。ただし本書の**公開範囲の選別**が要る |
+| 2 | Docker イメージ配布 | §2 マルチステージ化 ＝ §5 backend が要る |
+| 3 | 公開デモ（grabado.dev・`READONLY`） | Phase 2 の後。利用規約・プライバシーポリシーが要る |
+
+#### `HANDOVER.md` との齟齬（本体の改訂は別 PR）
+
+| 箇所 | 現行の記述 | 齟齬 |
+|---|---|---|
+| 冒頭・§1 | 「社内版」「各自ローカル稼働」 | 目的（公開プロダクト）が無い |
+| §1・§2.3 | 「Railway は**任意・従**」「共有サーバ常設は主経路ではない」 | 公開デモはブランディングの主戦場 |
+| §6.1 | 型パレットは PostgreSQL 18 のみ | 対応 DB は 8 本（下のエントリ） |
+| §6.2・§6.3 | house 既定（`uuidv7` / 複数形 / `fk_` / `idx_`）を前提 | **公開ユーザーに house 規約を強制するか**の判断が要る（「意見のあるツール」として既定にするか、設定可能にするか。§6.2 / §6.3 の着手時に決める） |
+| §8 | ドキュメントは `ARCHITECTURE.md` / `CUSTOMIZATIONS.md` の内部 2 本 | 公開文書（README・利用者向け）が無い |
+| §9 | 実装順序に公開準備が無い | Phase 1 の位置づけが要る |
+| §11.5 | プライバシーは「送信前の匿名化オプション」まで | 公開デモでの AI 無効化を明記すべき |
+| §10 | 確定事項に目的が無い | 本エントリで確定 |
+
+#### 現状が明確に不適切な 2 件（§6 の完了を待たず着手してよい）
+
+1. **[`README.md`](README.md) に upstream 作者宛の PayPal 寄付ボタンが残っている**（14 行）。
+   自社ブランドで公開する画面に載ると事故。2012 年のリリースノート・Google Code の話・
+   CUBRID 紹介文も upstream のまま
+2. **[`license.txt`](license.txt) の権利表記**が upstream のみ（上表のとおり）
+
+---
+
+### 2026-08-15 HANDOVER §6「機能」段階6-0 —— 対応 DB を確定し、§6 を分割する
+
+§6 の 1 本目。**文書のみで `js/` は 0 行**（§4 の 4-0a が §4 の分割表を作ったのと同じ位置づけ）。
+
+#### 決めたこと 1: 対応 DB は 8 本（既存 5 ＋ 新設 3）、4 本を撤去する
+
+| プロファイル | 実体 | 状態 |
+|---|---|---|
+| `postgresql` | PostgreSQL 18 | 対象・**house 標準**（最初に現代化） |
+| `mysql` | MySQL | 対象 |
+| `mariadb` | MariaDB | **新設** |
+| `mssql` | SQL Server | 対象 |
+| `oracle` | Oracle | 対象 |
+| `sqlite` | SQLite | 対象 |
+| `h2` | H2（Spring Boot のテスト用途） | **新設** |
+| `sql-standard` | ANSI SQL（ベンダ非依存） | **新設** |
+| `cubrid` | CUBRID（ニッチ） | **撤去** |
+| `vfp9` | Visual FoxPro 9（2015 年 EOL・出力は FoxPro の PRG） | **撤去** |
+| `web2py` | web2py の DAL（実質終了・出力は Python コード） | **撤去** |
+| `sqlalchemy` | Python ORM（**現役・巨大**） | **撤去して §6.3 で作り直す** |
+
+**撤去の意味づけは「捨てる」ではなく「XSLT のまま延命せず、§6.3 の TS 生成器の上で作り直す」。**
+`sqlalchemy` は「ER 図から ORM モデルを生成する」という出力カテゴリの 1 本目で、公開プロダクトの
+差別化要素になる（house が Kotlin/Spring Boot なので **JPA entity 生成**は自社利用でも効く。
+TypeScript の Prisma / Drizzle も訴求が大きい）。XSLT 実装は `position()` / `last()` のバグで
+Node 回帰から既に外れており、延命より作り直しが速い。**黙って消さない**ための記録がこの段落。
+
+#### 決めたこと 2: 現状の非 PG 出力は製品品質に達していない（実測）
+
+fixture は PG 用に書かれており（`types-matrix.xml` は PG パレット網羅として作られた）、
+それを 9 DB 全部に流して golden を採っている。他プロファイルで読むと大半の型が**未知型**になり、
+先頭型へ落ちた結果がそのまま golden に焼かれている:
+
+| プロファイル | `types-matrix` の未知型 | golden の姿 | 先頭型 |
+|---|---|---|---|
+| `postgresql` | 0 / 27 | 正しく解決 | Integer |
+| `mysql` / `cubrid` | 16 / 27 | mysql は 27 列中 16 列が INTEGER 系 | Integer / Short |
+| `oracle` | 18 / 27 | — | INTEGER |
+| `mssql` | 22 / 27 | — | TinyInt |
+| `sqlite` / `sqlalchemy` / `web2py` | 25 / 27 | — | Text / Integer |
+| `vfp9` | **26 / 27** | 27 列中 23 列が INTEGER 系 | INTEGER |
+
+つまり**非 PG の DDL golden 56 本が守っているのは「XSLT が壊れていないこと」と「未知型が先頭型に
+落ちること」（＝ known-issue #4 そのもの）だけ**で、その DB の DDL 生成が正しいことは検証していない。
+**公開したらそのままバグ報告になる。**
+
+ここから 2 つ従う。**(a) DB 別 fixture の整備は製品品質の必須要件**（PG 用 fixture を全 DB に流す
+構造では、どのプロファイルを現代化しても golden が動かず現代化が検証されない）。
+**(b) 未知型を throw にするのは現代化済みプロファイルに限る** —— 横断で throw にすると
+PG 用 fixture が読めず DDL golden を採れなくなる。「現代化済み ＝ strict / 未現代化 ＝ 従来どおり
+フォールバック」をパレット側で表し、**全プロファイルの現代化が終わった時点でこの分岐は消える**。
+
+#### 決めたこと 3: §6 の分割
+
+| 段階 | 目的 | golden への影響 |
+|---|---|---|
+| 6-0 | 目的と対応 DB の記録・分割表・PG18 パレット案・移行表（本エントリ） | 無し（文書のみ） |
+| 6-1 | 撤去 4 本（削除のみ） | 28 本が**消える**。残る 35 本は 1 バイトも動かない |
+| 6-2 | 型解決の再設計（`getTypeIndex` / `getFKTypeFor` の `id` 照合化、`sql`/`re` 照合の先勝ち化） | known-issue #3 の分だけ |
+| 6-3 | PG18 パレット差し替え ＋ 設計ファイル移行（**同一 PR**） | PG の `ddl` 7・`json` 7・`state` 一部 |
+| 6-4 | §6.2 初期テーブルテンプレート | PG の一部 |
+| 6-5 | §6.3 `output.xsl` の TS 生成器化 | 全対象プロファイル |
+| 6-6 | DB 別 fixture の整備 | 母集団の再編 |
+| 6-7 | 新設 3 本（`sql-standard` / `mariadb` / `h2`）を TS 生成器の上に載せる | 追加 |
+| 6-8 | 既存主要 4 本の現代化（`mysql` / `mssql` / `oracle` / `sqlite`） | 各プロファイル |
+| 6-9 | ORM 出力の再設計（`sqlalchemy` 復活 ＋ JPA / Prisma / Drizzle の検討） | 追加 |
+
+**新設 3 本を 6-7 に置いたのは、6-5 で `db/<db>/output.xsl` ごと捨てるため。**
+いま XSLT で 3 本書くと直後に捨てることになる。
+
+なお 4-2b の時点で [`docs/FORMAT.md`](docs/FORMAT.md) /
+[`tools/migrate-design.mjs`](tools/migrate-design.mjs) /
+[`tests/node/palette-id.test.ts`](tests/node/palette-id.test.ts) が
+「移行表の規則は **6-7** で決める」と書いていたが、これは当時の**仮番号**。実際には
+**6-3**（パレット差し替え ＋ 移行）がその段階なので、3 箇所を貼り替えた。
+
+#### 決めたこと 4: PG18 パレット案（24 型）と移行表
+
+現行 29 型から **7 型を撤去し 2 型を追加**、4 型の `sql` を PG18 の正式名に直す。
+**`id` は意味が同じなら据え置く**（[`docs/FORMAT.md`](docs/FORMAT.md) の規則 3 が唯一の契約で、
+`label` と `sql` は自由に動かしてよい）。
+
+撤去 7 型と移行先:
+
+| 旧 `id` | 旧 `label` / `sql` | 移行先 | 理由 |
+|---|---|---|---|
+| `serial` | Serial / `SERIAL` | `bigint_identity` | HANDOVER §6.1「`serial`→identity」。**int4 → int8 に広がる**（安全側） |
+| `bigserial` | Big Serial / `BIGSERIAL` | `bigint_identity` | 同上（こちらは幅が変わらない） |
+| `x_real` | Real / **`BIGINT`** | `bigint` | **実態は `BIGINT` を出力していた**（`label` の Real は upstream の誤記＝ known-issue #3 の本体）。出力を保つほうを採る |
+| `char` | Char / `CHAR` | `text` | HANDOVER §6.1「`char(n)`→`text`」。**size が落ちる**（情報の損失を移行表に明記） |
+| `timestamp` | Timestamp / `TIMESTAMP` | `timestamp_with_time_zone` | HANDOVER §6.1「`timestamp`→`timestamptz`」 |
+| `timestamp_without_time_zone` | Timestamp wo/ TZ | `timestamp_with_time_zone` | 同上 |
+| `json` | JSON / `JSON` | `jsonb` | HANDOVER §6.1「`json`→`jsonb`」 |
+
+追加 2 型:
+
+| `id` | `label` | `sql` | 備考 |
+|---|---|---|---|
+| `uuid` | UUID | `UUID` | house 既定 PK。**これが無いことが known-issue #4 の実害**（`house-defaults` の PK が `integer` に落ちている） |
+| `bigint_identity` | Big Integer (identity) | `BIGINT GENERATED ALWAYS AS IDENTITY` | `fk="Big Integer"` を付ける —— FK 側は `BIGINT` でなければならない。現行の `serial` が `fk="Integer"` で同じ仕組みを使っている |
+
+`sql` を直す 4 型（`id` は据え置き）:
+
+| `id` | 旧 `sql` | 新 `sql` | 理由 |
+|---|---|---|---|
+| `decimal` | `DECIMAL` | `NUMERIC` | PG の正式名。`DECIMAL` は別名で**同じ型**なので `id` は変えない |
+| `float` | `FLOAT` | `REAL` | PG の単精度は `real`（float4）。`FLOAT` 単独は曖昧 |
+| `double` | `DOUBLE` | `DOUBLE PRECISION` | **PG に `DOUBLE` 単独は無い**（現行は不正な SQL を吐いていた） |
+| `timestamp_with_time_zone` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMPTZ` | CLAUDE.md「`timestamptz` 固定」。標準形は `sql-standard` プロファイル（6-7）が持つ |
+
+維持 18 型: `integer` / `smallint` / `bigint` / `varchar` / `text` / `bytea` / `boolean` / `date` /
+`time` / `time_with_time_zone` / `interval` / `xml` / `bit` / `varbit` / `inet` / `cidr` /
+`geometry` / `jsonb`。
+
+`geometry`（PostGIS 拡張）は**撤去しない** —— 素の PG18 には無い型だが、PostGIS は PG エコシステムで
+広く使われており、公開プロダクトとして落とす積極的な理由がない。`xml` / `bit` / `varbit` も同じ。
+
+**配列型 `type[]` と生成列は今回入れない。** どちらも「他の型を修飾する」概念で、`<type>` の列挙
+という現行アーキでは表現できない。6-5（TS 生成器）で DDL 表現ごと設計する。
+
+#### 検証
+
+- `js/` の差分は 0 行（本エントリと `docs/` のみ）
+- `git status --porcelain tests/golden/` が空
+- `npm test` / `test:browser` / `test:dist` / `known-issues` / `typecheck` はすべて件数不変
+
+**次段階への入力 —— 6-1（撤去 4 本）**。削除だけなので残る 5 プロファイルの出力は 1 バイトも動かず、
+`git status --porcelain tests/golden/ddl/` に**削除した 4 つ以外が出ないこと**が完了判定になる。
+以降の段階で見る golden が 63 → 35 本に減る。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -2342,8 +2571,8 @@ HANDOVER §9 の順序（`§4 IO → §6 機能 → §5 backend`）どおり。�
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事 | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。**段階4-4 で `tests/golden/ddl-input/` に改名し、決定論・well-formed にした** | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化） |
-| DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
-| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立） | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`） |
+| DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | **段階6-0 で対応 DB を 8 本に確定**（既存 5 ＋ 新設 3）。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` の 4 本は **6-1 で撤去**。残りは 6-5 で TS 生成器へ置換（§6.3 の規約もここ）。**新設 3 本は TS 生成器の上に載せる**（6-7。いま XSLT で書くと直後に捨てることになる） |
+| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化は 6-8 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

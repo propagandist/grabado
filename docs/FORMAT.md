@@ -152,7 +152,8 @@ UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.
 ので、移行し忘れた `formatVersion: 1` のファイルが「たまたま読めてしまう」ことが原理的に起きない。
 
 4-2b 時点で `x_` が付いているのは実測 2 件だけ（`postgresql: x_real` ＝ known-issue #3 の本体、
-`vfp9: x_integer_not_key`）。§6 で各プロファイルを現代化すると 0 件になる。
+`vfp9: x_integer_not_key`）。**6-1 の撤去（`vfp9` が対応 DB から外れる）と 6-3 の PG18 パレット
+差し替え（`x_real` が消える）で 0 件になる。**
 規則そのものの検査は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts)。
 
 #### パレットを差し替えるときの移行
@@ -162,7 +163,9 @@ UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.
 
 §6 でパレットを現代化すると、撤去された型を使っているファイルはここで落ちる。**その段階が
 同じ PR で移行を持つ**（移行表とパレットが別の PR に分かれると、その間リポジトリの設計ファイルが
-読めない ＝ CLAUDE.md 制約1「半移行を放置しない」に反する）。移行表の形と規則は 6-7 の着手時に決める
+読めない ＝ CLAUDE.md 制約1「半移行を放置しない」に反する）。**移行表の形と規則は 6-3**
+（PG18 パレット差し替えと同じ PR）で確定する。**表そのものは
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の 6-0 の記録**にある
 —— 4-2b の移行が「label → id」の全射だったのに対し、§6 の移行は「消えた型をどこに寄せるか」という
 意味的判断を含むので、形が違う。
 

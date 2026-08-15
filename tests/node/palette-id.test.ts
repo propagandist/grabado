@@ -95,7 +95,8 @@ describe("型パレットの id 規則（段階4-2b）", () => {
          *   - vfp9 の Integer (not key)（sql="Integer"。INTEGER と大小違いで重複）
          *
          * 増えていたら、パレットに新しい壊れた entry が入ったということ。
-         * §6 で各プロファイルを現代化したら 0 件になる（6-7〜6-13 の完了判定）。
+         * 6-1 の撤去（vfp9 が対応 DB から外れる）で 1 件になり、6-3 の PG18 パレット
+         * 差し替え（x_real が消える）で 0 件になる。対応 DB の決定は CUSTOMIZATIONS.md の 6-0。
          */
         const flagged = DB_PROFILES.flatMap((db) =>
             readTypes(db)

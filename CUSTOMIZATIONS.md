@@ -1975,13 +1975,116 @@ known-issues #1 / #7 / #8。`golden/xml/` → `golden/ddl-input/` の改名は**
 
 ---
 
+### 2026-08-15 HANDOVER §4「IO」段階4-4 — DDL 入力 XML を決定論・well-formed にした
+
+§4 の 10 本目。**HANDOVER §4 の「決定論出力」要件を書き出し側で満たしきる段階**で、
+4-3b までに申し送られた 5 つ（決定論化・known-issues #1 / #7 / #8・golden の改名と
+関数の改名・同名テーブルの始末）を 1 本にまとめた。JSON 側は 4-2 の時点で既に決定論
+だったので、**本段階が動かすのは XML 側だけ**。
+
+**完了判定は `git status --porcelain tests/golden/ddl/` が空**（DDL golden 63 本が
+1 バイトも動かない）。これは 4-0a の実測「`output.xsl` 9 本は `<datatypes>` を一切
+参照しない」の検算そのもので、実際に空だった。golden が動いたのは
+`tests/golden/ddl-input/` の 7 本だけ。
+
+#### 決めたこと 1: `<datatypes>` の全文埋め込みごと落とす
+
+決定論化は `<!-- Active URL -->` の 1 行を消すだけでも成立するが、**パレット全文の
+埋め込みも一緒に落とした**。理由は 3 つ。
+
+- `output.xsl` が参照しないので **DDL には 1 バイトも影響しない**（4-0a の実測）
+- 埋め込みは `XMLSerializer` 経由なので、**整形が実行系依存**になりうる。1 行消して
+  「決定論になった」と言いながら実行系依存を残すのは筋が通らない
+- その `XMLSerializer` の else 節に、**未定義の `e` を参照する到達不能なバグ分岐**が
+  居座っていた（段階2 からマーカーとして温存し `@ts-expect-error` を付けていたもの）。
+  分岐ごと消えるので、`@ts-expect-error` の消し忘れは typecheck が捕まえる
+
+結果 `ddl-input/` は 7 本とも 44 行減った（-301 / +7）。読み込み互換は不変 ——
+`xml-parser` は元から実行中のパレットで型を解決し、同梱 `<datatypes>` を読む
+`Designer.fromXML()` は「無ければ `null`」なので、4-3b 以前の XML はそのまま読める。
+
+#### 決めたこと 2: known-issue #7 は「配列の破壊」だけを直す
+
+`alignTables()` が `this.tables` を直接 `sort()` していたため、再配置するだけの
+つもりが**保存されるテーブル順まで変わって**いた。ここで切り分けたのは
+**不具合＝配列を破壊すること／仕様＝関係数の降順に座標を割り当てること**。
+並べ替えた**コピー**を配置順としてだけ使う形にしたので、`moveTo()` が動かす座標は
+1 ピクセルも変わらない（`sort` は安定なので同順位の相対順も現行と同じ）。
+
+`importresponse` は従来どおり `alignTables()` を呼ぶ。テストハーネスの `loadFixture` が
+`importresponse` を避けているのも従来どおりで、理由が「順序と座標」から「座標」に減った。
+
+#### 決めたこと 3: エスケープ順は `&` が先。`key.name` だけ `String()` を挟む
+
+`escapeAttr` は `escapeXML`（`&` → `>` → `<`）を通してから `"` → `&quot;` を足す。
+逆にすると `&quot;` の `&` を後段が拾って `&amp;quot;` になる。実際
+`quotes-i18n` の `name="say &quot;hi&quot;"` が二重エスケープされていないことを確認した。
+
+`key.name` にだけ `String()` を挟んだのは、**name 属性の無い `<key>` を読むと実行時に
+`null` が入る**ため（`js/io/model.ts` の `KeyModel` に記録済みの嘘）。現行は
+`name="null"` と書き出すので、その嘘を保つ。直接 `escapeAttr` に渡すと `TypeError` に
+なり、fixture が検出しない経路で挙動が変わってしまう。
+
+#### 決めたこと 4: 同名テーブルは「形式で直さず保存を拒む」
+
+4-2 の決めごとのとおりに始末した。設計 JSON は relation の両端を**名前**で持つので、
+同名テーブルがあると読み戻したとき `findNamedTable()` が常に先頭に当たり、
+**名前は合っているのに参照先が入れ替わる**。id 参照へ移す案は id の発番が描画クラス側に
+要り、4-1c の申し送り「4-2 以降はライブ側 2 本を触らない」を破る。
+
+拒み方は `db` 無し / 型 `id` 無しと同じで、`serializeDesignJson` の入口で
+**1 バイトも書かずに落ちる**。受け止めは既存の `IO.toJsonOrAlert()` がそのまま担うので
+UI は無改修。メッセージは locale を通さず、重複した名前と `tables[i]` の位置に加えて
+「どちらかの名前を変えてから保存すること」まで書く。
+
+#### 決めたこと 5: 直した不具合のテストは消さず、反転させて移す
+
+`tests/known-issues/README.md` の運用 3 に従い、#1 / #7 / #8 の 3 本は削除せず
+**「直った後の挙動」のアサートに書き換えて** [`tests/browser/serialize.spec.ts`](tests/browser/serialize.spec.ts)
+へ移した。README には「直したもの」の表を新設して移設先を書いてある。同じ理由で
+「非決定性の所在」テストも消さず、環境依存が出力に現れないことの確認へ反転させた。
+**消えた記録は「そもそも壊れていなかった」ことにされてしまう。**
+
+`amp-in-name.xml` は known-issues 側に置いたまま。正常系 fixture へ昇格させると
+`FIXTURES` の母集団が 7 → 8 になり **DDL golden が 63 → 72 本**に増えて、本段階の
+完了判定「DDL golden が無差分」がぼやける。読み手だけ
+[`tests/support/fixtures.ts`](tests/support/fixtures.ts) の `readKnownIssueFixture` に
+共通化した。
+
+あわせて `normalizeDesignXml` / `hasActiveUrlComment` を撤去した。**golden はもう
+1 バイトも加工していない**（正規化していた唯一の行が消えたため）。
+
+#### 検証
+
+- **`git status --porcelain tests/golden/ddl/` が空**（DDL golden 63 本が無差分。本段階の完了判定）
+- `tests/golden/ddl-input/` の差分は 2 段階に分かれ、**どちらも予測どおり**だった ——
+  コミット3 で 7 本とも 44 行減（`<datatypes>` 42 行 ＋ Active URL 1 行 ＋ 前後）、
+  コミット4 は `<default>` の改行だけ（5 ファイル）。**エスケープ拡大では 1 バイトも
+  動かない**という予測も当たった（正常系 fixture 7 本は `&` と `<` を意図的に持たない
+  —— [`tests/fixtures/quotes-i18n.xml`](tests/fixtures/quotes-i18n.xml) の冒頭に明記されている）
+- `git grep "serializeDesignXml"` が 0 件、`git grep "golden/xml"` が経緯の記述だけ
+- `npm test` **158 passed** / 21 skipped（4-3b の 157 から +1 ＝ 同名テーブル拒否）、
+  `test:browser` **136 passed**（133 から +3 ＝ known-issues から移設した 3 本）、
+  `test:dist` 3 passed、`known-issues` **6 passed**（9 から -3）、`typecheck` 0 error
+- **対話パスの手動一巡は行っていない。** 本段階が触るのは DDL 入力 XML の生成と
+  `alignTables()` の 1 行で、前者は golden、後者は移設したテストが押さえている
+
+**次段階（4-5）への入力**。`<default>NULL</default>` の撤去（known-issue #2）。
+**DDL golden 16 本が動く唯一の段階**で、差分の全行が ` DEFAULT NULL`（cubrid / mysql /
+sqlite）と vfp9 の ` UL ` ゴミの削除であることが機械的な完了判定になる（4-0a の予測）。
+`RowModel.def` の `string | null` から「既定 NULL」の内部表現が消えるので、
+[`js/io/model.ts`](js/io/model.ts) の型注釈もそこで直す。§4 の残りは 4-5 / 4-6
+（外部変更検知）/ 4-7（仕上げ）の 3 本。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
 |---|---|---|
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
-| XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。golden は `tests/golden/xml/` で固定済み | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化）。`golden/xml/` → `golden/ddl-input/` の改名は 4-4 |
+| XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。**段階4-4 で `tests/golden/ddl-input/` に改名し、決定論・well-formed にした** | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
 | 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立） | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`） |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |

@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-import { FIXTURES, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
+import {
+    FIXTURES,
+    SERIALIZER_DB,
+    readFixture,
+    readKnownIssueFixture,
+} from "../support/fixtures.ts";
 import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";
 import { loadFixture, openDesigner, toXml, useDatatypes } from "./harness.ts";
@@ -86,6 +91,46 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         ]);
         // golden はもう 1 バイトも正規化していない（tests/support/normalize.ts）
         expect(raw).toBe(await toXml(page));
+    });
+
+    /*
+     * 旧 known-issue #1。段階4-4 で属性値とテキストノードのエスケープを全経路に
+     * 通したので、`&` を含む識別子でも読み直せる XML になった。fixture は
+     * known-issues 側のものをそのまま使う（正常系に昇格させると DDL golden の
+     * 母集団が 63 -> 72 に増え、本段階の完了判定「DDL golden 無差分」がぼやける）。
+     */
+    test("識別子に & を含んでも well-formed な XML を吐く", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readKnownIssueFixture("amp-in-name"));
+
+        const xml = await toXml(page);
+
+        expect(xml).toContain('name="R&amp;D"');
+        expect(xml).toContain('name="a&amp;b"');
+        expect(xml).not.toContain('name="R&D"');
+
+        const parseFailed = await page.evaluate((source) => {
+            const doc = new DOMParser().parseFromString(source, "text/xml");
+            return doc.getElementsByTagName("parsererror").length > 0;
+        }, xml);
+        expect(parseFailed).toBe(false);
+
+        // 読み直すと元の識別子に戻る（二重エスケープしていない）
+        await loadFixture(page, xml);
+        expect(await toXml(page)).toBe(xml);
+    });
+
+    /*
+     * 旧 known-issue #8。<default> だけ末尾に改行が無く、1 行に 2 要素が並んでいた。
+     */
+    test("<default> の後にも改行が入る（1 要素 1 行）", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture("house-defaults"));
+
+        const xml = await toXml(page);
+
+        expect(xml).toContain("<default>NULL</default>\n");
+        expect(xml).not.toContain("</default><");
     });
 
     /*

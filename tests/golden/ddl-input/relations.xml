@@ -10,7 +10,8 @@
 </row>
 <row name="manager_id" null="1" autoincrement="0">
 <datatype>INTEGER</datatype>
-<default>NULL</default><relation table="employees" row="id" />
+<default>NULL</default>
+<relation table="employees" row="id" />
 <comment>直属の上長（自己参照）</comment>
 </row>
 <key type="PRIMARY" name="employees_pkey">
@@ -30,7 +31,8 @@
 </row>
 <row name="team_id" null="1" autoincrement="0">
 <datatype>INTEGER</datatype>
-<default>NULL</default><relation table="teams" row="id" />
+<default>NULL</default>
+<relation table="teams" row="id" />
 </row>
 <key type="PRIMARY" name="projects_pkey">
 <part>id</part>

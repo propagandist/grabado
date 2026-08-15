@@ -39,8 +39,9 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 - `UUID` が型パレットに無く `INTEGER` に落ちている（known-issues #4）
 - `users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る（known-issues #6）
 - `DEFAULT 'now()'` のように式が引用符で囲まれる（型の `quote` 属性をそのまま適用するため）
-- nullable な行に `<default>NULL</default>` が生えている（known-issues #2）
-- `<default>` の後だけ改行が無い（known-issues #8）
+- nullable な行に `<default>NULL</default>` が生えている（known-issues #2。撤去は 4-5）
+
+§4 段階4-4 で `<default>` の後だけ改行が無い癖（旧 known-issues #8）は消えた。
 
 ## 正規化しているもの
 

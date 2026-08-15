@@ -10,7 +10,8 @@
 </row>
 <row name="hits" null="0" autoincrement="0">
 <datatype>INTEGER</datatype>
-<default>0</default></row>
+<default>0</default>
+</row>
 <key type="PRIMARY" name="counters_pkey">
 <part>id</part>
 </key>

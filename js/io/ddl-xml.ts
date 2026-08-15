@@ -26,6 +26,11 @@
  *   （js/io/xml-parser.ts）、同梱 <datatypes> を読む Designer.fromXML() は
  *   「無ければ null」なので、4-3b 以前に保存された XML はこれまでどおり読める。
  *
+ * **段階4-4 で well-formed になった**（known-issue #1）。属性値のエスケープが
+ * `"` -> `&quot;` の 1 つだけで、`&` を含む識別子を書くと二度と読めない XML が
+ * できていた。属性値は escapeAttr、テキストノードは escapeXML を全経路に通す。
+ * あわせて <default> の末尾に改行を足した（known-issue #8）。
+ *
  * export は 1 本だけにしてある。未使用の export を出すと、ツリーシェイクを切って
  * いる Node ハーネス（tests/node/harness.ts）の束と dist の束が構造的にずれる。
  */
@@ -50,7 +55,7 @@ export function buildDdlInputXml(
 }
 
 function serializeTable(table: TableModel, palette: TypePalette): string {
-    var t = table.title.replace(/"/g, "&quot;");
+    var t = escapeAttr(table.title);
     var xml = "";
     xml += '<table x="' + table.x + '" y="' + table.y + '" name="' + t + '">\n';
     for (var i = 0; i < table.rows.length; i++) {
@@ -70,7 +75,7 @@ function serializeTable(table: TableModel, palette: TypePalette): string {
 function serializeRow(row: RowModel, palette: TypePalette): string {
     var xml = "";
 
-    var t = row.title.replace(/"/g, "&quot;");
+    var t = escapeAttr(row.title);
     var nn = row.nll ? "1" : "0";
     var ai = row.ai ? "1" : "0";
     xml +=
@@ -83,7 +88,7 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
     if (row.size.length) {
         t += "(" + row.size + ")";
     }
-    xml += "<datatype>" + t + "</datatype>\n";
+    xml += "<datatype>" + escapeXML(t) + "</datatype>\n";
 
     if (row.def || row.def === null) {
         /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
@@ -94,13 +99,19 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
         } else if (d != "CURRENT_TIMESTAMP") {
             d = q + d + q;
         }
-        /* 末尾に改行を付けないのはここだけ（known-issue #8。4-4 で直す） */
-        xml += "<default>" + escapeXML(d) + "</default>";
+        /* 段階4-4 で末尾に改行を足した（known-issue #8）。ここだけ改行が無く、
+           1 行に 2 要素が並んで diff が読みにくかった */
+        xml += "<default>" + escapeXML(d) + "</default>\n";
     }
 
     for (var i = 0; i < row.relations.length; i++) {
         var r = row.relations[i]!;
-        xml += '<relation table="' + r.table + '" row="' + r.row + '" />\n';
+        xml +=
+            '<relation table="' +
+            escapeAttr(r.table) +
+            '" row="' +
+            escapeAttr(r.row) +
+            '" />\n';
     }
 
     if (row.comment) {
@@ -113,28 +124,48 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
 
 function serializeKey(key: KeyModel): string {
     var xml = "";
-    xml += '<key type="' + key.type + '" name="' + key.name + '">\n';
+    /* String() を挟むのは、name 属性の無い <key> を読むと実行時 null が入るため
+       （js/io/model.ts の KeyModel 参照）。現行は name="null" と書くので、その嘘を
+       そのまま保つ —— escapeAttr に直接渡すと TypeError になり挙動が変わる */
+    xml +=
+        '<key type="' +
+        escapeAttr(key.type) +
+        '" name="' +
+        escapeAttr(String(key.name)) +
+        '">\n';
     for (var i = 0; i < key.parts.length; i++) {
         var r = key.parts[i]!;
-        /* <part> は escapeXML も " の置換も通らない（現行どおり） */
-        xml += "<part>" + r + "</part>\n";
+        xml += "<part>" + escapeXML(r) + "</part>\n";
     }
     xml += "</key>\n";
     return xml;
 }
 
 /*
- * grabado: js/globals.ts の escape を改名して移設した（段階4-1a）。本体は 1 文字も
- * 変えていない。置換順（& -> > -> <）を入れ替えると二重エスケープになる。
+ * grabado: js/globals.ts の escape を改名して移設した（段階4-1a）。置換順
+ * （& -> > -> <）を入れ替えると二重エスケープになる。
  *
- * 適用先は <comment>（table / row）と <default> の 3 か所だけで、属性値は通らない
- * （name は " -> &quot; のみ、<relation> の属性と <part> は素通し）。これは
- * known-issue #1 として記録済みの逸脱で、直すのは 4-4。ここで適用範囲を広げると
- * npm run known-issues が赤くなる。
+ * **段階4-4 で適用範囲を全テキストノードに広げた**（known-issue #1）。4-1a 時点の
+ * 適用先は <comment>（table / row）と <default> の 3 か所だけで、<datatype> と
+ * <part> は素通しだった。属性値は下の escapeAttr が担う。
  */
 function escapeXML(str: string): string {
     return str
         .replace(/&/g, "&amp;")
         .replace(/>/g, "&gt;")
         .replace(/</g, "&lt;");
+}
+
+/*
+ * grabado: 属性値のエスケープ（段階4-4・known-issue #1）。
+ *
+ * 4-4 まで属性値に掛かっていたのは `"` -> `&quot;` の 1 つだけで、`&` を含む識別子
+ * （`R&D` など）を書くと well-formed でない XML ができ、DOMParser が parsererror に
+ * 落ちた —— 保存したファイルを二度と開けない、という形で表に出ていた不具合。
+ *
+ * escapeXML と同じ順で `&` を先に潰してから `"` を足す。`"` を先にすると
+ * `&quot;` の `&` を後段が拾って `&amp;quot;` になる。
+ */
+function escapeAttr(str: string): string {
+    return escapeXML(str).replace(/"/g, "&quot;");
 }

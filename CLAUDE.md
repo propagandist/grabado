@@ -40,3 +40,19 @@
 ## 迷ったら
 - スキーマ既定や上記制約を覆す提案（単数形化・native enum・PG 正本化・時間駆動同期・UI framework 化・AI 自動適用等）は勝手に進めず確認し、決定を `CUSTOMIZATIONS.md` に記録する。
 - 特性化テストを通らない変更、決定論出力を壊す変更はマージしない。
+
+## CI / ワークフロー
+
+GitHub Actions の無料枠 2,000 分/月は **org 全体で共有**。枯らすと全リポジトリの CI と
+デプロイが止まる。**ワークフローを増やす・トリガーを変える前に** org の判断規約を読むこと:
+
+`gh api repos/propagandist/.github/contents/docs/ci-strategy.md --jq .content | base64 -d`
+
+## セキュリティ
+
+このリポジトリは**分類 B**（ブラウザで完結。ビルドして配る）。**出力・依存・配信を変える前に**
+org の基準を読むこと。読むのは **§2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1**:
+
+`gh api repos/propagandist/.github/contents/docs/security-baseline.md --jq .content | base64 -d`
+
+確かめ方は同 `docs/security-verification.md`（手元／既存ジョブ／週次の 3 層）。

@@ -6,10 +6,10 @@
  * fromXML() のうち **DOM を読む部分だけ**を逐語で移した。ライブツリー（描画クラスの
  * インスタンス）には一切触らない —— 触る側は js/io/apply.ts。
  *
- * 4-1a の書き出し 2 本（extract / xml-serializer）と鏡になる:
+ * 4-1a の書き出し 2 本（extract / ddl-xml）と鏡になる:
  *
  *            ライブ側（描画エンジンを触る）      バイト側（形式を知る）
- *      出    extract.ts                        xml-serializer.ts
+ *      出    extract.ts                        ddl-xml.ts（4-3a まで xml-serializer.ts）
  *      入    apply.ts                          本ファイル
  *
  * 逐語であることが本段階の要件なので、var / for (var i = …) / 二重の var d /

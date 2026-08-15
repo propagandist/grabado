@@ -90,20 +90,7 @@ export const CONFIG = {
 
     STATIC_PATH: "",
     XHR_PATH: "",
-
-    /*
-     * The key below needs to be set individually by you if you want to use the Dropbox load/save feature.
-     * To do that, first sign up with Dropbox (may require a specific developer / SDK sign-up), go to
-     * https://www.dropbox.com/developers/apps and use "Create app" to add a new "Dropbox API app".
-     * Limit the app to its own folder. Call it, for instance, "wwwsqldesigner".
-     * Under "OAuth 2", "Redirect URIs", add the URL to the "dropbox-oauth-receiver.html" file on your server.
-     * E.g, if you install wwwsqldesigner on your local web server under "http://localhost/sqldesigner/", then add
-     * http://localhost/sqldesigner/dropbox-oauth-receiver.html as a Redirection URI.
-     * Copy the shown "App key" and paste it here below instead of the null value:
-     */
-    /* grabado: 各自が文字列を入れる前提の設定値なので、既定値の null からは
-       型が決まらない。js/io.js:378 が truthy 判定で読む（HANDOVER §3 段階3-1）。 */
-    DROPBOX_KEY: null as string | null, // such as: "d6stdscwewhl6sa"
+    /* grabado: DROPBOX_KEY は段階4-3a で Dropbox 連携ごと撤去した（js/io.ts の冒頭） */
 };
 
 /*

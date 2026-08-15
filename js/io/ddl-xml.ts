@@ -1,4 +1,4 @@
-/* ------------------------- xml serializer --------------------- */
+/* ------------------------- ddl xml --------------------- */
 /*
  * grabado: DesignModel -> XML 文字列（HANDOVER §4 段階4-1a）。
  *
@@ -9,9 +9,12 @@
  * 「整理したくなる箇所」がそのまま危険箇所で、内訳は CUSTOMIZATIONS.md の
  * 段階4-1a の記録にある。
  *
- * ファイル名を serializer.ts にしないのは、HANDOVER §4 の io/serializer.ts が
- * JSON serializer の指定だから。本ファイルは 4-3 で js/io/ddl-xml.ts に改名し、
- * output.xsl（DDL 生成）専用の内部モジュールになる。
+ * xml-serializer.ts から本名に改名したのは段階4-3a。ユーザーに見える保存経路は
+ * 4-3b で JSON になり、この XML は output.xsl（DDL 生成）への入力としてだけ残る
+ * ——「設計の保存形式」ではなく「DDL パイプラインの中間表現」なので、名前をその
+ * 役目に合わせた。関数名 serializeDesignXml は改名していない（バンドル差分に
+ * 関数リネームを混ぜないため。名前の再検討は 4-4）。モジュールごと消えるのは
+ * §6.3 で output.xsl を TS 実装に置き換えるとき。
  *
  * activeUrl を引数で受けるのは、書き出し経路で唯一の環境依存（location.href）を
  * 関数の外へ押し出して純関数にするため。評価タイミングは Designer.toXML() の

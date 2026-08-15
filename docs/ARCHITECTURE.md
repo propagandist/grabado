@@ -28,7 +28,9 @@ js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS
   io/palette.ts            ★ §4 段階4-0b で追加。型パレット層（旧 window.DATATYPES）
   io/model.ts              ★ §4 段階4-1a で追加。直列化の中間モデル（型のみ・emit 0）
   io/extract.ts            ★ §4 段階4-1a で追加。ライブツリー → DesignModel
-  io/xml-serializer.ts     ★ §4 段階4-1a で追加。DesignModel → XML（4-3 で ddl-xml.ts に改名）
+  io/ddl-xml.ts            ★ §4 段階4-1a で追加（当時 xml-serializer.ts。段階4-3a で改名）。
+                             DesignModel → XML。§6.3 で output.xsl を TS 実装に置き換えるまで
+                             DDL 生成の入力としてだけ残る内部モジュール
   io/xml-parser.ts         ★ §4 段階4-1b で追加。XML → DesignModel（形式側・ライブツリーに触らない）
   io/apply.ts              ★ §4 段階4-1b で追加。DesignModel → ライブツリー（形式を知らない）
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
@@ -197,7 +199,7 @@ Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
 ```
 io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
-      →  io/extract.ts  →  io/xml-serializer.ts  →  io/xml-parser.ts  →  io/apply.ts
+      →  io/extract.ts  →  io/ddl-xml.ts  →  io/xml-parser.ts  →  io/apply.ts
       →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
       →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.ts  →  io.ts
       →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts  →  window.ts  →  options.ts
@@ -205,11 +207,11 @@ io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
 ```
 
 `io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。`io/` の 4 本が
-`globals.ts` の直後なのは、`io/xml-serializer.ts` が `_` に値依存するため（段階4-1a）。
+`globals.ts` の直後なのは、`io/ddl-xml.ts` が `_` に値依存するため（段階4-1a）。
 残る 3 本（`extract` / `xml-parser` / `apply`）は `import type` だけなので位置の制約は無いが、
 io/ の 4 本を離さない（段階4-1b）。型だけの `io/model.ts` は emit が空なので `src/app.ts` には
 載せない。**入出力の 4 本は 2x2 の格子**で、ライブ側（`extract` / `apply`）は形式非依存、
-形式側（`xml-serializer` / `xml-parser`）だけが形式ごとに増える（4-2 / 4-3 の JSON）。
+形式側（`ddl-xml` / `xml-parser`）だけが形式ごとに増える（4-2 の JSON 2 本）。
 
 **この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本、段階3-2 で
 続く描画中核 7 本、段階3-3b で末尾 8 本が `.ts` になり、**`js/` に `.js` は 1 本も残っていない**。
@@ -249,7 +251,7 @@ Node ハーネスがバンドルの内側に手を届かせる経路は
 クラス参照は値 import になり、`SqlNamespace` は `{ Designer, designer }` の 2 つまで縮んだ
 （`Designer` は 3-4c で消える。`designer` は §4 の DI 化で消える）。pub/sub は
 [`../js/globals.ts`](../js/globals.ts) の named export で、`escape` は段階4-1a で
-[`../js/io/xml-serializer.ts`](../js/io/xml-serializer.ts) の `escapeXML` になった
+[`../js/io/ddl-xml.ts`](../js/io/ddl-xml.ts) の `escapeXML` になった
 （呼び手 3 か所がすべて `toXML` 経路だったので、書き出しの移設と同時に出た）。
 
 ### 5.1.1 ビルドと配信
@@ -274,7 +276,15 @@ SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウ�
 
 ### 5.3 外部依存
 
-`index.html` は Dropbox 連携のため **CDN から `dropbox.js` を読み込む**（`//cdnjs.cloudflare.com/…`）。Docker でローカル完結させる方針（HANDOVER §2）と噛み合わないため、Dropbox 機能の存廃とあわせて扱いを決める必要がある。特性化テストは常にこの読み込みを遮断してオフラインで走らせている（[`../tests/browser/harness.ts`](../tests/browser/harness.ts)）。§3 段階1 でも据え置いた（`<script src="//cdnjs…">` は Vite が外部 URL として素通しする）。
+**外部依存は無い。** 段階4-3a まで `index.html` は Dropbox 連携のため CDN から
+`dropbox.js` を読んでいた（`//cdnjs.cloudflare.com/…`）が、Docker でローカル完結させる
+方針（HANDOVER §2）と噛み合わず、「正本は git 管理ファイル・共有は PR」とも役割が
+重複するため Dropbox 機能ごと撤去した。
+
+特性化テストはかつてこの読み込みを `page.route` で遮断してオフラインを保っていたが、
+遮断すべきものが無くなったので [`../tests/browser/harness.ts`](../tests/browser/harness.ts)
+は**「アプリのオリジン外へリクエストが 1 本でも出たら失敗する」検査**に置き換えた
+（撤去が戻ってきたら赤くなる）。
 
 ### 5.4 クラス階層と 2 つの実行系（§3 段階2）
 

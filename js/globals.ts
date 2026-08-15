@@ -6,7 +6,7 @@
  * 段階4-0b で DATATYPES も js/io/palette.ts へ移り、本ファイルの window 面は尽きた
  * （経緯はファイル末尾のコメント）。
  *
- * 段階4-1a で escape が js/io/xml-serializer.ts へ出たので、値 export は
+ * 段階4-1a で escape が js/io/ddl-xml.ts（当時 xml-serializer.ts）へ出たので、値 export は
  * ロケール辞書と getText（LOCALE / _）、pub/sub（publish / subscribe）の 2 組。
  * pub/sub も HANDOVER §4 で RowManager 周りへ移る予定。
  */
@@ -105,7 +105,7 @@ export function subscribe(message: string, subscriber: SqlSubscriber): void {
  */
 
 /*
- * grabado: XML エスケープ（escape）は段階4-1a で js/io/xml-serializer.ts に
+ * grabado: XML エスケープ（escape）は段階4-1a で js/io/ddl-xml.ts に
  * escapeXML として移した（HANDOVER §4）。呼び手 3 か所（table / row の <comment> と
  * <default>）がすべて toXML 経路だったので、書き出しの移設と同時に import ごと消えた。
  * lib.dom の非推奨グローバル escape との同名衝突も構造的に無くなっている。

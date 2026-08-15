@@ -19,8 +19,8 @@
       ]><link rel="stylesheet" type="text/css" href="styles/ie7.css"
     /><![endif]-->
     <link rel="stylesheet" href="styles/print.css" type="text/css" media="print" />
-    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/dropbox.js/0.10.2/dropbox.min.js"></script>
 
+    <!-- grabado: 段階4-3a で dropbox.js の CDN 読み込みを撤去した。外部依存はこれで 0 本 -->
     <!-- grabado: js/*.js の読み込みと初期化は src/main.ts に集約（HANDOVER §3 段階1） -->
     <script type="module" src="/src/main.ts"></script>
 </head>
@@ -175,11 +175,6 @@
                                 <input type="button" id="clientlocalsave" />
                                 <input type="button" id="clientlocalload" />
                                 <input type="button" id="clientlocallist" />
-                            </div>
-                            <div id="singlerow">
-                                <input type="button" id="dropboxsave" /><!-- may get hidden by dropBoxInit() -->
-                                <input type="button" id="dropboxload" /><!-- may get hidden by dropBoxInit() -->
-                                <input type="button" id="dropboxlist" /><!-- may get hidden by dropBoxInit() -->
                             </div>
                             <div id="singlerow">
                               <input type="button" id="clientcopy" />

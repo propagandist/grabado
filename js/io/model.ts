@@ -7,8 +7,8 @@
  * 8 が 16 になるので、§4 の残りに入る前に 2x2 の格子へ組み替える。
  *
  *            ライブ側（描画エンジンを触る）      バイト側（形式を知る）
- *      出    extract.ts の extractModel()       xml-serializer.ts / 4-2 の json
- *      入    apply.ts の applyDesignModel()     xml-parser.ts / 4-3 の json
+ *      出    extract.ts の extractModel()       ddl-xml.ts / json-serializer.ts
+ *      入    apply.ts の applyDesignModel()     xml-parser.ts / json-parser.ts
  *
  * ライブ側は形式非依存なので一度だけ書く。形式が増えるとバイト側だけが増える。
  * 4 本すべてが揃ったのが段階4-1b。

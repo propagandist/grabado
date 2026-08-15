@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "db": "postgresql",
   "tables": [
     {
@@ -10,22 +10,22 @@
       "columns": [
         {
           "name": "id",
-          "type": "Integer"
+          "type": "integer"
         },
         {
           "name": "氏名",
-          "type": "Text",
+          "type": "text",
           "comment": "姓と名は分けない"
         },
         {
           "name": "say \"hi\"",
-          "type": "Text",
+          "type": "text",
           "nullable": true,
           "comment": "識別子に \" が入る場合の属性エスケープ確認"
         },
         {
           "name": "メモ",
-          "type": "Text",
+          "type": "text",
           "nullable": true,
           "comment": "顧客の'愛称'をここに書く"
         }

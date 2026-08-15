@@ -38,15 +38,24 @@ export function serializeDesignJson(
     palette: TypePalette
 ): string {
     const tables = model.tables.map((t) => serializeJsonTable(t, palette));
-    const db = palette.db();
 
     /*
-     * db の有無で 2 通りのリテラルを書き分けるのは、キー順を
-     * formatVersion -> db -> tables に固定するため（後から代入すると末尾に付く）。
+     * db は必須（段階4-2b）。読み込み側が実行中のパレットと照合する鍵なので、
+     * 無いまま書くと「どのパレットの id なのか分からないファイル」ができてしまう。
+     * 実在する 9 プロファイルはすべて db 属性を持つので、ここに来るのは
+     * パレットが壊れているときだけ。
      */
-    const design: JsonDesign = db
-        ? { formatVersion: 1, db: db, tables: tables }
-        : { formatVersion: 1, tables: tables };
+    const db = palette.db();
+    if (db === null) {
+        throw new Error("型パレットに db 属性が無い（設計 JSON を書き出せない）");
+    }
+
+    /* リテラルの並び = 出力のキー順（js/io/json-format.ts の宣言順に合わせる） */
+    const design: JsonDesign = {
+        formatVersion: 2,
+        db: db,
+        tables: tables,
+    };
 
     /* 2 スペース・末尾 LF。tests/support/state.ts と同じ形 */
     return `${JSON.stringify(design, null, 2)}\n`;
@@ -76,7 +85,7 @@ function serializeColumn(row: RowModel, palette: TypePalette): JsonColumn {
     /* 代入の並び = 出力のキー順。既定値と同じキーは出さない（js/io/json-format.ts） */
     const out: Writable<JsonColumn> = {
         name: row.title,
-        type: typeLabel(row.type, palette),
+        type: typeId(row.type, palette),
     };
 
     if (row.size) {
@@ -115,26 +124,25 @@ function serializeJsonKey(key: KeyModel): JsonKey {
 }
 
 /*
- * 型パレットの添字 -> label。
+ * 型パレットの添字 -> id（段階4-2b。それまでは label だった）。
  *
  * palette.typeAt() を通さず types() を直に引くのは、範囲外を「戻りが undefined で
  * 次の行が TypeError」ではなく**理由の分かる例外**にするため。ここは書き出しの入口で、
  * 落ちるならファイルを 1 バイトも書かないほうがよい（XML 側は現行の挙動を保つのが
  * 要件だったので typeAt のまま）。
  */
-function typeLabel(index: number, palette: TypePalette): string {
+function typeId(index: number, palette: TypePalette): string {
     const types = palette.types();
-    const elm = types[index];
-    if (!elm) {
+    if (!types[index]) {
         throw new Error(
             `型パレットに添字 ${index} の <type> が無い（db=${palette.db()}、型数 ${types.length}）`
         );
     }
-    const label = elm.getAttribute("label");
-    if (label === null) {
+    const id = palette.idAt(index);
+    if (id === null) {
         throw new Error(
-            `型パレットの添字 ${index} に label 属性が無い（db=${palette.db()}）`
+            `型パレットの添字 ${index} に id 属性が無い（db=${palette.db()}）`
         );
     }
-    return label;
+    return id;
 }

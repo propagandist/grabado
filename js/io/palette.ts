@@ -68,6 +68,41 @@ export class TypePalette {
         return this.types()[index]!;
     }
 
+    /*
+     * 以下 2 本は設計 JSON の型キー（<type> の id 属性）を引くための面（段階4-2b）。
+     *
+     * id は label（表示名）とも sql（出力する型名）とも別に置いた**永続化専用のキー**で、
+     * 「意味が同じ型の id は変えない・意味が変わったら必ず変える・別の意味で再利用しない」
+     * が唯一の契約。label と sql は §6 のパレット現代化で自由に動かしてよい。
+     * 規則と根拠は docs/FORMAT.md、規則そのものの検査は tests/node/palette-id.test.ts。
+     *
+     * どちらも例外を投げない（見つからなければ null / -1）。呼び手によって
+     * 「書き出しの入口だから 1 バイトも書かずに落ちる」「読み込みだから位置付きで落ちる」と
+     * 出すべき例外が違うので、判断は js/io/json-serializer.ts と js/io/json-parser.ts に置く。
+     */
+
+    /** <type> の id 属性。属性が無ければ null */
+    idAt(index: number): string | null {
+        return this.types()[index]?.getAttribute("id") ?? null;
+    }
+
+    /**
+     * id -> 添字。無ければ -1。
+     *
+     * **最初の一致が勝つ**が、id はパレット内で一意であることを
+     * tests/node/palette-id.test.ts が全プロファイルについて機械的に押さえているので、
+     * label の照合（known-issue #3 の後勝ち）と違って順序に意味は無い。
+     */
+    indexOfId(id: string): number {
+        const types = this.types();
+        for (let i = 0; i < types.length; i++) {
+            if (types[i]!.getAttribute("id") === id) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     groups(): HTMLCollectionOf<Element> {
         return this.element().getElementsByTagName("group");
     }

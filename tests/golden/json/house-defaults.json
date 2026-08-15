@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "db": "postgresql",
   "tables": [
     {
@@ -10,37 +10,37 @@
       "columns": [
         {
           "name": "id",
-          "type": "Integer",
+          "type": "integer",
           "default": "uuidv7()"
         },
         {
           "name": "email",
-          "type": "Text",
+          "type": "text",
           "comment": "ログイン用メールアドレス"
         },
         {
           "name": "display_name",
-          "type": "Text"
+          "type": "text"
         },
         {
           "name": "is_active",
-          "type": "Boolean",
+          "type": "boolean",
           "default": "true"
         },
         {
           "name": "preferences",
-          "type": "JSONB",
+          "type": "jsonb",
           "default": "'{}'::jsonb",
           "comment": "UI 設定などの任意項目"
         },
         {
           "name": "created_at",
-          "type": "Timestamp w/ TZ",
+          "type": "timestamp_with_time_zone",
           "default": "now()"
         },
         {
           "name": "updated_at",
-          "type": "Timestamp w/ TZ",
+          "type": "timestamp_with_time_zone",
           "default": "now()"
         }
       ],
@@ -69,12 +69,12 @@
       "columns": [
         {
           "name": "id",
-          "type": "Integer",
+          "type": "integer",
           "default": "uuidv7()"
         },
         {
           "name": "author_id",
-          "type": "Integer",
+          "type": "integer",
           "comment": "執筆者 (users.id)",
           "references": [
             {
@@ -85,38 +85,38 @@
         },
         {
           "name": "title",
-          "type": "Text"
+          "type": "text"
         },
         {
           "name": "body",
-          "type": "Text",
+          "type": "text",
           "nullable": true
         },
         {
           "name": "view_count",
-          "type": "Integer",
+          "type": "integer",
           "default": "0"
         },
         {
           "name": "price",
-          "type": "Decimal",
+          "type": "decimal",
           "size": "12,2",
           "nullable": true,
           "comment": "有料記事の価格。money ではなく numeric を使う"
         },
         {
           "name": "published_on",
-          "type": "Date",
+          "type": "date",
           "nullable": true
         },
         {
           "name": "created_at",
-          "type": "Timestamp w/ TZ",
+          "type": "timestamp_with_time_zone",
           "default": "now()"
         },
         {
           "name": "updated_at",
-          "type": "Timestamp w/ TZ",
+          "type": "timestamp_with_time_zone",
           "default": "now()"
         }
       ],
@@ -138,7 +138,7 @@
       "columns": [
         {
           "name": "article_id",
-          "type": "Integer",
+          "type": "integer",
           "references": [
             {
               "table": "articles",
@@ -148,11 +148,11 @@
         },
         {
           "name": "tag",
-          "type": "Text"
+          "type": "text"
         },
         {
           "name": "created_at",
-          "type": "Timestamp w/ TZ",
+          "type": "timestamp_with_time_zone",
           "default": "now()"
         }
       ],

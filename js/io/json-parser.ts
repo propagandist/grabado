@@ -12,10 +12,11 @@
  * 実行時 null）をそのまま持っている。本ファイルは**新しい形式**の読み手で、しかも
  * 読む対象は **git 管理の正本ファイル**（CLAUDE.md 制約2）なので、逆に振る:
  *
- *   - 未知の型 label は **throw**（known-issue #4 の「一致が無ければ添字 0」を持ち込まない。
+ *   - 未知の型 id は **throw**（known-issue #4 の「一致が無ければ添字 0」を持ち込まない。
  *     正本を黙って別の型で開くのが最悪の失敗）。
- *   - label の照合は **最初の一致が勝つ**（known-issue #3 の後勝ちを持ち込まない。
- *     label は 9 DB すべてで一意なので実際には差が出ない）。
+ *   - **db が実行中のパレットと違えば throw**（4-2b）。id はプロファイル内で一意なだけなので、
+ *     db を見ないと別プロファイルのファイルを黙って読んでしまう。
+ *   - **formatVersion 1 は読まない**（4-2b）。移行コマンドを名指しして落とす。
  *   - 型・必須キーが食い違えば throw。**壊れた JSON は部分的に読み込まない。**
  *
  * 例外の message は開発者向けで locale を通さない。ユーザーへの見せ方（alert か
@@ -44,17 +45,48 @@ export function parseDesignJson(
     const root = asObject(JSON.parse(text), "ルート");
 
     const version = root["formatVersion"];
-    if (version !== 1) {
+    /*
+     * 版 1 は後方互換で読まない（段階4-2b）。実行時に黙ってアップグレードすると、
+     * 開いて保存し直すまでファイルは旧世代のままで、リポジトリ内に 2 世代が混在し
+     * 「どれが移行済みか」を機械判定できなくなる（CLAUDE.md 制約2 は正本が git 管理の
+     * ファイルであることを要求している）。移行は 1 コミットとして git diff に出す。
+     * ここに置く後方互換は、この**例外メッセージ 1 つだけ**。
+     */
+    if (version === 1) {
         throw new Error(
-            `設計 JSON: formatVersion が 1 ではない（${JSON.stringify(version)}）`
+            "設計 JSON: formatVersion 1 は段階4-2b で廃止された" +
+                "（型キーが型パレットの label から id に変わった）。" +
+                "`npm run migrate:design -- <ファイル>` を通してからコミットすること"
+        );
+    }
+    if (version !== 2) {
+        throw new Error(
+            `設計 JSON: formatVersion が 2 ではない（${JSON.stringify(version)}）`
         );
     }
 
     /*
-     * db は読んで捨てる。実行中のパレットと食い違うときに何をするか
-     * （fetch し直す / 警告する / 拒む）は UI 配線の 4-3 の判断で、ここで決め打ちすると
-     * やり直しになる。型の解決は下の typeIndex が**実行中のパレット**で行う。
+     * db は必須で、実行中のパレットと照合する（4-2b。4-2 は読んで捨てていた）。
+     *
+     * 型キーの id はプロファイル内で一意なだけなので、db を見ないと別プロファイルの
+     * ファイルを黙って読んでしまう。label 時代はこれが**実害のある穴**で、実測すると
+     * postgresql と mysql は label を 12 個共有しており（Integer / Text / Timestamp /
+     * Char / Varchar / Decimal / Date / Time / Bit / Binary / 単精度 / 倍精度）、
+     * PG の設計を mysql パレットで開くと 12 型が例外にならず別の型に解決されていた。
+     * id にしても衝突の可能性は消えない（integer / text などは複数プロファイルにある）ので、
+     * **db の照合と id 化はセットで初めて安全になる**。
+     *
+     * 食い違ったときに UI が何をするか（そのパレットを取り直して開く / 拒むだけ）は
+     * 4-3 の判断。ここは「黙って別の型で開かない」ことだけを保証する。
      */
+    const db = asString(root["db"], "db");
+    const current = palette.db();
+    if (db !== current) {
+        throw new Error(
+            `設計 JSON: db が実行中の型パレットと違う` +
+                `（ファイル="${db}" / 実行中="${current}"）`
+        );
+    }
 
     const tables = asArray(root["tables"], "tables").map((t, i) =>
         parseJsonTable(t, `tables[${i}]`, palette)
@@ -91,7 +123,7 @@ function parseColumn(
     const def = obj["default"];
     return {
         title: asString(obj["name"], `${where}.name`),
-        type: typeIndex(
+        type: typeIdIndex(
             asString(obj["type"], `${where}.type`),
             palette,
             `${where}.type`
@@ -134,22 +166,25 @@ function parseJsonKey(value: unknown, where: string): KeyModel {
 }
 
 /*
- * 型パレットの label -> 添字。**最初の一致が勝つ**（xml-parser.ts の後勝ちとは逆。
- * ファイル冒頭の理由）。見つからなければ throw する。
+ * 型パレットの id -> 添字（段階4-2b。それまでは label 照合だった）。
+ * 見つからなければ throw する（known-issue #4 の「一致が無ければ添字 0」を持ち込まない）。
  *
- * §6.1 で PostgreSQL 18 パレットに差し替えると、旧 label で書かれた既存ファイルが
- * ここで落ちる。その移行は §6.1 の仕事（この例外がそれを可視化する）。
+ * §6 のパレット現代化で撤去される型（PG18 なら serial / char / json など）は、
+ * その段階が同じ PR で移行表を持ち、リポジトリ内の設計ファイルを移行する。
+ * ここで落ちるのは**移行し忘れたファイルだけ**で、それが移行漏れの可視化になる。
  */
-function typeIndex(label: string, palette: TypePalette, where: string): number {
-    const types = palette.types();
-    for (let i = 0; i < types.length; i++) {
-        if (types[i]!.getAttribute("label") === label) {
-            return i;
-        }
+function typeIdIndex(
+    id: string,
+    palette: TypePalette,
+    where: string
+): number {
+    const index = palette.indexOfId(id);
+    if (index < 0) {
+        throw new Error(
+            `設計 JSON ${where}: 型 "${id}" が現在の型パレット（db=${palette.db()}）に無い`
+        );
     }
-    throw new Error(
-        `設計 JSON ${where}: 型 "${label}" が現在の型パレット（db=${palette.db()}）に無い`
-    );
+    return index;
 }
 
 /* --------------------------- 検証ヘルパー --------------------------- */

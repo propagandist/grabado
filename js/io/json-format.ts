@@ -1,6 +1,6 @@
 /* ------------------------- json format ------------------------ */
 /*
- * grabado: 設計 JSON（formatVersion: 1）の形（HANDOVER §4 段階4-2）。
+ * grabado: 設計 JSON（formatVersion: 2）の形（HANDOVER §4 段階4-2 / 4-2b）。
  *
  * js/io/json-serializer.ts（書き出し）と js/io/json-parser.ts（読み込み）が共有する
  * **形式の正本**。仕様の散文は docs/FORMAT.md にある。
@@ -12,8 +12,8 @@
  *
  * DesignModel は「描画エンジンが実際に保持している値」の写しで、型は**パレットの添字**、
  * 語彙は描画エンジンのもの（title / row / relations）。こちらは**ファイル正本の形**で、
- * 型は**パレットの label**、語彙は ER 設計のもの（name / column / references）。
- * 添字 <-> label の変換は形式側 2 本が palette 引数を使って行う（段階4-1a の規約）。
+ * 型は**パレットの id**、語彙は ER 設計のもの（name / column / references）。
+ * 添字 <-> id の変換は形式側 2 本が palette 引数を使って行う（段階4-1a の規約）。
  *
  * ## 決定論の契約（CLAUDE.md 制約3）
  *
@@ -30,21 +30,26 @@ export type Writable<T> = { -readonly [K in keyof T]: T[K] };
 
 export interface JsonDesign {
     /**
-     * 形式の版。読み込み側は 1 以外を拒否する。
+     * 形式の版。読み込み側は 2 以外を拒否する。
      *
      * リテラル型にしてあるのは、版を増やすときに serializer / parser の両方が
      * typecheck で赤くなるようにするため（定数を 1 か所に置くと片方だけ直せてしまう）。
+     * 4-2b で 1 -> 2 に上げたときに実際そう動いた。
      */
-    readonly formatVersion: 1;
+    readonly formatVersion: 2;
     /**
      * 書き出したときの型パレット（db/<db>/datatypes.xml の db 属性）。
      * パレット全文は入れない —— 数百行のノイズが全設計ファイルに乗り、
      * diff フレンドリー要件と噛み合わないため（CUSTOMIZATIONS.md 段階4-2）。
      *
-     * 読み込み側は**読んで捨てる**。実行中のパレットと食い違うときの扱い
-     * （fetch し直すか警告するか）は UI 配線の 4-3 の判断。
+     * **必須。読み込み側は実行中のパレットと照合し、食い違えば例外**（4-2b）。
+     * id はプロファイル内で一意なだけなので、db が load-bearing でないと
+     * 型キーの安全性が成立しない —— 実測では postgresql と mysql が **label を 12 個共有**
+     * しており（Integer / Text / Timestamp / Char / Varchar ...）、4-2 の「db を読んで捨てる」
+     * ままだと PG の設計を mysql パレットで開いたときに 12 型が例外にならず
+     * **黙って別の型に解決される**（PG の Text=TEXT -> mysql の Text=MEDIUMTEXT）。
      */
-    readonly db?: string;
+    readonly db: string;
     /** 空でも出す（"tables": []） */
     readonly tables: readonly JsonTable[];
 }
@@ -65,10 +70,15 @@ export interface JsonTable {
 export interface JsonColumn {
     readonly name: string;
     /**
-     * 型パレットの **label**（"Big Integer" など）。sql 名で持たないのは、
-     * postgresql のパレットが sql="BIGINT" を Big Integer と Real の 2 か所に持ち
-     * （known-issue #3）、sql 名だと Real -> BIGINT -> Big Integer に round-trip が
-     * ドリフトするため。label は 9 DB すべてで一意であることを実測してある。
+     * 型パレットの **id**（"bigint" など。db/<db>/datatypes.xml の `<type id="...">`）。
+     *
+     * label でも sql 名でもないのは、**どちらもパレット差し替えで動く**から。
+     * label は表示名で §6 のパレット現代化が変え、sql は §6 が変えることを目的にしている
+     * 属性そのもの（SERIAL -> identity、CHAR -> TEXT、TIMESTAMP -> TIMESTAMPTZ）。
+     * 正本ファイルの型キーに最も不安定な属性を選ぶわけにいかない。
+     *
+     * id の契約は「意味が同じ型の id は変えない・意味が変わったら必ず変える・
+     * 別の意味で再利用しない」の 1 つだけ。詳細は docs/FORMAT.md。
      */
     readonly type: string;
     /** 既定 ""（サイズ指定なし）。"11" / "10,2" のような生文字列 */

@@ -44,9 +44,12 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 
 ## 正規化しているもの
 
-`ddl-input/` の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけ。
-現行 `toXML()` は `location.href` を埋め込むため出力が環境依存になる
-（[js/wwwsqldesigner.js:346](../../js/wwwsqldesigner.js#L346)）。
-行ごと消すと HANDOVER §4 でこれを撤去したときに diff に現れないので、URL 部分だけ差し替えている。
+**無い。§4 段階4-4 以降、golden は 1 バイトも加工していない。**
 
-それ以外は一切加工していない。**改行コードを含めてバイト一致で比較する。**
+4-4 までは `ddl-input/`（当時 `xml/`）の `<!-- Active URL: {{ACTIVE_URL}} -->` の 1 行だけを
+正規化していた。現行 `toXML()` が `location.href` を埋め込んで出力が環境依存になるためで、
+「§4 でこれを撤去した」ことが diff に現れるよう行ごとは消さずに残していた。
+4-4 でその行と `<datatypes>` の全文埋め込みを撤去し、書き出し側の環境依存が 0 になったので、
+[`../support/normalize.ts`](../support/normalize.ts) から正規化関数ごと落とした。
+
+**改行コードを含めてバイト一致で比較する。**

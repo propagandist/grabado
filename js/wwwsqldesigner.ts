@@ -40,7 +40,7 @@ import { Options } from "./options.ts";
 import { Window as SqlWindow } from "./window.ts";
 import { TypePalette } from "./io/palette.ts";
 import { extractModel } from "./io/extract.ts";
-import { serializeDesignXml } from "./io/ddl-xml.ts";
+import { buildDdlInputXml } from "./io/ddl-xml.ts";
 import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
 import { applyDesignModel } from "./io/apply.ts";
 import { serializeDesignJson } from "./io/json-serializer.ts";
@@ -473,15 +473,11 @@ export class Designer extends Visual<DesignerDom> {
      * 保存/読込 8 経路は toJson() / loadDesignText() に移り、ここに残る XML は
      * output.xsl（XSLT）への入力だけ。メソッドごと消えるのは §6.3。
      *
-     * location.href の評価がここに残るのは、serializer を純関数にするために唯一の
-     * 環境依存を引数へ押し出した結果（4-4 の決定論化でこの引数ごと消える）。
+     * **段階4-4 で location.href の評価が消えた。** 4-1a で引数に押し出してあった
+     * 唯一の環境依存で、これで出力は同一モデル→同一バイト列になる。
      */
     toXML(): string {
-        return serializeDesignXml(
-            extractModel(this),
-            this.palette,
-            location.href
-        );
+        return buildDdlInputXml(extractModel(this), this.palette);
     }
 
     /*

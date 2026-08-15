@@ -12,50 +12,35 @@
  * xml-serializer.ts から本名に改名したのは段階4-3a。ユーザーに見える保存経路は
  * 4-3b で JSON になり、この XML は output.xsl（DDL 生成）への入力としてだけ残る
  * ——「設計の保存形式」ではなく「DDL パイプラインの中間表現」なので、名前をその
- * 役目に合わせた。関数名 serializeDesignXml は改名していない（バンドル差分に
- * 関数リネームを混ぜないため。名前の再検討は 4-4）。モジュールごと消えるのは
- * §6.3 で output.xsl を TS 実装に置き換えるとき。
+ * 役目に合わせた。関数名を buildDdlInputXml にしたのは段階4-4。モジュールごと
+ * 消えるのは §6.3 で output.xsl を TS 実装に置き換えるとき。
  *
- * activeUrl を引数で受けるのは、書き出し経路で唯一の環境依存（location.href）を
- * 関数の外へ押し出して純関数にするため。評価タイミングは Designer.toXML() の
- * 呼び出し時のままなので値は同一。4-4 の決定論化でこの引数ごと消える。
+ * **段階4-4 で決定論になった**（CLAUDE.md 制約3 / HANDOVER §4）。撤去したのは 2 つ:
+ *
+ * - `<!-- Active URL: location.href -->`。書き出し経路で唯一の環境依存だった
+ *   （4-1a で引数に押し出してあったので、ここでは引数ごと落とすだけ）。
+ * - `<datatypes>` の全文埋め込み。**db 配下の output.xsl 9 本はこれを一切参照しない**
+ *   （4-0a の実測。datatypes を grep して 0 件）ので、DDL には
+ *   1 バイトも影響しない。数百行のノイズが消え、XMLSerializer の実行系依存も
+ *   同時に無くなる。読み込み側は元から実行中のパレットで型を解決していて
+ *   （js/io/xml-parser.ts）、同梱 <datatypes> を読む Designer.fromXML() は
+ *   「無ければ null」なので、4-3b 以前に保存された XML はこれまでどおり読める。
  *
  * export は 1 本だけにしてある。未使用の export を出すと、ツリーシェイクを切って
  * いる Node ハーネス（tests/node/harness.ts）の束と dist の束が構造的にずれる。
  */
 
-import { _ } from "../globals.ts";
 import type { TypePalette } from "./palette.ts";
 import type { DesignModel, TableModel, RowModel, KeyModel } from "./model.ts";
 
-export function serializeDesignXml(
+export function buildDdlInputXml(
     model: DesignModel,
-    palette: TypePalette,
-    activeUrl: string
+    palette: TypePalette
 ): string {
     var xml = '<?xml version="1.0" encoding="utf-8" ?>\n';
     xml +=
         "<!-- SQL XML created by WWW SQL Designer, https://github.com/ondras/wwwsqldesigner/ -->\n";
-    xml += "<!-- Active URL: " + activeUrl + " -->\n";
     xml += "<sql>\n";
-
-    /* serialize datatypes */
-    if (window.XMLSerializer) {
-        var s = new XMLSerializer();
-        xml += s.serializeToString(palette.element());
-    } else if ((palette.element() as unknown as { xml?: string }).xml) {
-        xml += (palette.element() as unknown as { xml: string }).xml;
-    } else {
-        /*
-         * grabado: e は未定義（本物のバグ）。到達不能な分岐（XMLSerializer が無い
-         * 実行系のみ）で、直すには「何を表示すべきか」を発明することになるため、
-         * 段階2 の判断どおりマーカーとして残す。@ts-expect-error は「エラーが
-         * 消えたらそれ自体がエラーになる」ので、§4 の XML 書き出し撤去でこの分岐が
-         * 消えたときに気づける。
-         */
-        // @ts-expect-error 未定義の識別子（js/wwwsqldesigner.js から持ち越した既知のバグ）
-        alert(_("errorxml") + ": " + e.message);
-    }
 
     for (var i = 0; i < model.tables.length; i++) {
         xml += serializeTable(model.tables[i]!, palette);

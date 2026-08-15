@@ -45,10 +45,10 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 
 ### ここに無いが記録済みのもの
 
-- **`<!-- Active URL: ... -->` に `location.href` が入り出力が非決定的**
-  （[js/wwwsqldesigner.js:346](../../js/wwwsqldesigner.js#L346)）。
-  golden の正規化契約そのものなので、[`../browser/serialize.spec.ts`](../browser/serialize.spec.ts) の
-  「非決定性の所在」テストで固定している。§4 の決定論要件で撤去される。
+- ~~**`<!-- Active URL: ... -->` に `location.href` が入り出力が非決定的**~~
+  **§4 段階4-4 で撤去した**（`<datatypes>` の全文埋め込みも同時に）。
+  [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts) のテストは主張を反転させ、
+  「環境依存が出力に現れない」ことを固定している。golden の正規化も無くなった。
 - **`CONFIG.AVAILABLE_DBS` に `web2py` が重複／`DEFAULT_BACKEND` が配列**
   （[js/config.js:3-15](../../js/config.js#L3-L15), [js/config.js:56](../../js/config.js#L56)）。
   出力に影響しないため今回は記録のみ（[`../../CUSTOMIZATIONS.md`](../../CUSTOMIZATIONS.md)）。

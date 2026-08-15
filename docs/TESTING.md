@@ -248,12 +248,16 @@ dialog ハンドラと衝突しない）。
 - **round-trip**: `fixture → toXML → fromXML → toXML → fromXML → toXML` で 1・2・3 回目が完全一致すること。
   JSON も同じ形で `toJson` / `fromJson` を回す。
 - **決定論**: 同一モデルから `toXML()` を 2 回呼んで完全一致すること（`toJson()` も同様）。
-- **非決定性の所在**: `<!-- Active URL: ... -->` に `location.href` が入ることを明示的に固定。
-  HANDOVER §4 の決定論要件で撤去される対象で、golden ではこの 1 行だけを `{{ACTIVE_URL}}` に正規化している。
+- **環境依存が無いこと**: 出力に `location.href` も `Active URL` コメントも現れないことを明示的に固定。
+  **§4 段階4-4 まではこれが「非決定性の所在」テスト**で、`<!-- Active URL: ... -->` に
+  `location.href` が入ることを固定し、golden ではその 1 行だけを `{{ACTIVE_URL}}` に正規化していた。
+  4-4 で行ごと撤去したので主張を反転させ、golden の正規化も無くなった。
 
 ### fixture（`tests/fixtures/`）
 
-すべて手書きの well-formed XML。`toXML()` は非決定的なので **fixture の生成に現行コードを使わない**。
+すべて手書きの well-formed XML。**fixture の生成に現行コードを使わない**
+（採取当時の `toXML()` は非決定的だった。決定論になった段階4-4 以降も、
+測る対象で測る対象を作らないという理由で手書きのまま）。
 `<datatypes>` ブロックは持たせず、DB プロファイルはテスト側が型パレットの差し替えで与える
 （`dbResponse()` と同じ操作。[js/wwwsqldesigner.ts の dbResponse](../js/wwwsqldesigner.ts)）。
 差し替え口は段階4-0b から `palette.setRoot()`（page 側は `window.d.palette`、node 側は

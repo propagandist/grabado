@@ -1,12 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { FIXTURES, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
 import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
-import {
-    ACTIVE_URL_PLACEHOLDER,
-    assertNoCarriageReturn,
-    hasActiveUrlComment,
-    normalizeDesignXml,
-} from "../support/normalize.ts";
+import { assertNoCarriageReturn } from "../support/normalize.ts";
 import { loadFixture, openDesigner, toXml, useDatatypes } from "./harness.ts";
 
 // 1 ページを beforeAll で作って使い回す（現行アプリはページ単位のグローバル SQL.designer 1 個で動く）。
@@ -37,7 +32,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
             await useDatatypes(page, SERIALIZER_DB);
             await loadFixture(page, readFixture(fixture.name));
 
-            const actual = normalizeDesignXml(await toXml(page));
+            const actual = await toXml(page);
             assertNoCarriageReturn(actual, `toXML(${fixture.name})`);
 
             const expected = writeOrReadGolden(
@@ -71,18 +66,26 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         expect(await toXml(page)).toBe(await toXml(page));
     });
 
-    test("非決定性の所在: Active URL コメントに location.href が入る（§4 で撤去する対象）", async () => {
+    /*
+     * 段階4-4 まではこれが「非決定性の所在」テスト —— Active URL コメントに
+     * location.href が入ることを固定していた。撤去したので主張を反転させる。
+     * テストを消さないのは、撤去したこと自体を記録として残すため。
+     */
+    test("環境依存が無い: Active URL コメントも location.href も出力に現れない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readFixture("minimal"));
 
         const raw = await toXml(page);
         const href = await page.evaluate(() => location.href);
 
-        expect(hasActiveUrlComment(raw)).toBe(true);
-        expect(raw).toContain(`<!-- Active URL: ${href} -->`);
-        // golden はこの 1 行だけを正規化している。他に環境依存が無いことの確認。
-        expect(normalizeDesignXml(raw)).toContain(`<!-- Active URL: ${ACTIVE_URL_PLACEHOLDER} -->`);
-        expect(normalizeDesignXml(raw)).not.toContain(href);
+        expect(raw).not.toContain("Active URL");
+        expect(raw).not.toContain(href);
+        // 残る http は upstream のクレジット行だけ（＝環境依存ではない）
+        expect(raw.match(/http\S*/g)).toEqual([
+            "https://github.com/ondras/wwwsqldesigner/",
+        ]);
+        // golden はもう 1 バイトも正規化していない（tests/support/normalize.ts）
+        expect(raw).toBe(await toXml(page));
     });
 
     /*
@@ -119,8 +122,14 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         expect(tableNamesOf(xmlAfter)).toEqual(tableNamesOf(xmlBefore));
     });
 
+    /*
+     * 段階4-4 まではこのテストが <datatypes db="..."> ブロックの差で「パレット依存」を
+     * 示していた。ブロックごと撤去したので、根拠を型解決の結果そのものに移す
+     * （minimal では INTEGER が両 DB で同じ SQL 名に解決されるため、PG 固有の型を
+     * 並べた types-matrix を使う）。
+     */
     test("型解決は型パレット依存（DB 横断 golden を持たない根拠）", async () => {
-        const xml = readFixture("minimal");
+        const xml = readFixture("types-matrix");
 
         await useDatatypes(page, "postgresql");
         await loadFixture(page, xml);
@@ -130,9 +139,11 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         await loadFixture(page, xml);
         const my = await toXml(page);
 
-        // 同じ入力・同じ serializer でも <datatypes> ブロックと型解決結果が変わる
-        expect(pg).toContain('<datatypes db="postgresql">');
-        expect(my).toContain('<datatypes db="mysql">');
+        // 同じ入力・同じ serializer でも解決結果が変わる。mysql に BYTEA / JSONB は
+        // 無いので、一致が無いときの初期値 0（＝先頭の型 INTEGER）に落ちる
+        // ——known-issue #4 そのもの。
+        expect(pg).toContain("<datatype>BYTEA</datatype>");
+        expect(my).not.toContain("<datatype>BYTEA</datatype>");
         expect(pg).not.toBe(my);
     });
 });

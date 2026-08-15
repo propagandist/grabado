@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "db": "postgresql",
   "tables": [
     {
@@ -9,17 +9,17 @@
       "columns": [
         {
           "name": "id",
-          "type": "Integer",
+          "type": "integer",
           "autoincrement": true
         },
         {
           "name": "label",
-          "type": "Varchar",
+          "type": "varchar",
           "size": "64"
         },
         {
           "name": "hits",
-          "type": "Integer",
+          "type": "integer",
           "default": "0"
         }
       ],

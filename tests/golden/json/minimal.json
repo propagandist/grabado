@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "db": "postgresql",
   "tables": [
     {
@@ -9,7 +9,7 @@
       "columns": [
         {
           "name": "id",
-          "type": "Integer"
+          "type": "integer"
         }
       ]
     }

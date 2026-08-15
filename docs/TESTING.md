@@ -19,6 +19,7 @@ npm run test:all      # 両方
 npm run known-issues  # 既知の不具合の再現確認（上記いずれにも含まれない）
 npm run test:dist     # build 成果物（dist/）のスモーク。上記いずれにも含まれない
 npm run typecheck     # src/ tests/ types/ の型検査（既存 js/ は checkJs: false で対象外）
+npm run migrate:design -- <ファイル>  # 設計 JSON を formatVersion 1 -> 2 に移行（§4 段階4-2b）
 ```
 
 `npm run test:browser` と `npm run known-issues` は **Vite dev server** を Playwright が勝手に起動する
@@ -189,10 +190,10 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
 
 ### 設計 JSON golden — `tests/golden/json/<fixture>.json`
 
-**§4 段階4-2 で追加。**`Designer.toJson()` の出力 7 本（postgresql）。上の 3 つと違い、
-**現行実装の実出力ではなく grabado が決めた新しい正本フォーマット**（`formatVersion: 1`。
-仕様は [`FORMAT.md`](FORMAT.md)）なので、golden だけでは「その形が設計を過不足なく運べるか」を
-何も言っていない。それを言うのが次の 1 本。
+**§4 段階4-2 で追加、4-2b で型キーを安定 `id` に移した。**`Designer.toJson()` の出力 7 本
+（postgresql）。上の 3 つと違い、**現行実装の実出力ではなく grabado が決めた新しい正本フォーマット**
+（`formatVersion: 2`。仕様は [`FORMAT.md`](FORMAT.md)）なので、golden だけでは
+「その形が設計を過不足なく運べるか」を何も言っていない。それを言うのが次の 1 本。
 
 - **情報保存**: 同じ fixture を **XML 経由**（`toXML` → `fromXML`）と **JSON 経由**
   （`toJson` → `fromJson`）で往復させ、`tests/support/state.ts` の状態スナップショットが
@@ -203,8 +204,17 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
   2 スペース以外の加工が 1 つも入っていないことを見ている。
 - **diff フレンドリー**: テーブルを 1 つ足した設計を読み書きすると、既存部分が 1 バイトも動かず
   末尾にブロックが 1 つ増えるだけであること（CLAUDE.md 制約3 の実地確認）。
-- **壊れた入力**: `formatVersion` 違い・未知の型 label・必須キー欠落・構文エラーで例外になり、
-  かつ**今開いている設計が消えない**こと。
+- **壊れた入力**: `formatVersion` 違い・未知の型 `id`・必須キー欠落・構文エラーで例外になり、
+  かつ**今開いている設計が消えない**こと。あわせて 4-2b で 2 つ足した ——
+  **`formatVersion: 1` は黙って読まず移行コマンドを名指しする**ことと、
+  **`db` が実行中のパレットと違えば拒む**こと（後者は label 時代に postgresql と mysql が
+  共有していた 12 型の無言誤解決を塞ぐ）。
+
+**型 `id` の規則そのもの**は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts) が
+全プロファイルについて見る（正規表現への適合・パレット内の一意性・`x_` が付いている entry の一覧）。
+**移行ツール**の規則は [`../tests/node/migrate-design.test.ts`](../tests/node/migrate-design.test.ts)。
+ツールが serializer と同じバイト列を書くことは、`tests/golden/json/` の 7 本が
+**ツールで移行したもの**であることをもって golden テストが毎回確認している。
 
 ### round-trip / 決定論
 

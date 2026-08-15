@@ -1687,6 +1687,121 @@ id の発番が要り、4-1b / 4-1c の申し送り「4-2 以降はライブ側 
 
 ---
 
+### 2026-08-15 HANDOVER §4「IO」段階4-2b — 設計 JSON の型キーを label から安定 `id` に移した
+
+**4-2 の訂正段階。§4 の分割表には無かった 1 本を足した。** 4-2 が確定させた `formatVersion: 1` の
+型キー（型パレットの `label`）が**パレット差し替えで壊れる**ことが分かったため、
+版を 2 に上げて型キーを `<type>` の新しい `id` 属性に移し、あわせて `db` を必須・照合対象にした。
+
+#### なぜ 4-3 より前でなければならなかったか
+
+**理由 1: 移行コストが 0 の窓が 4-3 で閉じる。** 4-3 の前に存在する v1 のファイルは
+`tests/golden/json/` の 7 本だけで、`npm run golden:update` で再導出できる。4-3 で UI が JSON に
+切り替わった後は実運用ファイルの移行になり、§6 でパレットを差し替えた後は「動いているパレットの
+下でのデータ移行」になる。
+
+**理由 2（決定的）: 4-2b は 4-3 の入力である。** 4-3 が決めなければならない「`db` が実行中のパレットと
+食い違うときの扱い」（4-2 の申し送り）は、**型キーが表示 label で、その名前空間がプロファイル間で
+衝突している状態では決めようがない**。実測すると **postgresql と mysql は型 label を 12 個共有する**
+（`Integer` / `Text` / `Timestamp` / `Char` / `Varchar` / `Decimal` / `Date` / `Time` / `Bit` /
+`Binary` / `Single precision` / `Double precision`）。4-2 の parser は `db` を読んで捨てていたので、
+**PG の設計を mysql パレットで開くと、この 12 型は例外にならず黙って別の型に解決されていた**
+（PG の `Text`=`TEXT` → mysql の `Text`=`MEDIUMTEXT`）。「不一致なら例外」と決めても、
+label のままでは 12 型が一致してしまって例外が飛ばない。**id 化と `db` の必須化は片方だけでは
+成立しない**ので、同じ段階に入れてある。
+
+#### 決めたこと 1: 型キーは `label` でも `sql` でもなく、新設する `id`
+
+4-2 が `label` を選んだ判断そのものは正しかった（`sql` は postgresql で `BIGINT` が Big Integer と
+Real の 2 か所に重複し、sql 名で焼くと known-issue #3 のドリフトが JSON 経路に入る）。
+問題は **`label` が表示名であること**で、§6 のパレット現代化がこれを動かす。
+[`docs/FORMAT.md`](docs/FORMAT.md) 自身が「§6.1 で差し替えると旧 label のファイルはここで落ちる」と
+申し送っていた —— **その申し送りは撤回し、形式側で解く**。
+
+`sql` に戻す案も検討して却下した。`sql` は §6 が**変えることを目的にしている属性**そのもの
+（`SERIAL` → identity、`CHAR` → `TEXT`、`TIMESTAMP` → `TIMESTAMPTZ`）で、正本ファイルの型キーに
+最も不安定な属性を選ぶことになる。加えて大文字小文字がプロファイル間で不統一（mssql / mysql は
+小文字、PG / oracle は大文字）で、空白も含む（`TIMESTAMP WITH TIME ZONE`）。
+
+`label` に alias 表を持たせる案も却下した。**「同じ綴りで別の意味」を表現できない**のが理由で、
+PG18 パレットが `timestamptz` を素直に `label="Timestamp"` と名付けると、旧ファイルの
+`"type": "Timestamp"`（＝ naive timestamp）が例外にならず**黙って timestamptz に解決される**。
+`docs/FORMAT.md` が「正本を黙って別の型で開くのが最悪の失敗」と書いた、まさにその失敗を
+構造的に作る案だった。加えて alias 表はファイルを 1 バイトも変えずに意味だけ移すので、
+**`git diff` に出ないスキーマ変更**になる（制約3 と噛み合わない）。
+
+#### 決めたこと 2: `id` は `sql` から機械生成する（意味的判断を 4-2b に持ち込まない）
+
+規則は 4 つ。(1) `^[a-z][a-z0-9_]{0,31}$` に適合しパレット内で一意、(2) 語源は `sql` の正規化
+（小文字化 → 英数字以外を `_` → 前後の `_` を落とす）、(3) **意味が同じ型の `id` は変えない・
+意味が変わったら必ず変える・別の意味で再利用しない**、(4) 衝突する / 語源が壊れている entry には
+`x_` を付ける。
+
+**規則 2 を機械生成にしたのは、6-7 の意思決定を 4-2b に漏らさないため。** 「この型を何と呼ぶか」は
+パレット現代化の判断で、本段階は「今あるものに安定したキーを振る」だけ。規則 3 が唯一の契約で、
+`label` と `sql` は §6 がいくらでも動かしてよい。
+
+**規則 1 が小文字始まりなのは安全装置でもある。** 実測すると **現行 9 パレットの label はこの形に
+1 つも一致しない**（すべて大文字を含むか空白を含む）ので、移行し忘れた v1 のファイルが
+「たまたま読めてしまう」ことが原理的に起きない。
+
+**`x_` は 9 DB 159 型のうち 2 件だけだった**（実測）。`postgresql: x_real`（`label="Real"` /
+`sql="BIGINT"` ＝ known-issue #3 の本体）と `vfp9: x_integer_not_key`（`sql="Integer"` が
+`INTEGER` と大小違いで重複）。どちらも sql 属性が壊れている entry で、§6 で現代化すると 0 件になる
+（`grep -c 'id="x_'` が 6-7〜6-13 の完了判定に使える）。
+
+#### 決めたこと 3: 移行は parser の後方互換読みではなく、git のコミットとして出す
+
+parser が持つ後方互換は **例外メッセージ 1 つだけ**にし、変換は
+[`tools/migrate-design.mjs`](tools/migrate-design.mjs)（`npm run migrate:design`）に置いた。
+
+実行時に黙ってアップグレードすると、**開いて保存し直すまでファイルは旧世代のまま**で、
+リポジトリ内に 2 世代が混在し「どれが移行済みか」を機械判定できない（制約2 は正本が git 管理の
+ファイルであることを要求している）。かつ意味の変化が `git diff` に出ない（制約3）。
+置き場所を `js/` でなく `tools/` にしたのは、**互換コードを出荷バンドルに入れない**ため。
+
+ツールには**前提検査**を入れた —— 「何も変換せずに `JSON.parse` → `JSON.stringify` した結果が
+原文とバイト一致するか」を先に見て、一致しなければ変換せずに落とす。手編集されたファイルを
+書き直すと、数値リテラルの表記揺れ（`20.0` → `20`）のような意図しない差分が移行コミットに
+紛れ込み、「移行だけが入っている」という PR の主張が壊れるため。
+
+#### 決めたこと 4: 移行表の機構は 4-2b では作らない（§6 の着手時に決める）
+
+当初の計画は「機構（ツール＋表のスキーマ＋健全性テスト）を 4-2b で入れ、§6 は表というデータを
+足すだけ」だったが、**表の形が違う**ので却下した。4-2b の移行は「label → id」の全射で、
+同じ `<type>` 要素を別の属性で引き直すだけ（意味は 1 つも変わらない）。§6 の移行は
+「消えた型をどこに寄せるか」という意味的判断を含み、しかも `serial` → `integer` **＋
+`autoincrement: true`** のように `type` 以外のキーも動かす必要がある。先に作ると間違った抽象になる。
+
+#### 見つけたこと: パレットに属性を 1 つ足すと XML golden が動く
+
+`tests/golden/xml/` の 7 本は**パレット全文を埋め込んでいる**（`minimal.xml` に `<type` が 29 行）。
+`id` を足しただけで 7 本すべてが動く。一方 **DDL golden 63 本と state golden 8 本は 1 バイトも
+動かない** —— `output.xsl` 9 本は `id` を参照せず、state は型を添字で持っているため。
+この非対称は「変更の性質を機械判定する」うえで有用なので、完了判定に独立の項として入れてある
+（`git status --porcelain tests/golden/ddl tests/golden/state` が空）。
+
+#### 検証
+
+- **`git diff -U0 db/` の変更行がすべて `<type ` 行**（0 件の例外）＝ パレットの変更が属性追加だけ
+- **`git diff -U0 tests/golden/xml/` も同じく `<type ` 行だけ**（上の従属結果）
+- **`git status --porcelain tests/golden/ddl tests/golden/state` が空**（63 + 8 本が不変）
+- **`git diff -U0 tests/golden/json/` の変更行が `"type":` と `"formatVersion":` だけ**（0 件の例外）
+- **移行ツールと serializer の等価性**: `tests/golden/json/` の 7 本はツールで移行したもので、
+  それが serializer の出力と一致することを golden テストが確認している（`golden:update` を
+  かけ直しても差分が出ない）
+- **冪等**: 同じファイルに 2 回流すと 2 回目は `skip (already v2)`
+- `npm test` **133 passed** / 21 skipped（4-2 の 93 から +40）、`test:browser` **121 passed**（+2）、
+  `test:dist` 3 passed、`known-issues` 9 passed、`typecheck` 0 error
+
+**次段階（4-3）への入力**。`db` 不一致の扱いは本段階で「例外」に確定したので、4-3 が決めるのは
+**UI の導線**だけになった（そのパレットを取り直して開くか、拒むだけか）。あわせて
+**保存ファイル名に `.json` 拡張子を付けること** —— 現行 [`backend/php-file/index.php`](backend/php-file/index.php)
+の保存先は拡張子なし（`data/<keyword>`）で、これだと `.gitattributes` / `.prettierignore` /
+移行 glob のいずれもファイルを名指しできない。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -1695,7 +1810,7 @@ id の発番が要り、4-1b / 4-1c の申し送り「4-2 以降はライブ側 
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | XML 永続化（`toXML()` / `save` の body） | 保持。**§7 で golden 固定済み**（`tests/golden/xml/`） | JSON 統一。XML は読込専用に。書き出しは撤去（§4） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | TS 実装へ置換（§6.3 の規約もここ） |
-| 型パレット `db/<db>/datatypes.xml` | 保持 | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4） |
+| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立） | PostgreSQL 18 型パレットへ差し替え（§6.1）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`） |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | `index.html` の Dropbox CDN 読み込み | 保持（テストでは遮断） | 存廃を未決（上記決定ログ参照） |
 

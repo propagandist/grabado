@@ -110,7 +110,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
 
         const design = JSON.parse(await toJson(page));
         expect(Object.keys(design)).toEqual(["formatVersion", "db", "tables"]);
-        expect(design.formatVersion).toBe(1);
+        expect(design.formatVersion).toBe(2);
         expect(design.db).toBe(SERIALIZER_DB);
 
         // users は comment / keys の両方を持つ（fixture house-defaults）
@@ -122,15 +122,16 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
         expect(Object.keys(id)).toEqual(["name", "type", "default"]);
     });
 
-    test("型を label で持つので後勝ちドリフトが起きない（known-issue #3 を持ち込まない）", async () => {
+    test("型を id で持つので後勝ちドリフトが起きない（known-issue #3 を持ち込まない）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readFixture("minimal"));
 
         // db/postgresql/datatypes.xml は sql="BIGINT" を Big Integer（添字 2）と
         // Real（添字 6）の 2 か所に持つ。型を sql 名で焼く形式だと
         // Big Integer -> "BIGINT" -> 照合の後勝ちで Real に化ける。
+        // id は重複した側に x_ が付く（Real -> x_real）ので、両者が別のキーになる。
         const design = JSON.parse(await toJson(page));
-        design.tables[0].columns[0].type = "Big Integer";
+        design.tables[0].columns[0].type = "bigint";
         const source = `${JSON.stringify(design, null, 2)}\n`;
 
         await loadJson(page, source);
@@ -139,7 +140,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
         // 同じ設計を XML 経由で往復させると化ける（現行の挙動。tests/known-issues/ が固定している）
         await loadFixture(page, await toXml(page));
         const drifted = JSON.parse(await toJson(page));
-        expect(drifted.tables[0].columns[0].type).toBe("Real");
+        expect(drifted.tables[0].columns[0].type).toBe("x_real");
     });
 
     test("diff フレンドリー: テーブル追加は独立ブロックの追加だけになる", async () => {
@@ -153,7 +154,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
             name: "audit_log",
             x: 700,
             y: 320,
-            columns: [{ name: "id", type: "Integer" }],
+            columns: [{ name: "id", type: "integer" }],
         });
         await loadJson(page, `${JSON.stringify(design, null, 2)}\n`);
         const after = await toJson(page);
@@ -175,11 +176,40 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
             await loadFixture(page, readFixture("minimal"));
         });
 
-        test("formatVersion が 1 でなければ拒む", async () => {
+        test("formatVersion が 2 でなければ拒む", async () => {
             const design = JSON.parse(await toJson(page));
-            design.formatVersion = 2;
+            design.formatVersion = 3;
             await expect(loadJson(page, JSON.stringify(design))).rejects.toThrow(
                 /formatVersion/,
+            );
+        });
+
+        test("formatVersion 1 は黙って読まず、移行コマンドを名指しする（段階4-2b）", async () => {
+            // 4-2 が書いていた形。型キーが label で、db は任意だった。
+            const v1 = {
+                formatVersion: 1,
+                db: SERIALIZER_DB,
+                tables: [
+                    {
+                        name: "things",
+                        x: 10,
+                        y: 20,
+                        columns: [{ name: "id", type: "Integer" }],
+                    },
+                ],
+            };
+            await expect(loadJson(page, JSON.stringify(v1))).rejects.toThrow(
+                /migrate:design/,
+            );
+        });
+
+        test("db が実行中の型パレットと違えば拒む（段階4-2b）", async () => {
+            // 型 id はプロファイル内で一意なだけ。db を見ないと、label 時代に
+            // postgresql と mysql が共有していた 12 型のような無言の誤解決が残る。
+            const design = JSON.parse(await toJson(page));
+            design.db = "mysql";
+            await expect(loadJson(page, JSON.stringify(design))).rejects.toThrow(
+                /db/,
             );
         });
 
@@ -198,7 +228,11 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
                 /columns\[0\]\.name/,
             );
 
-            const badTables = { formatVersion: 1, tables: {} };
+            const badTables = {
+                formatVersion: 2,
+                db: SERIALIZER_DB,
+                tables: {},
+            };
             await expect(loadJson(page, JSON.stringify(badTables))).rejects.toThrow(
                 /tables/,
             );
@@ -207,7 +241,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
         test("例外が出ても今開いている設計は消えない", async () => {
             const before = await toJson(page);
 
-            await expect(loadJson(page, '{"formatVersion": 2}')).rejects.toThrow();
+            await expect(loadJson(page, '{"formatVersion": 3}')).rejects.toThrow();
             await expect(loadJson(page, "{ 壊れた JSON")).rejects.toThrow();
 
             // parse を clearTables() より先に置いてある（js/wwwsqldesigner.ts の fromJson）

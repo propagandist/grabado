@@ -74,8 +74,59 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
         const before = h.toJson();
 
         // js/wwwsqldesigner.ts の fromJson は parse を clearTables() より先に置いてある
-        expect(() => h.loadJson('{"formatVersion": 2}')).toThrow(/formatVersion/);
+        expect(() => h.loadJson('{"formatVersion": 3}')).toThrow(/formatVersion/);
         expect(() => h.loadJson("{ 壊れた JSON")).toThrow();
         expect(h.toJson()).toBe(before);
+    });
+
+    // ---- 段階4-2b で足した 3 本 ----
+
+    test("formatVersion 1 は読まず、移行コマンドを名指しする", () => {
+        h.useDatatypes(SERIALIZER_DB);
+        h.loadFixture(readFixture("minimal"));
+        const before = h.toJson();
+
+        // 4-2 が書いていた形（型キーが label、db は任意）
+        const v1 = JSON.stringify({
+            formatVersion: 1,
+            db: SERIALIZER_DB,
+            tables: [
+                {
+                    name: "things",
+                    x: 10,
+                    y: 20,
+                    columns: [{ name: "id", type: "Integer" }],
+                },
+            ],
+        });
+
+        // 「黙ってアップグレードしない」ことと「何をすればいいか言う」ことの両方を押さえる。
+        // 後方互換はこの例外 1 つだけで、変換は tools/migrate-design.mjs にある。
+        expect(() => h.loadJson(v1)).toThrow(/migrate:design/);
+        expect(h.toJson()).toBe(before);
+    });
+
+    test("db が実行中の型パレットと違えば例外（label 12 個の無言誤解決を塞ぐ）", () => {
+        // postgresql の設計を mysql パレットで開く。label 時代はこれが通り、
+        // 共有していた 12 label（Integer / Text / Timestamp ...）が黙って別の型に化けていた。
+        h.useDatatypes(SERIALIZER_DB);
+        h.loadFixture(readFixture("minimal"));
+        const pgDesign = h.toJson();
+
+        h.useDatatypes("mysql");
+        expect(() => h.loadJson(pgDesign)).toThrow(/db/);
+    });
+
+    test("型 id は db をまたいで解決しない（同じ id が両方にあっても）", () => {
+        // integer は postgresql にも mysql にもある id。db 照合が無ければ通ってしまう。
+        h.useDatatypes("mysql");
+        h.loadFixture(readFixture("minimal"));
+        const mysqlDesign = h.toJson();
+
+        expect(mysqlDesign).toContain('"db": "mysql"');
+        expect(mysqlDesign).toContain('"type": "integer"');
+
+        h.useDatatypes(SERIALIZER_DB);
+        expect(() => h.loadJson(mysqlDesign)).toThrow(/db/);
     });
 });

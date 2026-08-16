@@ -3,9 +3,11 @@
   特性化テスト fixture: db/postgresql/datatypes.xml の型パレットを網羅する。
   サイズ付き（length="1"）の型は括弧つきで書き、Row.fromXML のサイズ抽出も通す。
 
-  BIGINT は意図的に外してある。datatypes.xml に sql="BIGINT" が 2 か所
-  （Big Integer / Real）あり「最後に一致した型が勝つ」ため Real に化ける既知の不具合で、
-  正常系の golden を汚さないよう tests/known-issues/ 側に隔離している。
+  BIGINT は外してある。段階6-2 まではこれが Real に化ける既知の不具合（#3）だったため
+  tests/known-issues/ 側に隔離していた。6-2 で直った後も**入れない** —— 列を足すと
+  DDL golden 5 本と json/state golden の中身が動き、「golden が 1 バイトも動かない」という
+  段階の完了判定がぼやけるため（母集団を動かさない判断は tests/support/fixtures.ts）。
+  BIGINT の解決は tests/browser/types.spec.ts が押さえている。母集団の再編は 6-6。
 -->
 <sql>
 <table x="20" y="20" name="type_samples">

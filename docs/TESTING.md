@@ -215,10 +215,21 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
   共有していた 12 型の無言誤解決を塞ぐ）。
 
 **型 `id` の規則そのもの**は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts) が
-全プロファイルについて見る（正規表現への適合・パレット内の一意性・`x_` が付いている entry の一覧）。
+全プロファイルについて見る（正規表現への適合・パレット内の一意性・`fk` の参照先が実在すること・
+`x_` が付いている entry の一覧）。
 **移行ツール**の規則は [`../tests/node/migrate-design.test.ts`](../tests/node/migrate-design.test.ts)。
 ツールが serializer と同じバイト列を書くことは、`tests/golden/json/` の 7 本が
 **ツールで移行したもの**であることをもって golden テストが毎回確認している。
+
+### 型解決 — golden より手前で押さえる 2 本（§6 段階6-2）
+
+型パレットを引く経路（`<datatype>` の名前 → 添字、`fk` → 子行の型）は golden に間接的にしか
+現れない。6-2 が照合規則を触ったので、**規則そのものを直接見るテスト**を 2 本置いた。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../js/io/palette.ts`](../js/io/palette.ts) を直に叩く（ハーネス不要。import 0 本のモジュールなので `conflict.test.ts` と同じ立場）。**旧規則の参照実装をテスト内に置き、全プロファイル × 全候補名で新旧を突き合わせる差分テスト**が主役で、差分が `postgresql/BIGINT` の 1 件だけであることが段階の完了判定そのもの。ほかに `fkIndexFor` の id 照合・パレット差し替え後の追随・旧パレット互換 |
+| [`../tests/browser/types.spec.ts`](../tests/browser/types.spec.ts) | 実ブラウザ側。`BIGINT` の解決（known-issue #3 の移設先）・XML 往復の安定・**FK 自動生成**（`rowManager` の対話経路。6-2 まで自動テストが 1 本も通っていなかった面）・パレット差し替え後の FK 生成 |
 
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 

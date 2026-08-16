@@ -2826,6 +2826,174 @@ H2 2.x は標準準拠が高く（1.4 の `IDENTITY` 型は廃止され `GENERAT
 
 ---
 
+### 2026-08-16 HANDOVER §6「機能」段階6-2 —— 型解決を再設計する
+
+6-0 の分割表の 3 本目（6-7 の設計先行を挟んだので記録の並びは 4 本目）。
+**`tests/golden/` は 1 バイトも動いていない。**
+
+#### 決めたこと 1: 6-0 の定義のうち `re` の先勝ち化は 6-8 へ送る
+
+6-0 は 6-2 を「`getTypeIndex` / `getFKTypeFor` の `id` 照合化、**`sql`/`re` 照合の先勝ち化**」と
+定義していた。実装に入る前に `re` を先勝ちにした場合の影響を実測したところ、**直す向きが
+品質を下げる**と分かったので、`sql` の完全一致どうしの順序だけを 6-2 で直した。
+
+`re` には独立した欠陥が 3 つある。
+
+| # | 欠陥 | 実例 |
+|---|---|---|
+| 1 | **アンカーされていない**（部分一致） | `postgresql` の `integer` は `re="INT"`。`BIGINT` / `SMALLINT` / `INTERVAL` すべてに当たる |
+| 2 | **大文字小文字を区別する** | `postgresql` の `decimal` は `re="numeric"`（小文字）。大文字の `NUMERIC` には当たらず先頭型に落ちる |
+| 3 | **`sql` の完全一致を後から上書きする** | `oracle` は `integer`(`sql="INTEGER"`) → `number`(`re="INT"`) の順。`INTEGER` は `NUMBER` に解決される |
+
+素朴に先勝ちへ倒したときに動く golden（実測）:
+
+| 入力 | `postgresql` 現行→提案 | `oracle` 現行→素朴先勝ち | `mssql` 現行→素朴先勝ち |
+|---|---|---|---|
+| `INTEGER` | 0 → 0 | `NUMBER` → `INTEGER`（改善） | **`bigint` → `tinyint`（縮小）** |
+| `BIGINT` | **6 `x_real` → 2 `bigint`** | — | — |
+| `FLOAT` | 7 → 7 | 変化なし | **`float` → `money`（別の意味）** |
+| `INTERVAL(6)` | 17 → 17 | `NUMBER(6)` → `INTEGER(6)` | **`bigint(6)` → `tinyint(6)`** |
+
+**動く golden は 12 本**（`oracle` 6 ＋ `mssql` 6。`empty` だけがテーブル 0 件で対象外）。
+確認は `grep -lE "NUMBER|NCLOB" tests/golden/ddl/oracle/*.sql` と
+`grep -lE "\bbigint\b|\bfloat\b|\bnumeric\b" tests/golden/ddl/mssql/*.sql` で、どちらも
+`autoincrement` / `house-defaults` / `minimal` / `quotes-i18n` / `relations` / `types-matrix` の 6 本。
+
+**壊れているのは照合順ではなくパレット側の `re`。** `mssql` は `re="INT"` を tinyint / smallint /
+int / bigint の **4 型**に、`re="FLOAT"` を money / smallmoney / real / float の 4 型に振っている。
+現行の後勝ちが正しく見えるのは「パレットが narrow → wide 順に並んでいる」ことに寄りかかった
+**偶然の広い方優先**にすぎず、先勝ちにすると偶然が逆に働くだけ。直す場所は 6-8（既存主要 4 本の
+現代化）で、その前に 6-6（DB 別 fixture）が要る —— いまの `oracle` / `mssql` の golden は
+PG 用 fixture で採っているので、先勝ちの是非を検証する材料がそもそも無い（6-0 の決めたこと 2）。
+
+**黙って落とさないために known-issue #10 を新設した**（`tests/known-issues/README.md`）。
+#3 の記述にあった「`re` もアンカー無しの部分一致」はそちらが引き継いでいる。
+
+#### 決めたこと 2: `fk` を id 参照にし、キャッシュは無効化ではなく廃止する
+
+`getTypeIndex()` は `fk` 属性を **label** で引き、`this.typeIndex[label]!` と非 null アサートして
+いた。`docs/FORMAT.md` の規則3 は「`label` と `sql` は §6 が自由に動かしてよい」と保証しているので、
+**6-3 が label を動かした瞬間に解決が `undefined` になり `Row.update({type: undefined})` →
+`palette.typeAt(undefined)` → `getColor()` で TypeError**（FK 作成が UI ごと落ちる）。
+`fk` を持つのは全 5 パレット中 `postgresql` の 2 行だけで、対応する id（`integer` / `bigint`）は
+既に在るので、書き換えは 2 か所で済む。
+
+さらに 2 つのキャッシュ（`typeIndex` / `fkTypeFor`）は**一度作られると二度と捨てられなかった**。
+`palette.setRoot()` を呼ぶ 3 経路（`dbResponse()` / `Designer.fromXML()` / 両ハーネスの
+`useDatatypes()`）のどれも無効化しない。**実装前の `develop` で実ブラウザ実測した**（壊れている
+コードごと消えるので恒久テストにはできない。6-1 の dangling 実測と同じ扱い）:
+
+| mysql パレットでの FK 自動生成 | キャッシュ無し（＝正しい） | postgresql のキャッシュが残った状態 |
+|---|---|---|
+| 親 `INT`（添字 4） | `INT`(4) | **`Integer`(0)** |
+| 親 `BIGINT`（添字 5） | `BIGINT`(5) | **`SMALLINT`(2)** |
+
+`BIGINT` の FK が `SMALLINT` になる ＝ **参照が入らない DDL が黙って出る**。経路は
+`fkTypeFor[5] = getTypeIndex("Big Integer") = 2`（PG の `bigint` の添字）が mysql の添字 2
+（`SMALLINT`）として読まれること。到達性もある —— `Designer.fromXML()` は設計 XML に同梱された
+`<datatypes>` でパレットを差し替えるので、「PG で FK を作る → 旧形式 XML を開く」で再現する。
+
+**無効化フックを `setRoot()` に足すのではなく、キャッシュごと廃止した。** `id` 照合にすると
+解決は線形走査 1 回（n ≤ 29、呼ばれるのは FK 作成時と親行更新時だけ）でキャッシュの価値が消える。
+フックを足せば `setRoot()` に「呼ぶたびに 2 つのキャッシュを捨てる」という永続的な契約が増える。
+状態を消すほうが小さく、腐らない。
+
+これに伴い `docs/FORMAT.md` と `js/io/json-parser.ts` の**根拠の文だけ**書き直した ——
+4-3b が「JSON 読込でパレットを取り直さない」理由として挙げた 3 つのうち 1 つがこのキャッシュの癖
+だったが、残る 2 つ（読込 5 経路の非同期化・cookie の `db` が変わらない半端な状態）で結論は
+変わらないので**決定そのものは保つ**（6-1 が `.gitattributes` の根拠文でやったのと同じ）。
+
+#### 決めたこと 3: 型解決を `js/io/palette.ts` に集約する
+
+4-0b は `palette.ts` に「型解決の再設計は §6 の型パレット差し替えと同時に行う」と書き残していた。
+その留保は**キャッシュについての留保**で、(2) でキャッシュを廃止すると前提ごと消える。
+`Designer.getTypeIndex` / `getFKTypeFor` と `xml-parser.ts` の照合ループに分かれていた 3 つが
+`TypePalette.indexOfTypeName` / `fkIndexFor` の 2 本になった。
+
+移さなかったもの: サイズ抽出の正規表現・`quote` 剥がし・**一致無しで先頭型に落ちるフォールバック**。
+`indexOfTypeName` は「無ければ -1」を返し、`xml-parser.ts` 側が `if (found !== -1)` で受ける。
+known-issue #4 は現在地に 1 行として残り、strict 化を後から足せる形になっている（6-3 / 6-8）。
+
+副産物として 6-7 の見積り（TS パレット化の影響 15 箇所以上）が縮んだ。TS パレットが提供すべき面は
+`types` / `typeAt` / `groups` / `idAt` / `indexOfId` / `indexOfTypeName` / `fkIndexFor` / `db` /
+`setRoot` / `isLoaded` / `element` に確定している。
+
+#### 決めたこと 4: この段階に入れなかった 4 件と送り先
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| `re` の先勝ち化・アンカー化・大小文字規則 | **6-8**（fixture は 6-6・strict フラグは 6-3 が先） | 決めたこと 1。known-issue #10 として記録済み |
+| known-issue #4（未知型 → 先頭型） | **6-3**（PG）/ **6-8**（他） | 6-2 が触るのは照合規則で、フォールバックは呼び手の判断。同じ PR に入れると「golden が動かない」という主張が PG パレットの差し替えと混ざる |
+| `x_real` エントリ自体の削除 | **6-3** | 6-2 は「重複していても観測できない」状態にするだけ。`tests/node/palette-id.test.ts` の `postgresql: x_real` は**動かしていない** |
+| `types-matrix.xml` に `BIGINT` を足す | **6-6** | #3 が直ったので正常系に入れられるようになったが、列を足すと DDL golden 5 本と json/state golden の中身が動き「golden が 1 バイトも動かない」という完了判定がぼやける。網羅は `tests/browser/types.spec.ts` が持つ。**除外理由のコメントだけは嘘になるので書き直した** |
+
+#### 6-0 の記録の訂正
+
+6-0 の「追加 2 型」の表は `bigint_identity` に **`fk="Big Integer"` を付ける**と書いていたが、
+6-2 以降 `fk` は id 参照なので **`fk="bigint"`** と読む。6-3 が地雷を踏まないよう
+`tests/node/palette-id.test.ts` に「`fk` の値は同じパレットに実在する `id`」という検査を足した
+（6-1 が仮番号 3 箇所を貼り替えたのと同じ扱いで、表の記述はここで訂正する）。
+
+#### 検証
+
+影響範囲の証明は 6-1 と同じ手法 —— **期待値を 1 行も直さずに全ハーネスを回し、赤の件数を数えた。
+赤くなったのは正確に 2 件**:
+
+1. `tests/known-issues/known-issues.spec.ts`（#3 が `"Real"` を期待）→ `"Big Integer"`
+2. `tests/browser/json.spec.ts`（XML 往復で `"x_real"` になることを期待）→ `"bigint"`
+
+3 件目が出ていたら未把握の依存があったということで、**この 2 件で尽きたこと自体が「#3 以外に
+効いていない」ことの機械的な証明**になっている。ただし順方向だけでは足りない ——
+`getFKTypeFor` とキャッシュ寿命は**テストが 0 本なので赤くなりようがない**（6-1 が `DEFAULT_DB` を
+「テストが止めてくれない変更」と呼んだのと同じ形）。そこで実装前の実測（決めたこと 2 の表）と、
+旧規則の参照実装をテスト内に置く差分テストを足した:
+
+```
+$ npx vitest run tests/node/type-resolution.test.ts
+  差分テスト: expect(diffs).toEqual(["postgresql/BIGINT: 6 -> 2"])
+```
+
+全プロファイル × 全候補名（各パレットの `sql` ∪ `re` ∪ 全 fixture の `<datatype>`。実測 82 種）で
+新旧を突き合わせ、**違いが 1 件しか無いこと**を固定している。6-3 で `x_real` が消えるとこの配列は
+空になって赤くなる（`palette-id.test.ts` の `x_` 検査と同じ「静かに変わらない」ための仕掛け）。
+
+完了判定:
+
+```
+$ for db in $(ls db); do grep -o 'sql="[^"]*"' db/$db/datatypes.xml | sort | uniq -d; done
+                                                  # postgresql の sql="BIGINT" だけ
+$ grep -n 'fk="' db/*/datatypes.xml               # 2 行。fk="integer" / fk="bigint"
+$ npm run golden:update && git status --porcelain tests/golden/
+                                                  # README.md（本段階で書き足した注記）以外は出ない
+$ git ls-files tests/golden | wc -l               # 58（ddl 35 / ddl-input 7 / json 7 / state 8 / README 1）
+```
+
+`getTypeIndex` / `getFKTypeFor` / `typeIndex` / `fkTypeFor` の**実コードとしての参照は 0**
+（`grep` に残る 16 件はすべて撤去の経緯を書いたコメント）。
+
+テスト件数（左が `develop`、右が本段階）:
+
+| | 前 | 後 |
+|---|---|---|
+| `npm test` | 151 passed / 7 skipped | **166 passed / 7 skipped**（`type-resolution` +10・`palette-id` +5） |
+| `npm run test:browser` | 111 passed | **115 passed**（`types.spec.ts` +4） |
+| `npm run known-issues` | 5 passed | 5 passed（#3 を移設し #10 を新設） |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**FK 自動生成（`rowManager` の対話経路）は本段階まで自動テストが 1 本も通っていなかった。**
+fixture 読込は経路が違い、リレーションを対話的に張る操作をどのテストもしていなかったため。
+`tests/browser/types.spec.ts` がここを塞いだので、6-3 が label を動かしても気づける。
+
+**次段階への入力 —— 6-3（PG18 パレット差し替え ＋ 設計ファイル移行）**。
+`fk` は id 参照になっているので `label` を自由に動かしてよい。追加する `bigint_identity` には
+`fk="bigint"` を付ける（`fk="Big Integer"` ではない）。`x_real` を撤去すると
+`tests/node/type-resolution.test.ts` の差分テストと `tests/node/palette-id.test.ts` の `x_` 検査が
+**両方赤くなる**が、どちらも「直す対象が消えた」ことによる正しい赤で、そのとき消してよい。
+known-issue #4（未知型 → 先頭型）の strict 化もこの段階から。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -2834,7 +3002,7 @@ H2 2.x は標準準拠が高く（1.4 の `IDENTITY` 型は廃止され `GENERAT
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。**段階4-4 で `tests/golden/ddl-input/` に改名し、決定論・well-formed にした** | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化） |
 | DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`）。**段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本） | 残る 5 本は 6-5 で TS 生成器へ置換（§6.3 の規約もここ）。**新設 3 本は TS 生成器の上に載せる**（6-7。いま XSLT で書くと直後に捨てることになる）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す** |
-| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化は 6-8 |
+| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

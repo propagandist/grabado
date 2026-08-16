@@ -19,9 +19,13 @@
  *
  *   - <comment> の走査規則が table と row で違う（table = 直下 childNodes・最後が勝つ /
  *     row = getElementsByTagName の子孫先頭が勝つ）。片方に寄せると挙動が変わる。
- *   - 型解決のループに break が無く**最後の一致が勝つ**（known-issue #3 の BIGINT
- *     ドリフトの本体。break を入れると known-issues が赤くなる）。
  *   - <part> の nodeValue はガード無しで読む（空の <part> は現行も TypeError）。
+ *
+ * この一覧には 3 つ目として「型解決のループに break が無く最後の一致が勝つ」があったが、
+ * **段階6-2 で解決した**（本ファイルの照合ループごと TypePalette.indexOfTypeName へ移した）。
+ * 直したのは sql の完全一致どうしの順序だけで、re の後勝ち（known-issue #10）と
+ * 一致が無いときに先頭型へ落ちる挙動（known-issue #4）はここに残っている。残る 2 つは
+ * 揃えてはいけないまま。
  *
  * palette を引数で受けるのは、型パレット依存の解決（sql/re 照合・quote 剥がし）を
  * 形式側に閉じる 4-1a の規約による。モデルは添字のまま持つ（js/io/model.ts）。
@@ -143,14 +147,14 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
         if (r![3]) {
             obj.size = r![3]!;
         }
-        var types = palette.types();
-        for (var i = 0; i < types.length; i++) {
-            var sql = types[i]!.getAttribute("sql");
-            var re = types[i]!.getAttribute("re");
-            /* break を入れない —— 最後の一致が勝つ（known-issue #3） */
-            if (sql == type || (re && new RegExp(re).exec(type))) {
-                obj.type = i;
-            }
+        /*
+         * 照合の規則は TypePalette.indexOfTypeName（段階6-2）。一致が無ければ -1 が返り、
+         * obj.type は初期値 0 のまま＝**先頭の型に黙って落ちる**（known-issue #4）。
+         * この 1 行が #4 の本体で、strict 化は 6-3（PG）/ 6-8（他）が扱う。
+         */
+        var found = palette.indexOfTypeName(type);
+        if (found !== -1) {
+            obj.type = found;
         }
     }
 

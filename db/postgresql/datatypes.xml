@@ -5,8 +5,8 @@
 		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" quote="" />
 		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" quote="" />
 		<type id="decimal" label="Decimal" length="1" sql="DECIMAL" re="numeric" quote="" />
-		<type id="serial" label="Serial" length="0" sql="SERIAL" re="SERIAL4" fk="Integer" quote="" />
-		<type id="bigserial" label="Big Serial" length="0" sql="BIGSERIAL" re="SERIAL8" fk="Big Integer" quote="" />
+		<type id="serial" label="Serial" length="0" sql="SERIAL" re="SERIAL4" fk="integer" quote="" />
+		<type id="bigserial" label="Big Serial" length="0" sql="BIGSERIAL" re="SERIAL8" fk="bigint" quote="" />
 		<type id="x_real" label="Real" length="0" sql="BIGINT" quote="" />
 		<type id="float" label="Single precision" length="0" sql="FLOAT" quote="" />
 		<type id="double" label="Double precision" length="0" sql="DOUBLE" re="DOUBLE" quote="" />

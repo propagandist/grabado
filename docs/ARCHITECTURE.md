@@ -485,8 +485,13 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
    `OZ.Request`・localStorage・ダウンロードはすべてこちら側で、`js/io/` は形式とモデルしか知らない。
 
 `ddl-xml.ts` は **§6.3 で `output.xsl` を TS 実装へ置き換えるときにモジュールごと消える**
-（それまで XSLT の入力に XML が要る）。`palette.ts` の型解決の再設計（`getTypeIndex` /
-`getFKTypeFor` の sql・re 照合）は §6.1 の型パレット差し替えと同時に行う。
+（それまで XSLT の入力に XML が要る）。
+
+型解決は **§6 段階6-2 で `palette.ts` に集約した**。それまで `Designer.getTypeIndex` /
+`getFKTypeFor`（label 照合＋差し替えで捨てられないキャッシュ）と `xml-parser.ts` の照合ループに
+分かれていたものが `TypePalette.indexOfTypeName` / `fkIndexFor` の 2 本になっている。
+`fk` は id 参照になり、キャッシュは廃止。一致が無いときに先頭型へ落とすフォールバック
+（known-issue #4）だけは呼び手（`xml-parser.ts`）に残っていて、strict 化は 6-3 / 6-8 の担当。
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

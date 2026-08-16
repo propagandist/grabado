@@ -20,6 +20,8 @@ interface PaletteType {
     readonly id: string | undefined;
     readonly label: string | undefined;
     readonly sql: string | undefined;
+    /** FK 子行の型（段階6-2 で label 参照から id 参照になった） */
+    readonly fk: string | undefined;
 }
 
 /**
@@ -33,6 +35,7 @@ function readTypes(db: string): PaletteType[] {
         id: /\sid="([^"]*)"/.exec(tag)?.[1],
         label: /\slabel="([^"]*)"/.exec(tag)?.[1],
         sql: /\ssql="([^"]*)"/.exec(tag)?.[1],
+        fk: /\sfk="([^"]*)"/.exec(tag)?.[1],
     }));
 }
 
@@ -68,6 +71,24 @@ describe("型パレットの id 規則（段階4-2b）", () => {
                 expect(
                     invalid.map((t) => `[${t.index}] id=${t.id} label=${t.label}`),
                 ).toEqual([]);
+            });
+
+            test("fk の値は同じパレットに実在する id", () => {
+                /*
+                 * 段階6-2。fk は「この型を親に持つ FK 子行の型」で、6-2 までは label 参照
+                 * だった。label は §6 のパレット現代化が自由に動かしてよい表示名なので
+                 * （docs/FORMAT.md の規則3）、そこを照合キーにしていると label を 1 文字
+                 * 動かした瞬間に解決が壊れる —— しかも実害は FK を対話的に作ったときだけ
+                 * 出るので、6-3 のパレット差し替えでは気づけない。
+                 *
+                 * TypePalette.fkIndexFor は引けなければ自分自身に倒す（旧パレット互換）ので、
+                 * 型が黙って別物になるのを止められるのは**この検査だけ**。
+                 */
+                const ids = new Set(types.map((t) => t.id));
+                const dangling = types
+                    .filter((t) => t.fk !== undefined && !ids.has(t.fk))
+                    .map((t) => `[${t.index}] id=${t.id} fk=${t.fk}`);
+                expect(dangling).toEqual([]);
             });
 
             test("id がパレット内で一意", () => {

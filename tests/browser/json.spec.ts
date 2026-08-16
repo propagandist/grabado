@@ -137,10 +137,13 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
         await loadJson(page, source);
         expect(await toJson(page)).toBe(source);
 
-        // 同じ設計を XML 経由で往復させると化ける（現行の挙動。tests/known-issues/ が固定している）
+        // XML 経由で往復させても化けない —— 段階6-2 で sql の完全一致を先勝ちにしたため
+        // （6-2 以前はここが "x_real" で、その差が known-issue #3 だった）。
+        // 型キーが id である利点は消えていない: パレットの sql 名が重複しても、
+        // 正本フォーマットは 4-2b の id 照合なのでそもそもこの経路を通らない。
         await loadFixture(page, await toXml(page));
         const drifted = JSON.parse(await toJson(page));
-        expect(drifted.tables[0].columns[0].type).toBe("x_real");
+        expect(drifted.tables[0].columns[0].type).toBe("bigint");
     });
 
     test("diff フレンドリー: テーブル追加は独立ブロックの追加だけになる", async () => {

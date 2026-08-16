@@ -74,11 +74,6 @@ http://code.google.com/r/charlieyouakim-wwwsqldesigner-deleteadd/
 A new patch, which enable optional display of field details, was submitted by Wilson Oliveira. While this code is not ready yet to be commited into repository, everyone can download it from http://ondras.zarovi.cz/sql/wwwsqldesigner-inline_field_details_patch.zip.
 
 
-## Support for CUBRID
-
-WWW SQL Designer now supports the [CUBRID database](http://www.cubrid.org/): both as a backend (using PHP) as well as datatype definition set.
-
-
 ## Release
 
 Version 2.5 was released on 18.6.2010. Many new features were added (hiding of sidebar, colored relation, multi-selection and multi-drag, ...), tons of bugs were fixed.

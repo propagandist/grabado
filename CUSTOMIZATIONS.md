@@ -2564,15 +2564,153 @@ PG 用 fixture が読めず DDL golden を採れなくなる。「現代化済�
 
 ---
 
+### 2026-08-16 HANDOVER §6「機能」段階6-1 —— 対応 DB から 4 本を撤去する
+
+6-0 の分割表の 2 本目。**削除だけ**の段階で、`js/` の実質的な変更は
+[`js/config.ts`](js/config.ts) の `AVAILABLE_DBS` 1 か所しかない。
+
+消したもの（37 ファイル）:
+
+| 対象 | 数 |
+|---|---|
+| `db/{cubrid,vfp9,web2py,sqlalchemy}/`（`datatypes.xml` / `output.xsl` ＋ `vfp9` の readme） | 9 |
+| `tests/golden/ddl/{cubrid,vfp9,web2py,sqlalchemy}/`（7 fixture × 4） | 28 |
+
+コード側は `AVAILABLE_DBS` から 5 エントリ（`web2py` は 2 回入っていたので重複も同時に消えた）、
+[`tests/node/parity-exceptions.ts`](tests/node/parity-exceptions.ts) から 2 エントリ、
+[`README.md`](README.md) から upstream の `## Support for CUBRID` の 3 行。
+
+#### 決めたこと 1: 撤去は「捨てる」ではない（6-0 の再掲・実行）
+
+**XSLT のまま延命せず、6-5 の TS 生成器の上で作り直す**というのが 6-0 で決めた意味づけ。
+とくに `sqlalchemy` は現役・巨大な ORM で、**6-9 で ORM 出力カテゴリの 1 本目として復活させる**
+（house が Kotlin/Spring Boot なので JPA entity 生成は自社利用でも効く）。
+この段階の diff だけを見ると 4 本が消えたようにしか見えないので、ここに書いておく。
+
+#### 決めたこと 2: 影響範囲は「削除して赤くなるのが 3 件」で証明した
+
+先にファイルを消し、期待値を直す前に `npm test` を回した。**赤くなったのは正確に 3 件**:
+
+1. `parity 例外がまだ実在する: sqlalchemy`（`useDatatypes()` が ENOENT）
+2. `parity 例外がまだ実在する: vfp9`（同上）
+3. `x_ 接頭辞は撤去予定の entry にだけ付いている`（期待値配列に `vfp9` 行が残っている）
+
+DDL 本体ループは全緑のまま（`DB_PROFILES` が `readdirSync` で 5 本に縮むため）。
+4 件目が出ていたら未把握の依存があったということで、**この 3 件で尽きたこと自体が
+「削除以外の影響が無い」ことの機械的な証明**になっている。順序は逆にできない
+—— 期待値を先に直すと、`db/sqlalchemy` と `db/vfp9` がまだ在るぶん
+**parity 例外が存在する理由そのもの**で赤くなる。
+
+#### 決めたこと 3: この段階に入れなかった 6 件と送り先
+
+6-1 の完了判定は「残る 35 本が 1 バイトも動かない」というバイト単位の主張だけで閉じる。
+**削除の必然として発生したのではない変更は、その主張を汚す**ので送った。
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| `DEFAULT_DB: "mysql"` → `postgresql` | **6-3** | 4 本を消しても `mysql` は残るので、放置して壊れる箇所が 1 つも無い唯一の項目。いま振ると初回ユーザーが最初に触るパレットが **uuid 不在（#4）・`x_real` が `BIGINT`（#3）の未現代化 PG** になる。house 標準を名乗る前に品質が伴っていない。**テストは `DEFAULT_DB` を読まない**（両ハーネスとも `useDatatypes()` で明示指定）ので、これは「テストが止めてくれない変更」でもある |
+| `AVAILABLE_DBS` の並び順 | **6-3**（`DEFAULT_DB` と同じ PR） | 並べ替えは `select` の見え方を変える意思決定。行を消すだけなら diff が「4 行消えた」だけになり、挙動不変がレビューで自明になる |
+| cookie に撤去 DB が残った場合の防御 | **6-3** | 下の dangling 2 を参照。回復が UI 内で完結する。6-3 は「現在のパレットに無い `id` は例外」というファイル側の非互換を初めて扱う段階なので、`db` 不整合の見せ方をそこで 1 か所にまとめられる |
+| backend の `php-cubrid` / `web2py` | **§5** | `AVAILABLE_BACKENDS` は `AVAILABLE_DBS` と別軸。**`backend/cf-mysql` は実体があるのにリストに無い**（実測）ので、リストとディレクトリは元から 1:1 ではない。ここに手を入れると「リストと実体の整合」という別テーマが 6-1 に流入する。§5 で `backend/` ごと消える |
+| `.gitattributes` の `db/** -text` → `text eol=lf` | **6-5** | 唯一 CRLF だった `db/vfp9/output.xsl` が消えて根拠は失われたが、改行ポリシーの変更は独立した意思決定。`db/*/output.xsl` ごと消える 6-5 で「`db/` に何が残るか」と一緒に決める。**根拠の文だけは嘘になるので書き直した**（`locale/ko.xml` は今も CRLF なので `locale/** -text` の根拠は残る） |
+| `ddl.test.ts` の adapter 2 本 | **6-5** | 実測では現行の母集団に対して両方 no-op（CRLF の XSL は 0 本、残る 35 本の golden に `& < >` は 1 文字も無い）。**しかし根拠は `vfp9`/`sqlalchemy` に閉じていない** —— 4-4 で `&` を含む識別子が書けるようになっており（`tests/known-issues/fixtures/amp-in-name.xml`）、6-6 でその種の入力が正常系に入った瞬間、adapter が無いと Node 側だけがブラウザとずれる。しかも「エンジンの非準拠」ではなく**「移植の回帰」に見える形**で。落とすなら「落として赤くなる仕掛け」を同時に作る必要があり、それは削除より重い |
+
+`README.md` の `## Support for CUBRID` **だけは 6-1 で消した** ——「grabado は CUBRID に対応している」
+という記述を CUBRID を消す PR が残すと、**その PR 自身が README を嘘にする**。撤去対象そのものの
+説明文なので削除の一部。ただし 6-0 が別件として立てた README の腐り（PayPal 寄付ボタン・
+2012 年のリリースノート・Google Code リンク）には触っていない —— 入れると PR の主語が
+「対応 DB の撤去」から「README 刷新」に移るため。
+
+#### 決めたこと 4: 6-1 が作った dangling を 2 つ記録する
+
+**(1) `backend/php-cubrid/index.php:37` が消えたファイルを読む。**
+
+```php
+@ $datatypes = file("../../db/cubrid/datatypes.xml");
+```
+
+`@` が付いているので警告は出ず、`$datatypes` が `false` になって続く `$datatypes[0]`（38 行）が
+空になる。実害は「CUBRID 拡張入りの PHP 環境で import を叩いたときだけ `<datatypes>` ブロックが
+空になる」で、このリポジトリのどのテストにも無い環境。**§5 で「なぜ壊れているのか」を
+再調査させないための 1 行**。
+
+**(2) cookie に撤去済み DB が残っている既存ユーザーは、起動は通るが型に触れない。**
+`getOption("db")` は cookie の生値を返すだけで `AVAILABLE_DBS` と照合しない
+（[`js/wwwsqldesigner.ts:335-346`](js/wwwsqldesigner.ts#L335-L346)）。実ブラウザで実測した:
+
+| | cookie 無し（＝ `DEFAULT_DB` の `mysql`） | cookie `db=cubrid` |
+|---|---|---|
+| `d.palette.isLoaded()` | `true` | **`false`** |
+| `d.palette.db()` | `"mysql"` | **`TypeError: this.element(...).getAttribute is not a function`**（[`js/io/palette.ts:54`](js/io/palette.ts#L54)） |
+| 起動時の `pageerror` | 0 件 | **0 件**（＝**静かに**通る。画面上は正常に見える） |
+| `minimal` を読ませる | テーブル 1 件・例外なし | **`TypeError: this.element(...).getElementsByTagName is not a function`**・テーブル 0 件・alert も出ない |
+
+経路は `requestDB()`（193-202）が `db/cubrid/datatypes.xml` を 404 で引き、`dbResponse()`（204-212）が
+`xmlDoc` の falsy を見て `setRoot` を飛ばし、`flag` だけ減らして `init2()` へ進むこと。
+**パレット未設定のまま起動が完了する。**
+
+**回復は UI 内で完結する**（これが 6-3 に送れる根拠）。実測:
+
+- Options ダイアログはパレットに触れずに開ける（`js/options.ts` の依存は `CONFIG` と `_()` だけ）
+- `select` は `AVAILABLE_DBS` から作られ、`cubrid` に一致が無いので `selectedIndex` は 0 のまま
+  ＝ **先頭の `mysql` が選択された状態で表示される**
+- そのまま OK → リロードで `palette.isLoaded() = true` / `db = mysql` に復帰
+
+「二度と開けない正本ファイル」型の非可逆な壊れ方ではない。ただし**エラーが 1 つも出ずに
+ボタンだけが効かなくなる**ので、体験としては TypeError が見えるより分かりにくい。
+6-3 で防御を入れるときは `getOption()`（全設定キー共通の入口で「cookie の生値を返す」契約）ではなく
+**`requestDB()` 側**に置くこと —— `Options.save()` 経由の値は常に妥当なので、守るべきは起動時の 1 経路だけ。
+
+#### 検証
+
+削除の完了判定（6-0 が指定したもの）:
+
+```
+$ git diff --name-status develop --diff-filter=D | wc -l        # 37（db 9 + golden 28）
+$ git status --porcelain tests/golden/ddl/ | grep -v '^D '      # 出力なし
+$ git ls-files tests/golden/ddl | wc -l                         # 35
+$ git ls-files tests/golden/ddl | cut -d/ -f4 | sort -u         # mssql mysql oracle postgresql sqlite
+$ git ls-files db | cut -d/ -f2 | sort -u                       # 同上 5 行
+```
+
+**`npm run golden:update` で実ブラウザから採り直しても `tests/golden/ddl/` は 1 バイトも動かなかった**
+（`D` 以外の行が 0）。「触っていない」ではなく「削除が残るプロファイルの出力に影響していない」ことを
+実行系で確かめている。`tests/golden/README.md` の `M` は本段階で数値を直したドキュメント。
+
+テスト件数（左が `develop`、右が本段階）:
+
+| | 前 | 後 |
+|---|---|---|
+| `npm test` | 179 passed / 21 skipped（200） | **151 passed / 7 skipped（158）** |
+| `npm run test:browser` | 139 passed | **111 passed**（DDL が 63 → 35） |
+| `npm run known-issues` | 5 passed | 5 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+skip が 21 → 7 になったのは parity 例外が 3 DB → `oracle` 1 本に減ったため。
+`npm run test:dist` は毎回 `vite build`（`emptyOutDir`）を通るので `dist/db/` も 5 本になっている。
+
+UI（`js/options.ts` に自動テストが無い唯一の面）は dev server ＋ 実ブラウザで実測:
+**設定ダイアログの DB `select` は 5 件**（`mysql` / `sqlite` / `mssql` / `postgresql` / `oracle`、
+`AVAILABLE_DBS` の並び順どおり）、`pageerror` 0 件。
+
+**次段階への入力 —— 6-2（型解決の再設計）**。`getTypeIndex` / `getFKTypeFor` を `id` 照合にし、
+`sql` / `re` 照合を先勝ちにする段階で、golden が動くのは known-issue #3 の分だけ。
+6-1 が残した `x_` は `postgresql: x_real` の 1 件で、これは #3 の本体そのもの
+（[`tests/node/palette-id.test.ts`](tests/node/palette-id.test.ts) がリテラルで押さえている）。
+6-3 の PG18 パレット差し替えで 0 件になる。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
 |---|---|---|
-| PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事 | Kotlin/Spring Boot へ移植し撤去 |
+| PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事。**6-1 でも触っていない**が、`backend/php-cubrid/index.php:37` が消えた `db/cubrid/datatypes.xml` を読む dangling ができた（段階6-1 の記録） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。**段階4-4 で `tests/golden/ddl-input/` に改名し、決定論・well-formed にした** | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化） |
-| DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`・全 9 DB） | **段階6-0 で対応 DB を 8 本に確定**（既存 5 ＋ 新設 3）。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` の 4 本は **6-1 で撤去**。残りは 6-5 で TS 生成器へ置換（§6.3 の規約もここ）。**新設 3 本は TS 生成器の上に載せる**（6-7。いま XSLT で書くと直後に捨てることになる） |
-| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化は 6-8 |
+| DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`）。**段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本） | 残る 5 本は 6-5 で TS 生成器へ置換（§6.3 の規約もここ）。**新設 3 本は TS 生成器の上に載せる**（6-7。いま XSLT で書くと直後に捨てることになる）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す** |
+| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化は 6-8 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

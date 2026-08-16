@@ -103,7 +103,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
      * 旧 known-issue #1。段階4-4 で属性値とテキストノードのエスケープを全経路に
      * 通したので、`&` を含む識別子でも読み直せる XML になった。fixture は
      * known-issues 側のものをそのまま使う（正常系に昇格させると DDL golden の
-     * 母集団が 63 -> 72 に増え、本段階の完了判定「DDL golden 無差分」がぼやける）。
+     * 母集団が 35 -> 40 に増え、本段階の完了判定「DDL golden 無差分」がぼやける）。
      */
     test("識別子に & を含んでも well-formed な XML を吐く", async () => {
         await useDatatypes(page, SERIALIZER_DB);

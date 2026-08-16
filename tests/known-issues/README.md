@@ -63,7 +63,7 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 | 8 | `<default>` だけ末尾に改行が付かず diff が読みにくい | §4 段階4-4 | 「`<default>` の後にも改行が入る」 |
 
 `fixtures/` はそのまま残す（`amp-in-name.xml` は移設先のテストが読む）。正常系
-[`../fixtures/`](../fixtures/) へ昇格させると DDL golden の母集団が 63 → 72 本に増え、
+[`../fixtures/`](../fixtures/) へ昇格させると DDL golden の母集団が 35 → 40 本に増え、
 「DDL golden が無差分」という段階の完了判定がぼやけるため。
 
 ### ここに無いが記録済みのもの
@@ -72,6 +72,8 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
   **§4 段階4-4 で撤去した**（`<datatypes>` の全文埋め込みも同時に）。
   [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts) のテストは主張を反転させ、
   「環境依存が出力に現れない」ことを固定している。golden の正規化も無くなった。
-- **`CONFIG.AVAILABLE_DBS` に `web2py` が重複／`DEFAULT_BACKEND` が配列**
-  （[js/config.ts:8-19](../../js/config.ts#L8-L19), [js/config.ts:61](../../js/config.ts#L61)）。
+- ~~**`CONFIG.AVAILABLE_DBS` に `web2py` が重複**~~
+  **§6 段階6-1 で解消した**（`web2py` ごと対応 DB から外れたため。副産物であって、
+  この重複を直すこと自体が目的ではなかった）。
+- **`DEFAULT_BACKEND` が配列**（[js/config.ts:61](../../js/config.ts#L61)）。
   出力に影響しないため今回は記録のみ（[`../../CUSTOMIZATIONS.md`](../../CUSTOMIZATIONS.md)）。

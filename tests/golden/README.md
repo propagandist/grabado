@@ -8,7 +8,7 @@
 
 ```
 ddl-input/<fixture>.xml  Designer.toXML() の出力＝output.xsl への入力（postgresql の型パレットで解決）
-ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。9 DB × 7 fixture
+ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。5 DB × 7 fixture
 state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
 ```

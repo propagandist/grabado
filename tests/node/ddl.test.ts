@@ -18,8 +18,13 @@ import { PARITY_EXCEPTIONS, PARITY_EXCLUDED_DBS } from "./parity-exceptions.ts";
 /**
  * XML 1.0 の line-end normalization（CRLF / 単独 CR -> LF）。
  * ブラウザの DOMParser はこれを行うが xslt-processor 5.1.0 の XmlParser は行わない。
- * db/vfp9/output.xsl は upstream 本体が CRLF なので、これを補わないと CR が生成 SQL に漏れる。
+ * 補わないと、CRLF を含む XSL / 入力 XML から CR が生成 SQL に漏れる。
  * golden を歪めるのではなく「準拠した XML パーサの振る舞いを補う」ための前処理。
+ *
+ * **段階6-1 時点では実際に踏むプロファイルが無い**（唯一 CRLF だった db/vfp9/output.xsl が
+ * 消え、入力 XML は buildDdlInputXml() が LF 固定で組む）。それでも残すのは、これが
+ * 特定プロファイルの都合ではなくエンジンの非準拠を埋める adapter だから。
+ * 関数ごと消えるのは 6-5（XSLT 経路そのものが無くなる段階）。
  */
 function normalizeXmlLineEnds(source: string): string {
     return source.replace(/\r\n?/g, "\n");
@@ -27,13 +32,19 @@ function normalizeXmlLineEnds(source: string): string {
 
 /**
  * xslt-processor 5.1.0 は <xsl:output method="text"/> でも結果ツリーを XML として直列化し、
- * & < > をエンティティにエスケープしてしまう（実測: db/vfp9 の "&tcCommand"、
- * db/sqlalchemy の "<things('%s')>" がそれぞれ &amp;tcCommand / &lt;things...&gt; になる）。
- * ブラウザの XSLTProcessor は text 出力なのでエスケープしない。
+ * & < > をエンティティにエスケープしてしまう（4-0b の実測。当時は db/vfp9 の "&tcCommand" と
+ * db/sqlalchemy の "<things('%s')>" が踏んでいた）。ブラウザの XSLTProcessor は
+ * text 出力なのでエスケープしない。
  *
  * これは「エスケープの逆変換」であって golden 側を歪める操作ではない。
  * &amp; を最後に戻すことで、本文に元々 "&lt;" という文字列があった場合
  * （エンジンは &amp;lt; と出す）も正しく "&lt;" に戻る。
+ *
+ * **段階6-1 で踏んでいた 2 プロファイルが消え、残る 35 本の golden に & < > は 1 文字も無い。**
+ * それでも残すのは、根拠が消えたのではなく現れていないだけだから —— 識別子に & を書けるのは
+ * 4-4 で直した挙動で（tests/known-issues/fixtures/amp-in-name.xml）、6-6 で DB 別 fixture に
+ * その種の入力が入った瞬間、adapter が無いと Node 側だけがブラウザとずれる。
+ * しかも「エンジンの非準拠」ではなく「移植の回帰」に見える形で。
  */
 function undoXmlTextEscaping(text: string): string {
     return text

@@ -19,8 +19,8 @@
  *
  * - `<!-- Active URL: location.href -->`。書き出し経路で唯一の環境依存だった
  *   （4-1a で引数に押し出してあったので、ここでは引数ごと落とすだけ）。
- * - `<datatypes>` の全文埋め込み。**db 配下の output.xsl 9 本はこれを一切参照しない**
- *   （4-0a の実測。datatypes を grep して 0 件）ので、DDL には
+ * - `<datatypes>` の全文埋め込み。**db 配下の output.xsl はこれを一切参照しない**
+ *   （4-0a に当時の 9 本すべてを実測。datatypes を grep して 0 件。6-1 で 5 本に減った）ので、DDL には
  *   1 バイトも影響しない。数百行のノイズが消え、XMLSerializer の実行系依存も
  *   同時に無くなる。読み込み側は元から実行中のパレットで型を解決していて
  *   （js/io/xml-parser.ts）、同梱 <datatypes> を読む Designer.fromXML() は

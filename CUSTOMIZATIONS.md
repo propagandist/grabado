@@ -2495,7 +2495,7 @@ PG 用 fixture が読めず DDL golden を採れなくなる。「現代化済�
 | 6-4 | §6.2 初期テーブルテンプレート | PG の一部 |
 | 6-5 | §6.3 `output.xsl` の TS 生成器化 | 全対象プロファイル |
 | 6-6 | DB 別 fixture の整備 | 母集団の再編 |
-| 6-7 | 新設 3 本（`sql-standard` / `mariadb` / `h2`）を TS 生成器の上に載せる | 追加 |
+| 6-7 | 新設 3 本（`sql-standard` / `mariadb` / `h2`）を TS 生成器の上に載せる（**型マッピングの設計は 2026-08-16 に先行実施済み**。下のエントリ） | 追加 |
 | 6-8 | 既存主要 4 本の現代化（`mysql` / `mssql` / `oracle` / `sqlite`） | 各プロファイル |
 | 6-9 | ORM 出力の再設計（`sqlalchemy` 復活 ＋ JPA / Prisma / Drizzle の検討） | 追加 |
 
@@ -2699,6 +2699,130 @@ UI（`js/options.ts` に自動テストが無い唯一の面）は dev server �
 6-1 が残した `x_` は `postgresql: x_real` の 1 件で、これは #3 の本体そのもの
 （[`tests/node/palette-id.test.ts`](tests/node/palette-id.test.ts) がリテラルで押さえている）。
 6-3 の PG18 パレット差し替えで 0 件になる。
+
+---
+
+### 2026-08-16 HANDOVER §6「機能」段階6-7（設計先行）—— `sql-standard` / `mariadb` / `h2` の型マッピングを確定する
+
+**設計だけを 6-7 から切り出して先に確定する。** 実装（型パレット ＋ 生成器）は 6-7 のまま。
+`db/` にファイルは 1 つも置かない（本エントリの差分は本書だけ）。
+
+#### なぜ「パレットだけ先に作る」ではないのか
+
+新設 3 本を前倒しする案を検討し、**パレットだけ置くのはきれいに切れない**と分かった。
+
+1. **パレットだけでは DDL が出ない。** [`js/io.ts`](js/io.ts) の `finish()` が
+   `db/<db>/output.xsl` を読むので、UI の db セレクタに出るのに DDL 生成が 404 になる
+   ＝ 半移行を UI に晒す（CLAUDE.md 制約1）
+2. **`ddl.test.ts` が赤くなる。** `DB_PROFILES`（`db/` のディレクトリ実体）× `DDL_FIXTURES` で
+   回るので、`output.xsl` を持たないプロファイルを置いた瞬間に落ちる。skip の仕掛けを足すと、
+   6-1 の撤去で減らした複雑さが戻る
+3. **パレットの TS 化は 1 段階に収まらない。** 影響は 15 箇所以上（`palette.ts` 全面・
+   `requestDB()` の XHR・`getTypeIndex` / `getFKTypeFor`・`xml-parser`・`row.ts` の型セレクタ・
+   両ハーネスの差し替え口・`migrate-design.mjs` の `readPalette()`・`smoke.spec.ts`）。しかも
+   [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の `fromXML()` が**古い XML に同梱された
+   `<datatypes>` を読む互換経路**を持ち、XHR が消えると「db の変更にはリロードが要る」という
+   現行契約自体が変わる
+
+一方**二重投資は思ったより小さい**。XML で書いたパレットを TS に移すのは機械的な形式変換で、
+**本体は「その DB に何の型を入れて何を外すか」という設計**。これは形式に依存せず、
+6-5（生成器の TS 化）の設計入力としてそのまま効く。だから設計だけ先に確定する。
+
+#### 決めたこと 1: `sql-standard` を基底に置き、各 DB は差分で表す
+
+6-0 で確定した PG18 パレット 24 型を軸に、ANSI SQL（SQL:2016 / SQL:2023）での対応を定めた。
+**`id` は 6-0 の PG パレットと同じものを使う**（型キーはプロファイル内で一意なだけでよいが、
+同じ意味の型に同じ `id` を振ると差分表が読める）。
+
+| `id` | `sql-standard` | 標準での位置づけ |
+|---|---|---|
+| `integer` / `smallint` / `bigint` | `INTEGER` / `SMALLINT` / `BIGINT` | 標準 |
+| `decimal` | `NUMERIC(p,s)` | 標準（`DECIMAL` も同義） |
+| `float` / `double` | `REAL` / `DOUBLE PRECISION` | 標準 |
+| `bigint_identity` | `BIGINT GENERATED ALWAYS AS IDENTITY` | SQL:2003 |
+| `varchar` | `CHARACTER VARYING(n)` | 標準 |
+| `text` | `CHARACTER LARGE OBJECT` | 標準（CLOB） |
+| `bytea` | `BINARY LARGE OBJECT` | 標準（BLOB） |
+| `boolean` | `BOOLEAN` | SQL:1999 |
+| `date` / `time` / `time_with_time_zone` / `interval` | 同名 | 標準 |
+| `timestamp_with_time_zone` | `TIMESTAMP WITH TIME ZONE` | 標準（PG だけが `TIMESTAMPTZ` と短縮する） |
+| `xml` | `XML` | SQL/XML（SQL:2003 Part 14） |
+| `jsonb` | `JSON` | **SQL:2023 で標準化** |
+| **`uuid`** | **無し** → `CHARACTER(36)` | **標準に UUID 型は無い** |
+| `bit` / `varbit` | 無し | SQL:1999 で導入され **SQL:2003 で削除**された |
+| `inet` / `cidr` | 無し | 標準外 |
+| `geometry` | 無し | SQL/MM Spatial（ISO 13249-3）は別規格 |
+
+**`uuid` が標準に無いことが house 既定に直接効く。** `id uuid DEFAULT uuidv7()` を
+`sql-standard` で出すと `CHARACTER(36)` になり、生成関数も標準には無い。
+
+#### 決めたこと 2: `mariadb` は MySQL のコピーではない（別プロファイルにする根拠）
+
+MySQL との差分が 2 つあり、**どちらも house 既定に関わる**:
+
+| `id` | `mariadb` | MySQL との差 |
+|---|---|---|
+| **`uuid`** | **`UUID`**（10.7+） | **MySQL には無い**（`CHAR(36)` / `BINARY(16)` 運用） |
+| **`inet`** | **`INET4`（10.5+）/ `INET6`（10.10+）** | **MySQL には無い** |
+| `bigint_identity` | `BIGINT AUTO_INCREMENT` | 同じ（標準の `GENERATED ALWAYS AS IDENTITY` は両者とも無い） |
+| `text` / `bytea` | `LONGTEXT` / `LONGBLOB` | 同じ |
+| `boolean` | `BOOLEAN`（`TINYINT(1)` のエイリアス） | 同じ |
+| `jsonb` | `JSON`（`LONGTEXT` ＋ `JSON_VALID` 制約） | MySQL はネイティブ JSON 型 |
+| **`timestamp_with_time_zone`** | **無し** → `TIMESTAMP` | 同じ。**tz を保持しない**（UTC 変換のみ） |
+| `interval` | 無し | 同じ（型ではなく式のみ） |
+| `xml` / `varbit` / `cidr` | 無し | 同じ |
+
+#### 決めたこと 3: `h2` は house 既定を完全に受けられる（対象にする実用的な理由）
+
+H2 2.x は標準準拠が高く（1.4 の `IDENTITY` 型は廃止され `GENERATED` 句に統一）、
+**house 既定の 4 点がすべてネイティブ**:
+
+| house 既定 | `h2` | 判定 |
+|---|---|---|
+| `id uuid` | `UUID` | **○ ネイティブ** |
+| `bigint identity` | `BIGINT GENERATED ALWAYS AS IDENTITY` | **○ 標準どおり** |
+| `created_at timestamptz` | `TIMESTAMP WITH TIME ZONE` | **○** |
+| `jsonb` | `JSON`（H2 2.x） | **○** |
+
+無いのは `xml`（→ CLOB）/ `bit` / `varbit` / `inet` / `cidr` のみで、`interval` と `geometry` は持つ。
+**PG で設計して H2 でテストする経路が型レベルで通る** —— house が Kotlin/Spring Boot である以上、
+これが `h2` を対応 DB に入れる理由そのもの。6-7 の実装時に H2 のバージョンを明示すること
+（1.4 と 2.x で型システムが違うため。**特定バージョンを焼き込まず docs を参照する**）。
+
+#### house 既定のスキーマが各 DB で失うもの（製品としての情報）
+
+| | `postgresql` | `h2` | `sql-standard` | `mariadb` | `mysql` |
+|---|---|---|---|---|---|
+| uuid PK | ○ `UUID` | ○ `UUID` | **× `CHARACTER(36)`** | ○ `UUID` | **× `CHAR(36)`** |
+| `uuidv7()` 生成 | ○ PG18 | × | × | × | × |
+| 監査列 `timestamptz` | ○ | ○ | ○ | **× tz が落ちる** | **× tz が落ちる** |
+| `jsonb` | ○ | ○ `JSON` | ○ `JSON`（SQL:2023） | △ `LONGTEXT` 相当 | ○ |
+| identity | ○ | ○ | ○ | △ `AUTO_INCREMENT` | △ |
+
+**この表そのものが公開プロダクトの価値情報**（ユーザーが DB を選ぶときに見る）で、
+6-7 の実装後に `docs/` の利用者向けドキュメントへ出す。
+
+#### 6-5（生成器の TS 化）への入力
+
+- **生成器は `sql-standard` を基底に持ち、各プロファイルは差分だけを宣言する構造**にできる。
+  後から標準を足すと、5 本分の個別実装ができた後に共通項を抽出する順序になる —— 先に
+  標準を定義しておく利点はここ
+- **未対応型の扱いは書き出し側の問題**で、6-0 の判断2（読み込み側の「移行表 → throw」）とは別。
+  現状は設計 JSON が `db` を持ち読み込み時に照合する（4-2b）ので、「PG の設計を mariadb で開く」
+  経路は存在しない。書き出し側のフォールバック規約は 6-5 で決める
+
+#### 将来: プロファイル変換（この表が土台になる）
+
+同じ `id` を全プロファイルで共有する設計にしたので、**「PG で設計して MySQL 用 DDL も出す」変換**が
+この表だけで書ける。現状は `db` 照合で拒んでいる（4-2b。**型キーの安全性が `db` 照合に依存**して
+いるため）ので、変換を作るなら「拒む」の例外として設計する必要がある。
+公開プロダクトとしては訴求の大きい機能なので、6-9 以降の候補として記録しておく。
+
+#### 検証
+
+- **`js/` の差分は 0 行**（本エントリのみ。`db/` にファイルを置かないのが本段階の要点）
+- `git status --porcelain tests/golden/` が空
+- `npm test` / `test:browser` / `test:dist` / `known-issues` / `typecheck` は 6-1 から件数不変
 
 ---
 

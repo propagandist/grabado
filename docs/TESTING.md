@@ -76,7 +76,7 @@ DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）を�
 | 実行系 | Playwright + Chromium。本物の `XSLTProcessor` / `DOMParser` / 描画 DOM | vitest + jsdom + `xslt-processor`（純 JS の XSLT 1.0）。アプリは vite が束ねた IIFE を jsdom で eval |
 | golden | **生成・確定する（唯一の正）** | 読むだけ。**絶対に書かない** |
 | 速さ | 数秒 | 速い |
-| カバー範囲 | 全 9 DB プロファイル | 6 DB（3 つは parity 例外、下記） |
+| カバー範囲 | 全 5 DB プロファイル | 4 DB（`oracle` だけが parity 例外、下記） |
 
 現行コードは**抽出せずそのまま動かす**。ロジックを先に抜き出すと「抜き出した後のコード」を
 特性化することになり、安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
@@ -159,7 +159,7 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 
 ### DDL golden — `tests/golden/ddl/<db>/<fixture>.sql`
 
-7 fixture × 9 DB = **63 本**。[js/io.ts](../js/io.ts) の `finish()` と同じ経路
+7 fixture × 5 DB = **35 本**。[js/io.ts](../js/io.ts) の `finish()` と同じ経路
 （`toXML()` → `DOMParser` → `XSLTProcessor` → `documentElement.textContent` → `trim`）で採る。
 UI の `#textarea` に入る値と一致する。
 
@@ -312,8 +312,9 @@ npm test                  # Node 側も新しい golden で緑になるか
   安全網が無くなる。判断は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) に記録する。
 - `tests/golden/**` と `tests/fixtures/**` は `.gitattributes` で **LF 固定**。
   `db/**` と `locale/**` は `-text`（改行変換なし）で、コミットされたバイトのままチェックアウトされる。
-  `db/vfp9/output.xsl` は upstream 本体が CRLF なので、`eol=lf` にすると upstream ファイルを
-  書き換えてしまうため。
+  `db/**` の改行は生成 SQL のバイト列を左右する（`output.xsl` の `xsl:text` 内の改行はそのまま
+  出力に出る）ので、環境依存の変換を挟まないのが最も強い保証になるため。**唯一 CRLF だった
+  `db/vfp9/output.xsl` は段階6-1 で消えた**が、`locale/ko.xml` が CRLF のまま残っている。
 
 ## fixture の追加手順
 
@@ -342,25 +343,30 @@ golden に写り込んでいる癖の一覧は [`tests/golden/README.md`](../tes
 
 ---
 
-## parity 例外（Node 側だけ届かない 3 DB）
+## parity 例外（Node 側だけ届かない `oracle`）
 
-`xslt-processor` 5.1.0 は XSLT 1.0 の一部を満たしておらず、次の 3 DB でブラウザと結果が一致しない。
+`xslt-processor` 5.1.0 は XSLT 1.0 の一部を満たしておらず、次の DB でブラウザと結果が一致しない。
 実測で原因を特定してあり、内容は [`tests/node/parity-exceptions.ts`](../tests/node/parity-exceptions.ts)。
 
 | DB | 症状 | エンジン側の不足 |
 |---|---|---|
 | `oracle` | `XPST0008: Unresolved variable reference: $crlf` で失敗 | トップレベル `xsl:variable` を解決できない |
-| `sqlalchemy` | カラム区切りのカンマが落ちる | `apply-templates` 経由で `position()` / `last()` を正しく評価しない |
-| `vfp9` | 1 文字の default が空にならない | `substring($s, 2, -1)` が空文字を返さない |
 
-この 3 DB の DDL 回帰は **`npm run test:browser` だけが張っている**。
+**段階6-1 で `sqlalchemy`（`position()` / `last()`）と `vfp9`（`substring($s, 2, -1)`）が
+対応 DB から外れ、Node 側がカバーしないのは `oracle` 1 本だけになった。**
+この 1 本の DDL 回帰は **`npm run test:browser` だけが張っている**。
 `npm test` だけで済ませないこと。
 
 エンジン側の以下 2 点は [`tests/node/ddl.test.ts`](../tests/node/ddl.test.ts) の adapter で補正済み
 （準拠した XML パーサ / text 出力の振る舞いを取り戻すだけの可逆な前後処理で、golden は歪めていない）。
 
-- XML 1.0 の line-end normalization をしない（`db/vfp9/output.xsl` が CRLF のため CR が漏れる）
+- XML 1.0 の line-end normalization をしない
 - `method="text"` でも `& < >` を XML エスケープする
+
+どちらも 6-1 時点では実際に踏むプロファイルが無い（CRLF の XSL は消え、残る 35 本の golden に
+`& < >` は 1 文字も無い）が、**`&` を含む識別子を入れた瞬間に効く**ので残してある
+（[`tests/known-issues/fixtures/amp-in-name.xml`](../tests/known-issues/fixtures/amp-in-name.xml) がその形）。
+adapter ごと消えるのは 6-5（XSLT 経路そのものが無くなる段階）。
 
 例外が静かに増えたり静かに消えたりしないよう、
 「その例外がまだ実在すること」自体もテストにしてある。エンジンが対応したら赤くなり棚卸しを促す。

@@ -5,17 +5,17 @@
  * まだ .js の 15 本が裸の CONFIG を読むので、window 登録は段階3-4 まで残す。
  */
 export const CONFIG = {
+    /*
+     * grabado: 段階6-1 で cubrid / vfp9 / web2py / sqlalchemy を落とした
+     * （web2py は 2 回入っていたので重複も同時に消えた）。並び順は upstream のまま。
+     * 対応 DB は 8 本で、新設 3 本（sql-standard / mariadb / h2）は 6-7 で入る。
+     */
     AVAILABLE_DBS: [
         "mysql",
         "sqlite",
-        "web2py",
         "mssql",
         "postgresql",
         "oracle",
-        "sqlalchemy",
-        "vfp9",
-        "cubrid",
-        "web2py",
     ],
     DEFAULT_DB: "mysql",
 

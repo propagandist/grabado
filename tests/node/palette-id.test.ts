@@ -57,7 +57,7 @@ describe("型パレットの id 規則（段階4-2b）", () => {
 
             test(`id が ${ID_PATTERN.source} に適合する`, () => {
                 /*
-                 * この形にしてあること自体が安全装置になっている。**現行 9 パレットの
+                 * この形にしてあること自体が安全装置になっている。**現行 5 パレットの
                  * label はこの形に 1 つも一致しない**（すべて大文字か空白を含む）ので、
                  * 移行し忘れた formatVersion 1 のファイルが「たまたま読めてしまう」ことが
                  * 原理的に起きない。id を大文字混じりにするとこの保証が消える。
@@ -90,22 +90,19 @@ describe("型パレットの id 規則（段階4-2b）", () => {
     test("x_ 接頭辞は撤去予定の entry にだけ付いている", () => {
         /*
          * x_ は「そのプロファイルの正規語彙に無い entry」の印（規則は docs/FORMAT.md）。
-         * 4-2b 時点の実測は 2 件だけで、どちらも sql 属性が壊れているもの:
-         *   - postgresql の Real（sql="BIGINT"。Big Integer と重複 ＝ known-issue #3 の本体）
-         *   - vfp9 の Integer (not key)（sql="Integer"。INTEGER と大小違いで重複）
+         * 4-2b 時点の実測は 2 件（postgresql の Real と vfp9 の Integer (not key)）で、
+         * どちらも sql 属性が壊れているもの。6-1 で vfp9 が対応 DB から外れ、残るのは
+         * postgresql の Real（sql="BIGINT"。Big Integer と重複 ＝ known-issue #3 の本体）だけ。
          *
          * 増えていたら、パレットに新しい壊れた entry が入ったということ。
-         * 6-1 の撤去（vfp9 が対応 DB から外れる）で 1 件になり、6-3 の PG18 パレット
-         * 差し替え（x_real が消える）で 0 件になる。対応 DB の決定は CUSTOMIZATIONS.md の 6-0。
+         * 6-3 の PG18 パレット差し替え（x_real が消える）で 0 件になる。
+         * 対応 DB の決定は CUSTOMIZATIONS.md の 6-0。
          */
         const flagged = DB_PROFILES.flatMap((db) =>
             readTypes(db)
                 .filter((t) => t.id?.startsWith("x_"))
                 .map((t) => `${db}: ${t.id} (label=${t.label}, sql=${t.sql})`),
         );
-        expect(flagged).toEqual([
-            "postgresql: x_real (label=Real, sql=BIGINT)",
-            "vfp9: x_integer_not_key (label=Integer (not key), sql=Integer)",
-        ]);
+        expect(flagged).toEqual(["postgresql: x_real (label=Real, sql=BIGINT)"]);
     });
 });

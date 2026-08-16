@@ -494,7 +494,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 
 | 何を固定するか | どこで採るか | 出力 |
 |---|---|---|
-| DDL（`db/<db>/output.xsl` の適用結果） | 実ブラウザ（Chromium の `XSLTProcessor`）。§5.2 の `finish()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 9 DB = 63 本） |
+| DDL（`db/<db>/output.xsl` の適用結果） | 実ブラウザ（Chromium の `XSLTProcessor`）。§5.2 の `finish()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 5 DB = 35 本） |
 | `Designer.toXML()` の出力＝`output.xsl` への入力 | 同上 | `tests/golden/ddl-input/<fixture>.xml`（7 本。段階4-4 で `golden/xml/` から改名） |
 | round-trip / 決定論 | 同上 | アサートのみ（golden なし） |
 | 高速回帰 | Node（jsdom ＋ `xslt-processor`）。同じ fixture・**同じ golden**を読むだけ | — |
@@ -503,4 +503,4 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 
 - **golden は実ブラウザ採取のものが唯一の正**。Node 側は書き込まない。
 - 現行コードは抽出せずそのまま動かす。モデル層が描画 DOM と密結合（§5）なうえ、先に抽出すると「抽出後のコード」を特性化することになり安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
-- `xslt-processor` が XSLT 1.0 を満たしていない 3 DB（`oracle` / `sqlalchemy` / `vfp9`）は Node 側の DDL 回帰から外れ、ブラウザ側だけがカバーする。原因は [`../tests/node/parity-exceptions.ts`](../tests/node/parity-exceptions.ts) に実測付きで記録。
+- `xslt-processor` が XSLT 1.0 を満たしていない `oracle` は Node 側の DDL 回帰から外れ、ブラウザ側だけがカバーする（`sqlalchemy` / `vfp9` も同じ理由で外れていたが、段階6-1 で対応 DB から消えた）。原因は [`../tests/node/parity-exceptions.ts`](../tests/node/parity-exceptions.ts) に実測付きで記録。

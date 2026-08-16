@@ -42,27 +42,6 @@ export const PARITY_EXCEPTIONS: readonly ParityException[] = Object.freeze([
             "定義してテンプレート内から参照する。xslt-processor はこのグローバル変数を解決できない。" +
             "XSLT 1.0 として正当な書き方なので、現行 XSL の不備ではなくエンジン側の未対応。",
     },
-    {
-        db: "sqlalchemy",
-        kind: "differs",
-        probeFixture: "relations",
-        symptom: "カラム区切りのカンマが落ちる（sa.Column(...) の行末 , が出ない）",
-        cause:
-            "db/sqlalchemy/output.xsl:103 前後の xsl:template match=\"row\" は " +
-            'xsl:if test="not (position()=last())" でカンマを制御する。apply-templates 経由の' +
-            "テンプレート適用時、xslt-processor は position() / last() を現在のノードリストに" +
-            "対して正しく評価せず、常に last() 扱いになる。",
-    },
-    {
-        db: "vfp9",
-        kind: "differs",
-        probeFixture: "autoincrement",
-        symptom: "1 文字の default（例 0）が空にならず、そのまま出力される",
-        cause:
-            "db/vfp9/output.xsl:110 は substring($cdefault, 2, string-length($cdefault)-2) で" +
-            "前後の引用符を剥がす。XPath 1.0 では length が負なら空文字になるはずだが、" +
-            "xslt-processor は元の文字列を返す。",
-    },
 ]);
 
 export const PARITY_EXCLUDED_DBS: ReadonlySet<string> = new Set(

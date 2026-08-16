@@ -10,8 +10,9 @@ export const GOLDEN_DIR = join(REPO_ROOT, "tests", "golden");
 
 /**
  * db/ 配下に実在する DB プロファイル。
- * js/config.js の CONFIG.AVAILABLE_DBS は "web2py" が重複しているため（既存の軽微なバグ、
- * CUSTOMIZATIONS.md に記録）、テストはディレクトリ実体を正とする。
+ * テストは CONFIG.AVAILABLE_DBS ではなくディレクトリ実体を正とする —— リストは
+ * 人が書き写すもので実体とずれうるため（4-2b 時点では "web2py" が重複していた。
+ * その重複は段階6-1 の撤去で消えたが、実体を正とする判断は変えない）。
  */
 export const DB_PROFILES: readonly string[] = Object.freeze(
     readdirSync(join(REPO_ROOT, "db"), { withFileTypes: true })
@@ -28,7 +29,7 @@ export interface Fixture {
     readonly name: string;
     /** このテストで何を押さえるのか */
     readonly purpose: string;
-    /** DDL golden を全 9 DB で採る対象か */
+    /** DDL golden を全 5 DB で採る対象か */
     readonly ddl: boolean;
 }
 
@@ -60,7 +61,7 @@ export function readFixture(name: string): string {
  * tests/known-issues/fixtures/ の fixture。
  *
  * 不具合が直っても fixture は動かさない（§4 段階4-4 で #1 を直したときの判断）。
- * 正常系へ昇格させると FIXTURES の母集団が増えて DDL golden が 63 -> 72 になり、
+ * 正常系へ昇格させると FIXTURES の母集団が増えて DDL golden が 35 -> 40 になり、
  * 「DDL golden が無差分」という段階の完了判定がぼやける。
  */
 export function readKnownIssueFixture(name: string): string {

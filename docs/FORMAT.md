@@ -148,12 +148,12 @@ UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.
 | 4 | 規則 2 の結果が衝突する / 語源が壊れている entry には `x_` を付ける（撤去予定の印） |
 
 **規則 3 が唯一の契約**で、`label` と `sql` は §6 がいくらでも動かしてよい。
-規則 1 が小文字始まりなのは安全装置でもある —— **現行 9 パレットの label はこの形に 1 つも一致しない**
+規則 1 が小文字始まりなのは安全装置でもある —— **現行 5 パレットの label はこの形に 1 つも一致しない**
 ので、移行し忘れた `formatVersion: 1` のファイルが「たまたま読めてしまう」ことが原理的に起きない。
 
-4-2b 時点で `x_` が付いているのは実測 2 件だけ（`postgresql: x_real` ＝ known-issue #3 の本体、
-`vfp9: x_integer_not_key`）。**6-1 の撤去（`vfp9` が対応 DB から外れる）と 6-3 の PG18 パレット
-差し替え（`x_real` が消える）で 0 件になる。**
+4-2b 時点で `x_` が付いているのは実測 2 件だけだった（`postgresql: x_real` ＝ known-issue #3 の本体、
+`vfp9: x_integer_not_key`）。**6-1 の撤去で `vfp9` が対応 DB から外れ、残るのは `x_real` の 1 件。
+6-3 の PG18 パレット差し替えでこれも消えて 0 件になる。**
 規則そのものの検査は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts)。
 
 #### パレットを差し替えるときの移行

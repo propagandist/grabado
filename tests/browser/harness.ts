@@ -64,7 +64,7 @@ export async function openDesigner(page: Page): Promise<void> {
  *
  * getOption("db") は cookie だけが上書き経路（js/wwwsqldesigner.ts:230-262）なので
  * URL では切り替えられない。dbResponse()（同 91-99）と同じく型パレットを直接
- * 差し替えるのが実経路どおりで、かつ 1 ページで 9 DB を回せる。
+ * 差し替えるのが実経路どおりで、かつ 1 ページで 5 DB を回せる。
  * 差し替え口は段階4-0b で window.DATATYPES から d.palette になった（操作は同じ）。
  */
 export async function useDatatypes(page: Page, db: string): Promise<void> {

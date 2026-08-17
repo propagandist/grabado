@@ -23,9 +23,11 @@
  *
  * この一覧には 3 つ目として「型解決のループに break が無く最後の一致が勝つ」があったが、
  * **段階6-2 で解決した**（本ファイルの照合ループごと TypePalette.indexOfTypeName へ移した）。
- * 直したのは sql の完全一致どうしの順序だけで、re の後勝ち（known-issue #10）と
- * 一致が無いときに先頭型へ落ちる挙動（known-issue #4）はここに残っている。残る 2 つは
- * 揃えてはいけないまま。
+ * 6-2 が直したのは sql の完全一致どうしの順序だけで、re の後勝ち（known-issue #10）と
+ * 一致が無いときに先頭型へ落ちる挙動（known-issue #4）が残っていたが、**段階6-3 で
+ * 現代化済みプロファイル（strict）については両方消えた** —— #4 は下の parseRow が例外に
+ * 倒し、#10 は strict の照合が re を見ない。どちらも未現代化の 4 本には残り、6-8 で消える。
+ * 上の 2 つ（comment の走査規則・<part> のガード無し）は揃えてはいけないまま。
  *
  * palette を引数で受けるのは、型パレット依存の解決（sql/re 照合・quote 剥がし）を
  * 形式側に閉じる 4-1a の規約による。モデルは添字のまま持つ（js/io/model.ts）。
@@ -148,13 +150,45 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
             obj.size = r![3]!;
         }
         /*
-         * 照合の規則は TypePalette.indexOfTypeName（段階6-2）。一致が無ければ -1 が返り、
-         * obj.type は初期値 0 のまま＝**先頭の型に黙って落ちる**（known-issue #4）。
-         * この 1 行が #4 の本体で、strict 化は 6-3（PG）/ 6-8（他）が扱う。
+         * 照合の規則は TypePalette.indexOfTypeName（段階6-2 / strict 分岐は 6-3）。
+         *
+         * **現代化済みプロファイル（strict）は一致が無ければ例外**（段階6-3 で known-issue #4 を
+         * PG について解消した箇所）。未現代化のプロファイルでは -1 のまま obj.type が初期値 0 に
+         * 残り、**先頭の型に黙って落ちる** —— #4 は 6-8 でこちらが strict になったときに消える。
+         *
+         * 横断で例外にできないのは、fixture が PG 用に書かれたまま全プロファイルに流れていて
+         * （6-0 の決めたこと 2）、未現代化のパレットでは大半の型が未知になるため。
+         * DB 別 fixture の整備は 6-6。
+         *
+         * 例外の message は開発者向けで locale を通さない（js/io/json-parser.ts と同じ立場。
+         * 受け止めは js/io.ts の loadDesignText が alert に流す 1 か所）。ここで落ちても
+         * **同梱パレットを持たない XML なら今開いている設計は変わらない** —— 6-3 が
+         * Designer.fromXML にその経路を分けて parse を clearTables() より先に置いたため。
          */
         var found = palette.indexOfTypeName(type);
         if (found !== -1) {
             obj.type = found;
+        } else if (palette.isStrict()) {
+            throw new Error(
+                `設計 XML: 型 "${type}" が現在の型パレット（db=${palette.db()}）に無い`
+            );
+        }
+
+        /*
+         * **寄せ先がサイズを取らない型なら size を捨てる**（段階6-3・strict のみ）。
+         *
+         * 6-3 の aka は CHAR(10) を text に、TIMESTAMP(3) を timestamptz に寄せる。前者は
+         * PG に size の概念が無い型なので、抽出した "10" を残すと js/io/ddl-xml.ts が
+         * TEXT(10) という**構文として壊れた DDL** を吐く（size があれば必ず括弧を付ける）。
+         * 後者は timestamptz(3) が有効なので残す —— その差を持っているのが length 属性で、
+         * 6-3 が読む契約にした（TypePalette.hasSize）。
+         *
+         * 同じ判断は tools/migrate-design.mjs の dropSize 側にもある（char -> text だけ）。
+         * **両者が一致していることは golden が見ている** —— tests/golden/json/ の 7 本は
+         * 移行ツールが書いたもので、それを serializer の出力と突き合わせているため。
+         */
+        if (palette.isStrict() && !palette.hasSize(obj.type)) {
+            obj.size = "";
         }
     }
 

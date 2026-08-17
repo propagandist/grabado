@@ -1,6 +1,6 @@
 /* ------------------------- migrate-design --------------------- */
 /*
- * grabado: 設計 JSON を formatVersion 1 -> 2 に移行する（HANDOVER §4 段階4-2b）。
+ * grabado: 設計 JSON を移行する（HANDOVER §4 段階4-2b ＋ §6 段階6-3）。
  *
  *   node tools/migrate-design.mjs <ファイル> [<ファイル> ...]
  *   npm run migrate:design -- tests/golden/json/*.json
@@ -14,16 +14,27 @@
  * 移行は 1 コミットとして出す。js/io/json-parser.ts が持つ後方互換は、
  * このコマンドを名指しする例外メッセージ 1 つだけ。
  *
- * ## 何が変わるか
+ * ## 何が変わるか（2 種類あり、同じ 1 パスで両方適用する）
+ *
+ * **A. 形式の移行（段階4-2b。formatVersion 1 -> 2）**
  *
  *   - formatVersion: 1 -> 2
  *   - db: 省略可 -> 必須（無いファイルは --db で補う）
  *   - columns[].type: 型パレットの label -> 同じ <type> の id
  *
  * 型の意味は 1 つも変えない（同じ <type> 要素を label で引いて id で書き直すだけ）ので、
- * 移行の前後で設計は完全に同値。§6 のパレット現代化で起きる「型が消える・意味が変わる」
- * 移行はこれとは別物で、その表と規則は 6-3（PG18 パレット差し替えと同じ PR）で確定する。
- * 表そのものは CUSTOMIZATIONS.md の 6-0 の記録にある。
+ * 移行の前後で設計は完全に同値。
+ *
+ * **B. 型 id の移行（段階6-3。パレット現代化で型が消える / 意味が変わる）**
+ *
+ *   - columns[].type: 撤去された id -> 寄せ先の id（表は下の TYPE_MIGRATIONS）
+ *   - columns[].size: 寄せ先がサイズを持たない型なら**キーごと落とす**
+ *
+ * A と違い**意味的判断を含む**（`serial` は int4 -> int8 に広がり、`char` は size が落ちる）。
+ * だから表は 6-0 で設計し、6-3 が同じ PR でパレットと一緒に入れた —— 表とパレットが
+ * 別 PR に分かれると、その間リポジトリの設計ファイルが読めない（CLAUDE.md 制約1）。
+ * **formatVersion は上げない**: キーの構造は変わらず値だけが変わるうえ、移行漏れは
+ * 「その id が現在のパレットに無い」で js/io/json-parser.ts が throw するので可視化される。
  *
  * ## 置き場所が js/ ではなく tools/ な理由
  *
@@ -35,6 +46,45 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+/* ----------------------------- 型 id の移行表 ----------------------------- */
+
+/**
+ * パレット現代化で撤去された型 id と、その寄せ先（段階6-3）。
+ *
+ * プロファイルごとに持つ —— 型 id はプロファイル内で一意なだけなので、db を見ずに
+ * 適用すると別プロファイルの同名 id を巻き込む（js/io/json-parser.ts が db を照合するのと
+ * 同じ論法）。6-3 で現代化したのは postgresql だけで、残る 4 本は 6-8 でここに増える。
+ *
+ * `dropSize` は寄せ先が length="0"（サイズを持たない型）のとき。落とさないと `TEXT(10)` の
+ * ような壊れた DDL が出る。**判断は db/<db>/datatypes.xml の length と一致していなければ
+ * ならない** —— 同じ規則を読み込み側（js/io/xml-parser.ts）も持っており、食い違うと
+ * 「移行したファイル」と「XML から読み直したファイル」が別物になる。一致は golden が見る。
+ *
+ * **この表は「旧 id -> 新 id」で、db/postgresql/datatypes.xml の aka（「旧 sql 名 -> 新型」）
+ * とは別物。** 前者は正本ファイルの移行、後者は互換で読む XML の照合。
+ * 判断の根拠は CUSTOMIZATIONS.md の段階6-0（移行表）と段階6-3（実装）。
+ */
+const TYPE_MIGRATIONS = {
+    postgresql: {
+        /* HANDOVER §6.1「serial -> identity」。int4 -> int8 に広がる（安全側） */
+        serial: { to: "bigint_identity" },
+        bigserial: { to: "bigint_identity" },
+        /* 実態は sql="BIGINT" を出力していた（label の Real は upstream の誤記＝ #3 の本体） */
+        x_real: { to: "bigint" },
+        /* HANDOVER §6.1「char(n) -> text」。**size が落ちる**（情報の損失） */
+        char: { to: "text", dropSize: true },
+        /*
+         * HANDOVER §6.1「timestamp -> timestamptz」。
+         * **size は落とさない** —— 6-0 の移行表は落ちる側に書いていたが、PG の
+         * timestamptz(p) は秒精度を取れるので保つほうが情報を失わない（6-3 で訂正）。
+         */
+        timestamp: { to: "timestamp_with_time_zone" },
+        timestamp_without_time_zone: { to: "timestamp_with_time_zone" },
+        /* HANDOVER §6.1「json -> jsonb」 */
+        json: { to: "jsonb" },
+    },
+};
 
 /* ----------------------------- 型パレット ----------------------------- */
 
@@ -81,12 +131,13 @@ export function readPalette(db) {
 /* ------------------------------ 変換 ------------------------------ */
 
 /**
- * 設計 JSON の文字列を v1 -> v2 に移行する。
+ * 設計 JSON の文字列を移行する（形式 v1 -> v2 ＋ 型 id の移行。冒頭の A / B）。
  *
- * すでに v2 なら**入力をそのまま返す**（冪等。同じファイルに 2 回流しても差分が出ない）。
+ * **v2 で移行対象の型 id を 1 つも持たないファイルは入力をそのまま返す**
+ * （冪等。同じファイルに 2 回流しても差分が出ない）。
  *
  * @param {string} text 設計 JSON の全文
- * @param {(db: string) => { labelToId: Map<string, string> }} loadPalette
+ * @param {(db: string) => { labelToId: Map<string, string>, ids: Set<string> }} loadPalette
  *   db 名からパレットを引く関数。テストが差し替えられるように引数で受ける
  * @param {{ db?: string, where?: string }} [options]
  *   db: ファイルに db キーが無いときに補う値 / where: 例外メッセージに出す名前
@@ -99,13 +150,30 @@ export function migrateDesignJson(text, loadPalette, options = {}) {
     if (root === null || typeof root !== "object" || Array.isArray(root)) {
         throw new Error(`${where}: ルートがオブジェクトではない`);
     }
-    if (root.formatVersion === 2) {
-        return { text: text, changed: false, db: root.db };
-    }
-    if (root.formatVersion !== 1) {
+    const version = root.formatVersion;
+    if (version !== 1 && version !== 2) {
         throw new Error(
-            `${where}: formatVersion が 1 でも 2 でもない（${JSON.stringify(root.formatVersion)}）`
+            `${where}: formatVersion が 1 でも 2 でもない（${JSON.stringify(version)}）`
         );
+    }
+
+    const db = root.db ?? options.db;
+    if (typeof db !== "string" || db === "") {
+        throw new Error(
+            `${where}: db キーが無い。--db <name> で補うこと（v2 では必須）`
+        );
+    }
+    const migrations = TYPE_MIGRATIONS[db] ?? {};
+
+    /*
+     * v2 かつ型 id の移行対象が 1 つも無ければ、**触らずに返す**。
+     *
+     * 下の正規形検査を通さないのは段階4-2b からの挙動をそのまま保つため —— 手編集された
+     * v2 ファイルに glob でこのコマンドを当てても、移行するものが無ければ黙って通る。
+     * 検査は「これから書き換えるファイル」にだけ掛ける。
+     */
+    if (version === 2 && !hasMigratableType(root, migrations)) {
+        return { text: text, changed: false, db: db };
     }
 
     /*
@@ -122,62 +190,110 @@ export function migrateDesignJson(text, loadPalette, options = {}) {
         );
     }
 
-    const db = root.db ?? options.db;
-    if (typeof db !== "string" || db === "") {
-        throw new Error(
-            `${where}: db キーが無い。--db <name> で補うこと（v2 では必須）`
-        );
-    }
-    const { labelToId } = loadPalette(db);
+    const palette = loadPalette(db);
+    /*
+     * v1 だけが label 照合を通る（v2 の type は既に id）。
+     *
+     * **label はパレット現代化で動く**（docs/FORMAT.md の規則3）ので、段階6-3 で消えた
+     * label（Serial / Char / Timestamp w/ TZ / Real ほか）を持つ v1 ファイルはここで
+     * 落ちる。実在するファイルは 0 本であることを 6-3 で確認済み（4-2 が書いた形式で、
+     * リポジトリ内の 7 本はすべて 4-2b で v2 に移行してある）。歴史的な label 表を
+     * ツールに焼くより、落ちて気づく形を採る。
+     */
+    const labelToId = version === 1 ? palette.labelToId : null;
 
     /* キー順を formatVersion -> db -> tables に固定する（js/io/json-format.ts の宣言順） */
     const out = {
         formatVersion: 2,
         db: db,
         tables: (root.tables ?? []).map((table, ti) =>
-            migrateTable(table, labelToId, `${where}: tables[${ti}]`)
+            migrateTable(
+                table,
+                { labelToId: labelToId, migrations: migrations, ids: palette.ids },
+                `${where}: tables[${ti}]`
+            )
         ),
     };
 
-    return { text: `${JSON.stringify(out, null, 2)}\n`, changed: true, db: db };
+    const text2 = `${JSON.stringify(out, null, 2)}\n`;
+    return { text: text2, changed: text2 !== text, db: db };
+}
+
+/** 移行対象の型 id が 1 つでもあるか（v2 を触るかどうかの判定だけに使う） */
+function hasMigratableType(root, migrations) {
+    for (const table of root.tables ?? []) {
+        for (const column of table?.columns ?? []) {
+            if (Object.hasOwn(migrations, column?.type)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 /**
- * テーブル 1 件。**columns[].type 以外は 1 つも触らない**ので、キーの並びは
+ * テーブル 1 件。**columns[].type / size 以外は 1 つも触らない**ので、キーの並びは
  * 入力のオブジェクトをそのまま展開して保つ（serializer が書いた順序がそのまま残る）。
  */
-function migrateTable(table, labelToId, where) {
+function migrateTable(table, ctx, where) {
     if (table === null || typeof table !== "object" || Array.isArray(table)) {
         throw new Error(`${where}: オブジェクトが必要`);
     }
     return {
         ...table,
         columns: (table.columns ?? []).map((column, ci) =>
-            migrateColumn(column, labelToId, `${where}.columns[${ci}]`)
+            migrateColumn(column, ctx, `${where}.columns[${ci}]`)
         ),
     };
 }
 
-function migrateColumn(column, labelToId, where) {
+function migrateColumn(column, ctx, where) {
     if (column === null || typeof column !== "object" || Array.isArray(column)) {
         throw new Error(`${where}: オブジェクトが必要`);
     }
-    const label = column.type;
-    if (typeof label !== "string") {
+    const key = column.type;
+    if (typeof key !== "string") {
         throw new Error(`${where}.type: 文字列が必要`);
     }
-    const id = labelToId.get(label);
-    if (id === undefined) {
-        throw new Error(
-            `${where}.type: 型 "${label}" が型パレットに無い（移行できない）`
-        );
+
+    /* A. 形式の移行（v1 のみ）: 型パレットの label -> 同じ <type> の id */
+    let id = key;
+    if (ctx.labelToId) {
+        id = ctx.labelToId.get(key);
+        if (id === undefined) {
+            throw new Error(
+                `${where}.type: 型 "${key}" が型パレットに無い（移行できない）`
+            );
+        }
     }
+
+    /* B. 型 id の移行（段階6-3）: 撤去された id -> 寄せ先 */
+    const rule = ctx.migrations[id];
+    const out = { ...column };
+    if (rule) {
+        /*
+         * 寄せ先が実在することを毎回検算する。表とパレットは同じ PR に入る決まりだが、
+         * 片方だけ動いたときに**黙って読めないファイルを書く**のが最悪の失敗なので、
+         * ツール側でも止める（js/io/json-parser.ts の未知 id throw と二重化）。
+         */
+        if (!ctx.ids.has(rule.to)) {
+            throw new Error(
+                `${where}.type: 移行先 "${rule.to}" が型パレットに無い（移行表とパレットが食い違っている）`
+            );
+        }
+        id = rule.to;
+        if (rule.dropSize) {
+            delete out.size;
+        }
+    }
+
     /*
      * スプレッドの後に type を書くと、キーの位置は**元のまま**で値だけ入れ替わる
      * （JS のオブジェクトは既存キーへの再代入で挿入順を変えない）。
-     * これで diff が type の 1 行だけになる。
+     * これで diff が type の 1 行（＋ size を落とす場合はその 1 行）だけになる。
      */
-    return { ...column, type: id };
+    out.type = id;
+    return out;
 }
 
 /* ------------------------------ CLI ------------------------------ */
@@ -222,7 +338,7 @@ function main(argv) {
             console.log(`migrated: ${file} (db=${result.db})`);
             migrated++;
         } else {
-            console.log(`skip (already v2): ${file}`);
+            console.log(`skip (移行するものが無い): ${file}`);
             skipped++;
         }
     }

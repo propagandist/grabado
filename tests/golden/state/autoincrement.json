@@ -43,7 +43,7 @@
         },
         {
           "title": "label",
-          "type": 10,
+          "type": 7,
           "size": "64",
           "def": "",
           "nll": false,

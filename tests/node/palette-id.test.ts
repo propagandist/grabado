@@ -22,10 +22,12 @@ interface PaletteType {
     readonly sql: string | undefined;
     /** FK 子行の型（段階6-2 で label 参照から id 参照になった） */
     readonly fk: string | undefined;
+    /** 読み込みで受ける別名（段階6-3 で新設。| 区切り） */
+    readonly aka: string | undefined;
 }
 
 /**
- * <type> を属性ごと拾う。XML パーサを使わないのは読むのが 3 属性だけで、
+ * <type> を属性ごと拾う。XML パーサを使わないのは読むのが数属性だけで、
  * かつ XML の属性値に " が入らないため（tools/migrate-design.mjs と同じ判断）。
  */
 function readTypes(db: string): PaletteType[] {
@@ -36,7 +38,13 @@ function readTypes(db: string): PaletteType[] {
         label: /\slabel="([^"]*)"/.exec(tag)?.[1],
         sql: /\ssql="([^"]*)"/.exec(tag)?.[1],
         fk: /\sfk="([^"]*)"/.exec(tag)?.[1],
+        aka: /\saka="([^"]*)"/.exec(tag)?.[1],
     }));
+}
+
+/** aka の 1 件ずつ（大小無視で照合されるので比較は大文字に寄せる） */
+function akaNames(t: PaletteType): string[] {
+    return (t.aka?.split("|") ?? []).map((n) => n.toUpperCase());
 }
 
 /** id -> 添字。tools 側と js/io/palette.ts の indexOfId と同じ規則 */
@@ -105,25 +113,80 @@ describe("型パレットの id 規則（段階4-2b）", () => {
                 }
                 expect(dup).toEqual([]);
             });
+
+            test("aka が他の型の sql と衝突しない（段階6-3）", () => {
+                /*
+                 * TypePalette.indexOfTypeNameStrict は sql を全型走査してから aka を走査する
+                 * ので、衝突しても sql が勝つ（＝黙って別の型になることはない）。それでも
+                 * ここで止めるのは、衝突した aka が**永遠に届かない死んだ別名**になるため。
+                 * 「別名を書いたのに効かない」を静かに残さない。
+                 */
+                const sqls = new Set(
+                    types.map((t) => t.sql?.toUpperCase()).filter((s) => s !== undefined),
+                );
+                const clashing = types.flatMap((t) =>
+                    akaNames(t)
+                        .filter((n) => sqls.has(n))
+                        .map((n) => `[${t.index}] id=${t.id} aka=${n}`),
+                );
+                expect(clashing).toEqual([]);
+            });
+
+            test("aka がパレット内で重複しない（段階6-3）", () => {
+                /* 同じ別名を 2 つの型が主張すると、解決は並び順という偶然に決まる */
+                const seen = new Map<string, string>();
+                const dup: string[] = [];
+                for (const t of types) {
+                    for (const name of akaNames(t)) {
+                        const first = seen.get(name);
+                        if (first !== undefined) {
+                            dup.push(`${name}: ${first} と ${t.id}`);
+                        } else {
+                            seen.set(name, `${t.id}`);
+                        }
+                    }
+                }
+                expect(dup).toEqual([]);
+            });
+
+            test("sql がパレット内で重複しない", () => {
+                /*
+                 * 6-2 まで db/postgresql/datatypes.xml が sql="BIGINT" を bigint と x_real の
+                 * 2 か所に持っていた（known-issue #3 の本体）。**6-3 の撤去で 5 パレットすべてが
+                 * 重複 0 になった**ので、ここを検査に変えて再発を止める。
+                 */
+                const seen = new Map<string, string>();
+                const dup: string[] = [];
+                for (const t of types) {
+                    if (t.sql === undefined) continue;
+                    const first = seen.get(t.sql);
+                    if (first !== undefined) {
+                        dup.push(`${t.sql}: ${first} と ${t.id}`);
+                    } else {
+                        seen.set(t.sql, `${t.id}`);
+                    }
+                }
+                expect(dup).toEqual([]);
+            });
         });
     }
 
-    test("x_ 接頭辞は撤去予定の entry にだけ付いている", () => {
+    test("x_ 接頭辞の entry は 1 つも残っていない", () => {
         /*
          * x_ は「そのプロファイルの正規語彙に無い entry」の印（規則は docs/FORMAT.md）。
          * 4-2b 時点の実測は 2 件（postgresql の Real と vfp9 の Integer (not key)）で、
-         * どちらも sql 属性が壊れているもの。6-1 で vfp9 が対応 DB から外れ、残るのは
-         * postgresql の Real（sql="BIGINT"。Big Integer と重複 ＝ known-issue #3 の本体）だけ。
+         * どちらも sql 属性が壊れているもの。6-1 で vfp9 が対応 DB から外れ、
+         * **6-3 の PG18 パレット差し替えで x_real も撤去されて 0 件になった**
+         * （移行先は bigint。表は CUSTOMIZATIONS.md の段階6-3）。
          *
-         * 増えていたら、パレットに新しい壊れた entry が入ったということ。
-         * 6-3 の PG18 パレット差し替え（x_real が消える）で 0 件になる。
-         * 対応 DB の決定は CUSTOMIZATIONS.md の 6-0。
+         * 期待値を [] にしたので、**壊れた entry を新しく足すとここが赤くなる**。
+         * そのとき考えるべきは「x_ を付けて通す」ではなく「なぜ壊れた型を入れるのか」。
          */
         const flagged = DB_PROFILES.flatMap((db) =>
             readTypes(db)
                 .filter((t) => t.id?.startsWith("x_"))
                 .map((t) => `${db}: ${t.id} (label=${t.label}, sql=${t.sql})`),
         );
-        expect(flagged).toEqual(["postgresql: x_real (label=Real, sql=BIGINT)"]);
+        expect(flagged).toEqual([]);
     });
 });

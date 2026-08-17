@@ -131,7 +131,13 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
      *
      * 段階4-5 まではここが <default>NULL</default> を読んでいた。#2 を直して
      * 「既定なし」の行から <default> が消えたので、実在する既定値へ寄せた
-     * （users.id の uuidv7()。INTEGER は quote 属性が空なので生値のまま出る）。
+     * （users.id の uuidv7()）。
+     *
+     * **段階6-3 で引用符が付いた。** 6-3 まで uuid 型がパレットに無く、この行は
+     * quote="" の INTEGER に落ちていた（known-issue #4）。uuid は他の非数値型と同じく
+     * quote="'" なので、式であっても引用符で囲まれる —— これは 6-3 が作った不具合では
+     * なく、`DEFAULT 'now()'` として golden に前からある癖（tests/golden/README.md）。
+     * 型の quote 属性を式にも当ててしまう設計そのものの問題で、直すのは §6.3（6-5）。
      */
     test("<default> の後にも改行が入る（1 要素 1 行）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
@@ -139,7 +145,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
 
         const xml = await toXml(page);
 
-        expect(xml).toContain("<default>uuidv7()</default>\n");
+        expect(xml).toContain("<default>'uuidv7()'</default>\n");
         expect(xml).not.toContain("</default><");
     });
 

@@ -19,7 +19,7 @@ npm run test:all      # 両方
 npm run known-issues  # 既知の不具合の再現確認（上記いずれにも含まれない）
 npm run test:dist     # build 成果物（dist/）のスモーク。上記いずれにも含まれない
 npm run typecheck     # js/ src/ tests/ と *.config.ts（strict / noUncheckedIndexedAccess）
-npm run migrate:design -- <ファイル>  # 設計 JSON を formatVersion 1 -> 2 に移行（§4 段階4-2b）
+npm run migrate:design -- <ファイル>  # 設計 JSON の移行（§4 段階4-2b の形式 ＋ §6 段階6-3 の型 id）
 ```
 
 `npm run test:browser` と `npm run known-issues` は **Vite dev server** を Playwright が勝手に起動する
@@ -216,20 +216,29 @@ serializer は型解決以外 DB 非依存なので DB 横断はしない（そ�
 
 **型 `id` の規則そのもの**は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts) が
 全プロファイルについて見る（正規表現への適合・パレット内の一意性・`fk` の参照先が実在すること・
-`x_` が付いている entry の一覧）。
-**移行ツール**の規則は [`../tests/node/migrate-design.test.ts`](../tests/node/migrate-design.test.ts)。
+`sql` と `aka` が重複しないこと・`x_` が付いている entry が 0 件であること）。
+**移行ツール**の規則は [`../tests/node/migrate-design.test.ts`](../tests/node/migrate-design.test.ts)
+（形式 v1 → v2 と、段階6-3 の型 `id` 移行表の両方）。
 ツールが serializer と同じバイト列を書くことは、`tests/golden/json/` の 7 本が
-**ツールで移行したもの**であることをもって golden テストが毎回確認している。
+**ツールで移行したもの**であることをもって golden テストが毎回確認している ——
+6-3 では `types-matrix.json` にツールを当てた結果が、`golden:update` で採り直した
+serializer の出力と 1 バイトも違わなかった（**読み込み側と移行ツールの `size` の扱いが
+一致していることの機械的な証明**でもある）。
 
-### 型解決 — golden より手前で押さえる 2 本（§6 段階6-2）
+### 型解決 — golden より手前で押さえる 2 本（§6 段階6-2 / 6-3）
 
 型パレットを引く経路（`<datatype>` の名前 → 添字、`fk` → 子行の型）は golden に間接的にしか
 現れない。6-2 が照合規則を触ったので、**規則そのものを直接見るテスト**を 2 本置いた。
 
 | ファイル | 担当 |
 |---|---|
-| [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../js/io/palette.ts`](../js/io/palette.ts) を直に叩く（ハーネス不要。import 0 本のモジュールなので `conflict.test.ts` と同じ立場）。**旧規則の参照実装をテスト内に置き、全プロファイル × 全候補名で新旧を突き合わせる差分テスト**が主役で、差分が `postgresql/BIGINT` の 1 件だけであることが段階の完了判定そのもの。ほかに `fkIndexFor` の id 照合・パレット差し替え後の追随・旧パレット互換 |
-| [`../tests/browser/types.spec.ts`](../tests/browser/types.spec.ts) | 実ブラウザ側。`BIGINT` の解決（known-issue #3 の移設先）・XML 往復の安定・**FK 自動生成**（`rowManager` の対話経路。6-2 まで自動テストが 1 本も通っていなかった面）・パレット差し替え後の FK 生成 |
+| [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../js/io/palette.ts`](../js/io/palette.ts) と [`../js/io/xml-parser.ts`](../js/io/xml-parser.ts) を直に叩く（ハーネス不要。どちらも実行時 import 0 本なので `conflict.test.ts` と同じ立場）。**旧規則の参照実装をテスト内に置き、未現代化プロファイル × 全候補名で新旧を突き合わせる差分テスト**が主役。ほかに strict の `aka` 照合（旧型名 → 新型の表をリテラルで固定）・`length` の契約・`fkIndexFor`・パレット差し替え後の追随・旧パレット互換 |
+| [`../tests/browser/types.spec.ts`](../tests/browser/types.spec.ts) | 実ブラウザ側。`BIGINT` の解決（known-issue #3 の移設先）・**`UUID` の解決と strict の例外**（#4 の移設先。6-3）・XML 往復の安定・**FK 自動生成**（`rowManager` の対話経路。6-2 まで自動テストが 1 本も通っていなかった面）・パレット差し替え後の FK 生成・**型セレクタの中身**（`Row.buildTypeSelect`。パレットを読む唯一の UI 面で golden に 1 ビットも写らない。6-3） |
+
+差分テストの主張は段階ごとに引き継いでいる。6-2 は「旧規則と違うのは `postgresql/BIGINT` の
+1 件だけ」を完了判定にしていたが、**6-3 でその原因（`x_real`）ごと撤去され、`postgresql` が
+strict 側へ移った**ので、いまは「**未現代化の 4 プロファイルは 6-2 以前と 1 件も違わない**」
+という形になっている（6-8 で `re` を触るときにここが赤くなる）。
 
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 
@@ -306,6 +315,13 @@ fs 経路はそのまま）。
 | `types-matrix` | 型パレット網羅（サイズ付き含む） |
 | `autoincrement` | `autoincrement="1"`（PG の `BIGSERIAL` 分岐） |
 | `quotes-i18n` | コメント内の `'`（XSLT の `replace-substring`）・識別子の `"`・日本語識別子 |
+
+**fixture は §6 のパレット差し替えでも動かさない。** 6-3 は `postgresql` のパレットだけを
+差し替えたが、fixture を 1 行でも触ると**全 5 プロファイルの DDL golden が動き**、
+「PG 以外は 1 バイトも動かない」という段階の完了判定がぼやける。撤去した型の旧名は
+パレット側の `aka` が受けるので、`types-matrix` は `SERIAL` / `CHAR(10)` / `JSON` を
+書いたまま新しい型に解決する。fixture が PG 用のまま全 DB に流れている構造そのものの
+是正は **6-6（DB 別 fixture の整備）**。
 
 ---
 

@@ -10,7 +10,7 @@
       "columns": [
         {
           "name": "id",
-          "type": "integer",
+          "type": "uuid",
           "default": "uuidv7()"
         },
         {
@@ -69,12 +69,12 @@
       "columns": [
         {
           "name": "id",
-          "type": "integer",
+          "type": "uuid",
           "default": "uuidv7()"
         },
         {
           "name": "author_id",
-          "type": "integer",
+          "type": "uuid",
           "comment": "執筆者 (users.id)",
           "references": [
             {
@@ -138,7 +138,7 @@
       "columns": [
         {
           "name": "article_id",
-          "type": "integer",
+          "type": "uuid",
           "references": [
             {
               "table": "articles",

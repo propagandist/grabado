@@ -2491,7 +2491,7 @@ PG 用 fixture が読めず DDL golden を採れなくなる。「現代化済�
 | 6-0 | 目的と対応 DB の記録・分割表・PG18 パレット案・移行表（本エントリ） | 無し（文書のみ） |
 | 6-1 | 撤去 4 本（削除のみ） | 28 本が**消える**。残る 35 本は 1 バイトも動かない |
 | 6-2 | 型解決の再設計（`getTypeIndex` / `getFKTypeFor` の `id` 照合化、`sql`/`re` 照合の先勝ち化） | known-issue #3 の分だけ |
-| 6-3 | PG18 パレット差し替え ＋ 設計ファイル移行（**同一 PR**） | PG の `ddl` 7・`json` 7・`state` 一部 |
+| 6-3 | PG18 パレット差し替え ＋ 設計ファイル移行（**同一 PR**） | PG の `ddl` 7・`json` 7・`state` 一部 → **実測は 11 本**（`ddl` 2・`ddl-input` 2・`json` 2・`state` 5）。旧型名を `aka` で受けたので fixture を動かさずに済み、見積りより小さくなった |
 | 6-4 | §6.2 初期テーブルテンプレート | PG の一部 |
 | 6-5 | §6.3 `output.xsl` の TS 生成器化 | 全対象プロファイル |
 | 6-6 | DB 別 fixture の整備 | 母集団の再編 |
@@ -2522,7 +2522,7 @@ PG 用 fixture が読めず DDL golden を採れなくなる。「現代化済�
 | `bigserial` | Big Serial / `BIGSERIAL` | `bigint_identity` | 同上（こちらは幅が変わらない） |
 | `x_real` | Real / **`BIGINT`** | `bigint` | **実態は `BIGINT` を出力していた**（`label` の Real は upstream の誤記＝ known-issue #3 の本体）。出力を保つほうを採る |
 | `char` | Char / `CHAR` | `text` | HANDOVER §6.1「`char(n)`→`text`」。**size が落ちる**（情報の損失を移行表に明記） |
-| `timestamp` | Timestamp / `TIMESTAMP` | `timestamp_with_time_zone` | HANDOVER §6.1「`timestamp`→`timestamptz`」 |
+| `timestamp` | Timestamp / `TIMESTAMP` | `timestamp_with_time_zone` | HANDOVER §6.1「`timestamp`→`timestamptz`」。**size は落ちない**（6-3 で訂正。`timestamptz(p)` は秒精度を取れる） |
 | `timestamp_without_time_zone` | Timestamp wo/ TZ | `timestamp_with_time_zone` | 同上 |
 | `json` | JSON / `JSON` | `jsonb` | HANDOVER §6.1「`json`→`jsonb`」 |
 
@@ -2991,6 +2991,173 @@ fixture 読込は経路が違い、リレーションを対話的に張る操作
 `tests/node/type-resolution.test.ts` の差分テストと `tests/node/palette-id.test.ts` の `x_` 検査が
 **両方赤くなる**が、どちらも「直す対象が消えた」ことによる正しい赤で、そのとき消してよい。
 known-issue #4（未知型 → 先頭型）の strict 化もこの段階から。
+
+---
+
+### 2026-08-17 HANDOVER §6「機能」段階6-3 —— PG18 パレットへ差し替え、設計ファイルを移行する
+
+6-0 の分割表の 4 本目。**`postgresql` が「現代化済み」の 1 本目**になり、残る 4 本
+（`mysql` / `mssql` / `oracle` / `sqlite`）は 6-8 で同じ形に移る。
+
+パレットは 6-0 の設計どおり **29 型 → 24 型**（7 撤去・2 追加・`sql` を 4 本修正）。
+撤去した型を使う設計 JSON は同じ PR で移行した —— 移行表とパレットが別 PR に分かれると
+その間リポジトリの設計ファイルが読めない（CLAUDE.md 制約1「半移行を放置しない」）。
+
+#### 決めたこと 1: 旧型名は新設の `aka` で受ける（6-0 に無かった要素）
+
+実装前に `sql` を PG18 の正式名へ直したときの影響を測ったところ、**6-0 の設計に穴があった** ——
+旧型名が照合できなくなる。とくに致命的なのは `TIMESTAMP WITH TIME ZONE` で、
+新 `sql` が `TIMESTAMPTZ` になるぶん**受け口が無くなる**。これは
+[`docs/samples/introspection-postgresql.xml`](docs/samples/introspection-postgresql.xml) の
+実出力そのもの（information_schema は標準名を返す）なので、落とすと PG18 相手の
+introspection → 設計取り込みが壊れる。同じ問題が `DECIMAL` / `FLOAT` / `DOUBLE` と
+撤去 7 型（`SERIAL` / `CHAR` / `TIMESTAMP` / `JSON` ほか）にもある。
+
+| 案 | 採否 |
+|---|---|
+| **`<type aka="…">` を新設**（`\|` 区切り・大小無視の完全一致） | **採用** |
+| 既存の `re` に旧名を書く | 却下。`re` はアンカー無し・大小区別・後勝ち（known-issue #10）。`text` に `re="CHAR"` と書くと `VARCHAR` にも当たる。避けるには PG の `re` を先勝ち・アンカー化する必要があり、**6-2 が 6-8 へ送った判断を部分的に覆す** |
+| 互換を捨てて fixture と introspection サンプルを新名に書き換える | 却下。upstream 由来の XML と introspection 出力が開けなくなる。fixture を動かすと**全 5 プロファイルの DDL golden が動き**、段階の完了判定もぼやける |
+
+`aka` に入れる名前の基準は 3 つに限る（パレットが「PG の全別名辞書」に育つのを防ぐ）:
+**(1) 撤去した型の旧 `sql` / `re`、(2) `sql` を直した 4 型の旧 `sql`、(3) PG が公式に認める
+短縮別名**（`int4` / `float8` / `bool` ほか）。
+
+照合は **`sql` を全型走査 → 決まらなければ `aka` を全型走査**の 2 段。型ごとに両方を見る
+1 段走査だと、並び順次第で**前の型の `aka` が後の型の `sql` を奪う**（`TIME WITH TIME ZONE` は
+`time_with_time_zone` の `sql` で、`timestamp_with_time_zone` の `aka` でもありうる）。
+`aka` が他の型の `sql` と衝突しないことは `tests/node/palette-id.test.ts` が全プロファイルで
+機械的に押さえるので、2 段走査はその二重化になっている。
+
+#### 決めたこと 2: `strict="1"` は「現代化済み」の印で、3 つを同時に切り替える
+
+6-0 の決めたこと 2(b) は「現代化済み ＝ strict / 未現代化 ＝ 従来どおりフォールバック」を
+パレット側で表すと決めていた。その 1 属性が切り替えるのは 3 つ:
+
+| | strict（`postgresql`） | 従来（残る 4 本） |
+|---|---|---|
+| 照合 | `sql` / `aka` の**大小無視の完全一致**のみ。`re` は見ない | `sql` 先勝ち ＋ `re` 後勝ち（#10） |
+| 未知型 | **例外**（#4 の解消） | 黙って先頭型（#4） |
+| `size` | 寄せ先が `length="0"` なら**捨てる** | そのまま残す |
+
+**PG パレットから `re` を全廃した**（`aka` へ移した）ので、`postgresql` では #10 の 3 欠陥が
+まとめて消えている。6-8 は各プロファイルでこれと同じことをやる段階になり、6-3 がその型紙。
+
+#### 決めたこと 3: `formatVersion` は上げない（2 のまま）
+
+4-2b は型キーが `label` → `id` と**構造ごと**変わったので版を上げた。6-3 で動くのは
+`columns[].type` に入る**値だけ**で、キーの構造は 1 つも変わらない。移行し忘れたファイルは
+「その `id` が現在のパレットに無い」で `json-parser.ts` が位置つきに落とすので、
+**版を上げなくても移行済みかを機械判定できる**。上げると内容の変わらない 6 本まで
+`formatVersion` の 1 行が動き、「意味のある差分だけが git diff に出る」（制約3）から遠のく。
+
+移行ツールは [`tools/migrate-design.mjs`](tools/migrate-design.mjs) に**同じ 1 パスとして**足した
+（`formatVersion: 1` のファイルは「`label` → `id` → 寄せ先」と連鎖する）。規則 5 つと表は
+[`docs/FORMAT.md`](docs/FORMAT.md) の「パレットを差し替えるときの移行」に確定版を置いた。
+
+**v1 の移行は現在のパレットの `label` を引く**ので、6-3 で消えた `label`（`Serial` / `Char` /
+`Real` ほか）を持つ v1 ファイルは移行できなくなった。歴史的な label 表をツールへ焼くより
+落ちて気づく形を採る —— **v1 のファイルはリポジトリに 1 本も無い**ことを確認済み
+（4-2 が書いた形式で、7 本とも 4-2b で v2 へ移行してある）。
+
+#### 決めたこと 4: `length` を契約にした（6-0 の移行表を 1 行訂正）
+
+`CHAR(10)` が `text` に寄ると size の "10" が残り、[`js/io/ddl-xml.ts`](js/io/ddl-xml.ts) が
+`TEXT(10)` という**構文として壊れた DDL** を吐く（size があれば必ず括弧を付ける）。
+判断材料は `<type length="…">` にあるが、**この属性は `js/` のどこからも読まれていなかった**
+（upstream 由来の死んだ属性で、size は型と無関係な自由文字列だった）。6-3 で読む契約にし、
+PG18 の実際に合わせて 4 型を直した:
+
+| `id` | 旧 | 新 | 理由 |
+|---|---|---|---|
+| `bytea` / `xml` | 1 | **0** | 精度を取らない |
+| `time_with_time_zone` / `timestamp_with_time_zone` | 0 | **1** | `timetz(p)` / `timestamptz(p)` は秒精度を取れる |
+
+これで **6-0 の移行表が 1 行変わる** —— 「`timestamp` → `timestamp_with_time_zone` は size が
+落ちる」と書いていたが、`timestamptz(3)` は有効なので**保つほうが情報を失わない**。
+size が落ちるのは `char` → `text` の 1 本だけになった。
+
+同じ規則を**読み込み側（`xml-parser.ts`）と移行ツールの両方**が持つ。食い違うと
+「移行したファイル」と「XML から読み直したファイル」が別物になるので、
+**一致は golden が見ている** —— 移行ツールが書いた `json/types-matrix.json` が、
+`golden:update` で採り直した serializer の出力と 1 バイトも違わないこと。
+
+#### 決めたこと 5: `fromXML` は同梱パレットが無ければ parse を先に置く
+
+6-3 から parse が例外を投げうるので、**`clearTables()` が先だと読めないファイルを開いただけで
+今の設計が消える**。実装中に `tests/browser/types.spec.ts` が実際にこれを捉えた
+（例外メッセージは一致したが、開いていた設計が空になっていた）。
+
+4-1b は「`clearTables()` は旧パレット・parse は新パレット」という順序制約を理由に
+clear を先に置いていたが、**その制約は同梱 `<datatypes>` を持つ XML にしか無い**
+（差し替えが起きなければ clear と parse の間でパレットは動かない）。同梱パレットを持つのは
+4-4 以前に grabado が書いた XML と一部の upstream ファイルだけなので、経路を分けて
+**大多数を守った**。そちらまで守るにはパレット差し替えのロールバックか破棄したツリーの
+復元が要り、どちらも「読み込みの失敗」1 点のためにライブ側へ状態を増やすことになる。
+
+#### 決めたこと 6: この段階に入れなかった 4 件と送り先
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| `output.xsl` の `@autoincrement=1` → `BIGSERIAL` 固定 | **6-5**（§6.3） | 分割表どおり `output.xsl` はまとめて TS 化する。おかげで `ddl/*/autoincrement.sql` が全 5 DB で無差分になり、完了判定が明確になった |
+| `DEFAULT 'uuidv7()'` のように式が引用符で囲まれる | **6-5** | 型の `quote` 属性を式にも当ててしまう設計の問題。**6-3 が作った不具合ではなく**、`DEFAULT 'now()'` として前から golden にある（`tests/golden/README.md`）。uuid が解決するようになって適用範囲が広がっただけ |
+| `BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL` の重複 | **6-5** | `sql` に制約句が入っており `output.xsl` はその後ろに `NOT NULL` を足すだけ。PG の構文としては有効（どちらも column_constraint）なので実害は冗長さのみ |
+| 新規行の既定型（`Row` のコンストラクタ既定 `type: 0`） | **6-4**（§6.2） | `integer` を添字 0 に保ったので現状維持。house 既定は uuid PK なので初期テンプレートと合わせて判断する |
+
+#### 検証
+
+**赤くなったテストを 1 件ずつ説明できることが影響範囲の証明**（6-1 / 6-2 と同じ手法）。
+期待値を 1 行も直さずに全ハーネスを回した時点で赤は **17 件**で、内訳は次の 3 群に尽きた:
+
+| 群 | 件数 | 中身 |
+|---|---|---|
+| golden の期待値が動く | 11 | `ddl/postgresql` 2・`ddl-input` 2・`json` 2・`state` 5 |
+| 主張が消えたテスト | 4 | 6-2 の差分テスト（`x_real` の撤去で空になる）・`x_` 検査・`UUID` が -1・`fkIndexFor(serial)` |
+| パレットを読むテスト | 2 | `label -> id`（`Timestamp w/ TZ` / `Real`）・移行ツールの表 |
+
+**`ddl/{mysql,mssql,oracle,sqlite}` の 28 本は 1 バイトも動いていない** —— これが段階の完了判定。
+
+```
+$ grep -c '<type ' db/postgresql/datatypes.xml          # 24
+$ for db in $(ls db); do grep -o 'sql="[^"]*"' db/$db/datatypes.xml | sort | uniq -d; done
+                                                        # 空（6-2 で残していた BIGINT の重複が消えた）
+$ grep -c 're="' db/postgresql/datatypes.xml            # 0（すべて aka へ移した）
+$ grep -o 'fk="[^"]*"' db/*/datatypes.xml               # postgresql の fk="bigint" 1 行だけ
+$ git status --porcelain tests/golden/ddl/{mysql,mssql,oracle,sqlite}
+                                                        # 空
+$ npm run migrate:design -- tests/golden/json/*.json    # 1 migrated, 6 skipped
+$ npm run golden:update && git diff tests/golden/json/  # 移行ツールの出力と 1 バイトも違わない
+```
+
+最後の 2 行が**この段階でいちばん強い検証**になっている。移行ツール（`tools/`）と
+読み込み側（`js/io/xml-parser.ts`）は `size` の扱いという同じ規則を別々に実装しているので、
+両者が一致しなければ diff が出る。
+
+テスト件数（左が `develop`、右が本段階）:
+
+| | 前 | 後 |
+|---|---|---|
+| `npm test` | 166 passed / 7 skipped | **209 passed / 7 skipped**（`type-resolution` +21・`palette-id` +15・`migrate-design` +9） |
+| `npm run test:browser` | 115 passed | **119 passed**（`types.spec.ts` +4） |
+| `npm run known-issues` | 5 passed | 5 passed（#4 / #10 を未現代化プロファイルの主張に寄せた） |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+`tests/fixtures/` は **1 行も動かしていない**（コメントのみ書き直した）。`types-matrix.xml` は
+`SERIAL` / `CHAR(10)` / `JSON` を書いたまま新しい型に解決する ＝ **互換で読む XML の受け口が
+そのままテストされている**形になっている。
+
+**UI の実操作は使い捨ての spec で一巡した**（型セレクタ・セレクタ操作 → DDL 生成・FK の対話生成・
+`pageerror` 0 件）。うち **`Row.buildTypeSelect` だけを恒久テストに残した** —— パレットを読む
+唯一の UI 面で、golden には 1 ビットも写らない（golden はすべて `toXML` / `toJson` 経由で採る）。
+6-3 は label を動かし型を 5 本減らしたので、ここが動いたことに気づける経路が要る。
+マウス操作そのものを張るテストは今も 0 本のまま（[`docs/TESTING.md`](docs/TESTING.md)）。
+
+**次段階への入力 —— 6-4（§6.2 初期テーブルテンプレート）**。パレットは `integer` が添字 0 の
+ままなので、新規行の既定型は現状維持。house 既定（`id uuid DEFAULT uuidv7()` ＋ `created_at` /
+`updated_at` の `timestamptz`）を出すのに必要な型は 6-3 でそろった。`uuidv7()` を既定値に
+入れると `DEFAULT 'uuidv7()'` と引用されるので、**テンプレートの既定値を決めるときは
+6-5（`quote` の扱い）と順序を確認すること**。
 
 ---
 

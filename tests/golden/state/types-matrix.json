@@ -63,7 +63,7 @@
         },
         {
           "title": "c_decimal",
-          "type": 3,
+          "type": 4,
           "size": "12,2",
           "def": "",
           "nll": true,
@@ -85,7 +85,7 @@
         },
         {
           "title": "c_serial",
-          "type": 4,
+          "type": 3,
           "size": "",
           "def": "",
           "nll": false,
@@ -109,7 +109,7 @@
         },
         {
           "title": "c_bigserial",
-          "type": 5,
+          "type": 3,
           "size": "",
           "def": "",
           "nll": false,
@@ -131,7 +131,7 @@
         },
         {
           "title": "c_float",
-          "type": 7,
+          "type": 5,
           "size": "",
           "def": "",
           "nll": true,
@@ -153,7 +153,7 @@
         },
         {
           "title": "c_double",
-          "type": 8,
+          "type": 6,
           "size": "",
           "def": "",
           "nll": true,
@@ -175,8 +175,8 @@
         },
         {
           "title": "c_char",
-          "type": 9,
-          "size": "10",
+          "type": 8,
+          "size": "",
           "def": "",
           "nll": true,
           "ai": false,
@@ -197,7 +197,7 @@
         },
         {
           "title": "c_varchar",
-          "type": 10,
+          "type": 7,
           "size": "255",
           "def": "",
           "nll": true,
@@ -219,7 +219,7 @@
         },
         {
           "title": "c_text",
-          "type": 11,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": true,
@@ -241,7 +241,7 @@
         },
         {
           "title": "c_bytea",
-          "type": 12,
+          "type": 9,
           "size": "",
           "def": "",
           "nll": true,
@@ -263,7 +263,7 @@
         },
         {
           "title": "c_boolean",
-          "type": 13,
+          "type": 10,
           "size": "",
           "def": "",
           "nll": true,
@@ -285,7 +285,7 @@
         },
         {
           "title": "c_date",
-          "type": 14,
+          "type": 11,
           "size": "",
           "def": "",
           "nll": true,
@@ -307,7 +307,7 @@
         },
         {
           "title": "c_time",
-          "type": 15,
+          "type": 12,
           "size": "3",
           "def": "",
           "nll": true,
@@ -329,7 +329,7 @@
         },
         {
           "title": "c_time_tz",
-          "type": 16,
+          "type": 13,
           "size": "",
           "def": "",
           "nll": true,
@@ -351,7 +351,7 @@
         },
         {
           "title": "c_interval",
-          "type": 17,
+          "type": 14,
           "size": "6",
           "def": "",
           "nll": true,
@@ -373,7 +373,7 @@
         },
         {
           "title": "c_timestamp",
-          "type": 18,
+          "type": 15,
           "size": "3",
           "def": "",
           "nll": true,
@@ -395,7 +395,7 @@
         },
         {
           "title": "c_timestamp_tz",
-          "type": 19,
+          "type": 15,
           "size": "",
           "def": "",
           "nll": true,
@@ -417,7 +417,7 @@
         },
         {
           "title": "c_timestamp_wo_tz",
-          "type": 20,
+          "type": 15,
           "size": "",
           "def": "",
           "nll": true,
@@ -439,7 +439,7 @@
         },
         {
           "title": "c_xml",
-          "type": 21,
+          "type": 17,
           "size": "",
           "def": "",
           "nll": true,
@@ -461,7 +461,7 @@
         },
         {
           "title": "c_bit",
-          "type": 22,
+          "type": 18,
           "size": "8",
           "def": "",
           "nll": true,
@@ -483,7 +483,7 @@
         },
         {
           "title": "c_varbit",
-          "type": 23,
+          "type": 19,
           "size": "8",
           "def": "",
           "nll": true,
@@ -505,7 +505,7 @@
         },
         {
           "title": "c_inet",
-          "type": 24,
+          "type": 20,
           "size": "",
           "def": "",
           "nll": true,
@@ -527,7 +527,7 @@
         },
         {
           "title": "c_cidr",
-          "type": 25,
+          "type": 21,
           "size": "",
           "def": "",
           "nll": true,
@@ -549,7 +549,7 @@
         },
         {
           "title": "c_geometry",
-          "type": 26,
+          "type": 22,
           "size": "",
           "def": "",
           "nll": true,
@@ -571,7 +571,7 @@
         },
         {
           "title": "c_json",
-          "type": 27,
+          "type": 23,
           "size": "",
           "def": "",
           "nll": true,
@@ -593,7 +593,7 @@
         },
         {
           "title": "c_jsonb",
-          "type": 28,
+          "type": 23,
           "size": "",
           "def": "",
           "nll": true,

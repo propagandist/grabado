@@ -16,7 +16,9 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 `json/` だけは他の 3 つと性格が違う。**現行実装の実出力ではなく、grabado が決めた新しい正本
 フォーマット**（`formatVersion: 2`。仕様は [`../../docs/FORMAT.md`](../../docs/FORMAT.md)）で、
 現行の癖のうち known-issues #2 / #3 / #4 / #5 は**意図的に持ち込んでいない**
-（#2 は §4 段階4-5 で、#3 は §6 段階6-2 で本体ごと消えたので、いまは XML 側にも無い）。
+（#2 は §4 段階4-5 で、#3 は §6 段階6-2 で本体ごと消え、#4 は 6-3 で PG から消えたので、
+いまは XML 側にも無い）。**7 本は移行ツールが書いたバイト列**（[`../../tools/migrate-design.mjs`](../../tools/migrate-design.mjs)）
+で、それが serializer の出力と一致することを golden テストが毎回見ている。
 「この形が設計を過不足なく運べる」ことの根拠は golden ではなく、XML 経由と JSON 経由で
 状態スナップショットが一致することを見る「情報保存」テストのほう。
 
@@ -37,13 +39,22 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 正常系の入力でも、現行実装の欠陥はそのまま出力に出る。golden を読むときはこれを踏まえること。
 それぞれ [`../known-issues/`](../known-issues/) に独立したテストがあり、**移植で直せばそちらが赤くなる**。
 
-- `UUID` が型パレットに無く `INTEGER` に落ちている（known-issues #4）
 - `users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る（known-issues #6）
-- `DEFAULT 'now()'` のように式が引用符で囲まれる（型の `quote` 属性をそのまま適用するため）
+- `DEFAULT 'now()'` / `DEFAULT 'uuidv7()'` のように式が引用符で囲まれる
+  （型の `quote` 属性をそのまま適用するため。直すのは §6.3 ＝ 6-5）
+- `BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL` のように制約が重なる
+  （`sql` に制約句が入っており、`output.xsl` はその後ろに `NOT NULL` を足すだけのため。同じく 6-5）
+- **未現代化のプロファイル**（`mysql` / `mssql` / `oracle` / `sqlite`）では `UUID` が
+  型パレットに無く `INTEGER` に落ちている（known-issues #4）
 
 **§6 段階6-2 の型解決の再設計では 1 バイトも動かなかった** —— 直したのは `sql="BIGINT"` の
 重複を後勝ちで拾う癖（#3）で、`types-matrix` fixture が `BIGINT` を持たないため
 （隔離先は [`../known-issues/fixtures/bigint-drift.xml`](../known-issues/fixtures/bigint-drift.xml)）。
+
+**§6 段階6-3（PG18 パレット差し替え）で `postgresql` の 11 本が動いた**（`ddl` 2 / `ddl-input` 2 /
+`json` 2 / `state` 5）。`UUID` → `INTEGER` の落ち方（#4）が PG から消えたのが主で、ほかに
+`NUMERIC` / `TIMESTAMPTZ` / `REAL` / `DOUBLE PRECISION` / identity への置き換え。
+**他 4 プロファイルの `ddl` 28 本は 1 バイトも動いていない** —— それが段階の完了判定。
 
 §4 段階4-4 で `<default>` の後だけ改行が無い癖（旧 known-issues #8）は消えた。
 **§4 段階4-5 で「既定値の無い行に `<default>NULL</default>` が生える」癖（旧 known-issues #2）も

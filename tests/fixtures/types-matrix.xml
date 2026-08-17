@@ -3,11 +3,17 @@
   特性化テスト fixture: db/postgresql/datatypes.xml の型パレットを網羅する。
   サイズ付き（length="1"）の型は括弧つきで書き、Row.fromXML のサイズ抽出も通す。
 
+  **書かれている型名は段階6-3 以前の PG パレットのもの**（SERIAL / CHAR / JSON など、
+  6-3 で撤去された 7 型を含む）。fixture を 1 行でも動かすと全 5 プロファイルの
+  DDL golden が動き、「PG 以外は 1 バイトも動かない」という 6-3 の完了判定がぼやけるので、
+  **旧名のまま置いてある** —— パレット側の aka がそれを新しい型に解決する
+  （SERIAL -> bigint_identity / CHAR -> text / JSON -> jsonb …）。互換で読む XML の
+  受け口がそのままテストされている形。母集団の再編は 6-6（DB 別 fixture の整備）。
+
   BIGINT は外してある。段階6-2 まではこれが Real に化ける既知の不具合（#3）だったため
-  tests/known-issues/ 側に隔離していた。6-2 で直った後も**入れない** —— 列を足すと
-  DDL golden 5 本と json/state golden の中身が動き、「golden が 1 バイトも動かない」という
-  段階の完了判定がぼやけるため（母集団を動かさない判断は tests/support/fixtures.ts）。
-  BIGINT の解決は tests/browser/types.spec.ts が押さえている。母集団の再編は 6-6。
+  tests/known-issues/ 側に隔離していた。6-2 で直り 6-3 で entry ごと消えた後も**入れない** ——
+  理由は上と同じ（母集団を動かさない判断は tests/support/fixtures.ts）。
+  BIGINT の解決は tests/browser/types.spec.ts が押さえている。
 -->
 <sql>
 <table x="20" y="20" name="type_samples">

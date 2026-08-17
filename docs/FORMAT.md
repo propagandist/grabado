@@ -10,8 +10,9 @@ grabado の**正本フォーマット**。git 管理のファイルとして保�
 > `""` の 1 通りに → 4-6 で保存前の外部変更検知。保存（textarea / クリップボード / ダウンロード /
 > localStorage / server）はすべてこの形式で、読み込みは JSON と XML の両方を受ける
 > （形式は中身の先頭 1 文字で判別する。[`../js/io/detect.ts`](../js/io/detect.ts)）。
-> **次に本書が動くのは §6.1（PostgreSQL 18 型パレットへの差し替え）** —— そのとき `id` の
-> 移行表が要る（「パレットを差し替えるときの移行」）。
+> **§6 段階6-3（PG18 パレット差し替え）で形式そのものは 1 バイトも変わらなかった** ——
+> 動いたのは `columns[].type` に入る値（型 `id`）だけで、`formatVersion` は 2 のまま。
+> 移行の規則は「パレットを差し替えるときの移行」に確定版がある。
 
 ## 例
 
@@ -155,23 +156,54 @@ UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.
 ので、移行し忘れた `formatVersion: 1` のファイルが「たまたま読めてしまう」ことが原理的に起きない。
 
 4-2b 時点で `x_` が付いているのは実測 2 件だけだった（`postgresql: x_real` ＝ known-issue #3 の本体、
-`vfp9: x_integer_not_key`）。**6-1 の撤去で `vfp9` が対応 DB から外れ、残るのは `x_real` の 1 件。
-6-3 の PG18 パレット差し替えでこれも消えて 0 件になる。** 6-2 で #3 の症状（`BIGINT` が Real に
-化ける）は直ったが、**entry 自体はまだ在る**ので `x_` は付いたまま。
-規則そのものの検査は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts)。
+`vfp9: x_integer_not_key`）。6-1 の撤去で `vfp9` が対応 DB から外れ、**6-3 の PG18 パレット
+差し替えで `x_real` も消えて 0 件になった**（移行先は `bigint`）。
+規則そのものの検査は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts) で、
+6-3 から `sql` と `aka` がパレット内で重複しないことも同じ場所が見る。
 
-#### パレットを差し替えるときの移行
+`label` が実際に動いたのは 6-3 が最初（`Timestamp w/ TZ` → `Timestamptz`、`Decimal` → `Numeric`）。
+**設計ファイルは 1 バイトも影響を受けていない** —— それが規則 3 の目的そのもので、
+`fk` を label 参照から id 参照に移した 6-2 の下準備がここで効いている。
+
+#### パレットを差し替えるときの移行（**規則は段階6-3 で確定**）
 
 読み込み時に**現在の型パレットに無い `id` は例外**にする（known-issues #4 の「一致が無ければ
 先頭の型」を持ち込まない）。正本を黙って別の型で開くのが最悪の失敗だから。
 
 §6 でパレットを現代化すると、撤去された型を使っているファイルはここで落ちる。**その段階が
 同じ PR で移行を持つ**（移行表とパレットが別の PR に分かれると、その間リポジトリの設計ファイルが
-読めない ＝ CLAUDE.md 制約1「半移行を放置しない」に反する）。**移行表の形と規則は 6-3**
-（PG18 パレット差し替えと同じ PR）で確定する。**表そのものは
-[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の 6-0 の記録**にある
-—— 4-2b の移行が「label → id」の全射だったのに対し、§6 の移行は「消えた型をどこに寄せるか」という
-意味的判断を含むので、形が違う。
+読めない ＝ CLAUDE.md 制約1「半移行を放置しない」に反する）。6-3 が PG18 パレットで
+実際にそれをやったので、以下がその規則。
+
+| # | 規則 |
+|---|---|
+| 1 | **`formatVersion` は上げない。** キーの構造は変わらず値（型 `id`）だけが変わる。移行漏れは「その `id` が現在のパレットに無い」で parser が位置つきに落とすので、版を上げなくても機械判定できる（4-2b は型キーが `label` → `id` と**構造ごと**変わったので上げた） |
+| 2 | 表は**プロファイルごと**に持つ（`tools/migrate-design.mjs` の `TYPE_MIGRATIONS`）。型 `id` はプロファイル内で一意なだけなので、`db` を見ずに当てると別プロファイルの同名 `id` を巻き込む |
+| 3 | 寄せ先が `length="0"`（サイズを取らない型）なら **`size` キーも落とす**。`char(10)` → `text` で残すと `TEXT(10)` という壊れた DDL が出る。**同じ判断を読み込み側（[`../js/io/xml-parser.ts`](../js/io/xml-parser.ts)）も持つ**ので、両者が食い違うと「移行したファイル」と「XML から読み直したファイル」が別物になる |
+| 4 | **表に無い未知の `id` はツールが動かさない。** そのまま残して parser に落とさせる —— ツールが勝手に寄せると、移行表に無い判断を静かに下すことになる |
+| 5 | 移行先が現在のパレットに実在することをツールが毎回検算する（表とパレットの食い違いで**黙って読めないファイルを書く**のを止める） |
+
+段階6-3 の表（PG18・7 型）:
+
+| 旧 `id` | 新 `id` | 備考 |
+|---|---|---|
+| `serial` / `bigserial` | `bigint_identity` | HANDOVER §6.1「`serial` → identity」。`serial` は int4 → int8 に広がる（安全側） |
+| `x_real` | `bigint` | 実態が `BIGINT` を出力していた（known-issues #3 の本体） |
+| `char` | `text` | §6.1「`char(n)` → `text`」。**`size` が落ちる**（唯一の情報の損失） |
+| `timestamp` / `timestamp_without_time_zone` | `timestamp_with_time_zone` | §6.1「`timestamp` → `timestamptz`」。`size` は**残す**（PG の `timestamptz(p)` は秒精度を取れる） |
+| `json` | `jsonb` | §6.1「`json` → `jsonb`」 |
+
+4-2b の移行が「`label` → `id`」の全射だったのに対し、この移行は「消えた型をどこに寄せるか」という
+意味的判断を含む。**だから表は 6-0 で設計してから 6-3 が実装した**（経緯は
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)）。ツールは 2 種類の移行を同じ 1 パスで適用する
+ので、`formatVersion: 1` のファイルは「`label` → `id` → 寄せ先」と連鎖する。
+
+**互換で読む XML 側は別の仕掛けで受ける。** 撤去した型の旧 `sql` 名（`SERIAL` / `CHAR` /
+`TIMESTAMP` …）と、`sql` を PG18 の正式名に直した 4 型の旧名（`DECIMAL` / `FLOAT` / `DOUBLE` /
+`TIMESTAMP WITH TIME ZONE`）は、`<type aka="…">` の別名として解決する。
+移行表が「旧 `id` → 新 `id`」なのに対し `aka` は「旧 `sql` 名 → 新しい型」で、**別物**。
+`TIMESTAMP WITH TIME ZONE` は introspection の実出力そのもの（`docs/samples/`）なので、
+ここを落とすと information_schema 由来の XML が読めなくなる。
 
 ### 参照は名前で持つ
 

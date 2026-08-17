@@ -482,18 +482,35 @@ export class Designer extends Visual<DesignerDom> {
      * rowManager.select(false) -> Row.deselect() -> redraw() -> getColor() ->
      * getDataType() とたどってパレットを読むので、先に差し替えると古い添字で
      * 新パレットを引くことになる。逆に parse（行の型解決）は**新パレット**で走る。
-     * したがって clear -> setRoot -> parse -> apply の順は入れ替えられない。
+     * したがって同梱パレットがある経路では clear -> setRoot -> parse -> apply の順を
+     * 入れ替えられない。
+     *
+     * **段階6-3 で「同梱パレットが無い」経路を分けた。** 6-3 から parse は例外を投げうる
+     * （strict なプロファイルの未知型。known-issue #4 の解消）ので、clear が先だと
+     * **読めないファイルを開いただけで今の設計が消える**。fromJson が 4-2b から
+     * parse を先に置いているのと同じ理由で、パレットを差し替えないなら順序制約は
+     * 生じない（clear と parse の間でパレットが動かない）から先に置ける。
+     *
+     * 同梱パレットを持つのは 4-4 以前に grabado が書いた XML と一部の upstream ファイルだけ
+     * （4-4 で <datatypes> の全文埋め込みを撤去した）ので、**守れないのは古い形式の
+     * 一部に限られる**。そちらまで守るにはパレット差し替えのロールバックか、
+     * 破棄したツリーの復元が要る —— どちらも「読み込みの失敗」1 点のために
+     * ライブ側へ状態を増やすことになるので採らない。
      *
      * 基底 Visual の空 fromXML() は同時に撤去した（4-1a の toXML() と同じ論法。
      * 残すと table.fromXML() の消し漏れが TypeError にならず黙って何もしない）。
      * override が外れたのはそのため。
      */
     fromXML(node: Element): void {
-        this.clearTables();
         var types = parseDatatypes(node);
-        if (types) {
-            this.palette.setRoot(types);
+        if (!types) {
+            var model = parseDesignXml(node, this.palette);
+            this.clearTables();
+            applyDesignModel(this, model);
+            return;
         }
+        this.clearTables();
+        this.palette.setRoot(types);
         applyDesignModel(this, parseDesignXml(node, this.palette));
     }
 

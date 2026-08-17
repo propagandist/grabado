@@ -9,22 +9,22 @@
 <datatype>SMALLINT</datatype>
 </row>
 <row name="c_decimal" null="1" autoincrement="0">
-<datatype>DECIMAL(12,2)</datatype>
+<datatype>NUMERIC(12,2)</datatype>
 </row>
 <row name="c_serial" null="0" autoincrement="0">
-<datatype>SERIAL</datatype>
+<datatype>BIGINT GENERATED ALWAYS AS IDENTITY</datatype>
 </row>
 <row name="c_bigserial" null="0" autoincrement="0">
-<datatype>BIGSERIAL</datatype>
+<datatype>BIGINT GENERATED ALWAYS AS IDENTITY</datatype>
 </row>
 <row name="c_float" null="1" autoincrement="0">
-<datatype>FLOAT</datatype>
+<datatype>REAL</datatype>
 </row>
 <row name="c_double" null="1" autoincrement="0">
-<datatype>DOUBLE</datatype>
+<datatype>DOUBLE PRECISION</datatype>
 </row>
 <row name="c_char" null="1" autoincrement="0">
-<datatype>CHAR(10)</datatype>
+<datatype>TEXT</datatype>
 </row>
 <row name="c_varchar" null="1" autoincrement="0">
 <datatype>VARCHAR(255)</datatype>
@@ -51,13 +51,13 @@
 <datatype>INTERVAL(6)</datatype>
 </row>
 <row name="c_timestamp" null="1" autoincrement="0">
-<datatype>TIMESTAMP(3)</datatype>
+<datatype>TIMESTAMPTZ(3)</datatype>
 </row>
 <row name="c_timestamp_tz" null="1" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<datatype>TIMESTAMPTZ</datatype>
 </row>
 <row name="c_timestamp_wo_tz" null="1" autoincrement="0">
-<datatype>TIMESTAMP WITHOUT TIME ZONE</datatype>
+<datatype>TIMESTAMPTZ</datatype>
 </row>
 <row name="c_xml" null="1" autoincrement="0">
 <datatype>XML</datatype>
@@ -78,7 +78,7 @@
 <datatype>GEOMETRY</datatype>
 </row>
 <row name="c_json" null="1" autoincrement="0">
-<datatype>JSON</datatype>
+<datatype>JSONB</datatype>
 </row>
 <row name="c_jsonb" null="1" autoincrement="0">
 <datatype>JSONB</datatype>

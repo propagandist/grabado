@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  既知の不具合 #10: <type re="..."> の照合が壊れている。
+
+  - アンカーされていない（部分一致）。postgresql の integer は re="INT" なので
+    BIGINT / SMALLINT / INTERVAL すべてに当たる。
+  - 大文字小文字を区別する。postgresql の decimal は re="numeric" なので
+    大文字の NUMERIC には当たらず、一致 0 件で先頭型に落ちる。
+  - sql の完全一致より後に評価され、それを上書きする。oracle は integer(sql="INTEGER") と
+    number(re="INT") の順に並ぶので、INTEGER は NUMBER に解決される。
+-->
+<sql>
+<table x="10" y="10" name="measurements">
+<row name="c_integer" null="1" autoincrement="0">
+<datatype>INTEGER</datatype>
+</row>
+<row name="c_numeric" null="1" autoincrement="0">
+<datatype>NUMERIC</datatype>
+</row>
+</table>
+</sql>

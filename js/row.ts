@@ -199,7 +199,8 @@ export class Row extends Visual<RowDom> {
             var r = this.relations[i]!;
             if (r.row1 == this) {
                 r.row2.update({
-                    type: des.getFKTypeFor(this.data.type),
+                    /* grabado: 段階6-2 で des.getFKTypeFor() から移した（id 照合・キャッシュ無し） */
+                    type: des.palette.fkIndexFor(this.data.type),
                     size: this.data.size,
                 });
             }

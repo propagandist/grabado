@@ -66,10 +66,6 @@ export class Designer extends Visual<DesignerDom> {
      * 所有される側（Row / IO）は owner 鎖でここに到達する。
      */
     declare palette: TypePalette;
-    /** getTypeIndex() が初回に作るキャッシュ。それまでは false */
-    declare typeIndex: Record<string, number> | false;
-    /** getFKTypeFor() が初回に作るキャッシュ。それまでは false */
-    declare fkTypeFor: Record<number, number> | false;
     /** SVG で描くか。実体は getOption("vector") && document.createElementNS の truthy 値 */
     declare vector: boolean;
     declare svgNS: string;
@@ -110,9 +106,6 @@ export class Designer extends Visual<DesignerDom> {
         ];
         this.width = this.minSize[0];
         this.height = this.minSize[1];
-
-        this.typeIndex = false;
-        this.fkTypeFor = false;
 
         /*
          * grabado: 現行は「オプションが真 かつ createElementNS がある」の truthy 値を
@@ -557,32 +550,11 @@ export class Designer extends Visual<DesignerDom> {
         }
     }
 
-    getTypeIndex(label: string): number {
-        if (!this.typeIndex) {
-            this.typeIndex = {};
-            var types = this.palette.types();
-            for (var i = 0; i < types.length; i++) {
-                var l = types[i]!.getAttribute("label");
-                if (l) {
-                    this.typeIndex[l] = i;
-                }
-            }
-        }
-        return this.typeIndex[label]!;
-    }
-
-    getFKTypeFor(typeIndex: number): number {
-        if (!this.fkTypeFor) {
-            this.fkTypeFor = {};
-            var types = this.palette.types();
-            for (var i = 0; i < types.length; i++) {
-                this.fkTypeFor[i] = i;
-                var fk = types[i]!.getAttribute("fk");
-                if (fk) {
-                    this.fkTypeFor[i] = this.getTypeIndex(fk);
-                }
-            }
-        }
-        return this.fkTypeFor[typeIndex]!;
-    }
+    /*
+     * getTypeIndex(label) / getFKTypeFor(index) は段階6-2 で撤去した。
+     * 移設先は TypePalette.fkIndexFor（getTypeIndex は fk を label で引くためだけに在り、
+     * 呼び手が getFKTypeFor 1 箇所だったので id 照合化と同時に消えた）。
+     * 2 つが持っていたキャッシュ（typeIndex / fkTypeFor）は差し替えで無効化されず、
+     * パレットを替えた後の FK 生成が古い添字に従っていた。実測は CUSTOMIZATIONS.md の段階6-2。
+     */
 }

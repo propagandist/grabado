@@ -7,11 +7,12 @@
  * インスタンス（Designer.palette）に移した。読み手は owner 鎖で到達する
  * （段階4-0a の SQL.designer 撤去と同じ論法。js/globals.ts の該当コメントを参照）。
  *
- * 本層はキャッシュを持たない。現行コードは参照のたびに getElementsByTagName を
- * 呼んでいて、Designer 側の typeIndex / fkTypeFor だけが唯一のキャッシュだからで、
- * ここに寄せると「datatypes を差し替えても消えない」現行の寿命が変わる。
- * 型解決そのものの再設計（getTypeIndex / getFKTypeFor / sql・re 照合）は
- * HANDOVER §6.1 の型パレット差し替えと同時に行う。
+ * 本層はキャッシュを持たない。段階4-0b 時点では「Designer 側の typeIndex / fkTypeFor だけが
+ * 唯一のキャッシュで、ここに寄せると *datatypes を差し替えても消えない* 現行の寿命が変わる」
+ * ことを理由に温存していたが、**段階6-2 でそのキャッシュごと廃止した**（型解決が id 照合に
+ * なり線形走査 1 回で済むようになったため）。差し替え後に古い結果が返る経路は無くなり、
+ * setRoot() に「呼ぶたびにキャッシュを捨てる」という契約を足す必要も無い。
+ * 経緯と実測は CUSTOMIZATIONS.md の段階6-2。
  *
  * 置き場所が js/io/ なのは HANDOVER §4 の io/serializer.ts をモジュールパスの表記と
  * 解釈しているため（CUSTOMIZATIONS.md の段階4-0a の記録）。本ファイルは js/ の
@@ -101,6 +102,69 @@ export class TypePalette {
             }
         }
         return -1;
+    }
+
+    /*
+     * 以下 2 本は型解決の面（段階6-2）。それまで Designer.getTypeIndex / getFKTypeFor と
+     * js/io/xml-parser.ts の照合ループに分かれていたものを、パレットを見る側に寄せた。
+     */
+
+    /**
+     * <datatype> の型名（サイズを外したもの）-> 添字。無ければ -1。
+     *
+     * **sql の完全一致は先勝ち**（段階6-2 で known-issue #3 を直した箇所）。現行は break を
+     * 持たず最後の一致が勝っていたので、db/postgresql/datatypes.xml が sql="BIGINT" を
+     * bigint と x_real の 2 か所に持つぶん BIGINT が Real に化けていた。
+     *
+     * **re は現行どおり後勝ちで、sql の完全一致も上書きしうる**（known-issue #10）。ここを
+     * 直さないのは意図的 —— re はアンカーされておらず（postgresql の integer は re="INT" で
+     * BIGINT / SMALLINT / INTERVAL すべてに部分一致する）、素朴に先勝ちへ倒すと oracle が
+     * INTEGER -> NUMBER を失うだけでなく mssql は re="INT" を 4 型に持つぶん
+     * INTEGER -> tinyint と**縮む**。壊れているのは照合順ではなくパレット側の re なので、
+     * 直すのは 6-8（既存主要 4 本の現代化）。判断の実測は CUSTOMIZATIONS.md の段階6-2。
+     *
+     * 一致が無いときに先頭の型へ落とすフォールバック（known-issue #4）は呼び手に残る。
+     * ここは -1 を返すだけで、strict 化の判断は 6-3 が js/io/xml-parser.ts で行う。
+     */
+    indexOfTypeName(name: string): number {
+        const types = this.types();
+        let index = -1;
+        let sqlFound = false;
+        for (let i = 0; i < types.length; i++) {
+            if (types[i]!.getAttribute("sql") === name) {
+                /* 2 件目以降の sql 一致は見ない（現行の || 短絡と同じく re も評価しない） */
+                if (!sqlFound) {
+                    index = i;
+                    sqlFound = true;
+                }
+                continue;
+            }
+            const re = types[i]!.getAttribute("re");
+            if (re && new RegExp(re).exec(name)) {
+                index = i;
+            }
+        }
+        return index;
+    }
+
+    /**
+     * この型を親に持つ FK 子行の型。<type fk="..."> が無ければ自分自身。
+     *
+     * fk は **id 参照**（段階6-2 で label 参照から変えた）。label は §6 のパレット現代化が
+     * 自由に動かしてよい表示名で、それを照合キーにしていると label を 1 文字動かした瞬間に
+     * 解決が undefined になり Row.update({type: undefined}) 経由で UI ごと落ちる。
+     * fk の値が実在する id であることは tests/node/palette-id.test.ts が全プロファイルで押さえる。
+     *
+     * 引けなかったときに自分自身へ倒すのは、id を持たない旧パレット（段階4-2b 以前の設計 XML に
+     * 同梱された <datatypes>）を読んでも落ちないようにするため。
+     */
+    fkIndexFor(index: number): number {
+        const fk = this.types()[index]?.getAttribute("fk");
+        if (!fk) {
+            return index;
+        }
+        const target = this.indexOfId(fk);
+        return target === -1 ? index : target;
     }
 
     groups(): HTMLCollectionOf<Element> {

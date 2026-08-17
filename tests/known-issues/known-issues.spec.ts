@@ -42,22 +42,38 @@ test.afterAll(async () => {
  * #1（属性値のエスケープ不足）と #8（<default> の末尾に改行が無い）は §4 段階4-4 で、
  * #2（保存で <default>NULL</default> が生える）は §4 段階4-5 で直した。「直った後の挙動」の
  * アサートは tests/browser/serialize.spec.ts に移してある（README の運用 3）。
+ *
+ * #3（BIGINT が Real に化ける）は §6 段階6-2 で直した。移設先は tests/browser/types.spec.ts と
+ * tests/browser/json.spec.ts。同じ段階で **#10 を新設**している（下）—— #3 の記述にあった
+ * 「re もアンカー無しの部分一致」はそちらが引き継ぐ。
  */
 
-test("#3 BIGINT が Big Integer ではなく Real に解決される（sql 重複・最後の一致が勝つ）", async () => {
+test("#10 <type re> の照合が壊れている（アンカー無し・大小文字・sql の完全一致を上書き）", async () => {
+    // (1) oracle は integer(sql="INTEGER") -> number(re="INT") の順に並ぶ。sql が完全一致した
+    //     後で number の re が部分一致して上書きするので、INTEGER が NUMBER になる。
+    await useDatatypes(page, "oracle");
+    await loadFixture(page, readKnownIssueFixture("re-match-drift"));
+
+    const oracleLabels = await page.evaluate(() =>
+        window.d!.tables[0]!.rows.map((r) => r.getDataType().getAttribute("label")),
+    );
+    expect(oracleLabels[0]).toBe("NUMBER");
+    expect(oracleLabels[0]).not.toBe("INTEGER");
+
+    // (2) postgresql の decimal は re="numeric"（小文字）なので大文字の NUMERIC には当たらず、
+    //     一致 0 件で先頭型 Integer に落ちる（#4 と同じ落ち方だが、原因は re の大小文字）。
     await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readKnownIssueFixture("bigint-drift"));
+    await loadFixture(page, readKnownIssueFixture("re-match-drift"));
 
-    const label = await page.evaluate(() => {
-        const row = (window.d!.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
-        return row!.getDataType().getAttribute("label");
-    });
+    const pgLabels = await page.evaluate(() =>
+        window.d!.tables[0]!.rows.map((r) => r.getDataType().getAttribute("label")),
+    );
+    expect(pgLabels[1]).toBe("Integer");
+    expect(pgLabels[1]).not.toBe("Decimal");
 
-    // db/postgresql/datatypes.xml は sql="BIGINT" を Big Integer と Real の 2 か所に持ち、
-    // js/io/xml-parser.ts:147-153 のループは break しないので後勝ちになる（§4 段階4-1b で
-    // js/row.js から移設。設計 JSON は 4-2b の id 照合なのでこの経路を持たない）
-    expect(label).toBe("Real");
-    expect(label).not.toBe("Big Integer");
+    // 段階6-2 は sql の完全一致どうしの順序だけを直し（#3）、ここは意図して残した。
+    // 素朴に re を先勝ちへ倒すと mssql が re="INT" を 4 型に持つぶん INTEGER -> tinyint と
+    // 縮み、oracle と合わせて DDL golden 12 本が品質を下げる方向に動く。直すのは 6-8。
 });
 
 test("#4 型パレットに無い型は黙って先頭の型になる（UUID -> INTEGER）", async () => {

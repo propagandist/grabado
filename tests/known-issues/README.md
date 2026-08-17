@@ -26,8 +26,8 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 
 | # | 現象 | 原因 | 経路 | 直る予定 |
 |---|---|---|---|---|
-| 3 | `BIGINT` が Big Integer ではなく **Real** に解決される | [db/postgresql/datatypes.xml](../../db/postgresql/datatypes.xml) が `sql="BIGINT"` を 2 か所に持ち、照合ループが `break` しないので後勝ち（[js/io/xml-parser.ts:147-153](../../js/io/xml-parser.ts#L147-L153)）。`re` もアンカー無しの部分一致 | **XML 読込のみ** | §6.1 |
-| 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/io/xml-parser.ts:125](../../js/io/xml-parser.ts#L125)）。現行 PG パレットに uuid が無い | **XML 読込のみ** | §6.1 |
+| 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/io/xml-parser.ts](../../js/io/xml-parser.ts)）。現行 PG パレットに uuid が無い | **XML 読込のみ** | §6 段階6-3（PG）/ 6-8（他） |
+| 10 | `<type re="...">` の照合が壊れている。アンカーされておらず部分一致し、大文字小文字を区別し、`sql` の完全一致を後から上書きする | [js/io/palette.ts](../../js/io/palette.ts) の `indexOfTypeName` が `re` を後勝ちで見る。壊れているのは規則よりパレット側で、`oracle` は `re="INT"` を integer と number の 2 型に、`mssql` は 4 型（tinyint/smallint/int/bigint）に振っている | **XML 読込のみ** | §6 段階6-8 |
 | 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る壊れた SQL が出る | [db/postgresql/output.xsl:58-64](../../db/postgresql/output.xsl#L58-L64) が要素の存在だけを見る。現行 introspection は値の無いカラムにも空の `<default>` を出す（[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.5） | **introspection 出力のみ** | §6.3 |
 | 6 | key が複数あると制約名が `<table>_pkey` で衝突する | [db/postgresql/output.xsl:90-92](../../db/postgresql/output.xsl#L90-L92) が `key/@name` を無視してテーブル名から生成する | DDL 生成 | §6.3 |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
@@ -35,11 +35,15 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 **「経路」列は §4 段階4-7 の棚卸しで足した。**残る 5 本はどれも現象が消えていないが、
 **§4 を通したことで 3 本は届く範囲が狭まっている** —— そのぶん §6 で直すときの影響も狭い。
 
-- **#3 / #4 は設計 JSON では起きない。** 正本フォーマットの型キーは 4-2b で安定 `id` になり、
+- **#4 / #10 は設計 JSON では起きない。** 正本フォーマットの型キーは 4-2b で安定 `id` になり、
   [json-parser.ts](../../js/io/json-parser.ts) は**パレットに無い id を throw** する
   （「一致が無ければ添字 0」を持ち込まない）。残っているのは互換で読む XML 経路
-  （[xml-parser.ts](../../js/io/xml-parser.ts)）だけで、そこは「現行の挙動を 1 バイトも変えない」
-  逐語移設が要件なので**意図して直していない**。テストが XML fixture を読ませているのはこのため。
+  （[xml-parser.ts](../../js/io/xml-parser.ts) → [palette.ts](../../js/io/palette.ts)）だけ。
+  テストが XML fixture を読ませているのはこのため。
+- **#10 を 6-2 で直さなかったのは、直す向きが品質を下げるから。** `re` を素朴に先勝ちへ倒すと
+  `mssql` は `INTEGER` → `tinyint`・`FLOAT` → `money` と**縮み**、oracle と合わせて DDL golden が
+  12 本動く。パレット側の `re` を直すのが本筋で、それは各プロファイルの現代化（6-8）の仕事。
+  DB 別 fixture（6-6）が無いうちは是非を検証する材料も無い。
 - **#5 は書き出し側では構造的に起きなくなった**（段階4-5）。`if (row.def)` が `""` を落とすので、
   grabado が書いた XML に空の `<default>` は出ない。残るのは introspection の出力（外部由来の XML）を
   直接 XSLT に食わせる経路だけ。
@@ -52,17 +56,21 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 ### 直したもの（このディレクトリから出た不具合）
 
 運用 3 に従い、テストは消さずに「直った後の挙動」のアサートへ書き換えて移設してある。
-**§4（IO）が引き受けた分はこの 4 本で尽きている**（段階4-5 の記録）。次にこの表が伸びるのは
-§6.1 で、#3 / #4 がそこへ移る。
+**§4（IO）が引き受けた分は 1 / 2 / 7 / 8 の 4 本で尽きている**（段階4-5 の記録）。
+§6 は 6-2 で #3 を引き取った。残る #4 は 6-3（PG）/ 6-8（他）へ。
 
-| # | 現象 | 直した段階 | 移設先（[`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)） |
+| # | 現象 | 直した段階 | 移設先 |
 |---|---|---|---|
-| 1 | 識別子に `&` を含めると `toXML()` が well-formed でない XML を吐き、保存したファイルを二度と開けない | §4 段階4-4 | 「識別子に `&` を含んでも well-formed な XML を吐く」 |
-| 2 | nullable かつ default 未指定の行が、保存すると `<default>NULL</default>` を獲得する（情報が増える） | §4 段階4-5 | 「既定値の無い行は保存しても `<default>` を獲得しない」＋「nullable な行の default 欄に NULL と打っても `<default>` は出ない」 |
-| 7 | `alignTables()` が `tables` を破壊的ソートし、テーブル順と座標を変える | §4 段階4-4 | 「`alignTables()` はテーブル順を変えない」 |
-| 8 | `<default>` だけ末尾に改行が付かず diff が読みにくい | §4 段階4-4 | 「`<default>` の後にも改行が入る」 |
+| 1 | 識別子に `&` を含めると `toXML()` が well-formed でない XML を吐き、保存したファイルを二度と開けない | §4 段階4-4 | [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)「識別子に `&` を含んでも well-formed な XML を吐く」 |
+| 2 | nullable かつ default 未指定の行が、保存すると `<default>NULL</default>` を獲得する（情報が増える） | §4 段階4-5 | 同上「既定値の無い行は保存しても `<default>` を獲得しない」＋「nullable な行の default 欄に NULL と打っても `<default>` は出ない」 |
+| 7 | `alignTables()` が `tables` を破壊的ソートし、テーブル順と座標を変える | §4 段階4-4 | 同上「`alignTables()` はテーブル順を変えない」 |
+| 8 | `<default>` だけ末尾に改行が付かず diff が読みにくい | §4 段階4-4 | 同上「`<default>` の後にも改行が入る」 |
+| 3 | `BIGINT` が Big Integer ではなく **Real** に解決される（`sql="BIGINT"` の重複を後勝ちで拾う） | §6 段階6-2 | [`../browser/types.spec.ts`](../browser/types.spec.ts)「BIGINT は Big Integer に解決される」＋「XML 往復で型がドリフトしない」／[`../browser/json.spec.ts`](../browser/json.spec.ts)「型を id で持つので後勝ちドリフトが起きない」 |
 
-`fixtures/` はそのまま残す（`amp-in-name.xml` は移設先のテストが読む）。正常系
+#3 の記述にあった「`re` もアンカー無しの部分一致」は **#10 が引き継いだ**（6-2 で新設）。
+直したのは `sql` の完全一致どうしの順序だけで、`re` の後勝ちはそのまま残っている。
+
+`fixtures/` はそのまま残す（`amp-in-name.xml` と `bigint-drift.xml` は移設先のテストが読む）。正常系
 [`../fixtures/`](../fixtures/) へ昇格させると DDL golden の母集団が 35 → 40 本に増え、
 「DDL golden が無差分」という段階の完了判定がぼやけるため。
 

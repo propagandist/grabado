@@ -2,12 +2,16 @@
 <!--
   既知の不具合 #10: <type re="..."> の照合が壊れている。
 
-  - アンカーされていない（部分一致）。postgresql の integer は re="INT" なので
-    BIGINT / SMALLINT / INTERVAL すべてに当たる。
-  - 大文字小文字を区別する。postgresql の decimal は re="numeric" なので
-    大文字の NUMERIC には当たらず、一致 0 件で先頭型に落ちる。
+  - アンカーされていない（部分一致）。mysql の int は re="INT" なので
+    BIGINT / SMALLINT すべてに当たる。
+  - 大文字小文字を区別する。
   - sql の完全一致より後に評価され、それを上書きする。oracle は integer(sql="INTEGER") と
     number(re="INT") の順に並ぶので、INTEGER は NUMBER に解決される。
+
+  **段階6-3 で postgresql はこの 3 つから抜けた** —— strict="1" のプロファイルは
+  re を見ず、sql / aka の大小無視の完全一致だけで解決する。当時この fixture が
+  踏んでいた「decimal の re="numeric" が大文字 NUMERIC に当たらず先頭型に落ちる」は
+  aka（sql="NUMERIC" 自体）で解消した。残るのは未現代化の 4 本で、6-8 で消える。
 -->
 <sql>
 <table x="10" y="10" name="measurements">

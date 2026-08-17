@@ -60,6 +60,23 @@ export class TypePalette {
         return this.element().getAttribute("db");
     }
 
+    /**
+     * <datatypes strict="1"> ＝ **現代化済みプロファイルの印**（段階6-3 で新設）。
+     *
+     * 6-0 が「現代化済み ＝ strict / 未現代化 ＝ 従来どおりフォールバック」をパレット側で
+     * 表すと決めた、その 1 属性。切り替わるのは 3 つ:
+     *
+     *   - 照合規則: sql / aka の**完全一致だけ**（大小無視・先勝ち）。re は見ない
+     *   - 未知型の扱い: 呼び手（js/io/xml-parser.ts）が黙って先頭型に落とさず例外にする
+     *   - size: 寄せ先が length="0" の型なら捨てる（同じく呼び手。hasSize を参照）
+     *
+     * 段階6-3 時点で立っているのは postgresql だけ。残る 4 本が 6-8 でこちらへ移ると
+     * **この分岐ごと消える**（そのとき indexOfTypeNameLegacy と re 属性が一緒に消える）。
+     */
+    isStrict(): boolean {
+        return this.element().getAttribute("strict") === "1";
+    }
+
     types(): HTMLCollectionOf<Element> {
         return this.element().getElementsByTagName("type");
     }
@@ -88,6 +105,22 @@ export class TypePalette {
     }
 
     /**
+     * この型はサイズ / 精度を取るか（<type length="1">）。段階6-3 で読むようにした。
+     *
+     * **length は 6-3 まで upstream 由来の死んだ属性だった** —— js/ のどこからも読まれず、
+     * size は型と無関係にユーザーが入れる自由文字列だった（INTEGER(5) も作れる）。
+     * 6-3 が読む必要に迫られたのは、パレット差し替えで **CHAR(10) が TEXT に寄る**ため。
+     * size を残すと TEXT(10) という壊れた DDL が出る（js/io/ddl-xml.ts は size があれば
+     * 必ず括弧を付ける）。呼び手は js/io/xml-parser.ts で、strict のときだけ捨てる。
+     *
+     * 属性が無ければ true（＝従来どおり size を自由に持てる）。旧パレットと未現代化の
+     * プロファイルはこちらに落ちるので、6-3 は PG 以外の挙動を 1 バイトも変えていない。
+     */
+    hasSize(index: number): boolean {
+        return this.types()[index]?.getAttribute("length") !== "0";
+    }
+
+    /**
      * id -> 添字。無ければ -1。
      *
      * **最初の一致が勝つ**が、id はパレット内で一意であることを
@@ -105,28 +138,75 @@ export class TypePalette {
     }
 
     /*
-     * 以下 2 本は型解決の面（段階6-2）。それまで Designer.getTypeIndex / getFKTypeFor と
+     * 以下は型解決の面（段階6-2）。それまで Designer.getTypeIndex / getFKTypeFor と
      * js/io/xml-parser.ts の照合ループに分かれていたものを、パレットを見る側に寄せた。
+     * 段階6-3 で strict / legacy の 2 規則に分かれた（内訳は isStrict()）。
      */
 
     /**
      * <datatype> の型名（サイズを外したもの）-> 添字。無ければ -1。
      *
-     * **sql の完全一致は先勝ち**（段階6-2 で known-issue #3 を直した箇所）。現行は break を
+     * 規則はプロファイルによって 2 通りある（段階6-3）。分ける根拠は isStrict() のコメント。
+     *
+     * 一致が無いときに先頭の型へ落とすフォールバック（known-issue #4）は**どちらでも
+     * 呼び手に残る**。ここは -1 を返すだけで、strict なら例外・そうでなければ先頭型という
+     * 判断は js/io/xml-parser.ts が持つ（設計 JSON 側は 4-2b から一貫して例外）。
+     */
+    indexOfTypeName(name: string): number {
+        return this.isStrict()
+            ? this.indexOfTypeNameStrict(name)
+            : this.indexOfTypeNameLegacy(name);
+    }
+
+    /**
+     * 現代化済みプロファイルの照合（段階6-3）。**sql → aka の 2 段で、どちらも大小無視の
+     * 完全一致・先勝ち**。re は見ない。
+     *
+     * 2 段に分けてあるのが要点 —— **ある型の aka が別の型の sql を奪うことが原理的に
+     * 起きない**。全型の sql を先に走査し、そこで決まらなければ aka を走査する。
+     * 例: 入力 TIME WITH TIME ZONE は time_with_time_zone の sql で決まり、
+     * timestamp_with_time_zone の aka（TIMESTAMP WITH TIME ZONE）とは無関係。
+     * 「aka が他の型の sql と衝突しない」ことは tests/node/palette-id.test.ts が
+     * 全プロファイルで機械的に押さえるので、この 2 段は保険の二重化になっている。
+     *
+     * 大小を無視するのは known-issue #10 の欠陥2（re が大文字小文字を区別し、
+     * postgresql の decimal が re="numeric" だったせいで大文字の NUMERIC に当たらず
+     * 先頭型に落ちていた）を持ち込まないため。手書き XML が小文字で型を書いても読める。
+     */
+    private indexOfTypeNameStrict(name: string): number {
+        const upper = name.toUpperCase();
+        const types = this.types();
+
+        for (let i = 0; i < types.length; i++) {
+            if (types[i]!.getAttribute("sql")?.toUpperCase() === upper) {
+                return i;
+            }
+        }
+        for (let i = 0; i < types.length; i++) {
+            const aka = types[i]!.getAttribute("aka");
+            if (aka && aka.toUpperCase().split("|").includes(upper)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 未現代化プロファイルの照合。**段階6-2 の実装そのまま**で、6-3 は 1 文字も変えていない
+     * （tests/node/type-resolution.test.ts が旧規則の参照実装と突き合わせて固定している）。
+     *
+     * **sql の完全一致は先勝ち**（段階6-2 で known-issue #3 を直した箇所）。6-2 以前は break を
      * 持たず最後の一致が勝っていたので、db/postgresql/datatypes.xml が sql="BIGINT" を
      * bigint と x_real の 2 か所に持つぶん BIGINT が Real に化けていた。
      *
-     * **re は現行どおり後勝ちで、sql の完全一致も上書きしうる**（known-issue #10）。ここを
-     * 直さないのは意図的 —— re はアンカーされておらず（postgresql の integer は re="INT" で
-     * BIGINT / SMALLINT / INTERVAL すべてに部分一致する）、素朴に先勝ちへ倒すと oracle が
+     * **re は 6-2 以前どおり後勝ちで、sql の完全一致も上書きしうる**（known-issue #10）。ここを
+     * 直さないのは意図的 —— re はアンカーされておらず（mysql の int は re="INT" で
+     * BIGINT / SMALLINT すべてに部分一致する）、素朴に先勝ちへ倒すと oracle が
      * INTEGER -> NUMBER を失うだけでなく mssql は re="INT" を 4 型に持つぶん
      * INTEGER -> tinyint と**縮む**。壊れているのは照合順ではなくパレット側の re なので、
      * 直すのは 6-8（既存主要 4 本の現代化）。判断の実測は CUSTOMIZATIONS.md の段階6-2。
-     *
-     * 一致が無いときに先頭の型へ落とすフォールバック（known-issue #4）は呼び手に残る。
-     * ここは -1 を返すだけで、strict 化の判断は 6-3 が js/io/xml-parser.ts で行う。
      */
-    indexOfTypeName(name: string): number {
+    private indexOfTypeNameLegacy(name: string): number {
         const types = this.types();
         let index = -1;
         let sqlFound = false;

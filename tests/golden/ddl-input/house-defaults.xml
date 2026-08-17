@@ -3,8 +3,8 @@
 <sql>
 <table x="20" y="20" name="users">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
-<default>uuidv7()</default>
+<datatype>UUID</datatype>
+<default>'uuidv7()'</default>
 </row>
 <row name="email" null="0" autoincrement="0">
 <datatype>TEXT</datatype>
@@ -23,11 +23,11 @@
 <comment>UI 設定などの任意項目</comment>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<datatype>TIMESTAMPTZ</datatype>
 <default>'now()'</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<datatype>TIMESTAMPTZ</datatype>
 <default>'now()'</default>
 </row>
 <key type="PRIMARY" name="users_pkey">
@@ -40,11 +40,11 @@
 </table>
 <table x="420" y="20" name="articles">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
-<default>uuidv7()</default>
+<datatype>UUID</datatype>
+<default>'uuidv7()'</default>
 </row>
 <row name="author_id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>UUID</datatype>
 <relation table="users" row="id" />
 <comment>執筆者 (users.id)</comment>
 </row>
@@ -59,18 +59,18 @@
 <default>0</default>
 </row>
 <row name="price" null="1" autoincrement="0">
-<datatype>DECIMAL(12,2)</datatype>
+<datatype>NUMERIC(12,2)</datatype>
 <comment>有料記事の価格。money ではなく numeric を使う</comment>
 </row>
 <row name="published_on" null="1" autoincrement="0">
 <datatype>DATE</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<datatype>TIMESTAMPTZ</datatype>
 <default>'now()'</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<datatype>TIMESTAMPTZ</datatype>
 <default>'now()'</default>
 </row>
 <key type="PRIMARY" name="articles_pkey">
@@ -80,14 +80,14 @@
 </table>
 <table x="820" y="20" name="article_tags">
 <row name="article_id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>UUID</datatype>
 <relation table="articles" row="id" />
 </row>
 <row name="tag" null="0" autoincrement="0">
 <datatype>TEXT</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<datatype>TIMESTAMPTZ</datatype>
 <default>'now()'</default>
 </row>
 <key type="PRIMARY" name="pk_article_tags">

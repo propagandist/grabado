@@ -25,11 +25,11 @@
         },
         {
           "name": "c_serial",
-          "type": "serial"
+          "type": "bigint_identity"
         },
         {
           "name": "c_bigserial",
-          "type": "bigserial"
+          "type": "bigint_identity"
         },
         {
           "name": "c_float",
@@ -43,8 +43,7 @@
         },
         {
           "name": "c_char",
-          "type": "char",
-          "size": "10",
+          "type": "text",
           "nullable": true
         },
         {
@@ -92,7 +91,7 @@
         },
         {
           "name": "c_timestamp",
-          "type": "timestamp",
+          "type": "timestamp_with_time_zone",
           "size": "3",
           "nullable": true
         },
@@ -103,7 +102,7 @@
         },
         {
           "name": "c_timestamp_wo_tz",
-          "type": "timestamp_without_time_zone",
+          "type": "timestamp_with_time_zone",
           "nullable": true
         },
         {
@@ -140,7 +139,7 @@
         },
         {
           "name": "c_json",
-          "type": "json",
+          "type": "jsonb",
           "nullable": true
         },
         {

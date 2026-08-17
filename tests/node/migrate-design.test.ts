@@ -6,13 +6,17 @@ import {
 import { SERIALIZER_DB } from "../support/fixtures.ts";
 
 /*
- * 設計 JSON の移行ツールの検査（HANDOVER §4 段階4-2b）。
+ * 設計 JSON の移行ツールの検査（HANDOVER §4 段階4-2b ＋ §6 段階6-3）。
  *
  * ツールが serializer と同じバイト列を書くことは、json の golden テスト
  * （tests/node/json.test.ts と tests/browser/json.spec.ts）が証明する ——
  * tests/golden/json/ の 7 本は**このツールで移行したもの**で、
  * それが serializer の出力と一致するかを golden テストが毎回見ている。
  * ここで押さえるのは変換そのものの規則（冪等・正規形の要求・移行できない入力の扱い）。
+ *
+ * 移行は 2 種類ある（tools/migrate-design.mjs の冒頭）。**A. 形式 v1 -> v2**（4-2b。
+ * 型キーが label から id になった）と **B. 型 id の移行**（6-3。PG18 パレット差し替えで
+ * 型が消える / 意味が変わる）。B は意味的判断を含むので、表そのものをここでリテラルで固定する。
  */
 
 const palettes = new Map<string, ReturnType<typeof readPalette>>();
@@ -175,11 +179,197 @@ describe("移行ツールが読む型パレット", () => {
 
         expect(pg.labelToId.get("Integer")).toBe("integer");
         expect(pg.labelToId.get("Big Integer")).toBe("bigint");
-        expect(pg.labelToId.get("Timestamp w/ TZ")).toBe(
-            "timestamp_with_time_zone",
-        );
-        /* known-issue #3 の本体。sql が BIGINT で重複しているので x_ が付く */
-        expect(pg.labelToId.get("Real")).toBe("x_real");
+        /* 6-3 で label が Timestamp w/ TZ から変わった（label は §6 が動かしてよい） */
+        expect(pg.labelToId.get("Timestamptz")).toBe("timestamp_with_time_zone");
+        /* 6-3 の新設 2 型 */
+        expect(pg.labelToId.get("UUID")).toBe("uuid");
+        expect(pg.labelToId.get("Big Integer (identity)")).toBe("bigint_identity");
         expect(pg.ids.size).toBe(pg.labelToId.size);
+    });
+});
+
+/* ------------------------- 型 id の移行（段階6-3） ------------------------- */
+
+/** serializer が書く形で v2 を組む */
+function v2(design: unknown): string {
+    return `${JSON.stringify(design, null, 2)}\n`;
+}
+
+/** 1 列だけの v2 設計。type / size を差し替えて使う */
+function oneColumn(column: Record<string, unknown>): string {
+    return v2({
+        formatVersion: 2,
+        db: "postgresql",
+        tables: [{ name: "t", x: 0, y: 0, columns: [column] }],
+    });
+}
+
+function migratedType(column: Record<string, unknown>): Record<string, unknown> {
+    const out = migrateDesignJson(oneColumn(column), loadPalette);
+    return JSON.parse(out.text).tables[0].columns[0];
+}
+
+/**
+ * 段階6-3 の移行表（CUSTOMIZATIONS.md の 6-0 で設計、6-3 で実装）。
+ *
+ * **ここが唯一「意味的判断」を固定している場所。** 表を動かすと git 管理下の設計ファイルが
+ * 別の型で開くので、変えるときは移行の再実行が要る。
+ */
+const TYPE_MIGRATION_TABLE: ReadonlyArray<readonly [string, string]> = [
+    ["serial", "bigint_identity"],
+    ["bigserial", "bigint_identity"],
+    ["x_real", "bigint"],
+    ["char", "text"],
+    ["timestamp", "timestamp_with_time_zone"],
+    ["timestamp_without_time_zone", "timestamp_with_time_zone"],
+    ["json", "jsonb"],
+];
+
+describe("設計 JSON の移行（型 id・段階6-3）", () => {
+    test("撤去された 7 型が寄せ先の id になる", () => {
+        const actual = TYPE_MIGRATION_TABLE.map(
+            ([from]) => [from, migratedType({ name: "c", type: from }).type] as const,
+        );
+        expect(actual).toEqual(TYPE_MIGRATION_TABLE.map(([f, t]) => [f, t]));
+    });
+
+    test("寄せ先がサイズを取らない型なら size キーを落とす", () => {
+        /*
+         * char(10) -> text は length="1" から "0" への移動。size を残すと TEXT(10) という
+         * 構文として壊れた DDL が出る（情報の損失は移行表に明記。CUSTOMIZATIONS.md の 6-0）。
+         * 同じ判断は読み込み側（js/io/xml-parser.ts）にもあり、一致は golden が見る。
+         */
+        expect(migratedType({ name: "c", type: "char", size: "10" })).toEqual({
+            name: "c",
+            type: "text",
+        });
+    });
+
+    test("寄せ先がサイズを取るなら size を残す", () => {
+        /*
+         * timestamp(3) -> timestamptz(3)。**6-0 の移行表はここを「落ちる」側に書いていたが、
+         * PG の timestamptz(p) は秒精度を取れる**ので保つほうが情報を失わない（6-3 で訂正。
+         * パレット側も length="0" -> "1" に直してある）。
+         */
+        expect(migratedType({ name: "c", type: "timestamp", size: "3" })).toEqual({
+            name: "c",
+            type: "timestamp_with_time_zone",
+            size: "3",
+        });
+
+        /* serial / bigserial / x_real / json は length="0" 同士なので size は元から無い */
+        expect(migratedType({ name: "c", type: "serial" })).toEqual({
+            name: "c",
+            type: "bigint_identity",
+        });
+        /* 移行対象でない型の size は当然そのまま */
+        expect(migratedType({ name: "c", type: "decimal", size: "12,2" })).toEqual({
+            name: "c",
+            type: "decimal",
+            size: "12,2",
+        });
+    });
+
+    test("type と size 以外のキーは位置も値も動かさない", () => {
+        const before = v2({
+            formatVersion: 2,
+            db: "postgresql",
+            tables: [
+                {
+                    name: "t",
+                    x: 1,
+                    y: 2,
+                    comment: "コメント",
+                    columns: [
+                        {
+                            name: "c",
+                            type: "json",
+                            nullable: true,
+                            default: "'{}'",
+                            comment: "列",
+                            references: [{ table: "t", column: "c" }],
+                        },
+                    ],
+                    keys: [{ type: "PRIMARY", name: "t_pkey", columns: ["c"] }],
+                },
+            ],
+        });
+
+        const after = migrateDesignJson(before, loadPalette).text;
+
+        const changed = after
+            .split("\n")
+            .filter((line, i) => line !== before.split("\n")[i]);
+        /* formatVersion は動かない（6-3 は版を上げない） */
+        expect(changed).toEqual(['          "type": "jsonb",']);
+    });
+
+    test("冪等: 移行対象が無ければ入力をそのまま返す", () => {
+        const once = migrateDesignJson(oneColumn({ name: "c", type: "json" }), loadPalette);
+        const twice = migrateDesignJson(once.text, loadPalette);
+
+        expect(once.changed).toBe(true);
+        expect(twice.changed).toBe(false);
+        expect(twice.text).toBe(once.text);
+    });
+
+    test("移行対象が無い v2 は正規形でなくても触らない（4-2b の挙動を保つ）", () => {
+        /*
+         * glob でコマンドを当てたときに、移行するものが無いファイルを「正規形ではない」で
+         * 落とさない。検査は**これから書き換えるファイル**にだけ掛ける。
+         */
+        const fourSpaces =
+            JSON.stringify(JSON.parse(oneColumn({ name: "c", type: "text" })), null, 4) + "\n";
+        const out = migrateDesignJson(fourSpaces, loadPalette);
+        expect(out.changed).toBe(false);
+        expect(out.text).toBe(fourSpaces);
+    });
+
+    test("移行対象を持つ v2 は正規形でなければ落とす", () => {
+        const fourSpaces =
+            JSON.stringify(JSON.parse(oneColumn({ name: "c", type: "json" })), null, 4) + "\n";
+        expect(() => migrateDesignJson(fourSpaces, loadPalette)).toThrow(/正規形/);
+    });
+
+    test("移行表とパレットが食い違えば位置つきで落とす", () => {
+        /*
+         * 表とパレットは同じ PR に入る決まりだが、片方だけ動いたときに**黙って読めない
+         * ファイルを書く**のが最悪の失敗。ツール側でも止める（js/io/json-parser.ts の
+         * 未知 id throw と二重化）。移行先を持たないパレットを渡して再現する。
+         */
+        const brokenPalette = () => ({
+            labelToId: new Map([["Text", "text"]]),
+            ids: new Set(["text"]),
+        });
+        expect(() =>
+            migrateDesignJson(oneColumn({ name: "c", type: "json" }), brokenPalette),
+        ).toThrow(/移行先 "jsonb" が型パレットに無い/);
+    });
+
+    test("移行表に無い未知の id はツールが通す（読み込み側が落とす）", () => {
+        /*
+         * ツールは「表に載っている型」だけを動かす。表にも現行パレットにも無い id は
+         * そのまま残り、js/io/json-parser.ts が読み込み時に位置つきで throw する
+         * （4-2b から一貫している「正本を黙って別の型で開かない」）。
+         * ツールが勝手に寄せると、移行表に無い判断を静かに下すことになる。
+         */
+        const out = migrateDesignJson(oneColumn({ name: "c", type: "mediumtext" }), loadPalette);
+        expect(out.changed).toBe(false);
+        expect(JSON.parse(out.text).tables[0].columns[0].type).toBe("mediumtext");
+    });
+
+    test("db ごとに表を引く（他プロファイルの同名 id を巻き込まない）", () => {
+        /*
+         * 型 id はプロファイル内で一意なだけ。mysql にも json / char / timestamp はあるが、
+         * 6-3 で現代化したのは postgresql だけなので mysql のファイルは 1 バイトも動かない。
+         */
+        const mysqlDesign = v2({
+            formatVersion: 2,
+            db: "mysql",
+            tables: [{ name: "t", x: 0, y: 0, columns: [{ name: "c", type: "json" }] }],
+        });
+        const out = migrateDesignJson(mysqlDesign, loadPalette);
+        expect(out.changed).toBe(false);
+        expect(out.text).toBe(mysqlDesign);
     });
 });

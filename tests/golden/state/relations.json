@@ -43,7 +43,7 @@
         },
         {
           "title": "name",
-          "type": 11,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": false,
@@ -139,7 +139,7 @@
         },
         {
           "title": "title",
-          "type": 11,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": false,
@@ -257,7 +257,7 @@
         },
         {
           "title": "name",
-          "type": 11,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": false,

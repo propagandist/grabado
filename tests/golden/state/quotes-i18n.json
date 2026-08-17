@@ -43,7 +43,7 @@
         },
         {
           "title": "氏名",
-          "type": 11,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": false,
@@ -65,7 +65,7 @@
         },
         {
           "title": "say \"hi\"",
-          "type": 11,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": true,
@@ -87,7 +87,7 @@
         },
         {
           "title": "メモ",
-          "type": 11,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": true,

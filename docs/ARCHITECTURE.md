@@ -57,7 +57,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
 | 永続化 | 共有 PG / ファイル 各種 | git 管理 JSON ファイル正本（DB レス既定） | — |
-| 型パレット | `db/*/datatypes.xml` | PostgreSQL 18 型パレット（§6.1） | — |
+| 型パレット | `db/*/datatypes.xml` | PostgreSQL 18 型パレット（§6.1）。**`postgresql` は段階6-3 で差し替え済み**（24 型・`strict="1"`）。残る 4 本は 6-8 | — |
 | 配布 | 共有サーバ＋外部 PG | マルチステージ Docker・各自ローカル | — |
 
 ## 3. 現物確認（HANDOVER §0）— 実施済み
@@ -490,8 +490,19 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 型解決は **§6 段階6-2 で `palette.ts` に集約した**。それまで `Designer.getTypeIndex` /
 `getFKTypeFor`（label 照合＋差し替えで捨てられないキャッシュ）と `xml-parser.ts` の照合ループに
 分かれていたものが `TypePalette.indexOfTypeName` / `fkIndexFor` の 2 本になっている。
-`fk` は id 参照になり、キャッシュは廃止。一致が無いときに先頭型へ落とすフォールバック
-（known-issue #4）だけは呼び手（`xml-parser.ts`）に残っていて、strict 化は 6-3 / 6-8 の担当。
+`fk` は id 参照になり、キャッシュは廃止。
+
+**§6 段階6-3 で規則がプロファイル別の 2 通りになった。** `<datatypes strict="1">` を持つ
+「現代化済み」のプロファイル（6-3 時点では `postgresql` のみ）は `sql` / `aka` の**大小無視の
+完全一致だけ**で解決し、一致が無ければ `xml-parser.ts` が例外を投げる。未現代化の 4 本は
+6-2 のまま（`re` の後勝ち ＝ known-issue #10・一致無しは先頭型 ＝ #4）で、6-8 でこちら側へ移ると
+**分岐ごと消える**。同じ strict 判定で `length="0"` の型に寄ったときの `size` も捨てる
+（`CHAR(10)` → `TEXT` が `TEXT(10)` にならないように）。
+
+これに伴い `Designer.fromXML()` は**同梱パレットを持たない XML について parse を
+`clearTables()` より先に置く**（6-3）。6-3 から parse が例外を投げうるので、読めない
+ファイルを開いただけで今の設計が消えるのを防ぐため。同梱パレットがある経路は
+「clear は旧パレット・parse は新パレット」という 4-1b の順序制約が生きているので従来のまま。
 
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 

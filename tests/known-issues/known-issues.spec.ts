@@ -48,52 +48,59 @@ test.afterAll(async () => {
  * 「re もアンカー無しの部分一致」はそちらが引き継ぐ。
  */
 
-test("#10 <type re> の照合が壊れている（アンカー無し・大小文字・sql の完全一致を上書き）", async () => {
+test("#10 <type re> の照合が壊れている（アンカー無し・sql の完全一致を上書き）", async () => {
     // (1) oracle は integer(sql="INTEGER") -> number(re="INT") の順に並ぶ。sql が完全一致した
     //     後で number の re が部分一致して上書きするので、INTEGER が NUMBER になる。
     await useDatatypes(page, "oracle");
     await loadFixture(page, readKnownIssueFixture("re-match-drift"));
 
-    const oracleLabels = await page.evaluate(() =>
-        window.d!.tables[0]!.rows.map((r) => r.getDataType().getAttribute("label")),
+    const oracleIds = await page.evaluate(() =>
+        window.d!.tables[0]!.rows.map((r) => window.d!.palette.idAt(r.data.type)),
     );
-    expect(oracleLabels[0]).toBe("NUMBER");
-    expect(oracleLabels[0]).not.toBe("INTEGER");
+    expect(oracleIds[0]).toBe("number");
+    expect(oracleIds[0]).not.toBe("integer");
 
-    // (2) postgresql の decimal は re="numeric"（小文字）なので大文字の NUMERIC には当たらず、
-    //     一致 0 件で先頭型 Integer に落ちる（#4 と同じ落ち方だが、原因は re の大小文字）。
-    await useDatatypes(page, SERIALIZER_DB);
+    // (2) mysql の int は re="INT" なので BIGINT にも部分一致する。ここは後ろにある
+    //     bigint の sql 完全一致が勝つので実害が出ていないだけで、規則としては壊れたまま。
+    await useDatatypes(page, "mysql");
     await loadFixture(page, readKnownIssueFixture("re-match-drift"));
 
-    const pgLabels = await page.evaluate(() =>
-        window.d!.tables[0]!.rows.map((r) => r.getDataType().getAttribute("label")),
+    const mysqlIds = await page.evaluate(() =>
+        window.d!.tables[0]!.rows.map((r) => window.d!.palette.idAt(r.data.type)),
     );
-    expect(pgLabels[1]).toBe("Integer");
-    expect(pgLabels[1]).not.toBe("Decimal");
+    // NUMERIC は mysql パレットに無く、re にも当たらないので先頭型に落ちる（#4 と同じ形）
+    expect(mysqlIds[1]).toBe("integer");
 
     // 段階6-2 は sql の完全一致どうしの順序だけを直し（#3）、ここは意図して残した。
     // 素朴に re を先勝ちへ倒すと mssql が re="INT" を 4 型に持つぶん INTEGER -> tinyint と
     // 縮み、oracle と合わせて DDL golden 12 本が品質を下げる方向に動く。直すのは 6-8。
+    //
+    // **postgresql は段階6-3 でこの不具合から抜けた** —— strict なプロファイルは re を
+    // 見ず、sql / aka の大小無視の完全一致だけで解決する。当時ここが押さえていた
+    // 「decimal の re="numeric" が大文字 NUMERIC に当たらない」の移設先は
+    // tests/node/type-resolution.test.ts の「大文字小文字を無視する」。
 });
 
-test("#4 型パレットに無い型は黙って先頭の型になる（UUID -> INTEGER）", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
+test("#4 型パレットに無い型は黙って先頭の型になる（未現代化プロファイル）", async () => {
+    // **postgresql は段階6-3 で解消した**（uuid 型の追加と strict 化）。移設先は
+    // tests/browser/types.spec.ts の「UUID が uuid に解決される」と
+    // 「strict なパレットでは未知の型が例外になる」。ここに残るのは未現代化の 4 本で、
+    // それぞれのパレットを現代化する 6-8 で消える。
+    await useDatatypes(page, "mysql");
     await loadFixture(page, readFixture("house-defaults"));
 
-    const label = await page.evaluate(() => {
-        const row = (window.d!.tables[0] as { rows: { getDataType(): Element }[] }).rows[0];
-        return row!.getDataType().getAttribute("label");
-    });
+    const id = await page.evaluate(() =>
+        window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type),
+    );
 
-    // fixture の users.id は UUID。現行 db/postgresql/datatypes.xml に uuid 型が無く、
-    // js/io/xml-parser.ts:125 の初期値 type:0 が残るため Integer になる（§4 段階4-1b で
-    // js/row.js から移設。設計 JSON は未知の id を throw するのでこの経路を持たない）。
-    // HANDOVER §6.1 の型パレット差し替えで解消される想定。
-    expect(label).toBe("Integer");
+    // fixture の users.id は UUID。mysql パレットに uuid 型が無く、
+    // js/io/xml-parser.ts の初期値 type:0 が残るため先頭型（integer）になる
+    // （設計 JSON は未知の id を throw するのでこの経路を持たない）。
+    expect(id).toBe("integer");
 
-    // 落ちた結果は golden にもそのまま写っている
-    const ddl = await generateDdl(page, SERIALIZER_DB);
-    expect(ddl).toContain("id INTEGER NOT NULL DEFAULT uuidv7()");
+    // 落ちた結果は golden にもそのまま写っている（mysql は識別子をバッククォートで囲む）
+    const ddl = await generateDdl(page, "mysql");
+    expect(ddl).toContain("`id` INTEGER NOT NULL DEFAULT uuidv7()");
 });
 
 test("#5 空の <default></default> で ` DEFAULT ` だけが残る（introspection 出力を食わせた場合）", async () => {

@@ -4,9 +4,14 @@
   docs/samples/introspection-sample-schema.sql を設計 XML として書き起こしたもの。
   uuidv7 PK / timestamptz 監査列 / jsonb / 複合 PK / UNIQUE / FK / 日本語コメントを含む。
 
-  注意: 現行の db/postgresql/datatypes.xml に uuid 型は無い。UUID は型パレットに
-  一致せず先頭の型（INTEGER）へ黙って落ちる。これは現行の実挙動であり、
-  HANDOVER §6.1 の型パレット差し替えで解消される対象。golden がその変化を捉える。
+  **段階6-3 で UUID が解決するようになった。** それまで db/postgresql/datatypes.xml に
+  uuid 型が無く、先頭の型（INTEGER）へ黙って落ちていた（known-issue #4 の実害）。
+  golden がその変化を捉えている（tests/golden/ddl/postgresql/house-defaults.sql）。
+
+  未現代化のプロファイル（mysql / mssql / oracle / sqlite）では今も落ちるので、
+  この fixture は #4 の再現にも使われている（tests/known-issues/known-issues.spec.ts）。
+  監査列の TIMESTAMP WITH TIME ZONE は PG の新パレットでは sql が TIMESTAMPTZ に
+  変わったが、aka で標準名を受けるのでこの fixture は 1 行も動かない。
 -->
 <sql>
 <table x="20" y="20" name="users">

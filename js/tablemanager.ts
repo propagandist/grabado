@@ -13,6 +13,8 @@
 
 import { OZ } from "./oz.ts";
 import { _ } from "./globals.ts";
+/* §6.2 初期テーブルテンプレート（段階6-4）。判断はパレットを見る側が持つ */
+import { applyTemplate, newRowType } from "./io/template.ts";
 import type { Table } from "./table.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
@@ -97,7 +99,10 @@ export class TableManager {
     }
 
     addRow(e?: Event): void {
-        var newrow = this.selection[0]!.addRow(_("newrow"));
+        /* 既定型はプロファイルが決める（段階6-4。postgresql は text、他は従来どおり添字 0） */
+        var newrow = this.selection[0]!.addRow(_("newrow"), {
+            type: newRowType(this.owner.palette),
+        });
         this.owner.rowManager.select(newrow);
         newrow.expand();
     }
@@ -192,13 +197,20 @@ export class TableManager {
             var x = e.clientX + scroll[0];
             var y = e.clientY + scroll[1];
             newtable = this.owner.addTable(_("newtable"), x, y);
-            var r = newtable.addRow("id", { ai: true });
             /*
-             * grabado: 第 2 引数 "" を落とした（HANDOVER §3 段階3-3b）。Table.addKey は
-             * 1 引数しか読まず、現行でも捨てられている（js/table.ts:240 の予告どおり）。
+             * grabado: §6.2 初期テーブルテンプレート（段階6-4）。テンプレートを持つのは
+             * 現代化済み（strict）のプロファイルだけで、無ければ false が返って
+             * 下の従来経路に落ちる —— 未現代化 4 本の初期テーブルは 1 バイトも変わらない。
              */
-            var k = newtable.addKey("PRIMARY");
-            k.addRow(r);
+            if (!applyTemplate(newtable, this.owner.palette)) {
+                var r = newtable.addRow("id", { ai: true });
+                /*
+                 * grabado: 第 2 引数 "" を落とした（HANDOVER §3 段階3-3b）。Table.addKey は
+                 * 1 引数しか読まず、現行でも捨てられている（js/table.ts:240 の予告どおり）。
+                 */
+                var k = newtable.addKey("PRIMARY");
+                k.addRow(r);
+            }
         }
         this.select(newtable);
         this.owner.rowManager.select(false);

@@ -40,8 +40,11 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 それぞれ [`../known-issues/`](../known-issues/) に独立したテストがあり、**移植で直せばそちらが赤くなる**。
 
 - `users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る（known-issues #6）
-- `DEFAULT 'now()'` / `DEFAULT 'uuidv7()'` のように式が引用符で囲まれる
-  （型の `quote` 属性をそのまま適用するため。直すのは §6.3 ＝ 6-5）
+- ~~`DEFAULT 'now()'` / `DEFAULT 'uuidv7()'` のように式が引用符で囲まれる~~
+  **§6 段階6-4 で `postgresql` から消えた**（式は `quote` を当てない）。未現代化の 4 本は
+  従来規則のままだが、そちらは `UUID` が先頭型（`quote=""`）に落ちるので元から裸で出ている
+  —— つまり**この癖はもうどの golden にも無い**。囲む側の規則（値の中の `'` を
+  エスケープしない）は残っており、known-issues #11 に隔離してある
 - `BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL` のように制約が重なる
   （`sql` に制約句が入っており、`output.xsl` はその後ろに `NOT NULL` を足すだけのため。同じく 6-5）
 - **未現代化のプロファイル**（`mysql` / `mssql` / `oracle` / `sqlite`）では `UUID` が
@@ -55,6 +58,14 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 `json` 2 / `state` 5）。`UUID` → `INTEGER` の落ち方（#4）が PG から消えたのが主で、ほかに
 `NUMERIC` / `TIMESTAMPTZ` / `REAL` / `DOUBLE PRECISION` / identity への置き換え。
 **他 4 プロファイルの `ddl` 28 本は 1 バイトも動いていない** —— それが段階の完了判定。
+
+**§6 段階6-4（初期テーブルテンプレート）で動いたのは 2 本だけ**（`ddl-input/house-defaults.xml` と
+`ddl/postgresql/house-defaults.sql`）。テンプレートそのものは golden に 1 ビットも写らない ——
+golden はすべて fixture を読み込んでから採るので、「テーブル追加ボタンで何ができるか」は
+どのファイルにも現れない（受け皿は [`../browser/template.spec.ts`](../browser/template.spec.ts)）。
+動いた 2 本はどちらも**式の引用が外れたぶん**で、`DEFAULT 'uuidv7()'` → `DEFAULT uuidv7()`、
+`DEFAULT ''{}'::jsonb'` → `DEFAULT '{}'::jsonb` のように PG に流せる形になっている。
+`json` / `state` は不変 —— 既定値は元から引用符を剥がした値で持っているため。
 
 §4 段階4-4 で `<default>` の後だけ改行が無い癖（旧 known-issues #8）は消えた。
 **§4 段階4-5 で「既定値の無い行に `<default>NULL</default>` が生える」癖（旧 known-issues #2）も

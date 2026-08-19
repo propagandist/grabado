@@ -4,7 +4,7 @@
 <table x="20" y="20" name="users">
 <row name="id" null="0" autoincrement="0">
 <datatype>UUID</datatype>
-<default>'uuidv7()'</default>
+<default>uuidv7()</default>
 </row>
 <row name="email" null="0" autoincrement="0">
 <datatype>TEXT</datatype>
@@ -15,20 +15,20 @@
 </row>
 <row name="is_active" null="0" autoincrement="0">
 <datatype>BOOLEAN</datatype>
-<default>'true'</default>
+<default>true</default>
 </row>
 <row name="preferences" null="0" autoincrement="0">
 <datatype>JSONB</datatype>
-<default>''{}'::jsonb'</default>
+<default>'{}'::jsonb</default>
 <comment>UI 設定などの任意項目</comment>
 </row>
 <row name="created_at" null="0" autoincrement="0">
 <datatype>TIMESTAMPTZ</datatype>
-<default>'now()'</default>
+<default>now()</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
 <datatype>TIMESTAMPTZ</datatype>
-<default>'now()'</default>
+<default>now()</default>
 </row>
 <key type="PRIMARY" name="users_pkey">
 <part>id</part>
@@ -41,7 +41,7 @@
 <table x="420" y="20" name="articles">
 <row name="id" null="0" autoincrement="0">
 <datatype>UUID</datatype>
-<default>'uuidv7()'</default>
+<default>uuidv7()</default>
 </row>
 <row name="author_id" null="0" autoincrement="0">
 <datatype>UUID</datatype>
@@ -67,11 +67,11 @@
 </row>
 <row name="created_at" null="0" autoincrement="0">
 <datatype>TIMESTAMPTZ</datatype>
-<default>'now()'</default>
+<default>now()</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
 <datatype>TIMESTAMPTZ</datatype>
-<default>'now()'</default>
+<default>now()</default>
 </row>
 <key type="PRIMARY" name="articles_pkey">
 <part>id</part>
@@ -88,7 +88,7 @@
 </row>
 <row name="created_at" null="0" autoincrement="0">
 <datatype>TIMESTAMPTZ</datatype>
-<default>'now()'</default>
+<default>now()</default>
 </row>
 <key type="PRIMARY" name="pk_article_tags">
 <part>article_id</part>

@@ -72,6 +72,69 @@ function serializeTable(table: TableModel, palette: TypePalette): string {
     return xml;
 }
 
+/** 囲まずにそのまま出す SQL キーワード（isSqlExpression の判定 2）。照合は大小を無視する */
+const SQL_DEFAULT_KEYWORDS = [
+    "TRUE",
+    "FALSE",
+    "NULL",
+    "CURRENT_DATE",
+    "CURRENT_TIME",
+    "CURRENT_TIMESTAMP",
+    "CURRENT_USER",
+    "SESSION_USER",
+    "LOCALTIME",
+    "LOCALTIMESTAMP",
+];
+
+/**
+ * <default> を型の quote で囲まずにそのまま出す値か（段階6-4。**strict プロファイル限定**）。
+ *
+ * quote 属性は「文字列型の既定値をリテラルとして囲む」ためのもので、6-4 まで**式にも
+ * 当たっていた** —— PG18 パレットの uuid は quote="'" なので、house 既定の
+ * DEFAULT uuidv7() が `DEFAULT 'uuidv7()'` になり、uuid 列に文字列を入れる DDL として
+ * PG に弾かれる。§6.2 の初期テーブルテンプレートは既定値に uuidv7() / now() を持つので、
+ * 直さずにテンプレートだけ入れると**新規テーブルが必ず壊れた DDL を吐く**。
+ * 6-3 が 6-5（output.xsl の TS 生成器化）へ送っていた項目を、その理由で 6-4 に前倒しした。
+ *
+ * 判定は「囲まない側」を列挙する形にしてある —— 迷ったら囲む（＝従来どおり）に倒れるので、
+ * 判定漏れが「文字列既定値が裸で出る」方向に働かない。
+ *
+ * **未現代化プロファイル（mysql / mssql / oracle / sqlite）では呼ばれない。** そちらは
+ * CURRENT_TIMESTAMP だけを特例にする従来分岐のままで、6-8 でこちら側に移る
+ * （6-3 の strict と同じ型紙）。なお現状の 4 本で式が裸で出ているのは、UUID が
+ * パレットに無く quote="" の先頭型に落ちているためで（known-issue #4）、規則の結果ではない。
+ *
+ * SQL リテラルのエスケープ（O'Brien -> 'O''Brien'）はここでは扱わない。囲む側の規則で、
+ * 6-4 が作った欠陥でもない（known-issues #11 に隔離した）。直すのは 6-5。
+ */
+function isSqlExpression(def: string): boolean {
+    /* 数値リテラル。0 / -1.5 / 1e3 */
+    if (/^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/.test(def)) {
+        return true;
+    }
+    /* キーワード。大小は無視する（手書きの true も受ける） */
+    if (SQL_DEFAULT_KEYWORDS.includes(def.toUpperCase())) {
+        return true;
+    }
+    /* 関数呼び出し。now() / uuidv7() / gen_random_uuid() / pg_catalog.now() */
+    if (/^[A-Za-z_][\w$]*(\.[A-Za-z_][\w$]*)*\s*\(.*\)$/.test(def)) {
+        return true;
+    }
+    /* ユーザーが自分で引用符を書いた（囲むと二重になる） */
+    if (def.startsWith("'")) {
+        return true;
+    }
+    /* キャスト式。'{}'::jsonb / ARRAY[]::text[] */
+    if (def.includes("::")) {
+        return true;
+    }
+    /* 配列コンストラクタ。ARRAY[1,2] */
+    if (/^ARRAY\[/i.test(def)) {
+        return true;
+    }
+    return false;
+}
+
 function serializeRow(row: RowModel, palette: TypePalette): string {
     var xml = "";
 
@@ -96,7 +159,12 @@ function serializeRow(row: RowModel, palette: TypePalette): string {
         /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
         var q = elm.getAttribute("quote")!;
         var d = row.def;
-        if (d != "CURRENT_TIMESTAMP") {
+        if (palette.isStrict()) {
+            /* 段階6-4: 式は囲まない。未現代化プロファイルは下の従来分岐のまま */
+            if (!isSqlExpression(d)) {
+                d = q + d + q;
+            }
+        } else if (d != "CURRENT_TIMESTAMP") {
             d = q + d + q;
         }
         /* 段階4-4 で末尾に改行を足した（known-issue #8）。ここだけ改行が無く、

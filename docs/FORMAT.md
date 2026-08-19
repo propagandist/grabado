@@ -165,6 +165,66 @@ UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.
 **設計ファイルは 1 バイトも影響を受けていない** —— それが規則 3 の目的そのもので、
 `fk` を label 参照から id 参照に移した 6-2 の下準備がここで効いている。
 
+#### 初期テーブルテンプレート（**段階6-4 で新設**）
+
+`db/<db>/datatypes.xml` は型パレットに加えて、**新規テーブルの初期列**（HANDOVER §6.2）を持つ。
+設計 JSON の形式には現れない —— テンプレートは「作った直後の中身」であって、保存された
+ファイルからは普通の列と区別が付かない。ここに書くのは**型キーと同じ `id` 参照の契約**を持つため。
+
+```xml
+<datatypes db="postgresql" strict="1" newrowtype="text">
+	<template>
+		<row name="id" type="uuid" null="0" default="uuidv7()" key="PRIMARY" />
+		<row name="created_at" type="timestamp_with_time_zone" null="0" default="now()" />
+		<row name="updated_at" type="timestamp_with_time_zone" null="0" default="now()" />
+	</template>
+```
+
+| 属性 | 意味 |
+|---|---|
+| `name` | 列名。SQL 識別子なので locale の対象にしない |
+| `type` | **型 `id` 参照**（`sql` 名ではない。`fk` と同じ規約）。引けなければ例外 |
+| `size` | 省略可。`NUMERIC(12,2)` のような精度 |
+| `default` | 既定値。`quote` を当てるかは値が式かどうかで決まる（段階6-4。下記） |
+| `null` | 設計 XML の `<row null>` と同じ。`"1"` が NULL 許可 |
+| `autoincrement` | 同じく `"1"` が identity |
+| `key` | `"PRIMARY"` なら PRIMARY キーに入る。複数行に付ければ複合 PK |
+
+ルート属性 `newrowtype` は「Add row ボタンで足す行の既定型」（同じく `id` 参照）。
+テンプレートとは別概念なので `<template>` の中に入れない。**どちらも省略でき、
+省略したプロファイルは従来どおり**（初期列は `id` 1 列 ＋ autoincrement、既定型は添字 0）。
+
+**テンプレートを持つのは現代化済み（`strict="1"`）のプロファイルだけ。** 段階6-4 時点では
+`postgresql` の 1 本で、未現代化の 4 本は 6-8 で入る（`uuid` 相当の型が `mssql` の
+`uniqueidentifier` しか無く、先に決めると 6-8 の現代化方針を先取りすることになるため）。
+
+読むのは [`../js/io/template.ts`](../js/io/template.ts)、`type` / `newrowtype` が実在の `id` で
+あることの検査は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts)。
+
+#### 既定値を `quote` で囲むか（**段階6-4 で規則になった**）
+
+`<type quote="'">` は「文字列型の既定値をリテラルとして囲む」ための属性で、6-4 まで**式にも
+当たっていた**。PG18 パレットの `uuid` は `quote="'"` なので、house 既定の `DEFAULT uuidv7()` が
+`DEFAULT 'uuidv7()'` になる —— uuid 列に文字列を入れる DDL なので PG が実行時に弾く。
+§6.2 のテンプレートは既定値に `uuidv7()` / `now()` を持つため、直さずに入れると
+**新規テーブルが必ず壊れた DDL を吐く**。それが 6-4 でここを触った理由。
+
+**strict プロファイルでは、次のいずれかに当たる値を式とみなして囲まない。**
+
+| # | 条件 | 例 |
+|---|---|---|
+| 1 | 数値リテラル | `0` `-1.5` `1e3` |
+| 2 | キーワード（大小無視の完全一致） | `TRUE` `NULL` `CURRENT_TIMESTAMP` `LOCALTIME` |
+| 3 | 関数呼び出しの形 | `now()` `uuidv7()` `pg_catalog.now()` |
+| 4 | 先頭が `'`（自分で引用符を書いた） | `'{}'::jsonb` |
+| 5 | `::` を含む（キャスト） | `ARRAY[]::text[]` |
+| 6 | `ARRAY[` で始まる | `ARRAY[1,2]` |
+
+**列挙するのは「囲まない側」だけ**で、判定漏れは「囲む」（＝従来どおり）に倒れる。
+未現代化プロファイルは `CURRENT_TIMESTAMP` だけを特例にする従来規則のままで、6-8 で移る。
+**囲む側の規則（値の中の `'` をエスケープしない）は 6-4 では直していない** ——
+known-issues #11 に隔離し、`output.xsl` を TS 生成器にする 6-5 でまとめて設計する。
+
 #### パレットを差し替えるときの移行（**規則は段階6-3 で確定**）
 
 読み込み時に**現在の型パレットに無い `id` は例外**にする（known-issues #4 の「一致が無ければ

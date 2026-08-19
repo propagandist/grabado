@@ -47,6 +47,33 @@ function akaNames(t: PaletteType): string[] {
     return (t.aka?.split("|") ?? []).map((n) => n.toUpperCase());
 }
 
+/** そのプロファイルの datatypes.xml 全文（下の 2 本は <type> 以外も読む） */
+function readPalette(db: string): string {
+    return readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+}
+
+/**
+ * <template> の <row> が指す型 id（段階6-4）。テンプレートが無ければ空。
+ *
+ * 読み方は readTypes と同じ素の正規表現。**id 参照であることが唯一の契約**なので、
+ * ここで実在を押さえておかないと「テンプレートを適用した瞬間に例外」が
+ * パレットを触った段階ではなく利用者の手元で出る。
+ */
+function readTemplateTypes(db: string): string[] {
+    const block = /<template>([\s\S]*?)<\/template>/.exec(readPalette(db));
+    if (!block) {
+        return [];
+    }
+    return (block[1]!.match(/<row\s[^>]*?\/>/g) ?? []).map(
+        (tag) => /\stype="([^"]*)"/.exec(tag)?.[1] ?? "",
+    );
+}
+
+/** <datatypes newrowtype="..."> が指す型 id（段階6-4。無ければ undefined） */
+function readNewRowType(db: string): string | undefined {
+    return /<datatypes\s[^>]*?\snewrowtype="([^"]*)"/.exec(readPalette(db))?.[1];
+}
+
 /** id -> 添字。tools 側と js/io/palette.ts の indexOfId と同じ規則 */
 const ID_PATTERN = /^[a-z][a-z0-9_]{0,31}$/;
 
@@ -147,6 +174,28 @@ describe("型パレットの id 規則（段階4-2b）", () => {
                     }
                 }
                 expect(dup).toEqual([]);
+            });
+
+            test("<template> の type は実在する id（段階6-4）", () => {
+                /*
+                 * fk と同じ論法。テンプレートは type を **id 参照**で持つので
+                 * （sql 名にすると §6 が sql を動かした瞬間に壊れる）、実在しない id を
+                 * 書くと js/io/template.ts が例外を投げる —— それが出るのは
+                 * 「新規テーブルを作ろうとしたとき」なので、パレットを触った段階では
+                 * 誰も気づけない。**この検査だけがその間に立つ。**
+                 */
+                const ids = new Set(types.map((t) => t.id));
+                const dangling = readTemplateTypes(db).filter(
+                    (id) => !ids.has(id),
+                );
+                expect(dangling).toEqual([]);
+            });
+
+            test("newrowtype は実在する id（段階6-4）", () => {
+                /* 属性を持たないプロファイル（未現代化の 4 本）は空振りでよい */
+                const id = readNewRowType(db);
+                const ids = new Set(types.map((t) => t.id));
+                expect(id === undefined || ids.has(id)).toBe(true);
             });
 
             test("sql がパレット内で重複しない", () => {

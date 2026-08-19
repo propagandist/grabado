@@ -133,11 +133,12 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
      * 「既定なし」の行から <default> が消えたので、実在する既定値へ寄せた
      * （users.id の uuidv7()）。
      *
-     * **段階6-3 で引用符が付いた。** 6-3 まで uuid 型がパレットに無く、この行は
-     * quote="" の INTEGER に落ちていた（known-issue #4）。uuid は他の非数値型と同じく
-     * quote="'" なので、式であっても引用符で囲まれる —— これは 6-3 が作った不具合では
-     * なく、`DEFAULT 'now()'` として golden に前からある癖（tests/golden/README.md）。
-     * 型の quote 属性を式にも当ててしまう設計そのものの問題で、直すのは §6.3（6-5）。
+     * **段階6-3 で引用符が付き、段階6-4 で外れた。** 6-3 まで uuid 型がパレットに無く、
+     * この行は quote="" の INTEGER に落ちていた（known-issue #4）。uuid は他の非数値型と
+     * 同じく quote="'" なので、6-3 では式まで引用符で囲まれていた（`DEFAULT 'now()'` として
+     * golden に前からあった癖）。**6-4 が strict プロファイルでその癖を消した** ——
+     * §6.2 のテンプレートが uuidv7() / now() を既定値に持つので、囲んだままでは
+     * 新規テーブルが必ず壊れた DDL を吐くため（CUSTOMIZATIONS.md の段階6-4）。
      */
     test("<default> の後にも改行が入る（1 要素 1 行）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
@@ -145,7 +146,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
 
         const xml = await toXml(page);
 
-        expect(xml).toContain("<default>'uuidv7()'</default>\n");
+        expect(xml).toContain("<default>uuidv7()</default>\n");
         expect(xml).not.toContain("</default><");
     });
 

@@ -10,13 +10,18 @@
     length 1 ならサイズ / 精度を取る型。0 なら取らない
     re     非 strict プロファイル用の正規表現照合。本パレットは 1 つも持たない
 
+  ルート属性 newrowtype は「Add row で足す行の既定型」（id 参照。段階6-4）。
+  テンプレートとは別概念なので <template> の中に入れない。無ければ従来どおり
+  先頭の型（添字 0）になる。
+
   **length は段階6-3 まで upstream 由来の死んだ属性だった**（js/ のどこからも読まれて
   いなかった）。6-3 で strict プロファイルの読み込み契約にしたので、PG18 の実際に
   合わせて 4 型を直してある: bytea / xml は精度を取らないので 1 -> 0、
   timetz / timestamptz は秒精度を取れるので 0 -> 1。読むのは
   js/io/xml-parser.ts で、CHAR(10) -> TEXT のように寄せ先がサイズを取らない型の
   ときに size を捨てる（残すと TEXT(10) という壊れた DDL が出る）。
-  UI の size 欄を型ごとに閉じるかどうかは §6.2（6-4）の判断で、ここでは決めない。
+  **UI の size 欄を型ごとに閉じるかどうかは 6-4 でも決めていない** —— テンプレートとは
+  別件で、全プロファイルが strict になる 6-8 までは片側だけ閉じる形になるため。
 
   strict="1" は「現代化済み」の印。照合は sql / aka の完全一致だけになり、
   一致しない型は黙って先頭型に落ちず例外になる（known-issue #4 の解消）。
@@ -33,7 +38,25 @@
   移行表（旧 id -> 新 id）は CUSTOMIZATIONS.md の段階6-3 と
   tools/migrate-design.mjs が持つ。aka は「旧 sql 名 -> 新型」で別物。
 -->
-<datatypes db="postgresql" strict="1">
+<datatypes db="postgresql" strict="1" newrowtype="text">
+	<!--
+	  §6.2 初期テーブルテンプレート（段階6-4）。新規テーブルはこの行で作られる。
+	  読むのは js/io/template.ts で、type は **id 参照**（sql 名ではない。fk と同じ規約）。
+	  key="PRIMARY" の行が PRIMARY キーに入る。
+
+	  §6.2 の例外 2 つ（外部露出 = gen_random_uuid() / 完全内部 = bigint identity）は
+	  **UI に出さない**。作成後に型と既定値を手で変える。テンプレートを選ばせると
+	  locale 21 言語に文言が要るわりに、変える手間は 2 クリックしか減らない。
+
+	  テンプレートを持たないプロファイル（未現代化の 4 本）は従来どおり
+	  id 1 列 ＋ autoincrement で作られる。6-8 でこちら側に移る。
+	-->
+	<template>
+		<row name="id" type="uuid" null="0" default="uuidv7()" key="PRIMARY" />
+		<row name="created_at" type="timestamp_with_time_zone" null="0" default="now()" />
+		<row name="updated_at" type="timestamp_with_time_zone" null="0" default="now()" />
+	</template>
+
 	<group label="Numeric" color="rgb(238,238,170)">
 		<type id="integer" label="Integer" length="0" sql="INTEGER" aka="INT|INT4" quote="" />
 		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" aka="INT2" quote="" />

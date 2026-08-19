@@ -31,6 +31,12 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 | 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る壊れた SQL が出る | [db/postgresql/output.xsl:58-64](../../db/postgresql/output.xsl#L58-L64) が要素の存在だけを見る。現行 introspection は値の無いカラムにも空の `<default>` を出す（[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.5） | **introspection 出力のみ** | §6.3 |
 | 6 | key が複数あると制約名が `<table>_pkey` で衝突する | [db/postgresql/output.xsl:90-92](../../db/postgresql/output.xsl#L90-L92) が `key/@name` を無視してテーブル名から生成する | DDL 生成 | §6.3 |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
+| 11 | 既定値を型の `quote` で囲むとき、値の中の `'` がエスケープされない（`O'Brien` → `'O'Brien'`） | [js/io/ddl-xml.ts](../../js/io/ddl-xml.ts) が `quote` 属性を前後に足すだけで、値の中を見ない（upstream から一度も見ていない） | DDL 生成 | §6 段階6-5 |
+
+**#11 は §6 段階6-4 で新設した。**6-4 が作った欠陥ではなく、囲む側の規則が upstream から
+値の中を見ていないもの。6-4 まで golden に出ていなかったのは fixture の既定値が式と数値しか
+無かったためで、**§6.2 のテンプレートで「文字列の既定値を打つ」が house 既定の一部になった**
+ぶん、隔離しておく先が要るようになった。6-4 が触ったのは「式なら囲まない」という逆側の判定だけ。
 
 **「経路」列は §4 段階4-7 の棚卸しで足した。**残る 5 本はどれも現象が消えていないが、
 **§4 を通したことで 3 本は届く範囲が狭まっている** —— そのぶん §6 で直すときの影響も狭い。

@@ -3161,6 +3161,165 @@ $ npm run golden:update && git diff tests/golden/json/  # 移行ツールの出�
 
 ---
 
+### 2026-08-19 HANDOVER §6「機能」段階6-4 —— §6.2 初期テーブルテンプレートを入れる
+
+6-0 の分割表の 5 本目。新規テーブルが house 既定（`id uuid PRIMARY KEY DEFAULT uuidv7()` ＋
+`created_at` / `updated_at` = `timestamptz NOT NULL DEFAULT now()`）で作られるようになった。
+必要な型は 6-3 でそろっていたので、6-4 が足したのは**定義の置き場所と適用経路**。
+
+#### 決めたこと 1: 式の引用（`DEFAULT 'uuidv7()'`）を 6-5 から前倒しした
+
+6-3 は型の `quote` 属性が式にも当たる問題を 6-5（`output.xsl` の TS 生成器化）へ送りつつ、
+「テンプレートの既定値を決めるときは 6-5 と順序を確認すること」と残していた。**確認した結果、
+6-4 に前倒しした** —— テンプレートの既定値は `uuidv7()` と `now()` で、`uuid` は `quote="'"` を
+持つ。直さずに入れると `DEFAULT 'uuidv7()'`（uuid 列に文字列を入れる DDL）になり、
+**新規テーブルを作った瞬間に PG が弾く DDL が出る**。公開プロダクトでその期間を作らない。
+
+| 案 | 採否 |
+|---|---|
+| **6-4 で式判定を入れる**（`js/io/ddl-xml.ts`。6-5 で TS 生成器へ移す前提の暫定） | **採用**。golden が動くのも 1 回で済む |
+| 分割表どおり 6-5 に送る | 却下。6-4 の成果物が「新規テーブル ＝ 壊れた DDL」になる |
+| 6-5 を先にやる（順序入れ替え） | 却下。§6 で最大の段階を、テンプレートという小さな段階のために前倒しすることになる |
+
+**判定は「囲まない側」だけを列挙する**（数値 / キーワード / 関数呼び出しの形 / 先頭が `'` /
+`::` を含む / `ARRAY[`）。列挙漏れは「囲む」＝従来どおりに倒れるので、`hello` のような
+文字列既定値が裸で出る方向には働かない。規則の表は [`docs/FORMAT.md`](docs/FORMAT.md)。
+
+**strict プロファイル限定**にしたので、未現代化 4 本の規則は 1 文字も動いていない
+（`CURRENT_TIMESTAMP` だけが特例のまま）。6-3 の型紙をそのまま使った形で、6-8 で移る。
+なお 4 本で式が裸で出ているのは `UUID` が `quote=""` の先頭型に落ちているためで
+（known-issue #4）、規則の結果ではない —— **その 2 つが 6-8 で入れ替わる**。
+
+#### 決めたこと 2: テンプレートはパレットと同じファイルに置く
+
+`db/postgresql/datatypes.xml` の `<datatypes>` 直下に `<template>` を新設した。
+
+```xml
+<template>
+	<row name="id" type="uuid" null="0" default="uuidv7()" key="PRIMARY" />
+	<row name="created_at" type="timestamp_with_time_zone" null="0" default="now()" />
+	<row name="updated_at" type="timestamp_with_time_zone" null="0" default="now()" />
+</template>
+```
+
+別ファイル（`db/<db>/template.xml`）に切らなかったのは、**`type` が実在する型 `id` である
+ことを [`tests/node/palette-id.test.ts`](tests/node/palette-id.test.ts) が機械的に押さえられる**ため。
+テンプレートの型 id が壊れると例外が出るのは「新規テーブルを作ろうとしたとき」で、
+パレットを触った段階では誰も気づけない。**その間に立てるのはこの検査だけ**。
+`fk` を label 参照から id 参照へ移した 6-2 と同じ論法で、同じ場所が見る。
+
+属性の意味は設計 XML の `<row>` に合わせた（`null="1"` が NULL 許可、`autoincrement="1"` が
+identity）。**`type` だけは id 参照**で、`sql` 名ではない。`key="PRIMARY"` を複数行に付ければ
+複合 PK も書ける（PRIMARY キーは primary な行が 1 つ以上あるときだけ作る）。
+
+#### 決めたこと 3: 適用範囲は strict（`postgresql`）のみ
+
+テンプレートを持たないプロファイルでは `readTemplate()` が空を返し、呼び手が
+**従来の「`id` 1 列 ＋ autoincrement」にそのまま落ちる**。未現代化 4 本の初期テーブルは
+1 バイトも変わらない。
+
+いま 4 本に書かないのは、**`uuid` 相当の型が `mssql` の `uniqueidentifier` しか無い**ため
+（`mysql` / `oracle` / `sqlite` には無く、`text` すら `mysql` / `oracle` に無い）。
+ここで決めると 6-8 の現代化方針を先取りすることになる。6-3 が strict でやったことと同じ形で、
+**全プロファイルが現代化された時点でこの分岐は消える**。
+
+#### 決めたこと 4: §6.2 の例外 2 つは UI に出さない
+
+§6.2 は既定（`uuidv7()`）のほかに例外を 2 つ挙げている（外部露出 = `gen_random_uuid()`、
+完全内部 = `bigint identity`）。**テンプレート選択 UI は作らず、既定 1 種だけを自動適用する。**
+選ばせると locale 21 言語に文言が要るのに対し、作成後に型と既定値を変える手間は
+2 クリックしか減らない。6-4 を「テンプレートの定義と適用」に閉じられる。
+
+#### 決めたこと 5: 新規行の既定型は `text`（6-3 が送った項目）
+
+`<datatypes newrowtype="text">` をルート属性として新設した。CLAUDE.md の「`text` 優先」に
+合わせたもので、テンプレートとは別概念なので `<template>` の中に入れていない。
+
+**`Row` のコンストラクタ既定（`js/row.ts` の `data.type = 0`）は動かしていない** ——
+あそこは読み込み経路（`js/io/apply.ts`）も通る道で、直後の `update()` が必ず型を入れる。
+「UI で足す行の既定」はプロファイルの性質なので、パレットを見る側（`js/io/template.ts`）が決める。
+属性を持たない 4 本は従来どおり添字 0。
+
+#### 決めたこと 6: known-issue #11 を新設した（SQL リテラルのエスケープ）
+
+`O'Brien` を既定値にすると `DEFAULT 'O'Brien'` という壊れた DDL が出る。**6-4 が作った欠陥では
+ない** —— 囲む側は upstream から一度も値の中を見ていない。6-4 まで golden に出ていなかったのは
+fixture の既定値が式と数値しか無かったためで、**テンプレートで「文字列の既定値を打つ」が
+house 既定の一部になった**ぶん、隔離しておく先が要るようになった。直すのは 6-5。
+
+#### 決めたこと 7: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| UI の size 欄を型ごとに閉じる（`length="0"` の型で入力させない） | **6-8 以降** | 6-3 のパレットが「§6.2（6-4）の判断」と書いていたが、テンプレートとは別件。全プロファイルが strict になるまでは片側だけ閉じることになる |
+| テーブル名の複数形・命名規約（§6.3） | **6-5** | 分割表どおり。`_("newtable")` は locale の文言のままにした |
+| `output.xsl` の `@autoincrement=1` → `BIGSERIAL` 固定 / `NOT NULL` の重複 | **6-5** | 6-3 が送った 2 件。テンプレートが identity を使わないので、新規テーブルではどちらも踏まない |
+
+#### 検証
+
+**赤くなったテストを 1 件ずつ説明できることが影響範囲の証明**（6-1 / 6-2 / 6-3 と同じ手法）。
+期待値を 1 行も直さずに全ハーネスを回した時点で赤は **2 件**で、どちらも式の引用が外れたぶん:
+
+| 対象 | 中身 |
+|---|---|
+| golden 2 本 | `ddl-input/house-defaults.xml` と `ddl/postgresql/house-defaults.sql` |
+| 主張が動いたテスト 1 本 | `serialize.spec.ts` の「`<default>` の後にも改行が入る」（`'uuidv7()'` → `uuidv7()`） |
+
+**テンプレートそのものは golden に 1 ビットも写らない。** golden はすべて fixture を読み込んで
+から `toXML()` / `toJson()` で採るので、「テーブル追加ボタンで何ができるか」はどのファイルにも
+現れない。受け皿として [`tests/browser/template.spec.ts`](tests/browser/template.spec.ts) を
+新設した（6-3 が `Row.buildTypeSelect` だけを恒久テストに残したのと同じ位置づけ）。
+
+```
+$ git status --porcelain tests/golden/
+ M tests/golden/ddl-input/house-defaults.xml
+ M tests/golden/ddl/postgresql/house-defaults.sql
+$ git status --porcelain tests/golden/ddl/{mysql,mssql,oracle,sqlite} tests/golden/json tests/golden/state
+                                                        # 空 ← 段階の完了判定
+$ grep DEFAULT tests/golden/ddl/postgresql/house-defaults.sql
+ id UUID NOT NULL DEFAULT uuidv7(),                      # 6-3 は DEFAULT 'uuidv7()'
+ is_active BOOLEAN NOT NULL DEFAULT true,
+ preferences JSONB NOT NULL DEFAULT '{}'::jsonb...       # 6-3 は ''{}'::jsonb'
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+```
+
+`json` / `state` が不変なのは、**既定値を元から引用符の無い値で持っている**ため
+（引用は書き出しの最後に付く）。6-4 が触ったのが出力の 1 点だけであることの裏付けになっている。
+
+テスト件数（左が `develop`、右が本段階）:
+
+| | 前 | 後 |
+|---|---|---|
+| `npm test` | 209 passed / 7 skipped | **237 passed / 7 skipped**（`template` +15・`palette-id` +10・`serialize` +3） |
+| `npm run test:browser` | 119 passed | **123 passed**（`template.spec.ts` +4） |
+| `npm run known-issues` | 5 passed | **6 passed**（#11 を新設） |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+`tests/fixtures/` は **1 行も動かしていない**。
+
+`js/io/template.ts` は **実行時の依存が 0 本**（import は型だけ）なので、`js/io/palette.ts` と
+同じくハーネス無しで直に叩ける。`applyTemplate` を `TableManager.click()` に書かず読み取り層に
+置いたのはそのため —— マウス経路に判断を置くと Node 側からテストが張れない。
+
+**UI の実操作はブラウザ側で一巡した**（テーブル追加 → 3 列と PK・生成 DDL・Add row の既定型・
+`mysql` に切り替えて従来経路に落ちること）。`TableManager.click()` はマウスイベントを受けるので、
+`#area` の実クリックの代わりに同じ入口を `window.d` 越しに叩いている。**マウス操作そのものを
+張るテストは 6-4 でも 0 本のまま**（[`docs/TESTING.md`](docs/TESTING.md)）。
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読した。
+**該当項目は無い** —— 依存・配信・DNS・CI を変えず、`innerHTML` 経路も増やしていない
+（テンプレートは既存の `Table.addRow` を通る）。生成する DDL は人が読んでから実行するもので、
+アプリ自身は SQL を実行しない。
+
+**次段階への入力 —— 6-5（§6.3 `output.xsl` の TS 生成器化）**。6-4 が `js/io/ddl-xml.ts` に置いた
+式判定は**暫定**で、TS 生成器に移すときに「囲む側の規則」ごと設計し直す（known-issue #11 の
+エスケープもそこで直す）。6-3 が送った `@autoincrement=1` → `BIGSERIAL` 固定と
+`NOT NULL` の重複も同じ段階。テンプレートが identity を使わないので、**新規テーブルでは
+そのどちらも踏まない**状態になっている。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -3168,8 +3327,8 @@ $ npm run golden:update && git diff tests/golden/json/  # 移行ツールの出�
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事。**6-1 でも触っていない**が、`backend/php-cubrid/index.php:37` が消えた `db/cubrid/datatypes.xml` を読む dangling ができた（段階6-1 の記録） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。**段階4-4 で `tests/golden/ddl-input/` に改名し、決定論・well-formed にした** | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化） |
-| DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`）。**段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本） | 残る 5 本は 6-5 で TS 生成器へ置換（§6.3 の規約もここ）。**新設 3 本は TS 生成器の上に載せる**（6-7。いま XSLT で書くと直後に捨てることになる）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す** |
-| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8 |
+| DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`）。**段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本） | 残る 5 本は 6-5 で TS 生成器へ置換（§6.3 の規約もここ）。**新設 3 本は TS 生成器の上に載せる**（6-7。いま XSLT で書くと直後に捨てることになる）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。**6-5 は `js/io/ddl-xml.ts` が 6-4 で持った式判定（`DEFAULT uuidv7()` を囲まない）と known-issue #11（値の中の `'` をエスケープしない）も引き取る** |
+| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

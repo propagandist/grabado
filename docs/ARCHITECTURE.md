@@ -471,6 +471,11 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 | [`model.ts`](../js/io/model.ts) | モデルの定義 | `DesignModel` の型（型だけ・emit 空）。上の格子の説明もここ |
 | [`palette.ts`](../js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |
 | [`conflict.ts`](../js/io/conflict.ts) | 保存境界 | 保存前の外部変更検知の判定（純関数。`absent` / `clean` / `exists` / `conflict`） |
+| [`template.ts`](../js/io/template.ts) | 参照 | §6.2 初期テーブルテンプレート（§6 段階6-4 で追加）。`<template>` を読み、新規テーブルの初期列と PRIMARY を作る。`Add row` の既定型（`newrowtype`）も同じ層 |
+
+**12 本目の [`template.ts`](../js/io/template.ts) は §6 段階6-4 で足した**（§4 の 11 本ではない）。
+格子の外にあるのは、入出力ではなく**プロファイルの既定値**を読む層だから —— 位置づけは
+`palette.ts` と同じで、実行時の依存は 0 本（import は型だけ）。
 
 守る規約は 4 つ。
 

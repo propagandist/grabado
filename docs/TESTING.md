@@ -235,6 +235,25 @@ serializer の出力と 1 バイトも違わなかった（**読み込み側と�
 | [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../js/io/palette.ts`](../js/io/palette.ts) と [`../js/io/xml-parser.ts`](../js/io/xml-parser.ts) を直に叩く（ハーネス不要。どちらも実行時 import 0 本なので `conflict.test.ts` と同じ立場）。**旧規則の参照実装をテスト内に置き、未現代化プロファイル × 全候補名で新旧を突き合わせる差分テスト**が主役。ほかに strict の `aka` 照合（旧型名 → 新型の表をリテラルで固定）・`length` の契約・`fkIndexFor`・パレット差し替え後の追随・旧パレット互換 |
 | [`../tests/browser/types.spec.ts`](../tests/browser/types.spec.ts) | 実ブラウザ側。`BIGINT` の解決（known-issue #3 の移設先）・**`UUID` の解決と strict の例外**（#4 の移設先。6-3）・XML 往復の安定・**FK 自動生成**（`rowManager` の対話経路。6-2 まで自動テストが 1 本も通っていなかった面）・パレット差し替え後の FK 生成・**型セレクタの中身**（`Row.buildTypeSelect`。パレットを読む唯一の UI 面で golden に 1 ビットも写らない。6-3） |
 
+### 初期テーブルテンプレート — golden に 1 ビットも写らない面（§6 段階6-4）
+
+golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で採るので、**「テーブル追加
+ボタンを押したときに何ができるか」はどのファイルにも現れない**。6-4 が §6.2 の house 既定を
+そこに入れたので、受け皿を 2 本置いた。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../js/io/template.ts`](../js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。`postgresql` が §6.2 の 3 列を返すこと・未現代化 4 本が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外・`newrowtype` |
+| [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・`mysql` では従来経路に落ちること |
+
+**マウス操作そのものを張るテストは 6-4 でも 0 本のまま。** `#area` の実クリックではなく
+同じ入口を叩いている（座標だけを持つ event で足りる）。上の「`.ts` 化そのものが張れない層」の
+穴は塞いでいない —— 塞いだのは「テンプレートが何を作るか」であって、ドラッグや選択の経路ではない。
+
+なお `<default>` を型の `quote` で囲むかどうかの規則（6-4 が strict 側で式判定にした箇所）は
+[`../tests/node/serialize.test.ts`](../tests/node/serialize.test.ts) が入力値と出力の表で固定している。
+fixture を足していないのは、`DDL_FIXTURES` に入れると golden が 5 プロファイル分増えるため。
+
 差分テストの主張は段階ごとに引き継いでいる。6-2 は「旧規則と違うのは `postgresql/BIGINT` の
 1 件だけ」を完了判定にしていたが、**6-3 でその原因（`x_real`）ごと撤去され、`postgresql` が
 strict 側へ移った**ので、いまは「**未現代化の 4 プロファイルは 6-2 以前と 1 件も違わない**」

@@ -149,3 +149,24 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
     expect(sample).not.toContain("idx_articles_author_id");
     expect(sample).not.toContain("idx_articles_published_on_title");
 });
+
+test("#11 既定値を quote で囲むとき値の中の ' がエスケープされない", async () => {
+    await useDatatypes(page, SERIALIZER_DB);
+    await loadFixture(page, readKnownIssueFixture("quote-in-default"));
+
+    const ddl = await generateDdl(page, SERIALIZER_DB);
+
+    /*
+     * 段階6-4 で新設。**6-4 が作った欠陥ではない** —— js/io/ddl-xml.ts は quote 属性を
+     * 前後に足すだけで、値の中の ' は upstream から一度も見ていない。6-4 が触ったのは
+     * 「式なら囲まない」という逆側の判定で、囲む側の規則には手を入れていない。
+     *
+     * 6-4 まで #11 が golden に出ていなかったのは、fixture の既定値が式（now() /
+     * uuidv7()）と数値しか無かったため。テンプレートが入って「文字列の既定値」を
+     * 打つ経路が house 既定の一部になったので、隔離しておく先が要る。
+     *
+     * 正しくは 'O''Brien'。直すのは 6-5（output.xsl の TS 生成器化）で、
+     * そのとき囲む側の規則ごと設計する。
+     */
+    expect(ddl).toContain("owner TEXT NOT NULL DEFAULT 'O'Brien'");
+});

@@ -11,13 +11,13 @@ DROP TABLE "article_tags" PURGE;
 -------------------------------------------------------------------------------
 
 CREATE TABLE "users" (
-    "id"                              INTEGER             DEFAULT uuidv7()             NOT NULL
-  , "email"                           NCLOB               NOT NULL
-  , "display_name"                    NCLOB               NOT NULL
-  , "is_active"                       INTEGER             DEFAULT true             NOT NULL
-  , "preferences"                     INTEGER             DEFAULT '{}'::jsonb             NOT NULL
-  , "created_at"                      INTEGER             DEFAULT now()             NOT NULL
-  , "updated_at"                      INTEGER             DEFAULT now()             NOT NULL
+    "id"                              RAW(16)             DEFAULT 'SYS_GUID()'             NOT NULL
+  , "email"                           VARCHAR2(255)       NOT NULL
+  , "display_name"                    VARCHAR2(255)       NOT NULL
+  , "is_active"                       NUMBER(1)           DEFAULT 1           NOT NULL
+  , "preferences"                     CLOB                NOT NULL
+  , "created_at"                      TIMESTAMP(6)        DEFAULT SYSTIMESTAMP        NOT NULL
+  , "updated_at"                      TIMESTAMP(6)        DEFAULT SYSTIMESTAMP        NOT NULL
   , CONSTRAINT "users_pkey" PRIMARY KEY ( "id" )
   , CONSTRAINT "users_email_key" UNIQUE ( "email" )
 );
@@ -31,30 +31,30 @@ COMMENT ON COLUMN "users"."preferences"                     IS 'UI 設定など�
 -------------------------------------------------------------------------------
 
 CREATE TABLE "articles" (
-    "id"                              INTEGER             DEFAULT uuidv7()             NOT NULL
-  , "author_id"                       INTEGER             NOT NULL
-  , "title"                           NCLOB               NOT NULL
-  , "body"                            NCLOB
+    "id"                              RAW(16)             DEFAULT 'SYS_GUID()'             NOT NULL
+  , "author_id"                       RAW(16)             NOT NULL
+  , "title"                           VARCHAR2(255)       NOT NULL
+  , "body"                            CLOB
   , "view_count"                      NUMBER              DEFAULT 0              NOT NULL
   , "price"                           DECIMAL(12,2)
   , "published_on"                    DATE
-  , "created_at"                      INTEGER             DEFAULT now()             NOT NULL
-  , "updated_at"                      INTEGER             DEFAULT now()             NOT NULL
+  , "created_at"                      TIMESTAMP(6)        DEFAULT SYSTIMESTAMP        NOT NULL
+  , "updated_at"                      TIMESTAMP(6)        DEFAULT SYSTIMESTAMP        NOT NULL
   , CONSTRAINT "articles_pkey" PRIMARY KEY ( "id" )
 );
 
 COMMENT ON TABLE  "articles"                                 IS '記事';
 COMMENT ON COLUMN "articles"."author_id"                       IS '執筆者 (users.id)';
-COMMENT ON COLUMN "articles"."price"                           IS '有料記事の価格。money ではなく numeric を使う';
+COMMENT ON COLUMN "articles"."price"                           IS '有料記事の価格。浮動小数ではなく decimal を使う';
 
 -------------------------------------------------------------------------------
 --            article_tags
 -------------------------------------------------------------------------------
 
 CREATE TABLE "article_tags" (
-    "article_id"                      INTEGER             NOT NULL
-  , "tag"                             NCLOB               NOT NULL
-  , "created_at"                      INTEGER             DEFAULT now()             NOT NULL
+    "article_id"                      RAW(16)             NOT NULL
+  , "tag"                             VARCHAR2(64)        NOT NULL
+  , "created_at"                      TIMESTAMP(6)        DEFAULT SYSTIMESTAMP        NOT NULL
   , CONSTRAINT "pk_article_tags" PRIMARY KEY ( "article_id", "tag" )
 );
 

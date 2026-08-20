@@ -8,9 +8,9 @@ DROP SEQUENCE "SQ_counters";
 -------------------------------------------------------------------------------
 
 CREATE TABLE "counters" (
-    "id"                              NUMBER              NOT NULL
-  , "label"                           INTEGER(64)         NOT NULL
-  , "hits"                            NUMBER              DEFAULT 0              NOT NULL
+    "id"                              NUMBER(10)          NOT NULL
+  , "label"                           VARCHAR2(64)        NOT NULL
+  , "hits"                            NUMBER(10)          DEFAULT 0          NOT NULL
   , CONSTRAINT "counters_pkey" PRIMARY KEY ( "id" )
 );
 

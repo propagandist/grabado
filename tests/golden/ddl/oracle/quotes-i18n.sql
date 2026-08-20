@@ -7,10 +7,10 @@ DROP TABLE 顧客 PURGE;
 -------------------------------------------------------------------------------
 
 CREATE TABLE 顧客 (
-    "id"                              NUMBER              NOT NULL
-  , 氏名                              NCLOB               NOT NULL
-  , "say "hi""                        NCLOB
-  , メモ                              NCLOB
+    "id"                              NUMBER(10)          NOT NULL
+  , 氏名                              VARCHAR2(255)       NOT NULL
+  , "say "hi""                        VARCHAR2(255)
+  , メモ                              CLOB
   , CONSTRAINT "顧客_pkey" PRIMARY KEY ( "id" )
 );
 

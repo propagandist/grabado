@@ -7,7 +7,7 @@
 **意図しない挙動変化が起きたら赤くする**こと。CLAUDE.md の Hard Constraint 1 が言う安全網の実体。
 
 ```
-ddl/<db>/<fixture>.sql   Designer.toDdl() の出力。6 DB × 7 fixture
+ddl/<db>/<fixture>.sql   Designer.toDdl() の出力。7 DB × 7 fixture
 state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
@@ -18,9 +18,12 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 `mysql` 4 / `mssql` 6 / `oracle` 5 / `sqlite` 3 / `postgresql` 3（`types-matrix` に
 `BIGINT` と `UUID` を足したぶん。`ddl` / `json` / `state` の 1 本ずつ）。
 
-**§6 段階6-7a で `sql-standard` の 7 本が新規に増えた**（既存 35 本は 1 バイトも動いていない ——
-新設プロファイルは既存の出力に触れないので、それが段階の完了判定）。ベンダ非依存のプロファイルで、
-`COMMENT ON` も `CREATE INDEX` も標準に無いため**行コメントで出る**のが他 5 本と違う。
+**§6 段階6-7a で `sql-standard`、6-7b で `h2` が 7 本ずつ増えた**（そのたびに既存の golden は
+1 バイトも動いていない —— 新設プロファイルは既存の出力に触れないので、それが段階の完了判定）。
+
+- `sql-standard` はベンダ非依存で、`COMMENT ON` も `CREATE INDEX` も標準に無いため**行コメントで出る**
+- `h2` は **house 既定をほぼそのまま置ける唯一の非 PostgreSQL**（uuid / tz 付き timestamp /
+  JSON / boolean がすべてネイティブ）。失うのは `uuidv7()` → `RANDOM_UUID()`（v4）だけ
 
 **これで非 PG の golden が初めて「その DB の DDL」になった。** 6-6a まではどれも
 PG 用の型名を読ませた結果で、`oracle` は uuid / jsonb / timestamptz が全部 `INTEGER`、

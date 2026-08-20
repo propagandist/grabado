@@ -5,7 +5,7 @@
  * js/io/ddl/naming.ts の quoteIdentifier() が唯一の読み手で、規則そのものは向こうにある。
  * ここは語彙表だけを持つ —— 6-8 で mysql（約 260 語）/ mssql / oracle / sqlite が足されると
  * 規則本体が語彙に埋もれるため、最初からファイルを分けてある。
- * **段階6-7a で sql-standard が 2 本目として入った**（採取元は下）。
+ * **段階6-7a で sql-standard が、6-7b で h2 が入った**（採取元はそれぞれ下）。
  *
  * **一覧は推測ではなく実 PG18 から採った。** 採取手順（そのまま再現できる）:
  *
@@ -130,4 +130,45 @@ export const SQL_STANDARD_RESERVED: ReadonlySet<string> = new Set([
     "values", "value_of", "var_pop", "var_samp", "varbinary", "varchar",
     "varying", "versioning", "when", "whenever", "where", "width_bucket",
     "window", "with", "within", "without", "year",
+]);
+
+/*
+ * H2 2.4.240 の予約語（段階6-7b）。
+ *
+ * **H2 は INFORMATION_SCHEMA.KEYWORDS を持たない**（2.4 の 35 ビューを数えて確認した）ので、
+ * PostgreSQL の pg_get_keywords() のように一覧を引くことができない。かわりに
+ * **実物に総当たりで聞いた** —— 語ごとに列名として使えるかを試し、拒まれた語を採る。
+ * 「列名に使えるか」で採るのは PG（catcode R / T）と同じ基準。
+ *
+ *   $ curl -O https://repo1.maven.org/maven2/com/h2database/h2/2.4.240/h2-2.4.240.jar
+ *   $ java -cp h2-2.4.240.jar Kw.java <母集団> <出力>
+ *       // 各語で CREATE TABLE t_probe(<語> INT) を試し、SQLException になった語を集める
+ *
+ *   採取日 2026-08-21 / H2 2.4.240 / 母集団 391 語 -> 90 語
+ *
+ * **母集団の作り方が採取の限界そのもの。** SQL:2016 の 365 語 ∪ PostgreSQL の 101 語 ∪
+ * H2 のソース（org/h2/util/ParserUtil.java）の文字列リテラルを合わせた 391 語で、
+ * ここに無い語は漏れる。ParserUtil を混ぜたのは標準にも PG にも無い H2 固有語を拾うためで、
+ * 実際に 6 語（if / key / minus / qualify / rownum / _rowid_）がそこからしか出ていない。
+ *
+ * jar は採取時 1 回きりで、リポジトリにも配布物にも残していない（6-5b の postgres:18 と同じ扱い）。
+ */
+
+/** 列名・テーブル名として裸で書けない語（H2 2.4.240） */
+export const H2_RESERVED: ReadonlySet<string> = new Set([
+    "all", "and", "any", "array", "as", "asymmetric",
+    "authorization", "between", "case", "cast", "check", "constraint",
+    "cross", "current_catalog", "current_date", "current_path", "current_role", "current_schema",
+    "current_time", "current_timestamp", "current_user", "day", "default", "distinct",
+    "else", "end", "end-exec", "except", "exists", "false",
+    "fetch", "for", "foreign", "from", "full", "group",
+    "having", "hour", "if", "in", "inner", "intersect",
+    "interval", "is", "join", "key", "left", "like",
+    "limit", "localtime", "localtimestamp", "minus", "minute", "month",
+    "natural", "not", "null", "offset", "on", "or",
+    "order", "primary", "qualify", "right", "row", "rownum",
+    "second", "select", "session_user", "set", "some", "symmetric",
+    "system_user", "table", "to", "true", "uescape", "union",
+    "unique", "unknown", "user", "using", "value", "values",
+    "when", "where", "window", "with", "year", "_rowid_",
 ]);

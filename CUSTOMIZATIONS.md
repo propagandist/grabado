@@ -4184,6 +4184,155 @@ CI のワークフローは増やしていないが、**`test:browser` の実行
 - **H2 のバージョンを明示する**（1.4 と 2.x で型システムが違う。6-7 の設計エントリの指示）
 
 
+---
+
+### 2026-08-21 HANDOVER §6「機能」段階6-7b —— `h2` を入れ、ansi 系 3 本の骨格を括る
+
+**新設 3 本の 2 本目。** 6-7 の設計（2026-08-16）が「**house 既定の 4 点がすべてネイティブ**」と
+書いた唯一の非 PostgreSQL で、**PG で設計して H2 でテストする経路が型レベルで通る**ことが
+対応 DB に入れた理由そのもの（house は Kotlin/Spring Boot）。
+
+#### 決めたこと 1: 予約語は「実物に総当たりで聞く」で採った
+
+6-7 の設計エントリは「H2 は `INFORMATION_SCHEMA.KEYWORDS` を持つ」と書いていたが、**2.4.240 に
+そのビューは無い**（35 ビューを数えて確認）。PG の `pg_get_keywords()` にあたる一覧が引けない。
+
+かわりに**実物に総当たりで聞いた** —— 語ごとに `CREATE TABLE t_probe(<語> INT)` を試し、
+拒まれた語を集める。「列名に使えるか」で採るのは PG（catcode R / T）と同じ基準。
+
+```
+$ curl -O https://repo1.maven.org/maven2/com/h2database/h2/2.4.240/h2-2.4.240.jar
+$ java -cp h2-2.4.240.jar Kw.java <母集団> <出力>
+  -> 採取日 2026-08-21 / H2 2.4.240 / 母集団 391 語 -> **90 語**
+```
+
+**母集団の作り方が採取の限界そのもの。** SQL:2016 の 365 語 ∪ PostgreSQL の 101 語 ∪
+H2 のソース（`org/h2/util/ParserUtil.java`）の文字列リテラルを合わせた 391 語で、
+**ここに無い語は漏れる**。ParserUtil を混ぜたのは標準にも PG にも無い H2 固有語を拾うためで、
+実際に 6 語（`if` / `key` / `minus` / `qualify` / `rownum` / `_rowid_`）がそこからしか出ていない。
+
+jar は採取時 1 回きりで、リポジトリにも配布物にも残していない（6-5b の `postgres:18` と同じ扱い）。
+
+#### 決めたこと 2: 型も実物に聞いた —— 設計表を 1 行訂正した
+
+候補ごとに `CREATE TABLE t(c <型>)` を試して通った型だけをパレットに置いた。
+**6-7 の設計表が「`h2` は `interval` を持つ」としていたのは誤り**で、
+
+```
+NG   INTERVAL       -> SQL ステートメントに文法エラー "CREATE TABLE t_probe(c INTERVAL[*])"
+OK   INTERVAL YEAR  -> INTERVAL
+```
+
+**単独の `INTERVAL` 型が無い**（`INTERVAL YEAR` のように単位が要る）。`<type>` の列挙では
+表せないので**入れない** —— 配列型や生成列を 6-0 が入れなかったのと同じ理由。
+`XML` と `INET` も無いことを実測で確かめた（`XML` は `aka` で `text`＝CLOB が受ける）。
+
+かわりに H2 にあって PG に無い `tinyint` / `decfloat` / `varbinary` を足し、**22 型**にした。
+`enum` / `varchar_ignorecase` / `java_object` は入れない —— どれも H2 固有で、
+設計ツールとして他プロファイルへ持っていけない（`java_object` は Java 依存そのもの）。
+
+#### 決めたこと 3: 6-7a の「3 本そろうまで待つ」を前倒しした（ansi.ts の抽出）
+
+6-7a は共通骨格の抽出を 6-7c へ送っていた。**`h2` を書く段になって前提が変わった** ——
+H2 は postgresql と**構文レベルで同一**（`COMMENT ON` も `CREATE INDEX` も
+`GENERATED ALWAYS AS IDENTITY` も持ち、識別子は `"` で囲む）で、違うのは予約語の語彙だけ。
+このまま書けば **170 行のコピーが 3 本目としてできる**。
+
+[`js/io/ddl/ansi.ts`](js/io/ddl/ansi.ts) を作り、3 本の違いを 2 つに畳んだ:
+
+| | `postgresql` | `sql-standard` | `h2` |
+|---|---|---|---|
+| `rules`（識別子の語彙） | PG 101 語 | SQL:2016 365 語 | H2 90 語 |
+| `hasCommentOn` | ○ | **×**（標準に無い→行コメント） | ○ |
+| `hasCreateIndex` | ○ | **×**（索引は標準の範囲外→行コメント） | ○ |
+
+**6-7a の判断を覆したのではなく、対象を切り分けた。** あそこで待つと決めたのは
+「**8 本の一般化**」で、`mysql` / `mssql` / `oracle` / `sqlite` / `mariadb` は DROP 文・GO・
+trigger + sequence・inline FK と骨格からして違う。`ansi.ts` が受け持つのは
+「**CREATE TABLE ＋ ALTER TABLE ADD CONSTRAINT で組み立てる系**」だけで、
+それらを含む抽象は 6-7c（mariadb）と 6-8 で決める。
+
+**postgresql と sql-standard の出力はバイト単位で不変**（golden 14 本が 1 バイトも動いていない）。
+`postgresql.ts` は 170 行 → 39 行になり、残ったのは「このプロファイルは何者か」の記述だけ。
+
+#### 決めたこと 4: house 既定が H2 で失うのは 1 つだけ
+
+| house 既定 | `h2` |
+|---|---|
+| `id uuid` | ○ `UUID`（ネイティブ） |
+| **`uuidv7()`** | **× `RANDOM_UUID()`（v4。時系列の順序性を失う）** |
+| `created_at timestamptz` | ○ `TIMESTAMP WITH TIME ZONE` |
+| `jsonb` | ○ `JSON` |
+| `boolean` | ○ `BOOLEAN` |
+| identity | ○ `BIGINT GENERATED ALWAYS AS IDENTITY` |
+
+6-6b で実測した 4 プロファイル（uuid も tz も jsonb も失う）と対照的で、
+**この 1 行が「PG で設計して H2 でテストする」を支えている**。
+
+#### 決めたこと 5: 生成した DDL を実物に流して確かめた
+
+golden を採ったあと、**6 本すべてを H2 2.4.240 で実際に実行した**（`empty` は空なので除く）:
+
+```
+$ java -cp h2-2.4.240.jar org.h2.tools.RunScript     -url jdbc:h2:mem:v -user sa -script tests/golden/ddl/h2/<name>.sql
+  -> minimal / house-defaults / relations / types-matrix / autoincrement / quotes-i18n
+     すべてエラー無し（日本語識別子を含む quotes-i18n も通る）
+```
+
+**grabado の歴史で初めて「生成した DDL が実物で動く」ことを確かめた段階。**
+これまでの 5 プロファイルは golden（バイト列の固定）しか根拠を持っておらず、
+6-6b で見つかった `mssql` の `UNIQUE KEY` のような構文エラーは目で読んで気づくしかなかった。
+
+**恒久テストにはしない** —— jar が要り、依存を増やす（分類 B の §5.1）。採取時の検証として
+記録に残し、6-8 以降で他プロファイルにも同じ手当てをするかは別途判断する
+（`mysql` / `mariadb` / `mssql` / `oracle` は docker が要る）。
+
+#### 決めたこと 6: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| `mariadb` | **6-7c** | MySQL 系文法で `ansi.ts` に載らない。骨格の一般化と一緒にやる |
+| 8 本ぶんの共通骨格 | **6-7c / 6-8** | 決めたこと 3 |
+| 生成 DDL の実物検証をテスト化する案 | **見送り（記録のみ）** | 決めたこと 5 |
+| `interval` を単位付きで表す | **6-9 以降** | 決めたこと 2。配列型・生成列と同じ「型の修飾」の問題 |
+
+#### 検証
+
+**完了判定は「既存 42 本が 1 バイトも動かず、新設 7 本が増える」。**
+骨格の抽出（決めたこと 3）でも動いていないことが、同じ 1 行で示せている。
+
+```
+$ git status --porcelain tests/golden/
+?? tests/golden/ddl/h2/       # 新規 7 本だけ。postgresql / sql-standard にも M は付かない
+```
+
+| | 6-7a | 6-7b |
+|---|---|---|
+| `npm test` | 269 passed | **287 passed** |
+| `npm run test:browser` | 116 passed | **123 passed** |
+| `npm run known-issues` | 6 passed | 6 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読済み。
+**依存は 1 本も増やしていない** —— H2 の jar は採取時にダウンロードして使い、
+`package.json` にも配布物にも入れていない（§2.2 / §3.12 / §5.1）。
+CI のワークフローは増やしていない。**`test:browser` は 1.8 分 → 2 分台**（DDL golden 42 → 49 件）。
+
+#### 次段階への入力 —— 6-7c（`mariadb`）
+
+新設 3 本の最後。**MySQL 系文法なので `ansi.ts` には載らない** —— バッククォート、
+`AUTO_INCREMENT`、列定義内の `COMMENT`、`DROP TABLE IF EXISTS` と骨格からして違う。
+
+- 6-7 の設計表のとおり **`mariadb` は MySQL のコピーではない**（`UUID` 型 10.7+ と
+  `INET4` / `INET6` を持つ）。`mysql` パレットは未現代化のまま 6-8 で触るので、
+  **`mariadb` を先に現代化済みで作ると 6-8 の型紙になる**
+- 予約語は **MariaDB の実物から採る**（docker が使える。`INFORMATION_SCHEMA.KEYWORDS` を持つ）
+- **共通骨格の仕上げはここ** —— `mysql` / `mariadb` の系統が見えて初めて、
+  `ansi.ts` の外側にもう 1 つ骨格が要るのか、それとも 6-8 で `mysql` を現代化するときに
+  まとめるのかが決まる
+
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -4192,7 +4341,7 @@ CI のワークフローは増やしていないが、**`test:browser` の実行
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
 | ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離。**#14 が 6-6b で 10 件目として出た**）は **6-8**。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
-| 型パレット `db/<db>/datatypes.xml` | **段階6-7a で 6 本目（`sql-standard`）が新設で入った**（strict ＝ 最初から現代化済み。予約語は SQL:2016 の 365 語）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
+| 型パレット `db/<db>/datatypes.xml` | **段階6-7a で 6 本目（`sql-standard`）、6-7b で 7 本目（`h2`）が新設で入った**（どちらも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

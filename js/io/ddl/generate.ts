@@ -18,9 +18,11 @@
  * 「挙動不変」の主張が弱くなる。4-1a が toXML() 4 実装を移設したときと同じ立場で、
  * 共通骨格の抽出は sql-standard を基底に置く 6-7 の仕事（CUSTOMIZATIONS.md 段階6-7）。
  *
- * **段階6-7a で sql-standard が 6 本目として入った。** 骨格は postgresql と同じで、
- * 標準に無い COMMENT ON と CREATE INDEX だけが違う。**共通化は h2 / mariadb を書いてから**
- * —— 2 本の比較では正しい抽象が決まらない（CUSTOMIZATIONS.md 段階6-7a）。
+ * **段階6-7a で sql-standard、6-7b で h2 が入った。** どちらも骨格は postgresql と同じで、
+ * 違うのは識別子の語彙と、標準に無い COMMENT ON / CREATE INDEX の有無だけ。**6-7b で
+ * その 3 本を js/io/ddl/ansi.ts へ寄せた** —— h2 が postgresql と構文レベルで同一で、
+ * 170 行のコピーを作るしかなくなったため。**残る 4 本（mysql / mssql / oracle / sqlite）は
+ * 骨格からして違う**ので、それらを含む抽象は 6-7c（mariadb）と 6-8 で決める。
  *
  * export は 1 本だけにしてある。未使用の export を出すと、ツリーシェイクを切っている
  * Node ハーネス（tests/node/harness.ts）の束と dist の束が構造的にずれる。
@@ -35,6 +37,7 @@ import { generateMssql } from "./mssql.ts";
 import { generateOracle } from "./oracle.ts";
 import { generateSqlite } from "./sqlite.ts";
 import { generateSqlStandard } from "./sql-standard.ts";
+import { generateH2 } from "./h2.ts";
 
 export function generateDdl(model: DesignModel, palette: TypePalette): string {
     const db = palette.db();
@@ -61,6 +64,8 @@ export function generateDdl(model: DesignModel, palette: TypePalette): string {
             return generateSqlite(tables).trim();
         case "sql-standard":
             return generateSqlStandard(tables).trim();
+        case "h2":
+            return generateH2(tables).trim();
         default:
             throw new Error(`DDL 生成に対応していない DB プロファイル: ${db}`);
     }

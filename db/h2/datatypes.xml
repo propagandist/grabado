@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  H2 2.x 型パレット（HANDOVER §6 / 段階6-7b で新設）。
+
+  **house が Kotlin/Spring Boot なのでテスト用途で効くプロファイル。** 6-7 の設計
+  （2026-08-16）が「house 既定の 4 点がすべてネイティブ」と実測した唯一の非 PostgreSQL:
+    uuid -> UUID ／ identity -> BIGINT GENERATED ALWAYS AS IDENTITY ／
+    timestamptz -> TIMESTAMP WITH TIME ZONE ／ jsonb -> JSON
+  **PG で設計して H2 でテストする経路が型レベルで通る。**
+
+  属性の契約は docs/FORMAT.md（db/postgresql/datatypes.xml の頭に一覧がある）。
+  strict="1" は「現代化済み」の印。
+
+  **対象は 2.x**（1.4 とは型システムが違い、1.4 の IDENTITY 型は廃止されて GENERATED 句に
+  統一された）。**型は 2.4.240 の実物に聞いて確かめた** —— 候補ごとに
+  CREATE TABLE t(c <型>) を試し、通った型だけを置いている:
+
+    $ curl -O https://repo1.maven.org/maven2/com/h2database/h2/2.4.240/h2-2.4.240.jar
+    $ java -cp h2-2.4.240.jar Ty.java <候補>    # 採取日 2026-08-21
+
+  **PG18 パレットとの差**:
+    xml / bit / varbit / inet / cidr   H2 に無い（xml は CLOB で代替する）
+    **interval**                       **単独の INTERVAL 型が無い**（INTERVAL YEAR のように
+                                       単位が要る。<type> の列挙では表せないので入れない。
+                                       6-7 の設計表が「h2 は interval を持つ」としていた点の訂正）
+    tinyint / decfloat / varbinary     H2 にあって PG に無いので足した
+    geometry                           両方が持つ（H2 は組み込み、PG は PostGIS）
+
+  enum / varchar_ignorecase / java_object は**入れない** —— どれも H2 固有で、
+  設計ツールとして他プロファイルへ持っていけない（java_object は Java 依存そのもの）。
+
+  newrowtype は text（CLOB）ではなく varchar。CLAUDE.md の「text 優先」は PostgreSQL の
+  text（可変長・上限なし）を指しており、H2 の CHARACTER LARGE OBJECT は別物のため。
+-->
+<datatypes db="h2" strict="1" newrowtype="varchar">
+	<!--
+	  §6.2 初期テーブルテンプレート。**house 既定をほぼそのまま置ける唯一の非 PG プロファイル。**
+	  uuid だけは生成関数の名前が違う（PG18 は uuidv7()、H2 は RANDOM_UUID() で v4）。
+	-->
+	<template>
+		<row name="id" type="uuid" null="0" default="RANDOM_UUID()" key="PRIMARY" />
+		<row name="created_at" type="timestamp_with_time_zone" null="0" default="CURRENT_TIMESTAMP" />
+		<row name="updated_at" type="timestamp_with_time_zone" null="0" default="CURRENT_TIMESTAMP" />
+	</template>
+
+	<group label="Numeric" color="rgb(238,238,170)">
+		<type id="integer" label="Integer" length="0" sql="INTEGER" aka="INT|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" aka="INT2" quote="" />
+		<type id="tinyint" label="Tiny Integer" length="0" sql="TINYINT" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" aka="INT8" quote="" />
+		<type id="bigint_identity" label="Big Integer (identity)" length="0" sql="BIGINT GENERATED ALWAYS AS IDENTITY" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
+		<type id="decimal" label="Numeric" length="1" sql="NUMERIC" aka="DECIMAL|DEC" quote="" />
+		<type id="float" label="Single precision" length="0" sql="REAL" aka="FLOAT|FLOAT4" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE PRECISION" aka="DOUBLE|FLOAT8" quote="" />
+		<type id="decfloat" label="Decimal Floating" length="1" sql="DECFLOAT" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="char" label="Character" length="1" sql="CHARACTER" aka="CHAR" quote="'" />
+		<type id="varchar" label="Varchar" length="1" sql="CHARACTER VARYING" aka="VARCHAR" quote="'" />
+		<type id="text" label="Text (CLOB)" length="0" sql="CHARACTER LARGE OBJECT" aka="CLOB|TEXT|XML" quote="'" />
+		<type id="bytea" label="Binary (BLOB)" length="0" sql="BINARY LARGE OBJECT" aka="BLOB|BYTEA" quote="'" />
+		<type id="varbinary" label="Varbinary" length="1" sql="BINARY VARYING" aka="VARBINARY" quote="'" />
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" aka="BOOL" quote="'" />
+	</group>
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+		<type id="date" label="Date" length="0" sql="DATE" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" quote="'" />
+		<type id="time_with_time_zone" label="Time w/ TZ" length="1" sql="TIME WITH TIME ZONE" aka="TIMETZ" quote="'" />
+		<type id="timestamp_with_time_zone" label="Timestamp w/ TZ" length="1" sql="TIMESTAMP WITH TIME ZONE" aka="TIMESTAMPTZ|TIMESTAMP" quote="'" />
+	</group>
+
+	<group label="Miscellaneous" color="rgb(200,200,255)">
+		<type id="uuid" label="UUID" length="0" sql="UUID" quote="'" />
+		<type id="jsonb" label="JSON" length="0" sql="JSON" aka="JSONB" quote="'" />
+		<type id="geometry" label="Geometry" length="0" sql="GEOMETRY" quote="'" />
+	</group>
+</datatypes>

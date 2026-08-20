@@ -27,7 +27,7 @@ for (const db of DB_PROFILES) {
         for (const fixture of DDL_FIXTURES) {
             test(`${db} / ${fixture.name}`, async () => {
                 await useDatatypes(page, db);
-                await loadFixture(page, readFixture(fixture.name));
+                await loadFixture(page, readFixture(db, fixture.name));
 
                 const actual = await generateDdl(page, db);
                 assertNoCarriageReturn(actual, `DDL(${db}/${fixture.name})`);

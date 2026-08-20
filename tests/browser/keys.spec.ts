@@ -63,7 +63,7 @@ function addColumnToKeyByUi(page: Page, column: string): Promise<string[]> {
 test.describe("キー管理 UI から CREATE INDEX まで（段階6-5b）", () => {
     test("postgresql: 2 本目のキーは INDEX で、列を入れると idx_<table>_<cols> が出る", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         /* 追加直後は name も列も空 —— 規約名を組む側（naming.ts）に入る実際の入力がこれ */
         expect(await addKeyByUi(page)).toEqual({ type: "INDEX", name: "", parts: [] });

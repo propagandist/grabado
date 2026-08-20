@@ -163,6 +163,7 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 
 7 fixture × 5 DB = **35 本**。[js/io.ts](../js/io.ts) の `clientsql()` と同じ経路
 （`Designer.toDdl()` → `.trim()`）で採る。UI の `#textarea` に入る値と一致する。
+入力は**そのプロファイルの fixture**（`tests/fixtures/<db>/`。§6 段階6-6a）。
 
 **§6 段階6-5a で `tests/golden/ddl-input/` の 7 本が消えた。** あれは `Designer.toXML()` の
 出力＝`db/<db>/output.xsl` への入力で、DDL 生成が「モデル → 中間 XML → XSLT → 文字列」の
@@ -320,7 +321,7 @@ fs 経路はそのまま）。
   `location.href` が入ることを固定し、golden ではその 1 行だけを `{{ACTIVE_URL}}` に正規化していた。
   4-4 で行ごと撤去したので主張を反転させ、golden の正規化も無くなった。
 
-### fixture（`tests/fixtures/`）
+### fixture（`tests/fixtures/<db>/`）
 
 すべて手書きの well-formed XML。**fixture の生成に現行コードを使わない**
 （採取当時の `toXML()` は非決定的だった。決定論になった段階4-4 以降も、
@@ -330,22 +331,35 @@ fs 経路はそのまま）。
 差し替え口は段階4-0b から `palette.setRoot()`（page 側は `window.d.palette`、node 側は
 ハーネスが掴んでいる `designer.palette`）。
 
+**§6 段階6-6a から fixture は DB 別**（`tests/fixtures/<db>/<name>.xml`）。名前の 7 本は
+どのプロファイルにも同じだけ在り、**中身がその DB の型で書かれている**。読むのは
+`readFixture(db, name)` で、**db は省略できない** —— 「どのプロファイル向けの入力を、
+どのパレットで読んでいるか」がずれていること自体が主張になっているテストがあるため
+（known-issues #4 / #10 と `state/mysql-house-defaults.json` は
+**postgresql の fixture を mysql / oracle のパレットで読む**）。全プロファイル分が
+実在することは [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が
+機械的に見る。
+
 | fixture | 押さえていること |
 |---|---|
 | `empty` | テーブル 0 件 |
 | `minimal` | 1 テーブル / 1 カラム |
-| `house-defaults` | uuidv7 PK・timestamptz 監査列・jsonb・複合 PK・UNIQUE・FK・日本語コメント |
+| `house-defaults` | house 既定をそのプロファイルで表せる範囲・複合 PK・UNIQUE・FK・日本語コメント |
 | `relations` | 自己参照 FK・多対多・1 テーブルに複数 FK |
-| `types-matrix` | 型パレット網羅（サイズ付き含む） |
+| `types-matrix` | **そのプロファイルの**型パレット網羅（サイズ付き含む） |
 | `autoincrement` | `autoincrement="1"`（PG は段階6-5b から `<datatype>` ＋ `GENERATED ALWAYS AS IDENTITY`。それまでは `BIGSERIAL` 固定） |
 | `quotes-i18n` | コメント内の `'`（生成器の `replaceSubstring`。段階6-5a まで XSLT の `replace-substring`）・識別子の `"`・日本語識別子 |
 
 **fixture は §6 のパレット差し替えでも動かさない。** 6-3 は `postgresql` のパレットだけを
-差し替えたが、fixture を 1 行でも触ると**全 5 プロファイルの DDL golden が動き**、
+差し替えたが、fixture を 1 行でも触ると**全プロファイルの DDL golden が動き**、
 「PG 以外は 1 バイトも動かない」という段階の完了判定がぼやける。撤去した型の旧名は
-パレット側の `aka` が受けるので、`types-matrix` は `SERIAL` / `CHAR(10)` / `JSON` を
-書いたまま新しい型に解決する。fixture が PG 用のまま全 DB に流れている構造そのものの
-是正は **6-6（DB 別 fixture の整備）**。
+パレット側の `aka` が受けるので、`postgresql/types-matrix` は `SERIAL` / `CHAR(10)` / `JSON` を
+書いたまま新しい型に解決する。
+
+**6-6a の時点では `mysql` / `mssql` / `oracle` / `sqlite` の 7 本ずつが postgresql 版の
+暫定コピー**で、型名も PG のまま（各ファイルの先頭コメントに明記してある）。6-6a が変えたのは
+配線だけで、**DDL golden が 1 バイトも動かないこと**が完了判定だったため。
+その DB の実型・実関数へ書き直すのは **6-6b**。
 
 ---
 
@@ -371,7 +385,10 @@ npm test                  # Node 側も新しい golden で緑になるか
 
 ## fixture の追加手順
 
-1. `tests/fixtures/<name>.xml` を手書きで置く（`<datatypes>` は入れない）。
+1. `tests/fixtures/<db>/<name>.xml` を手書きで置く（`<datatypes>` は入れない）。
+   **全プロファイル分を置く** —— 1 本でも欠けると
+   [`tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が名指しで落ちる。
+   型はそのプロファイルのパレットに実在する `sql` 名で書く。
 2. [`tests/support/fixtures.ts`](../tests/support/fixtures.ts) の `FIXTURES` に 1 行足す。
 3. `npm run golden:update` → 生成された golden を読んで、生成器 / serializer から予想した形と合うか確認。
 4. `npm test` と `npm run test:browser` が緑になることを確認。
@@ -426,7 +443,7 @@ vitest の cwd 正規化ラッパーがそれで、**vitest を上げると必�
 ```
 tests/
   support/       fixture 定義・正規化・golden 入出力（両ハーネス共通）
-  fixtures/      入力設計 XML（正常系）
+  fixtures/<db>/ 入力設計 XML（正常系。§6 段階6-6a から DB 別）
   golden/        現行の実出力（README.md に注意書き）
   browser/       Playwright。golden の権威
   node/          vitest + jsdom。同じ golden を高速に検証

@@ -72,7 +72,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
 
     test("UUID が uuid に解決される（known-issue #4 が直った後の挙動・PG）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         /*
          * 6-3 まで PG パレットに uuid が無く、house 既定の PK（uuidv7）が黙って先頭型の
@@ -90,7 +90,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
 
     test("strict なパレットでは未知の型が例外になる（#4 の再発防止）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
          * 黙って先頭型に落ちないこと。ここが緑である限り、パレットから型を落としたときに
@@ -117,7 +117,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
 
     test("未現代化のプロファイルでは従来どおり先頭型に落ちる（#4 は 6-8 まで残る）", async () => {
         await useDatatypes(page, "mysql");
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
          * strict 化は現代化済みプロファイルに限る（6-0 の決めたこと 2）。横断で例外にすると
@@ -144,7 +144,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
          * マウス操作の経路そのものは今も誰も張っていない（docs/TESTING.md）。
          */
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         const menu = await page.evaluate(() => {
             const row = window.d!.tables[0]!.rows[0]!;
@@ -189,7 +189,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
 
     test("FK 自動生成は fk 属性の id に従う", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
          * db/postgresql/datatypes.xml: bigint_identity -> fk="bigint"。
@@ -205,12 +205,12 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
 
     test("パレットを差し替えた後の FK 自動生成は新しいパレットに従う", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
         /* ここで旧実装は Designer.fkTypeFor を postgresql の内容で焼いていた */
         expect(await createFkChildId(page, "bigint_identity")).toBe("bigint");
 
         await useDatatypes(page, "mysql");
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
          * mysql は fk 属性を 1 つも持たないので、FK 子行は親と同じ型でなければならない。

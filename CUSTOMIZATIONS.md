@@ -3747,6 +3747,161 @@ oracle と sqlite が `"`（sqlite は `'` も受ける）で、**予約語表�
 
 ---
 
+### 2026-08-20 HANDOVER §6「機能」段階6-6a —— fixture を DB 別に分け、配線だけを変える
+
+**入力の母集団を作り替える段階の前半。** 6-0 の決めたこと 2 が実測で示していたとおり、
+`tests/fixtures/` の 7 本は**すべて postgresql の型名で書かれており**、それを 5 プロファイル
+全部に流して DDL golden 35 本を採っていた。非 PG では大半の型がパレットに無く、先頭型へ
+黙って落ちた結果がそのまま焼かれている（`ddl/oracle/house-defaults.sql` は uuid / jsonb /
+timestamptz が全部 `INTEGER`、`ddl/sqlite/house-defaults.sql` は全列 `TEXT`）。
+**28 本が守っているのは「未知型が先頭型に落ちること」だけ**で、その DB の DDL が正しいことは
+1 行も検証していない。
+
+6-8（既存主要 4 本の現代化）でパレットに `strict="1"` を立てると**未知型は例外**になるので、
+PG 用 fixture では golden がそもそも採れない。**6-6 は 6-8 の前提条件**で、到達点は
+「6-8 で生成器とパレットを直したとき、その DB の golden が動くことで現代化が検証される」状態。
+
+#### 決めたこと 1: 完全複製（`tests/fixtures/<db>/<name>.xml`）にする
+
+共通 fixture を置いて差分だけ DB 別に上書きするオーバーレイ案を検討し、**採らなかった**。
+理由は「共通に置ける型が実質存在しない」こと —— 5 プロファイルの型パレットを突き合わせると、
+`TEXT` は oracle に無く（`CLOB` / `NCLOB`）、`VARCHAR` は sqlite に無く（affinity 5 型だけ）、
+`INTEGER` すら mssql は `int` で `re="INT"` の部分一致に頼っている。**構造だけを見る
+`minimal` や `relations` でさえ DB 非依存にはならない。** 真に共通なのは `empty`（テーブル 0 件）
+1 本だけで、そのために 2 つの置き場所を持つ規則を足す価値はない。
+
+型名をプレースホルダで書いてテスト側がパレットから展開する案も落とした。**パレットを読んで
+入力を組み立てると、6-8 でパレットを差し替えたときに golden が動く理由が二重になる**
+（生成器を直したからなのか、入力が変わったからなのか）。fixture は手書きのまま置く
+（docs/TESTING.md「fixture の生成に現行コードを使わない」）。
+
+複製の副作用は `empty.xml` のようにほぼ同内容のファイルが増えることだが、規則は
+**「DB × 名前 → ファイル」の 1 本**だけになる。6-7 で新設 3 本を足すときも
+ディレクトリを 1 つ増やすだけで済む。
+
+#### 決めたこと 2: 6-6a と 6-6b に割る（完了判定が別物になるため）
+
+| 段階 | 変えるもの | 完了判定 |
+|---|---|---|
+| **6-6a**（本エントリ） | 配線とディレクトリ構成だけ | **DDL golden 35 本が 1 バイトも動かない** |
+| **6-6b** | 4 プロファイルの fixture の中身 | **28 本が動き、動いた理由を DB ごとに説明できる** |
+
+6-5a / 6-5b と同じ型紙。**混ぜると golden の差分が「移動由来」と「実型化由来」で
+混ざり、レビューで切り分けられなくなる。**
+
+そのため 6-6a では `mysql` / `mssql` / `oracle` / `sqlite` の 7 本ずつを
+**postgresql 版の逐語コピー**にしてある。半移行を黙って置かないよう、
+**28 ファイルすべての先頭コメント**に「これは 6-6a の暫定コピーで、型名は postgresql のもの。
+実型へ書き直すのは 6-6b」と書いた（CLAUDE.md 制約1）。
+
+#### 決めたこと 3: `readFixture(db, name)` の `db` は省略できない
+
+既定値（`db = "postgresql"`）を持たせる案を採らなかった。**「どのプロファイル向けの入力を、
+どのパレットで読んでいるか」がずれていること自体が主張になっているテストがある**ため:
+
+| テスト | 入力 | パレット | 主張 |
+|---|---|---|---|
+| known-issues **#4** | `postgresql/house-defaults` | `mysql` | パレットに無い `UUID` が先頭型 `integer` に落ちる |
+| known-issues **#10** | known-issues 側の fixture | `oracle` / `mssql` | `re` の部分一致が `sql` の完全一致を上書きする |
+| `state/mysql-house-defaults.json` | `postgresql/house-defaults` | `mysql` | 同じ入力を別パレットで読んだときの解決結果 |
+
+既定値があると、この 3 本は「db を書かない呼び出し」のまま残り、6-6b で 4 本の fixture を
+実型に書き換えた瞬間に**主張が静かに消える**（`mysql` の fixture を `mysql` のパレットで
+読むのは正常系で、#4 は再現しない）。呼び出し側に db を書かせれば、書き換えの影響が
+grep で見える。約 60 箇所は機械的に `readFixture(SERIALIZER_DB, ...)` へ移した。
+
+#### 決めたこと 4: known-issues の fixture は DB 別にしない
+
+[`tests/known-issues/fixtures/`](tests/known-issues/fixtures/) の 5 本は 1 本のまま置く。
+既知の不具合はどれも「**特定のパレットで**読んだときに起きること」が主張なので、
+入力を DB ごとに分けると再現条件そのものが消える。決めたこと 3 の裏返し。
+
+#### 決めたこと 5: 母集団を見るテストを 1 本足した
+
+[`tests/node/fixture-set.test.ts`](tests/node/fixture-set.test.ts)（3 件）。
+`DB_PROFILES` × `FIXTURES` のファイルが**全部実在し、余分も無い**こと・`tests/fixtures/`
+直下に `.xml` が残っていないこと・fixture のディレクトリが `db/` のプロファイルと 1 対 1 で
+あることを見る。
+
+分けた瞬間に「置き忘れ」という新しい壊れ方が生まれるのが理由。6-7 で
+`db/<db>/datatypes.xml` だけ置いて fixture を忘れると DDL golden のテストが
+「golden が無い」で落ち、**原因が期待値の不在に見えて実際は入力の不在**という読み違えやすい
+形になる。`tests/node/palette-id.test.ts` がパレット側にやっていることの、入力側の対応物。
+
+[`tests/node/type-resolution.test.ts`](tests/node/type-resolution.test.ts) の
+`candidateNames()`（照合に掛かりうる型名の母集団）も **全プロファイルの fixture の和集合**へ
+配線し直した。直下を `readdirSync` していたので、放置すると **fixture 由来の型名が 0 件に
+なって母集団が静かに縮む**（「未現代化プロファイルは旧規則と 1 件も違わない」という
+6-2 からの安全網が空振りになる）。件数の下限を見るテストが既に隣にあるので実害は出ないが、
+配線としては誤り。
+
+#### 決めたこと 6: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| 4 プロファイルの fixture を実型・実既定値で書き直す | **6-6b** | 決めたこと 2 |
+| `types-matrix` のパレット全型網羅と、その網羅を機械検査するテスト | **6-6b** | 同上。網羅は中身の話 |
+| 新設 3 本（`sql-standard` / `mariadb` / `h2`）の fixture | **6-7** | `db/` にディレクトリが無く `DB_PROFILES` に入らない。6-6a の構造にディレクトリを足すだけで済む |
+| パレットの現代化・`strict="1"`・`re` の是正（#4 / #10） | **6-8** | 変わらず |
+| fixture を XML から設計 JSON へ移す案 | **見送り（記録のみ）** | XML 経路は #4 / #10 の唯一の再現路で、互換読込の特性化そのもの。形式を変えると再現条件が消える |
+
+#### 検証
+
+**完了判定は golden 無差分そのもの。** 配線だけを変える段階なので、期待値が 1 バイトも
+動かないことが正しさの直接の証明になる。
+
+```
+$ git status --porcelain tests/golden/{ddl,json,state}
+                                    # 空 ← 期待値 50 本（ddl 35 / json 7 / state 8）すべて不動
+```
+
+（`tests/golden/README.md` だけは本段階で書き換えている —— 期待値ではなく注意書きのほう。
+入力が DB 別になったことと、6-6a の時点では 4 本が暫定コピーであることを追記した。）
+
+| | 6-5b | 6-6a |
+|---|---|---|
+| `npm test` | 234 passed | **237 passed**（`fixture-set.test.ts` の 3 本） |
+| `npm run test:browser` | 109 passed | 109 passed |
+| `npm run known-issues` | 5 passed | 5 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+`js/` の差分は **0 行**（本段階が触ったのは `tests/` と `docs/` だけ）。
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読した。
+**依存は 1 本も増やしていない**（§2.2 / §3.12 / §5.1）。§2.1 の「実データをテストの入力に
+置かない」は本段階で 28 ファイルを増やしたので改めて確認した —— fixture のスキーマは
+`users` / `articles` / `article_tags` の架空のもので、実データは 1 行も含まない。
+CI のワークフローは増やしていない（トリガーも不変。テスト件数は +3、実行時間は不変）。
+
+#### 次段階への入力 —— 6-6b（4 プロファイルの実型化）
+
+書けるのは**現行パレットに実在する `sql` 名だけ**。パレットに無い型（mysql の `JSON`、
+oracle の `TIMESTAMP WITH TIME ZONE` など）を足すのは 6-8 なので、**6-6b の golden は
+「6-8 直前のベースライン」**であってその DB の理想形ではない。house 既定の写り方:
+
+| house 既定 | `mysql` | `mssql` | `oracle` | `sqlite` |
+|---|---|---|---|---|
+| `id uuid DEFAULT uuidv7()` | `CHAR(36)` / `UUID()` | **`uniqueidentifier`** / `NEWID()` | `RAW(16)` / `SYS_GUID()` | `TEXT` / 既定値なし |
+| `text` | `MEDIUMTEXT` | `nvarchar(4000)` | `CLOB` | `TEXT` |
+| `boolean` | `bit` | `bit` | `NUMBER(1)` | `INTEGER` |
+| `jsonb` | `MEDIUMTEXT` | `nvarchar(4000)` | `CLOB` | `TEXT` |
+| `timestamptz` / `now()` | `TIMESTAMP` / `CURRENT_TIMESTAMP` | `datetime` / `GETDATE()` | `TIMESTAMP` / `SYSTIMESTAMP` | `TEXT` / `CURRENT_TIMESTAMP` |
+| `numeric(12,2)` | `DECIMAL(12,2)` | `decimal(12,2)` | `DECIMAL(12,2)` | `NUMERIC`（`length="0"` なので精度が落ちる） |
+| `date` | `DATE` | **`datetime`**（`date` 型がパレットに無い） | `DATE` | `TEXT` |
+| `integer` | `INTEGER` | `int` | `INTEGER` | `INTEGER` |
+
+**`mssql` の `timestamp` は行バージョンであって日時ではない**（`datetime` を使う）。
+この表は 6-7 の「house 既定のスキーマが各 DB で失うもの」を 4 本ぶん埋めるもので、
+**表そのものが公開プロダクトの価値情報**（ユーザーが DB を選ぶときに見る）。
+
+**6-6b で予測される粗さ**は直さずに golden へ焼く —— 未現代化の生成器は式と文字列リテラルを
+区別しないので、`oracle` の `raw`（`quote="'"`）に `SYS_GUID()` を置くと
+`DEFAULT 'SYS_GUID()'` が出る。**known-issue #11 の未現代化 4 本ぶんの実害が初めて
+golden に現れる形**で、6-8 で直すときにその行が動くことが現代化の証明になる。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

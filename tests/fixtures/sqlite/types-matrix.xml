@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  **段階6-6a の暫定コピー。中身は postgresql 版と同一で、型名も postgresql のもの。**
+
+  6-6a が変えるのは配線だけ（tests/fixtures/<db>/ への分割と readFixture(db, name) への
+  署名変更）で、**DDL golden が 1 バイトも動かないこと**が完了判定。そのため中身を
+  postgresql 版と揃えてある —— この段階では sqlite のパレットで読んでも解決結果は 6-5b までと
+  1 ビットも変わらない（未知型が先頭型へ落ちる known-issue #4 の姿がそのまま残る）。
+
+  <datatype> と <default> を sqlite の実型・実関数へ書き直すのは **6-6b**。
+  経緯と段階の切り方は CUSTOMIZATIONS.md の段階6-6a。
+-->
+<!--
+  特性化テスト fixture: db/postgresql/datatypes.xml の型パレットを網羅する。
+  サイズ付き（length="1"）の型は括弧つきで書き、Row.fromXML のサイズ抽出も通す。
+
+  **書かれている型名は段階6-3 以前の PG パレットのもの**（SERIAL / CHAR / JSON など、
+  6-3 で撤去された 7 型を含む）。fixture を 1 行でも動かすと全 5 プロファイルの
+  DDL golden が動き、「PG 以外は 1 バイトも動かない」という 6-3 の完了判定がぼやけるので、
+  **旧名のまま置いてある** —— パレット側の aka がそれを新しい型に解決する
+  （SERIAL -> bigint_identity / CHAR -> text / JSON -> jsonb …）。互換で読む XML の
+  受け口がそのままテストされている形。母集団の再編は 6-6（DB 別 fixture の整備）。
+
+  BIGINT は外してある。段階6-2 まではこれが Real に化ける既知の不具合（#3）だったため
+  tests/known-issues/ 側に隔離していた。6-2 で直り 6-3 で entry ごと消えた後も**入れない** ——
+  理由は上と同じ（母集団を動かさない判断は tests/support/fixtures.ts）。
+  BIGINT の解決は tests/browser/types.spec.ts が押さえている。
+-->
+<sql>
+<table x="20" y="20" name="type_samples">
+<row name="c_integer" null="1" autoincrement="0">
+<datatype>INTEGER</datatype>
+</row>
+<row name="c_smallint" null="1" autoincrement="0">
+<datatype>SMALLINT</datatype>
+</row>
+<row name="c_decimal" null="1" autoincrement="0">
+<datatype>DECIMAL(12,2)</datatype>
+</row>
+<row name="c_serial" null="0" autoincrement="0">
+<datatype>SERIAL</datatype>
+</row>
+<row name="c_bigserial" null="0" autoincrement="0">
+<datatype>BIGSERIAL</datatype>
+</row>
+<row name="c_float" null="1" autoincrement="0">
+<datatype>FLOAT</datatype>
+</row>
+<row name="c_double" null="1" autoincrement="0">
+<datatype>DOUBLE</datatype>
+</row>
+<row name="c_char" null="1" autoincrement="0">
+<datatype>CHAR(10)</datatype>
+</row>
+<row name="c_varchar" null="1" autoincrement="0">
+<datatype>VARCHAR(255)</datatype>
+</row>
+<row name="c_text" null="1" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="c_bytea" null="1" autoincrement="0">
+<datatype>BYTEA</datatype>
+</row>
+<row name="c_boolean" null="1" autoincrement="0">
+<datatype>BOOLEAN</datatype>
+</row>
+<row name="c_date" null="1" autoincrement="0">
+<datatype>DATE</datatype>
+</row>
+<row name="c_time" null="1" autoincrement="0">
+<datatype>TIME(3)</datatype>
+</row>
+<row name="c_time_tz" null="1" autoincrement="0">
+<datatype>TIME WITH TIME ZONE</datatype>
+</row>
+<row name="c_interval" null="1" autoincrement="0">
+<datatype>INTERVAL(6)</datatype>
+</row>
+<row name="c_timestamp" null="1" autoincrement="0">
+<datatype>TIMESTAMP(3)</datatype>
+</row>
+<row name="c_timestamp_tz" null="1" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+</row>
+<row name="c_timestamp_wo_tz" null="1" autoincrement="0">
+<datatype>TIMESTAMP WITHOUT TIME ZONE</datatype>
+</row>
+<row name="c_xml" null="1" autoincrement="0">
+<datatype>XML</datatype>
+</row>
+<row name="c_bit" null="1" autoincrement="0">
+<datatype>BIT(8)</datatype>
+</row>
+<row name="c_varbit" null="1" autoincrement="0">
+<datatype>VARBIT(8)</datatype>
+</row>
+<row name="c_inet" null="1" autoincrement="0">
+<datatype>INET</datatype>
+</row>
+<row name="c_cidr" null="1" autoincrement="0">
+<datatype>CIDR</datatype>
+</row>
+<row name="c_geometry" null="1" autoincrement="0">
+<datatype>GEOMETRY</datatype>
+</row>
+<row name="c_json" null="1" autoincrement="0">
+<datatype>JSON</datatype>
+</row>
+<row name="c_jsonb" null="1" autoincrement="0">
+<datatype>JSONB</datatype>
+</row>
+<key type="PRIMARY" name="type_samples_pkey">
+<part>c_serial</part>
+</key>
+</table>
+</sql>

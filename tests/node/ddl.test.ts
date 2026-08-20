@@ -35,7 +35,7 @@ describe("DDL golden（Node）", () => {
             for (const fixture of DDL_FIXTURES) {
                 test(`${db} / ${fixture.name}`, () => {
                     h.useDatatypes(db);
-                    h.loadFixture(readFixture(fixture.name));
+                    h.loadFixture(readFixture(db, fixture.name));
 
                     const actual = h.toDdl();
                     assertNoCarriageReturn(actual, `DDL(${db}/${fixture.name})`);

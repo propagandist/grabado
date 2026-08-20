@@ -80,8 +80,13 @@ test("#4 型パレットに無い型は黙って先頭の型になる（未現�
     // tests/browser/types.spec.ts の「UUID が uuid に解決される」と
     // 「strict なパレットでは未知の型が例外になる」。ここに残るのは未現代化の 4 本で、
     // それぞれのパレットを現代化する 6-8 で消える。
+    //
+    // **入力は postgresql の fixture でなければならない**（段階6-6a で fixture が DB 別に
+    // なった）。見たいのは「そのパレットに無い型名を読ませたとき」で、mysql の fixture を
+    // mysql のパレットで読むのは正常系。6-6b が 4 プロファイルの fixture を実型へ書き換えても
+    // ここは動かない。
     await useDatatypes(page, "mysql");
-    await loadFixture(page, readFixture("house-defaults"));
+    await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
     const id = await page.evaluate(() =>
         window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type),
@@ -165,7 +170,7 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
 
 test("#12 mssql: 最終列にコメントがあると区切りカンマが -- に飲まれる", async () => {
     await useDatatypes(page, "mssql");
-    await loadFixture(page, readFixture("relations"));
+    await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
 
     const ddl = await generateDdl(page, "mssql");
 
@@ -182,7 +187,7 @@ test("#12 mssql: 最終列にコメントがあると区切りカンマが -- �
 
 test("#13 sqlite: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える", async () => {
     await useDatatypes(page, "sqlite");
-    await loadFixture(page, readFixture("relations"));
+    await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
 
     const ddl = await generateDdl(page, "sqlite");
 

@@ -356,10 +356,19 @@ fs 経路はそのまま）。
 パレット側の `aka` が受けるので、`postgresql/types-matrix` は `SERIAL` / `CHAR(10)` / `JSON` を
 書いたまま新しい型に解決する。
 
-**6-6a の時点では `mysql` / `mssql` / `oracle` / `sqlite` の 7 本ずつが postgresql 版の
-暫定コピー**で、型名も PG のまま（各ファイルの先頭コメントに明記してある）。6-6a が変えたのは
-配線だけで、**DDL golden が 1 バイトも動かないこと**が完了判定だったため。
-その DB の実型・実関数へ書き直すのは **6-6b**。
+**§6 段階6-6b で 4 プロファイルの中身がその DB の実型・実関数になった。**
+`types-matrix` はパレットの全型を 1 列ずつ網羅し（sqlite 5・oracle 15・mysql 23・
+mssql 26・postgresql 24 型）、`house-defaults` は house 既定を「その DB で普通に書く形」で
+表している（`uniqueidentifier` ＋ `NEWID()` / `RAW(16)` ＋ `SYS_GUID()` など）。
+**網羅とパレットの整合は
+[`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が機械的に見る** ——
+パレットに型を足して fixture を忘れると、足りない型名を名指しで落ちる。
+
+**書けるのは現行パレットに実在する型だけ。** mysql の `JSON`、oracle の
+`TIMESTAMP WITH TIME ZONE`、mssql の `date` はパレットに無いので使えず、6-8 で足す。
+つまり **6-6b 時点の非 PG golden は「6-8 直前のベースライン」**であって、その DB の
+理想形ではない。house 既定が各 DB で何を失うかは
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階6-6b に表がある。
 
 ---
 

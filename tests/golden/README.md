@@ -45,20 +45,31 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 正常系の入力でも、現行実装の欠陥はそのまま出力に出る。golden を読むときはこれを踏まえること。
 それぞれ [`../known-issues/`](../known-issues/) に独立したテストがあり、**移植で直せばそちらが赤くなる**。
 
-- `users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る（known-issues #6）
+- ~~`users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る~~
+  **§6 段階6-5b で `postgresql` から消えた**（制約名は `key/@name` を優先し、空のときだけ
+  §6.3 の規約で組む）。`users` の UNIQUE は fixture が持っていた `users_email_key` として出る。
+  未現代化の 4 本は元から `key/@name` を読んでいるのでこの癖を持たない
 - ~~`DEFAULT 'now()'` / `DEFAULT 'uuidv7()'` のように式が引用符で囲まれる~~
   **§6 段階6-4 で `postgresql` から消えた**（式は `quote` を当てない）。未現代化の 4 本は
   従来規則のままだが、そちらは `UUID` が先頭型（`quote=""`）に落ちるので元から裸で出ている
   —— つまり**この癖はもうどの golden にも無い**。囲む側の規則（値の中の `'` を
-  エスケープしない）は残っており、known-issues #11 に隔離してある
-- `BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL` のように制約が重なる
-  （`sql` に制約句が入っており、生成器はその後ろに `NOT NULL` を足すだけのため。直すのは 6-5b）
+  エスケープしない）も **6-5b で `postgresql` からは消えた**（未現代化の 4 本には残る。
+  known-issues #11 の脚注）
+- ~~`BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL` のように制約が重なる~~
+  **§6 段階6-5b で `postgresql` から消えた**（identity は暗黙で NOT NULL なので句を出さない）。
+  同じ段階で `@autoincrement=1` の `BIGSERIAL` 固定も無くなり、型を残して IDENTITY 句を足す形になった
 - **`mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれる**（known-issues #12。
   `ddl/mssql/relations.sql` に実物がある）
 - **`sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える**（known-issues #13。
   `ddl/sqlite/relations.sql`）
 - **未現代化のプロファイル**（`mysql` / `mssql` / `oracle` / `sqlite`）では `UUID` が
   型パレットに無く `INTEGER` に落ちている（known-issues #4）
+
+**§6 段階6-5b で `postgresql` の 5 本・31 行が動いた**（`autoincrement` 1 / `types-matrix` 2 /
+`quotes-i18n` 6 / `relations` 7 / `house-defaults` 15）。内訳は 1 行ずつ
+[`../../CUSTOMIZATIONS.md`](../../CUSTOMIZATIONS.md) の段階6-5b に対応表がある。
+**他 4 プロファイルの `ddl` 28 本は 1 バイトも動いていない** —— それが段階の完了判定。
+`empty` / `minimal` が動かないのは、識別子が裸のまま・key もコメントも FK も無いため。
 
 **§6 段階6-2 の型解決の再設計では 1 バイトも動かなかった** —— 直したのは `sql="BIGINT"` の
 重複を後勝ちで拾う癖（#3）で、`types-matrix` fixture が `BIGINT` を持たないため

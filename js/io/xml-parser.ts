@@ -267,8 +267,15 @@ function parseKey(node: Element): KeyModel {
     return {
         /* type 属性が無ければ実行時 null。Key.setType() の !t が握りつぶして既定 "INDEX" のまま */
         type: node.getAttribute("type") as string,
-        /* name 属性が無ければ実行時 null。書き出すと name="null" になる現行の癖（model.ts） */
-        name: node.getAttribute("name") as string,
+        /*
+         * name 属性が無ければ getAttribute は null。**段階6-5b で "" に正規化した。**
+         * 6-5a まで DDL 生成が String() で受けていたので "null" という文字列の制約名になり、
+         * mssql は CONSTRAINT null を、sqlite は CREATE INDEX 'null' を実際に出していた。
+         * その癖を残す根拠だった XML の書き出しは 6-5a で消え、JSON serializer は falsy を
+         * キーごと落とすので、同じモデルから JSON は「名前なし」・DDL は「名前は null」という
+         * 食い違いだけが残っていた（tests/node/ddl.test.ts の T-4）。
+         */
+        name: node.getAttribute("name") ?? "",
         parts: parts,
     };
 }

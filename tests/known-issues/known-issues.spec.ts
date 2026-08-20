@@ -109,21 +109,18 @@ test("#4 型パレットに無い型は黙って先頭の型になる（未現�
  * 「直った後の挙動」のアサートは tests/browser/serialize.spec.ts に移してある（README の運用 3）。
  */
 
-test("#6 key が複数あると制約名が <table>_pkey で衝突する", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readFixture("house-defaults"));
-
-    const ddl = await generateDdl(page, SERIALIZER_DB);
-
-    // db/postgresql/output.xsl:90-92 は key/@name を無視してテーブル名から生成する。
-    // users は PRIMARY と UNIQUE の 2 本を持つので同名の制約が 2 つ出る。
-    const collisions = ddl.match(/ADD CONSTRAINT users_pkey /g) ?? [];
-    expect(collisions).toHaveLength(2);
-    expect(ddl).toContain("ADD CONSTRAINT users_pkey PRIMARY KEY (id);");
-    expect(ddl).toContain("ADD CONSTRAINT users_pkey UNIQUE (email);");
-    // fixture が持っている本来の名前はどこにも出ない
-    expect(ddl).not.toContain("users_email_key");
-});
+/*
+ * #6（key が複数あると制約名が <table>_pkey で衝突する）は §6 段階6-5b で直した。
+ *
+ * 制約名は key/@name を優先し、空のときだけ §6.3 の規約で組む（js/io/ddl/naming.ts）。
+ * house-defaults の users は PRIMARY と UNIQUE の 2 本を持つので、直った結果が
+ * tests/golden/ddl/postgresql/house-defaults.sql に users_email_key として出ている
+ * （PRIMARY / UNIQUE 以外が ADD CONSTRAINT ... KEY (...) に落ちる件も同時に消えた）。
+ *
+ * 「直った後の挙動」と**規約そのもの**のアサートは tests/node/ddl.test.ts の
+ * 「§6.3 の命名規約と識別子の引用（段階6-5b）」へ移してある（README の運用 3）——
+ * fixture 11 個すべてが name を持つので、名前が空のときの規約は golden では見えない。
+ */
 
 /*
  * #7（alignTables() の破壊的ソート）は §4 段階4-4 で直した。「直った後の挙動」の
@@ -149,26 +146,15 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
     expect(sample).not.toContain("idx_articles_published_on_title");
 });
 
-test("#11 既定値を quote で囲むとき値の中の ' がエスケープされない", async () => {
-    await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readKnownIssueFixture("quote-in-default"));
-
-    const ddl = await generateDdl(page, SERIALIZER_DB);
-
-    /*
-     * 段階6-4 で新設。**6-4 が作った欠陥ではない** —— js/io/ddl-xml.ts は quote 属性を
-     * 前後に足すだけで、値の中の ' は upstream から一度も見ていない。6-4 が触ったのは
-     * 「式なら囲まない」という逆側の判定で、囲む側の規則には手を入れていない。
-     *
-     * 6-4 まで #11 が golden に出ていなかったのは、fixture の既定値が式（now() /
-     * uuidv7()）と数値しか無かったため。テンプレートが入って「文字列の既定値」を
-     * 打つ経路が house 既定の一部になったので、隔離しておく先が要る。
-     *
-     * 正しくは 'O''Brien'。直すのは 6-5（output.xsl の TS 生成器化）で、
-     * そのとき囲む側の規則ごと設計する。
-     */
-    expect(ddl).toContain("owner TEXT NOT NULL DEFAULT 'O'Brien'");
-});
+/*
+ * #11（既定値を quote で囲むとき値の中の ' がエスケープされない）は §6 段階6-5b で
+ * **strict なプロファイルだけ**直した（js/io/ddl/shared.ts の escapeLiteral）。
+ * #4 / #10 と同じ形で、現象は未現代化の 4 本（mysql / mssql / oracle / sqlite）に残っている
+ * ——直るのは 6-8。fixtures/quote-in-default.xml はそのまま残してある。
+ *
+ * 「直った後の挙動」は tests/node/ddl.test.ts の LITERALS 表（O'Brien -> 'O''Brien'）、
+ * 「未現代化では直っていない」ことは同ファイルの mysql のテストが押さえる。
+ */
 
 /*
  * ここから下は §6 段階6-5a で新設した 2 件。**6-5a が作った欠陥ではない** ——

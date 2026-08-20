@@ -56,9 +56,9 @@ export interface DdlRow {
 export interface DdlKey {
     readonly type: string;
     /**
-     * name 属性の値。KeyModel.name は XML 由来だと実行時 null がありうるので
-     * String() で受ける（js/io/model.ts の KeyModel 参照）。XSLT 経路では
-     * name="null" という文字列として XML に出ていたので、その嘘をそのまま保つ。
+     * name 属性の値。**常に string で、属性が無ければ ""**（段階6-5b で
+     * js/io/xml-parser.ts が正規化するようになった。それまでは "null" という文字列）。
+     * 空のときに §6.3 の規約で名前を組むのは js/io/ddl/naming.ts。
      */
     readonly name: string;
     readonly parts: readonly string[];
@@ -107,24 +107,42 @@ function buildRow(row: RowModel, palette: TypePalette): DdlRow {
 }
 
 function buildKey(key: KeyModel): DdlKey {
-    return { type: key.type, name: String(key.name), parts: key.parts.slice() };
+    return { type: key.type, name: key.name, parts: key.parts.slice() };
 }
 
 /**
  * 既定値に型の quote を適用する（js/io/ddl-xml.ts:158-169 の逐語移設）。
  *
- * **6-5a では規則を 1 文字も変えない。** 6-4 が「囲まない側」だけを列挙して入れた
- * 判定（下の isSqlExpression）と、未現代化プロファイルの CURRENT_TIMESTAMP 特例の
- * 両方をそのまま持つ。**囲む側の規則**——値の中の ' をエスケープしないこと
- * （known-issues #11）——を直すのは 6-5b。
+ * 「囲まない側」の判定（下の isSqlExpression。段階6-4）と、未現代化プロファイルの
+ * CURRENT_TIMESTAMP 特例を持つ。**囲む側の規則は段階6-5b で直した**（known-issues #11。
+ * escapeLiteral のコメント）—— ただし **strict なプロファイルだけ**で、未現代化の 4 本は
+ * 6-8 までここも従来どおり。この if がその境界そのもので、外へ出すと
+ * tests/golden/ddl/sqlite/house-defaults.sql が動く。
  */
 function quoteDefault(def: string, elm: Element, palette: TypePalette): string {
     /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
     const q = elm.getAttribute("quote")!;
     if (palette.isStrict()) {
-        return isSqlExpression(def) ? def : q + def + q;
+        return isSqlExpression(def) ? def : q + escapeLiteral(def, q) + q;
     }
     return def != "CURRENT_TIMESTAMP" ? q + def + q : def;
+}
+
+/**
+ * 引用符で囲む前に、値の中の同じ記号を二重化する（known-issues #11。段階6-5b）。
+ *
+ * upstream は quote 属性を前後に足すだけで値の中を一度も見ておらず、O'Brien を既定値に
+ * すると DEFAULT 'O'Brien' という壊れた DDL が出ていた。§6.2 のテンプレートで「文字列の
+ * 既定値を打つ」が house 既定の一部になった（段階6-4）ぶん、実際に踏む道が増えている。
+ *
+ * quote が空の型（数値・boolean）は囲まないので分解もしない —— 空文字で split すると
+ * 値が 1 文字ずつに割れる。
+ */
+function escapeLiteral(def: string, quote: string): string {
+    if (quote === "") {
+        return def;
+    }
+    return replaceSubstring(def, quote, quote + quote);
 }
 
 /** 囲まずにそのまま出す SQL キーワード（isSqlExpression の判定 2）。照合は大小を無視する */

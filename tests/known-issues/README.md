@@ -28,9 +28,7 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 |---|---|---|---|---|
 | 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/io/xml-parser.ts](../../js/io/xml-parser.ts)） | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（`postgresql` は段階6-3 で解消） | §6 段階6-8 |
 | 10 | `<type re="...">` の照合が壊れている。アンカーされておらず部分一致し、大文字小文字を区別し、`sql` の完全一致を後から上書きする | [js/io/palette.ts](../../js/io/palette.ts) の `indexOfTypeNameLegacy` が `re` を後勝ちで見る。壊れているのは規則よりパレット側で、`oracle` は `re="INT"` を integer と number の 2 型に、`mssql` は 4 型（tinyint/smallint/int/bigint）に振っている | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（同上） | §6 段階6-8 |
-| 6 | key が複数あると制約名が `<table>_pkey` で衝突する | [js/io/ddl/postgresql.ts](../../js/io/ddl/postgresql.ts) が `key/@name` を無視してテーブル名から生成する（`db/postgresql/output.xsl:90-92` の逐語） | DDL 生成 | §6 段階6-5b |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
-| 11 | 既定値を型の `quote` で囲むとき、値の中の `'` がエスケープされない（`O'Brien` → `'O'Brien'`） | [js/io/ddl/shared.ts](../../js/io/ddl/shared.ts) が `quote` 属性を前後に足すだけで、値の中を見ない（upstream から一度も見ていない） | DDL 生成 | §6 段階6-5b |
 | 12 | `mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれ、続く `CONSTRAINT` 行が列定義に繋がらない（T-SQL として壊れる） | [js/io/ddl/mssql.ts](../../js/io/ddl/mssql.ts) がカンマをコメントより先に出す（`db/mssql/output.xsl:34-45` の逐語） | DDL 生成 | §6 段階6-8 |
 | 13 | `sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち、PRIMARY KEY が 1 つも無い DDL になる | [js/io/ddl/sqlite.ts](../../js/io/ddl/sqlite.ts) が「UNIQUE、または part 2 個以上の PRIMARY」をまとめて UNIQUE として出す（`db/sqlite/output.xsl:61-64` の逐語） | DDL 生成 | §6 段階6-8 |
 
@@ -38,14 +36,14 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 見つかった upstream からの粗さで、**6-5a が作った欠陥ではない**。挙動不変が 6-5a の要件なので
 TS 側でも忠実に再現してあり、直すのは 6-8。**黙って持ち込まないための隔離**がこの 2 本。
 
-**#11 は §6 段階6-4 で新設した。**6-4 が作った欠陥ではなく、囲む側の規則が upstream から
-値の中を見ていないもの。6-4 まで golden に出ていなかったのは fixture の既定値が式と数値しか
-無かったためで、**§6.2 のテンプレートで「文字列の既定値を打つ」が house 既定の一部になった**
-ぶん、隔離しておく先が要るようになった。6-4 が触ったのは「式なら囲まない」という逆側の判定だけ。
+**#11 は §6 段階6-4 で新設し、6-5b で PG から消えた**（下の「直したもの」）。囲む側の規則が
+upstream から値の中を見ていないもので、6-4 が作った欠陥ではない。未現代化の 4 本には残っている。
 
 **「経路」列は §4 段階4-7 の棚卸しで足した。**残る 5 本はどれも現象が消えていないが、
 **§4 を通したことで 3 本は届く範囲が狭まっている** —— そのぶん §6 で直すときの影響も狭い。
 **§6 段階6-3 で #4 / #10 はさらに狭まり、`postgresql` から消えた。**
+**段階6-5b で #6 / #11 が出て、残るのは 5 本**（#4 / #10 / #12 / #13 は未現代化 4 本の話で 6-8、
+#9 は introspection で §5.2）。
 
 - **#4 / #10 は設計 JSON では起きない。** 正本フォーマットの型キーは 4-2b で安定 `id` になり、
   [json-parser.ts](../../js/io/json-parser.ts) は**パレットに無い id を throw** する
@@ -66,10 +64,11 @@ TS 側でも忠実に再現してあり、直すのは 6-8。**黙って持ち�
   直接 XSLT に食わせる経路だけ。
 
 `PRIMARY` / `UNIQUE` 以外の key type が PostgreSQL で `ADD CONSTRAINT <table>_pkey KEY (...)` に
-落ちる件（`INDEX` も `FULLTEXT` も同じ）は #6 と同じ
-[js/io/ddl/postgresql.ts](../../js/io/ddl/postgresql.ts) の粗さで、**同じ §6.3（段階6-5b）で
-一緒に直す**。テストは足していない —— #6 の fixture が同じ経路を既に踏んでいて、
-制約名を直す作業が必ずここを通るため（[docs/FORMAT.md](../../docs/FORMAT.md) の `tables[].keys[]` に記録）。
+落ちていた件（`INDEX` も `FULLTEXT` も同じ）は **#6 と一緒に段階6-5b で直した** ——
+PG に `KEY (...)` 構文は無いので `CREATE INDEX idx_<table>_<cols>` になる。
+`INDEX` / `FULLTEXT` を持つ fixture が 1 本も無く golden には 1 行も出ないので、
+テストは [`../node/ddl.test.ts`](../node/ddl.test.ts)（規約）と
+[`../browser/keys.spec.ts`](../browser/keys.spec.ts)（UI からの到達点）に置いてある。
 
 ### 直したもの（このディレクトリから出た不具合）
 
@@ -90,6 +89,8 @@ TS 側でも忠実に再現してあり、直すのは 6-8。**黙って持ち�
 | 4（PG のみ） | `UUID` が型パレットに無く `INTEGER` に落ちる | §6 段階6-3 | [`../browser/types.spec.ts`](../browser/types.spec.ts)「UUID が uuid に解決される」＋「strict なパレットでは未知の型が例外になる」 |
 | 10（PG のみ） | `re` が大文字小文字を区別し `NUMERIC` に当たらない | §6 段階6-3 | [`../node/type-resolution.test.ts`](../node/type-resolution.test.ts)「大文字小文字を無視する」＋「部分一致しない」 |
 | 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る | §6 段階6-5a | [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)「空の `<default></default>` を読んでも DEFAULT 句は出ない」 |
+| 6 | key が複数あると制約名が `<table>_pkey` で衝突する（`INDEX` / `FULLTEXT` が `KEY (...)` に落ちる件も同じ） | §6 段階6-5b | [`../node/ddl.test.ts`](../node/ddl.test.ts)「name が空のキーは §6.3 の規約で名前を組む」ほか 3 本 ＋ [`../browser/keys.spec.ts`](../browser/keys.spec.ts) |
+| 11（PG のみ） | 既定値を `quote` で囲むとき値の中の `'` がエスケープされない | §6 段階6-5b | [`../node/ddl.test.ts`](../node/ddl.test.ts) の `LITERALS` 表（`O'Brien` → `'O''Brien'`）。**未現代化 4 本には残る**ので同ファイルの mysql のテストが「直っていない」側を押さえる |
 
 #3 の記述にあった「`re` もアンカー無しの部分一致」は **#10 が引き継いだ**（6-2 で新設）。
 6-2 が直したのは `sql` の完全一致どうしの順序だけで、**6-3 で `postgresql` が `re` を

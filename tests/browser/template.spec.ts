@@ -7,7 +7,7 @@ import { generateDdl, loadFixture, openDesigner, useDatatypes } from "./harness.
  *
  * テンプレートの読み取りそのものは tests/node/template.test.ts が押さえる。ここが見るのは
  * **UI から新規テーブルを作る経路**で、そこは golden に 1 ビットも写らない ——
- * golden はすべて fixture を読み込んでから toXML() / toJson() で採るので、
+ * golden はすべて fixture を読み込んでから toDdl() / toJson() で採るので、
  * 「テーブル追加ボタンを押したときに何ができるか」はどのファイルにも現れない。
  * 6-3 が Row.buildTypeSelect だけを恒久テストに残したのと同じ位置づけ。
  *

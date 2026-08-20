@@ -1,17 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
+import { SERIALIZER_DB, readFixture, readKnownIssueFixture } from "../support/fixtures.ts";
 import {
-    FIXTURES,
-    SERIALIZER_DB,
-    readFixture,
-    readKnownIssueFixture,
-} from "../support/fixtures.ts";
-import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
-import { assertNoCarriageReturn } from "../support/normalize.ts";
-import {
+    generateDdl,
     loadFixture,
+    loadJson,
     openDesigner,
     toJson,
-    toXml,
     useDatatypes,
 } from "./harness.ts";
 
@@ -20,11 +14,9 @@ import {
 
 let page: Page;
 
-/** 出力 XML に現れる <table name="..."> を出現順に取り出す */
-function tableNamesOf(xml: string): string[] {
-    return [...xml.matchAll(/<table x="[^"]*" y="[^"]*" name="([^"]*)">/g)].map(
-        (m) => m[1]!
-    );
+/** 設計 JSON の tables[].name を出現順に取り出す */
+function tableNamesOf(json: string): string[] {
+    return (JSON.parse(json) as { tables: { name: string }[] }).tables.map((t) => t.name);
 }
 
 test.beforeAll(async ({ browser }) => {
@@ -37,137 +29,124 @@ test.afterAll(async () => {
     await page.close();
 });
 
-test.describe("serializer 特性化（toXML / fromXML）", () => {
-    for (const fixture of FIXTURES) {
-        test(`golden: ${fixture.name} — ${fixture.purpose}`, async () => {
-            await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture(fixture.name));
-
-            const actual = await toXml(page);
-            assertNoCarriageReturn(actual, `toXML(${fixture.name})`);
-
-            const expected = writeOrReadGolden(
-                goldenPath("ddl-input", `${fixture.name}.xml`),
-                actual
-            );
-            expect(actual).toBe(expected);
-        });
-
-        test(`round-trip: ${fixture.name}`, async () => {
-            await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture(fixture.name));
-
-            // fixture -> toXML -> fromXML -> toXML -> fromXML -> toXML
-            const first = await toXml(page);
-            await loadFixture(page, first);
-            const second = await toXml(page);
-            await loadFixture(page, second);
-            const third = await toXml(page);
-
-            // 保存した XML を読み直しても同じ XML に戻る（＝情報が落ちない・増えない）
-            expect(second).toBe(first);
-            expect(third).toBe(second);
-        });
-    }
-
-    test("決定論: 同一モデルから toXML() を 2 回呼ぶと完全に一致する", async () => {
-        await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
-
-        expect(await toXml(page)).toBe(await toXml(page));
-    });
-
+/*
+ * **段階6-5a で「XML の書き出し」という主題そのものが消えた。**
+ * 4-3b でユーザーに見える保存経路が JSON になり、残っていた toXML() は
+ * db/<db>/output.xsl（XSLT）への入力専用だった。その XSLT が TS 生成器になったので、
+ * 中間 XML と tests/golden/ddl-input/ の 7 本ごと撤去してある。
+ *
+ * ここに残るのは **XML を読む側の互換**と、形式に依存しない serializer の性質。
+ * 移した先の対応は CUSTOMIZATIONS.md の段階6-5a「消える主張の始末」の表にある:
+ *
+ *   - golden 7 本 / round-trip 7 本 / 決定論  -> JSON 側（json.spec.ts）が同じ主張を持つ
+ *   - <default> の後に改行（旧 #8）           -> XML 固有なので消滅
+ *   - & を含む識別子（旧 #1）                 -> 下の「識別子に & を含んでも壊れない」
+ *   - 既定値の無い行（旧 #2）                 -> 下の JSON 版
+ *   - alignTables（旧 #7）                    -> 下（比較対象を JSON にしただけ）
+ */
+test.describe("serializer 特性化（読込互換と形式非依存の性質）", () => {
     /*
-     * 段階4-4 まではこれが「非決定性の所在」テスト —— Active URL コメントに
-     * location.href が入ることを固定していた。撤去したので主張を反転させる。
+     * 段階4-4 まではこれが「非決定性の所在」テスト —— XML の Active URL コメントに
+     * location.href が入ることを固定していた。撤去したので主張を反転させてある。
+     *
+     * **段階6-5a で対象が XML から JSON と DDL に移った。** 環境依存が出力に現れない
+     * こと自体は CLAUDE.md 制約3（決定論）の中身なので、書き出しが残る 2 形式で見る。
      * テストを消さないのは、撤去したこと自体を記録として残すため。
      */
-    test("環境依存が無い: Active URL コメントも location.href も出力に現れない", async () => {
+    test("環境依存が無い: location.href が出力に現れない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readFixture("minimal"));
 
-        const raw = await toXml(page);
+        const json = await toJson(page);
+        const ddl = await generateDdl(page, SERIALIZER_DB);
         const href = await page.evaluate(() => location.href);
 
-        expect(raw).not.toContain("Active URL");
-        expect(raw).not.toContain(href);
-        // 残る http は upstream のクレジット行だけ（＝環境依存ではない）
-        expect(raw.match(/http\S*/g)).toEqual([
-            "https://github.com/ondras/wwwsqldesigner/",
-        ]);
-        // golden はもう 1 バイトも正規化していない（tests/support/normalize.ts）
-        expect(raw).toBe(await toXml(page));
+        expect(json).not.toContain("Active URL");
+        expect(json).not.toContain(href);
+        expect(ddl).not.toContain(href);
+        /*
+         * XML には upstream のクレジット行（https://github.com/ondras/...）が入っていた。
+         * JSON にも DDL にも URL は 1 つも出ない
+         */
+        expect(json.match(/http\S*/g)).toBeNull();
+        expect(ddl.match(/http\S*/g)).toBeNull();
+
+        /* golden はもう 1 バイトも正規化していない（tests/support/normalize.ts） */
+        expect(json).toBe(await toJson(page));
+        expect(ddl).toBe(await generateDdl(page, SERIALIZER_DB));
     });
 
     /*
      * 旧 known-issue #1。段階4-4 で属性値とテキストノードのエスケープを全経路に
-     * 通したので、`&` を含む識別子でも読み直せる XML になった。fixture は
-     * known-issues 側のものをそのまま使う（正常系に昇格させると DDL golden の
+     * 通したので、`&` を含む識別子でも読み直せる XML になった。
+     *
+     * **段階6-5a で XML の書き出しが消えたので、主張を JSON と DDL に移した。**
+     * 「壊れたファイルができて二度と開けない」という #1 の実害は、書き出す形式が
+     * 変わっても消えない性質なので、形式ごとに見る:
+     *   - JSON: JSON.stringify がエスケープを持つので、読み直して同じ設計になる
+     *   - DDL: 生成器は識別子を素通しする（XSLT 経路でも実体参照の往復で素通しだった）
+     * fixture は known-issues 側のものをそのまま使う（正常系に昇格させると DDL golden の
      * 母集団が 35 -> 40 に増え、本段階の完了判定「DDL golden 無差分」がぼやける）。
      */
-    test("識別子に & を含んでも well-formed な XML を吐く", async () => {
+    test("識別子に & を含んでも書き出し・読み直しが壊れない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readKnownIssueFixture("amp-in-name"));
 
-        const xml = await toXml(page);
+        const json = await toJson(page);
+        const ddl = await generateDdl(page, SERIALIZER_DB);
 
-        expect(xml).toContain('name="R&amp;D"');
-        expect(xml).toContain('name="a&amp;b"');
-        expect(xml).not.toContain('name="R&D"');
+        /* JSON は生の & を持ち、DDL にもそのまま出る（実体参照は 1 つも残らない） */
+        expect(json).toContain('"name": "R&D"');
+        expect(json).not.toContain("&amp;");
+        expect(ddl).toContain("R&D");
+        expect(ddl).not.toContain("&amp;");
 
-        const parseFailed = await page.evaluate((source) => {
-            const doc = new DOMParser().parseFromString(source, "text/xml");
-            return doc.getElementsByTagName("parsererror").length > 0;
-        }, xml);
-        expect(parseFailed).toBe(false);
-
-        // 読み直すと元の識別子に戻る（二重エスケープしていない）
-        await loadFixture(page, xml);
-        expect(await toXml(page)).toBe(xml);
-    });
-
-    /*
-     * 旧 known-issue #8。<default> だけ末尾に改行が無く、1 行に 2 要素が並んでいた。
-     *
-     * 段階4-5 まではここが <default>NULL</default> を読んでいた。#2 を直して
-     * 「既定なし」の行から <default> が消えたので、実在する既定値へ寄せた
-     * （users.id の uuidv7()）。
-     *
-     * **段階6-3 で引用符が付き、段階6-4 で外れた。** 6-3 まで uuid 型がパレットに無く、
-     * この行は quote="" の INTEGER に落ちていた（known-issue #4）。uuid は他の非数値型と
-     * 同じく quote="'" なので、6-3 では式まで引用符で囲まれていた（`DEFAULT 'now()'` として
-     * golden に前からあった癖）。**6-4 が strict プロファイルでその癖を消した** ——
-     * §6.2 のテンプレートが uuidv7() / now() を既定値に持つので、囲んだままでは
-     * 新規テーブルが必ず壊れた DDL を吐くため（CUSTOMIZATIONS.md の段階6-4）。
-     */
-    test("<default> の後にも改行が入る（1 要素 1 行）", async () => {
-        await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
-
-        const xml = await toXml(page);
-
-        expect(xml).toContain("<default>uuidv7()</default>\n");
-        expect(xml).not.toContain("</default><");
+        /* 読み直すと元の識別子に戻る（二重エスケープしていない） */
+        await loadJson(page, json);
+        expect(await toJson(page)).toBe(json);
     });
 
     /*
      * 旧 known-issue #2。段階4-5 で「既定 NULL」の内部表現（def === null）を撤去したので、
-     * 既定値を持たない行は保存しても <default> を獲得しない（＝保存で情報が増えない）。
+     * 既定値を持たない行は保存しても既定値を獲得しない（＝保存で情報が増えない）。
+     * **段階6-5a で見る先を XML から JSON に移した**（主張は同じ）。
      */
-    test("既定値の無い行は保存しても <default> を獲得しない", async () => {
+    test("既定値の無い行は保存しても既定値を獲得しない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readFixture("house-defaults"));
 
-        const xml = await toXml(page);
+        const design = JSON.parse(await toJson(page)) as {
+            tables: { name: string; columns: { name: string; default?: string }[] }[];
+        };
+        const body = design.tables
+            .find((t) => t.name === "articles")!
+            .columns.find((c) => c.name === "body")!;
 
-        // fixture の articles.body は <default> を持たない。保存しても持たないまま
+        /* fixture の articles.body は <default> を持たない。保存しても持たないまま */
         expect(readFixture("house-defaults")).toContain(
-            '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>'
+            '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>',
         );
-        expect(xml).toContain(
-            '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>'
-        );
-        expect(xml).not.toContain("<default>NULL</default>");
+        expect(body.default).toBeUndefined();
+        expect(await toJson(page)).not.toContain('"default": "NULL"');
+    });
+
+    /*
+     * 旧 known-issue #5。空の <default></default>（introspection が値の無いカラムにも出す）を
+     * 読ませると ` DEFAULT ` だけの壊れた SQL になっていた。**段階6-5a で経路ごと消えた** ——
+     * XSLT に外部由来の XML を直接食わせる口が無くなり、生成器はモデルからしか DDL を作らない。
+     * 空の値は読み込みの時点で "" になるので（4-5）、DEFAULT 句そのものが出ない。
+     */
+    test("空の <default></default> を読んでも DEFAULT 句は出ない", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readKnownIssueFixture("empty-default"));
+
+        const ddl = await generateDdl(page, SERIALIZER_DB);
+
+        /* 旧 #5 ではこの行が " note TEXT DEFAULT \n" になっていた */
+        expect(ddl).toContain(" note TEXT\n");
+        expect(ddl).not.toContain("DEFAULT \n");
+        /* 同じテーブルの id は本物の既定値を持つので、DEFAULT 句自体は出る */
+        expect(ddl).toContain(" id UUID NOT NULL DEFAULT uuidv7(),");
     });
 
     /*
@@ -192,7 +171,6 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
 
         await loadFixture(page, legacy);
 
-        expect(await toXml(page)).not.toContain("<default>");
         expect(await toJson(page)).not.toContain('"default"');
     });
 
@@ -201,7 +179,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
      * （nullable 列の DEFAULT NULL は SQL 上も暗黙の既定と同義）。正規化は
      * Row.update() の 1 箇所だけにあるので、ここでは UI 経路（collapse）を通す。
      */
-    test("nullable な行の default 欄に NULL と打っても <default> は出ない", async () => {
+    test("nullable な行の default 欄に NULL と打っても既定値は出ない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readFixture("house-defaults"));
 
@@ -230,9 +208,13 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         expect(typed.shown).toBe("");
         expect(typed.stored).toBe("");
         /* 他の行の既定値（uuidv7() など）は出るので、body の行だけを見る */
-        expect(await toXml(page)).toContain(
-            '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>'
-        );
+        const design = JSON.parse(await toJson(page)) as {
+            tables: { name: string; columns: { name: string; default?: string }[] }[];
+        };
+        const body = design.tables
+            .find((t) => t.name === "articles")!
+            .columns.find((c) => c.name === "body")!;
+        expect(body.default).toBeUndefined();
     });
 
     /*
@@ -247,7 +229,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         const before = await page.evaluate(() =>
             (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle())
         );
-        const xmlBefore = await toXml(page);
+        const jsonBefore = await toJson(page);
 
         await page.evaluate(() =>
             (window.d! as unknown as { alignTables(): void }).alignTables()
@@ -256,7 +238,7 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         const after = await page.evaluate(() =>
             (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle())
         );
-        const xmlAfter = await toXml(page);
+        const jsonAfter = await toJson(page);
 
         expect(before).toEqual([
             "employees",
@@ -266,31 +248,32 @@ test.describe("serializer 特性化（toXML / fromXML）", () => {
         ]);
         expect(after).toEqual(before);
         // 座標の再配置は仕様なので出力自体は変わってよい。変わってはいけないのは順序。
-        expect(tableNamesOf(xmlAfter)).toEqual(tableNamesOf(xmlBefore));
+        expect(tableNamesOf(jsonAfter)).toEqual(tableNamesOf(jsonBefore));
     });
 
     /*
      * 段階4-4 まではこのテストが <datatypes db="..."> ブロックの差で「パレット依存」を
-     * 示していた。ブロックごと撤去したので、根拠を型解決の結果そのものに移す
+     * 示していた。ブロックごと撤去したので、根拠を型解決の結果そのものに移した
      * （minimal では INTEGER が両 DB で同じ SQL 名に解決されるため、PG 固有の型を
-     * 並べた types-matrix を使う）。
+     * 並べた types-matrix を使う）。**段階6-5a で見る先を XML から DDL に移した** ——
+     * 型解決の結果がいちばん素直に出るのが <datatype> の後継である DDL の型名だから。
      */
     test("型解決は型パレット依存（DB 横断 golden を持たない根拠）", async () => {
         const xml = readFixture("types-matrix");
 
         await useDatatypes(page, "postgresql");
         await loadFixture(page, xml);
-        const pg = await toXml(page);
+        const pg = await generateDdl(page, "postgresql");
 
         await useDatatypes(page, "mysql");
         await loadFixture(page, xml);
-        const my = await toXml(page);
+        const my = await generateDdl(page, "mysql");
 
-        // 同じ入力・同じ serializer でも解決結果が変わる。mysql に BYTEA / JSONB は
+        // 同じ入力・同じ生成器でも解決結果が変わる。mysql に BYTEA / JSONB は
         // 無いので、一致が無いときの初期値 0（＝先頭の型 INTEGER）に落ちる
         // ——known-issue #4 そのもの。
-        expect(pg).toContain("<datatype>BYTEA</datatype>");
-        expect(my).not.toContain("<datatype>BYTEA</datatype>");
+        expect(pg).toContain("BYTEA");
+        expect(my).not.toContain("BYTEA");
         expect(pg).not.toBe(my);
     });
 });

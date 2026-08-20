@@ -6,7 +6,7 @@ import { createHarness, type NodeHarness } from "./harness.ts";
  * UI 層（js/io.ts）の保存/読込経路の検査。HANDOVER §4 段階4-3b。
  *
  * **golden はここを 1 ビットも押さえない。** golden は Designer のファサード
- * （toXML / toJson / fromXML / fromJson）経由で採るので js/io.ts を通らず、
+ * （toDdl / toJson / fromXML / fromJson）経由で採るので js/io.ts を通らず、
  * 「UI が JSON に切り替わったこと」は golden 不変と両立してしまう。だから 4-3b の
  * 完了判定は「golden 85 本が無差分」＋「本ファイルと tests/browser/io-ui.spec.ts」の
  * 2 本立てになる。
@@ -307,8 +307,14 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
         });
 
         test("設計 XML も読む（読込互換）", () => {
+            /*
+             * 段階6-5a まで入力の XML を h.toXML()（＝ grabado 自身の書き出し）から
+             * 作っていた。XML の書き出しが消えたので fixture をそのまま食わせる
+             * （tests/fixtures/ は手書きの upstream 互換 XML）。
+             */
+            const xml = readFixture("house-defaults");
+            h.loadFixture(xml);
             const source = h.toJson();
-            const xml = h.toXML();
             h.loadFixture(readFixture("minimal"));
 
             h.io.loadDesignText(xml);

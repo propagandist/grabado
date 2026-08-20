@@ -8,20 +8,19 @@ import {
     openDesigner,
     setIoTextarea,
     toJson,
-    toXml,
     useDatatypes,
 } from "./harness.ts";
 
 /*
  * UI の保存/読込経路の特性化。HANDOVER §4 段階4-3b。
  *
- * **golden はここを 1 ビットも押さえない。** golden 85 本はすべて Designer のファサード
- * （toXML / toJson / fromXML / fromJson）経由で採るので js/io.ts を通らず、「UI が JSON に
+ * **golden はここを 1 ビットも押さえない。** golden はすべて Designer のファサード
+ * （toDdl / toJson / fromXML / fromJson）経由で採るので js/io.ts を通らず、「UI が JSON に
  * 切り替わったこと」は golden 不変と両立してしまう。だから 4-3b の完了判定は
  * 「golden 無差分」＋「本ファイルと tests/node/io-ui.test.ts」の 2 本立てになる。
  *
  * こちら（実ブラウザ）が担うのは、Node の jsdom では見られないもの —— download の
- * suggestedFilename、localStorage、XSLTProcessor 経由の DDL 生成、そして DOM に
+ * suggestedFilename、localStorage、UI ボタンからの DDL 生成、そして DOM に
  * ボタンが実在すること。server 経路の契約（URL / Content-type / body）は
  * tests/node/io-ui.test.ts の担当。
  *
@@ -94,9 +93,17 @@ test.describe("読み込み（JSON と XML の両方を受ける）", () => {
         expect(await toJson(page)).toBe(source);
     });
 
+    /*
+     * 段階6-5a まで、この 2 本は入力の XML を toXml()（＝ grabado 自身の書き出し）から
+     * 作っていた。XML の書き出しが消えたので **fixture をそのまま食わせる**形にしてある。
+     * tests/fixtures/ は手書きの upstream 互換 XML なので、「外から来た XML を読める」
+     * という読込互換の主張としてはむしろ純度が上がる。
+     */
     test("clientload は設計 XML も読む（読込互換）", async () => {
+        const xml = readFixture("house-defaults");
+        await loadFixture(page, xml);
         const expected = await toJson(page);
-        const xml = await toXml(page);
+
         await loadFixture(page, readFixture("minimal"));
         await setIoTextarea(page, xml);
 
@@ -105,8 +112,10 @@ test.describe("読み込み（JSON と XML の両方を受ける）", () => {
     });
 
     test("4-3b より前に localStorage へ保存した XML も読める", async () => {
+        const xml = readFixture("house-defaults");
+        await loadFixture(page, xml);
         const expected = await toJson(page);
-        const xml = await toXml(page);
+
         await page.evaluate((value) => {
             localStorage.setItem("wwwsqldesigner_databases_io-ui-legacy", value);
         }, xml);
@@ -168,19 +177,20 @@ test.describe("読めない入力は開いている設計を壊さない", () =>
     });
 });
 
-test.describe("XML が残る場所", () => {
+test.describe("DDL 生成の UI 経路", () => {
     test("clientsql は UI 経由でも DDL golden と一致する", async () => {
         /*
-         * ここだけ Designer.toXML() が生き残る（output.xsl への入力）。ddl.spec.ts は
-         * ハーネスが finish() を模しているので、実経路（ボタン -> OZ.Request -> XSLT）を
-         * 通す DDL はこの 1 本だけになる。
+         * ddl.spec.ts はハーネスが Designer の面を直接叩くので、**実経路（ボタン ->
+         * clientsql()）を通す DDL はこの 1 本だけ**。
+         *
+         * 段階6-5a まではここが「XML が残る場所」で、経路は
+         * ボタン -> OZ.Request で output.xsl を GET -> finish() が XSLTProcessor に食わせる、
+         * という非同期の 3 段だった。生成が TS になって**同期の 1 行**になったので、
+         * 応答待ちの expect.poll も要らない。
          */
         expect(await clickIo(page, "clientsql")).toEqual([]);
 
-        await expect
-            .poll(() => ioTextarea(page), { timeout: 10_000 })
-            .not.toBe("");
-        /* golden は末尾改行を持たない（finish() が .trim() した値をそのまま採ったもの） */
+        /* golden は末尾改行を持たない（生成器が .trim() した値をそのまま採ったもの） */
         expect(await ioTextarea(page)).toBe(
             readGolden(goldenPath("ddl", SERIALIZER_DB, "house-defaults.sql")),
         );

@@ -7,17 +7,25 @@
 export const CONFIG = {
     /*
      * grabado: 段階6-1 で cubrid / vfp9 / web2py / sqlalchemy を落とした
-     * （web2py は 2 回入っていたので重複も同時に消えた）。並び順は upstream のまま。
+     * （web2py は 2 回入っていたので重複も同時に消えた）。
      * 対応 DB は 8 本で、新設 3 本（sql-standard / mariadb / h2）は 6-7 で入る。
+     *
+     * **段階6-5a で house 標準を先頭に出し、既定を postgresql にした。**
+     * 6-1 がこの 2 つを 6-3 へ送っていた（「いま振ると初回ユーザーが最初に触るパレットが
+     * uuid 不在・x_real が BIGINT の未現代化 PG になる」）が、6-3 のエントリに実施記録が
+     * 無く落ちていた。**テストは DEFAULT_DB を読まない**（両ハーネスとも useDatatypes() で
+     * 明示指定する）ので、6-1 が言うとおり「テストが止めてくれない変更」だった。
+     * 送り先の条件——PG の現代化——は 6-3 で満たされている。
+     * 並びは postgresql を先頭へ動かすだけで、残る 4 本の相対順は upstream のまま。
      */
     AVAILABLE_DBS: [
+        "postgresql",
         "mysql",
         "sqlite",
         "mssql",
-        "postgresql",
         "oracle",
     ],
-    DEFAULT_DB: "mysql",
+    DEFAULT_DB: "postgresql",
 
     AVAILABLE_LOCALES: [
         "ar",

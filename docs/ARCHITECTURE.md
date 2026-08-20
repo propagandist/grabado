@@ -28,17 +28,17 @@ js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS
   io/palette.ts            ★ §4 段階4-0b で追加。型パレット層（旧 window.DATATYPES）
   io/model.ts              ★ §4 段階4-1a で追加。直列化の中間モデル（型のみ・emit 0）
   io/extract.ts            ★ §4 段階4-1a で追加。ライブツリー → DesignModel
-  io/ddl-xml.ts            ★ §4 段階4-1a で追加（当時 xml-serializer.ts。段階4-3a で改名）。
-                             DesignModel → XML。§6.3 で output.xsl を TS 実装に置き換えるまで
-                             DDL 生成の入力としてだけ残る内部モジュール
+  io/ddl/                  ★ §6 段階6-5a で追加。db/<db>/output.xsl（XSLT 1.0・5 本）の置き換え
+    generate.ts              入口。DesignModel + TypePalette → DDL 文字列
+    shared.ts                型解決と既定値の引用（XSLT が見ていた入力に相当する構造体を組む）
+    postgresql.ts            5 プロファイルの逐語移植。mysql / mssql / oracle / sqlite も同列
   io/xml-parser.ts         ★ §4 段階4-1b で追加。XML → DesignModel（形式側・ライブツリーに触らない）
   io/apply.ts              ★ §4 段階4-1b で追加。DesignModel → ライブツリー（形式を知らない）
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
 styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
 db/<db>/                   DB プロファイル。型パレット差分の対象
-  datatypes.xml            型パレット定義
-  output.xsl               ★ DDL 生成の実体（XSLT 1.0）
+  datatypes.xml            型パレット定義（**段階6-5a 以降、db/ にはこれしか無い**）
 backend/                   各種 backend 実装（下記）。PHP は廃止予定
   php-file/                ファイル I/O 版。house 到達点に最も近い（§4 実測の主対象）
   php-postgresql/          PostgreSQL 版。introspection(import) の実測対象
@@ -53,7 +53,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
 | frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-3b で 18 本すべてを `.ts` 化・段階3-4 で `SQL.*` と `window` 登録を撤去** | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
-| **DDL 生成** | **`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）** | **TS 実装**（§6.3 の規約を含む） | — |
+| **DDL 生成** | ~~`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）~~ → **段階6-5a で [`../js/io/ddl/`](../js/io/ddl/) へ逐語移植（XSLT は撤去）** | TS 実装（**§6.3 の規約は 6-5b**） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
 | 永続化 | 共有 PG / ファイル 各種 | git 管理 JSON ファイル正本（DB レス既定） | — |
@@ -217,19 +217,19 @@ Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
 ```
 io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
-      →  io/extract.ts  →  io/ddl-xml.ts  →  io/xml-parser.ts  →  io/apply.ts
+      →  io/extract.ts  →  io/xml-parser.ts  →  io/apply.ts  →  io/ddl/generate.ts
       →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
       →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.ts  →  io.ts
       →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts  →  window.ts  →  options.ts
       →  wwwsqldesigner.ts
 ```
 
-`io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。`io/` の 4 本が
-`globals.ts` の直後なのは、`io/ddl-xml.ts` が `_` に値依存するため（段階4-1a）。
-残る 3 本（`extract` / `xml-parser` / `apply`）は `import type` だけなので位置の制約は無いが、
-io/ の 4 本を離さない（段階4-1b）。型だけの `io/model.ts` は emit が空なので `src/app.ts` には
-載せない。**入出力の 4 本は 2x2 の格子**で、ライブ側（`extract` / `apply`）は形式非依存、
-形式側（`ddl-xml` / `xml-parser`）だけが形式ごとに増える（4-2 の JSON 2 本）。
+`io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。段階6-5a まで
+`io/` が `globals.ts` の直後だったのは `io/ddl-xml.ts` が `_` に値依存したためで、**その 1 本が
+消えたのでいま `io/` に順序の制約は無い**（残りは `import type` だけ）。並びは io/ を
+ひと固まりに保つためのもの。型だけの `io/model.ts` は emit が空なので `src/app.ts` には
+載せない。**入出力は 2x2 の格子**で、ライブ側（`extract` / `apply`）は形式非依存、
+形式側（`xml-parser` / `json-*` / `ddl/`）だけが形式ごとに増える。
 
 **この順序がそのまま `.ts` 化の順序**でもある（§5.5）。段階3-1 で先頭 3 本、段階3-2 で
 続く描画中核 7 本、段階3-3b で末尾 8 本が `.ts` になり、**`js/` に `.js` は 1 本も残っていない**。
@@ -269,8 +269,10 @@ Node ハーネスがバンドルの内側に手を届かせる経路は
 クラス参照は値 import になり、`SqlNamespace` は `{ Designer, designer }` の 2 つまで縮んだ
 （`Designer` は 3-4c で消える。`designer` は §4 の DI 化で消える）。pub/sub は
 [`../js/globals.ts`](../js/globals.ts) の named export で、`escape` は段階4-1a で
-[`../js/io/ddl-xml.ts`](../js/io/ddl-xml.ts) の `escapeXML` になった
+`js/io/ddl-xml.ts` の `escapeXML` になった
 （呼び手 3 か所がすべて `toXML` 経路だったので、書き出しの移設と同時に出た）。
+**そのモジュールは段階6-5a で消えた** —— XML の書き出しごと無くなったので、
+grabado に XML エスケープを持つ場所はもう無い。
 
 ### 5.1.1 ビルドと配信
 
@@ -284,13 +286,26 @@ Node ハーネスがバンドルの内側に手を届かせる経路は
 `url(../images/…)` のまま参照するので、いずれも Rollup の依存グラフに乗らない。
 [`../vite.config.ts`](../vite.config.ts) の `viteStaticCopy` がこの 3 つを dist へコピーしている。
 
-### 5.2 DDL 生成が XSLT である点（特性化テストへの影響）
+### 5.2 DDL 生成（段階6-5a で XSLT から TS へ）
 
-SQL 出力は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**して得ている（[`../js/io.ts`](../js/io.ts) の `clientsql()` と `finish()`）。`<xsl:output method="text"/>` で `CREATE TABLE …` を直接組み立て、`.trim()` して `#textarea` に入れる。**段階4-3b 以降、`Designer.toXML()` を呼ぶ出荷コードはこの `finish()` 1 か所だけ**（保存/読込は JSON に移った）。
+SQL 出力は [`../js/io/ddl/generate.ts`](../js/io/ddl/generate.ts) が組み立てる。入口は
+`generateDdl(model: DesignModel, palette: TypePalette): string` で、`palette.db()` で
+プロファイルを選び、`.trim()` した文字列を [`../js/io.ts`](../js/io.ts) の `clientsql()` が
+`#textarea` に入れる。**呼び手は `clientsql()` の 1 か所だけ**（保存/読込は段階4-3b で JSON に移った）。
 
 > 旧版の本書はこのメソッドを `sql()` と書いていたが、実装名は **`clientsql()`**。
 
-このため HANDOVER §7 の **DDL golden テストは XSLT の出力に対して組む**必要がある。Node/Vitest には `XSLTProcessor` が無い。**この分岐点は 2026-08-09 に決着済み**（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログ）— golden は実ブラウザ（Playwright/Chromium）で採り、日常回帰は jsdom + `xslt-processor` で回すハイブリッド構成。詳細は [`TESTING.md`](TESTING.md)。HANDOVER §6.3 の SQL エクスポート規約も最終的にこの層の置き換えになる。
+**段階6-5a まで、ここは `db/<db>/output.xsl`（XSLT 1.0・5 本・計 952 行）をブラウザの
+`XSLTProcessor` で適用していた。** `Designer.toXML()` が中間 XML を作り、`clientsql()` が
+XHR で XSL を取り、`finish()` が変換する 3 段の経路で、DDL 生成だけが他の形式より 2 段深かった。
+この構造は特性化テストの形も決めていた —— Node/Vitest に `XSLTProcessor` が無いため、
+golden は実ブラウザ（Playwright/Chromium）で採り、日常回帰は jsdom + `xslt-processor` で回す
+ハイブリッドにし、それでも動かない `oracle` は Node 側から外していた（parity 例外）。
+
+**6-5a はその 3 つ（中間 XML・XSLT・parity 例外）をまとめて落とした。** ブラウザと Node で
+同じ TS が動くのでエンジン差が無く、oracle も Node 回帰に戻っている。golden を採るのが
+実ブラウザだけという分担は変わらない（描画 DOM を通す `state/` と揃えるため）。詳細は
+[`TESTING.md`](TESTING.md)。**HANDOVER §6.3 の SQL エクスポート規約は段階6-5b でこの層に入る。**
 
 ### 5.3 外部依存
 
@@ -445,13 +460,13 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 
 ### 5.6 `js/io/` の構成（§4）
 
-§4（IO）は入出力を `js/io/` の **11 本**に集め、描画クラスから `toXML()` / `fromXML()` を
+§4（IO）は入出力を `js/io/` に集め、描画クラスから `toXML()` / `fromXML()` を
 1 行も残さず抜いた。組み方は **2×2 の格子**で、これが分割の原理そのもの
 （[`../js/io/model.ts`](../js/io/model.ts) のヘッダが正本）。
 
 ```
              ライブ側（描画エンジンを触る）   形式側（バイト列を知る）
-   出        extract.ts                     json-serializer.ts / ddl-xml.ts
+   出        extract.ts                     json-serializer.ts / ddl/
    入        apply.ts                       json-parser.ts / xml-parser.ts
 ```
 
@@ -466,7 +481,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 | [`apply.ts`](../js/io/apply.ts) | 入・ライブ | `DesignModel` → ライブツリー。**純関数ではない** —— `moveTo()` の snap・`update()` の FK 連鎖・ff hack の**順序**が挙動 |
 | [`extract.ts`](../js/io/extract.ts) | 出・ライブ | ライブツリー → `DesignModel`。描画エンジンを知っている唯一の出力側 |
 | [`json-serializer.ts`](../js/io/json-serializer.ts) | 出・形式 | `DesignModel` → 設計 JSON（決定論。書けない設計は 1 バイトも書かずに throw） |
-| [`ddl-xml.ts`](../js/io/ddl-xml.ts) | 出・形式 | `DesignModel` → **DDL 入力 XML**。`output.xsl` 専用の中間表現で、ユーザーに見える保存経路にはもう出ない |
+| [`ddl/`](../js/io/ddl/) | 出・形式 | `DesignModel` → **DDL**（段階6-5a）。`generate.ts` が入口、`shared.ts` が型解決と既定値の引用、残る 5 本がプロファイルごとの逐語移植 |
 | [`json-format.ts`](../js/io/json-format.ts) | 形式の定義 | 設計 JSON の形とキー順の契約（型だけ・emit 空）。散文は [`FORMAT.md`](FORMAT.md) |
 | [`model.ts`](../js/io/model.ts) | モデルの定義 | `DesignModel` の型（型だけ・emit 空）。上の格子の説明もここ |
 | [`palette.ts`](../js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |
@@ -489,8 +504,9 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 4. **UI と通信は `js/io.ts` に残す。** ダイアログの組み立て・`alert` / `confirm` / `prompt`・
    `OZ.Request`・localStorage・ダウンロードはすべてこちら側で、`js/io/` は形式とモデルしか知らない。
 
-`ddl-xml.ts` は **§6.3 で `output.xsl` を TS 実装へ置き換えるときにモジュールごと消える**
-（それまで XSLT の入力に XML が要る）。
+**段階6-5a で `ddl-xml.ts`（`DesignModel` → DDL 入力 XML）が消え、`ddl/` が入った。**
+XSLT が TS になって中間 XML が要らなくなったので、書き出し側は「モデル → バイト列」の
+1 段に揃っている。**grabado から XML の書き出しはこれで 1 つ残らず無くなった**（読み込みは互換で残る）。
 
 型解決は **§6 段階6-2 で `palette.ts` に集約した**。それまで `Designer.getTypeIndex` /
 `getFKTypeFor`（label 照合＋差し替えで捨てられないキャッシュ）と `xml-parser.ts` の照合ループに
@@ -515,13 +531,15 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 
 | 何を固定するか | どこで採るか | 出力 |
 |---|---|---|
-| DDL（`db/<db>/output.xsl` の適用結果） | 実ブラウザ（Chromium の `XSLTProcessor`）。§5.2 の `finish()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 5 DB = 35 本） |
-| `Designer.toXML()` の出力＝`output.xsl` への入力 | 同上 | `tests/golden/ddl-input/<fixture>.xml`（7 本。段階4-4 で `golden/xml/` から改名） |
+| DDL（`Designer.toDdl()` の出力） | 実ブラウザ（Chromium）。§5.2 の `clientsql()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 5 DB = 35 本） |
 | round-trip / 決定論 | 同上 | アサートのみ（golden なし） |
-| 高速回帰 | Node（jsdom ＋ `xslt-processor`）。同じ fixture・**同じ golden**を読むだけ | — |
+| 高速回帰 | Node（jsdom）。同じ fixture・**同じ golden**を読むだけ | — |
 | 既知の不具合 | 実ブラウザ。golden を持たず「現在こう壊れている」を直接アサート | `tests/known-issues/` |
 | 配布物（§3 で追加） | 実ブラウザ。`vite build` → `vite preview` に対するスモーク | `tests/dist/`（golden は読むだけ） |
 
 - **golden は実ブラウザ採取のものが唯一の正**。Node 側は書き込まない。
 - 現行コードは抽出せずそのまま動かす。モデル層が描画 DOM と密結合（§5）なうえ、先に抽出すると「抽出後のコード」を特性化することになり安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
-- `xslt-processor` が XSLT 1.0 を満たしていない `oracle` は Node 側の DDL 回帰から外れ、ブラウザ側だけがカバーする（`sqlalchemy` / `vfp9` も同じ理由で外れていたが、段階6-1 で対応 DB から消えた）。原因は [`../tests/node/parity-exceptions.ts`](../tests/node/parity-exceptions.ts) に実測付きで記録。
+- ~~`xslt-processor` が XSLT 1.0 を満たしていない `oracle` は Node 側の DDL 回帰から外れる~~
+  **段階6-5a で parity 例外ごと消えた**（`tests/node/parity-exceptions.ts` を撤去）。
+  DDL 生成が TS になり、ブラウザと Node で同じコードが動くのでエンジン差が無い。
+  **oracle の 7 件が Node 回帰に復帰**し、`npm test` の skipped は 0 になった。

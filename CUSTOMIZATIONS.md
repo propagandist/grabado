@@ -3320,14 +3320,208 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 
 ---
 
+### 2026-08-20 HANDOVER §6「機能」段階6-5a —— `output.xsl` を TS 生成器へ逐語移植し、XSLT 経路を撤去する
+
+6-0 の分割表の 6 本目。**`db/<db>/output.xsl`（XSLT 1.0・5 本・計 952 行）が消え、
+[`js/io/ddl/`](js/io/ddl/) の 7 本になった。** `tests/golden/ddl/` の 35 本は 1 バイトも
+動いていない —— それが本段階の完了判定そのもの。
+
+#### 決めたこと 1: 6-5 を 2 つに割った
+
+6-5 が引き取る項目は 11 件あり（分割表の「§6.3 `output.xsl` の TS 生成器化」＋ 6-1 / 6-3 / 6-4 が
+送った申し送り）、**「挙動不変の移植」と「意図的な出力変更」が混ざっていた**。
+6-1〜6-4 が採ってきた「golden が動かないことを完了判定にする」型紙が使えなくなるので割った。
+
+| | 6-5a（本エントリ） | 6-5b |
+|---|---|---|
+| 中身 | XSLT 5 本の逐語移植・XSLT 経路の撤去 | §6.3 の命名規約・識別子の引用・known-issue #6 / #11 の是正 |
+| golden | **`ddl/` 35 本が 1 バイトも動かない** | PG の 7 本が動く（他 4 本は 0 バイト差） |
+| 完了判定 | 無差分そのもの | 動いた 7 本を 1 本ずつ説明できること |
+
+1 PR にまとめる案は却下した —— golden が動いたときに「移植の回帰」なのか「意図した是正」なのかを
+切り分けられなくなる。**952 行を書き写す作業でその安全網を手放すのは割に合わない。**
+
+#### 決めたこと 2: 生成器の入口は `(DesignModel, TypePalette)`。中間 XML を挟まない
+
+移植前の DDL 生成は **3 段**だった: `extractModel()` → `buildDdlInputXml()`（中間 XML）→
+XHR で `output.xsl` を GET → `XSLTProcessor`。他の形式（JSON）は 1 段なので、DDL だけが 2 段深い。
+
+[`js/io/ddl/generate.ts`](js/io/ddl/generate.ts) の `generateDdl(model, palette): string` は
+[`js/io/json-serializer.ts`](js/io/json-serializer.ts) の `serializeDesignJson(model, palette)` と
+**同じ 2 引数**にした。`Designer.toXML()` が `buildDdlInputXml(extractModel(this), this.palette)` で
+しかなかったので、中間 XML を挟む必然性が元から無かった（4-1a の格子がその形を用意していた）。
+
+**結果として XML の書き出しが grabado から 1 つ残らず消えた。** 4-3b でユーザーに見える保存経路が
+JSON になった時点で残っていたのは DDL の中間表現だけで、それが消えた。読み込みは互換で残る
+（HANDOVER §4「XML は読込専用」）。
+
+XSLT が見ていた入力に相当する構造体は [`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) が組む。
+XPath 式をそのまま TS の条件式に写せる形にしてあり（`test="comment"` → `if (table.comment)`、
+`@null = 0` → `!row.nullable`）、**型パレットを読むのはここだけ**。5 つのプロファイル実装は
+解決済みの文字列しか見ない —— XSLT が `datatypes.xml` を一度も参照していなかったのと同じ分業。
+
+#### 決めたこと 3: プロファイル間の共通化は 6-5a では行わない
+
+5 本の文法差は大きい（`DROP TABLE IF EXISTS` の有無・`GO`・trigger + sequence・79 文字の罫線と
+桁揃え・inline FK・識別子の引用文字が 5 通り）。逐語移植の最中に共通項を括ると、**挙動不変の主張が
+「共通化が正しいこと」に依存してしまう**。4-1a が `toXML()` 4 実装を移設したときと同じ立場で、
+「整理したくなる箇所がそのまま危険箇所」。
+
+共通骨格の抽出は `sql-standard` を基底に置く 6-7 の仕事（6-7 の設計先行エントリ）。
+**6-7 が「生成器は基底 + 差分」と書いているのは型マッピングの話**で、DDL 文法の共通化とは別。
+
+#### 決めたこと 4: 消える主張を 1 件ずつ始末した（この段階でいちばん注意が要る作業）
+
+XML の書き出しが消えると、[`tests/browser/serialize.spec.ts`](tests/browser/serialize.spec.ts) と
+`tests/node/serialize.test.ts` が持っていた主張が宙に浮く。**黙って消さない**ために全件を振り分けた。
+
+| 主張 | 6-5a での扱い |
+|---|---|
+| `toXML()` の golden 7 本（`tests/golden/ddl-input/`） | **撤去**。書き出しが無い以上、あのファイルは何も保証しない |
+| round-trip 7 本 / 決定論 | **撤去**。JSON 側（`json.spec.ts` / `json.test.ts`）が同じ主張を持つ |
+| 環境依存が無い（旧 Active URL） | **JSON と DDL に移設**。CLAUDE.md 制約3 の中身なので書き出しが残る 2 形式で見る |
+| `&` を含む識別子（旧 known-issue #1） | **JSON と DDL に移設**。「壊れたファイルができて二度と開けない」は形式が変わっても消えない性質 |
+| `<default>` の後に改行（旧 #8） | **消滅**。XML 固有で移設先を持たない |
+| 既定値の無い行（旧 #2） | **JSON 版に置換** |
+| `alignTables()` の順序（旧 #7） | 比較対象を JSON にしただけ |
+| `<default>` の引用規則の表（EXPRESSIONS 13 / LITERALS 4） | **[`tests/node/ddl.test.ts`](tests/node/ddl.test.ts) へ移設**。未現代化 4 本の規則が「実際に何か」を書いてある唯一の場所で、`ddl/{mysql,mssql,oracle,sqlite}` の 28 本が動かないことの規則側の裏付け |
+| XML 読込互換のテスト入力（`io-ui` / `types` / `json`） | **fixture をそのまま食わせる形に変えた**。`tests/fixtures/` は手書きの upstream 互換 XML なので、「外から来た XML を読める」という主張としてはむしろ純度が上がる |
+
+**引用規則を DDL で観測すると 1 行だけ見え方が変わる。** `NULL` は strict 側で式と判定されて
+囲まれないが、PG の出力側が `default = 'NULL'` のとき句ごと落とすので DDL には現れない
+（`db/postgresql/output.xsl:58-64` の逐語）。囲む側の規則と出力側の規則が別物であることが、
+XML 経由では見えていなかった。mysql は落とす分岐を持たないので `DEFAULT 'NULL'` が出る。
+
+#### 決めたこと 5: known-issue #5 は経路ごと消え、#12 / #13 を新設した
+
+**#5（空の `<default></default>` で ` DEFAULT ` だけが残る）は構造的に消えた。**
+現象が起きるのは「introspection が吐いた XML を**直接 XSLT に食わせる**」経路だけで、
+生成器はモデルからしか DDL を作らない。空の値は読み込みの時点で `""` になり（4-5）、
+`hasDefault` が false になるので句そのものが出ない。**直したというより到達できなくなった。**
+
+**逐語移植の過程で未記録のバグを 9 件見つけた。** 挙動不変が要件なので TS 側でも忠実に再現して
+あり、黙って持ち込まないために記録する。実害の大きい 2 件は known-issues に新設した（直すのは 6-8）。
+
+| 現象 | 扱い |
+|---|---|
+| **`mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれ T-SQL が構文エラー** | **known-issue #12 を新設** |
+| **`sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える** | **known-issue #13 を新設** |
+| `mssql`: DEFAULT を一切出力しない（分岐が無い） | 本エントリに記録 |
+| `sqlite`: コメントを一切出力しない | 同上 |
+| `mysql`: コメントを 60 字で無言に切り詰める | 同上 |
+| `oracle`: 日本語識別子が `ora_ident` を素通りして裸で出る（`translate()` は非 ASCII を変えない） | 同上 |
+| `mysql` / `mssql`: FK の参照元列だけ引用符が付かない（テーブル名には付く） | 同上 |
+| `oracle`: 複数列が autoincrement だと同名の `CREATE SEQUENCE` が重複 | 同上（golden 未カバー） |
+| `mssql`: 複数列 INDEX の 2 列目以降に `[` が付かない（`([c1], c2])`） | 同上（golden 未カバー） |
+
+**`INDEX` / `FULLTEXT` を持つ fixture が 1 本も無い**ので、`CREATE INDEX` 経路は 35 本の golden に
+1 行も現れない。下 2 件が golden 未カバーなのはそのため。6-5b が PG の `KEY (...)` を
+`CREATE INDEX` に直すときは golden 差分では検証できない（恒久テストを 1 本立てる）。
+
+なお `mysql` の XSLT には `<xsl-text>`（正しくは `xsl:text`）というタイポが 7 箇所あり、
+非名前空間のリテラル結果要素として扱われた結果 `method="text"` では中身だけが出て
+**たまたま動いていた**。移植でその区別は消えている。
+
+#### 決めたこと 6: `.gitattributes` の `db/**` を `text eol=lf` にした（6-1 が送った項目）
+
+`-text` だった根拠は「`output.xsl` の `xsl:text` 内の改行がそのまま生成 SQL に出る」ことで、
+**`db/` の改行コードが DDL golden のバイト列を左右していた**。その経路が消え、`db/` に残るのは
+属性を読むだけの `datatypes.xml` だけになったので、他の text ファイルと同じ LF 固定へ揃えた。
+5 本とも既に LF でコミットされているのでバイト列は動いていない。`locale/** -text` は
+`ko.xml` が CRLF のまま残るので維持。
+
+#### 決めたこと 7: `DEFAULT_DB` の実施漏れを埋めた
+
+[`js/config.ts`](js/config.ts) が `DEFAULT_DB: "mysql"` のままだった。6-1 がこれと
+`AVAILABLE_DBS` の並び替えを 6-3 へ送っていたが（「いま振ると初回ユーザーが最初に触るパレットが
+uuid 不在・`x_real` が `BIGINT` の未現代化 PG になる」）、**6-3 のエントリに実施記録が無く落ちていた**。
+`git log -- js/config.ts` の最新も 6-1。6-1 自身が「**テストが止めてくれない変更**」と書いている
+とおり、CI は赤くならない。
+
+送り先の条件——PG の現代化——は 6-3 で満たされている。新しい決定ではなく実施漏れなので
+6-5a で埋めた（`postgresql` を先頭へ動かし、既定に。残る 4 本の相対順は upstream のまま）。
+**同じ表にあった「cookie に撤去 DB が残った場合の防御」は未実施のまま**で、そちらは 6-5a の
+スコープ外（`db` 不整合の見せ方という別テーマ）。
+
+#### 決めたこと 8: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| §6.3 の命名規約（`fk_<table>_<ref>` / `idx_<table>_<cols>`）・識別子の引用 | **6-5b** | 決めたこと 1 |
+| known-issue **#6**（`<table>_pkey` の衝突）・**#11**（`'` のエスケープ）・`KEY (...)` 構文・`BIGSERIAL` 固定・`NOT NULL` の重複 | **6-5b** | 同上。どれも golden が動く |
+| 未現代化 4 本の粗さ（#4 / #10 / #12 / #13 ほか上の 9 件） | **6-8** | プロファイルごとの現代化と一体。6-6 の DB 別 fixture が先に要る |
+| 配列型 `type[]` / 生成列の DDL 表現 | **6-8 以降** | 6-0 は「6-5 で DDL 表現ごと設計する」と書いたが、**パレットに型が無い**（6-0 自身が「`<type>` の列挙では表現できない」として入れなかった）。生成器だけ先に作っても入口が無い |
+| 5 本の共通骨格の抽出 | **6-7** | 決めたこと 3 |
+
+#### 検証
+
+**6-5a の完了判定は「赤の内訳を数える」ではなく `golden` 無差分そのもの。**
+逐語移植なので、期待値を 1 行も直さずに通ることが移植の正しさの直接の証明になる。
+
+```
+$ npm run golden:update && git status --porcelain tests/golden/
+D  tests/golden/ddl-input/*.xml                          # 7 本（撤去）以外は 1 行も出ない
+$ git status --porcelain tests/golden/ddl tests/golden/json tests/golden/state
+                                                         # 空 ← 段階の完了判定
+$ find db -type f
+db/*/datatypes.xml                                       # 5 本。output.xsl は 1 本も無い
+$ grep -c xslt-processor package.json
+0                                                        # devDependency が 1 本減った
+```
+
+**Node 側の 35 件が一度も期待値を直さずに通った**（最初の実行で 35/35）。ブラウザ側で 1 件だけ
+赤くなったが、それは 6-5a が**新しく書いたテスト**（旧 #5 の移設先）のアサーションが甘すぎた
+もので、生成器の欠陥ではない（同じテーブルの `id` 列が持つ本物の `DEFAULT uuidv7()` に当たっていた）。
+
+テスト件数（左が `develop`、右が本段階）:
+
+| | 前 | 後 |
+|---|---|---|
+| `npm test` | 237 passed / **7 skipped** | **228 passed / 0 skipped** |
+| `npm run test:browser` | 123 passed | **108 passed** |
+| `npm run known-issues` | 6 passed | **7 passed**（#5 が消え #12 / #13 を新設） |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**skipped が 0 になったのがこの段階の副産物**。`oracle` は `xslt-processor` がトップレベルの
+`xsl:variable` を解決できず（`XPST0008`）Node 回帰から外れていたが、生成が TS になって
+エンジン差そのものが消えた。**`oracle` の DDL 回帰をブラウザ側だけが張っていた状態が解消**され、
+`tests/node/parity-exceptions.ts` と `ddl.test.ts` の adapter 2 本も根拠ごと消えている。
+
+件数の増減はすべて「XML の書き出しが消えたこと」に由来する:
+
+| ハーネス | 内訳 |
+|---|---|
+| Node −9 | `ddl.test.ts` 29 → 38（golden 28 → 35・parity 例外 −1・引用規則 +3）／`serialize.test.ts` 18 → 0（ファイルごと撤去） |
+| ブラウザ −15 | `serialize.spec.ts` 23 → 8（golden 7・round-trip 7・決定論 1・`<default>` 改行 1 を撤去、旧 #5 の移設先 1 を追加） |
+| known-issues +1 | #5 を撤去、#12 / #13 を新設 |
+
+`tests/fixtures/` は **1 行も動かしていない**。
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読した。
+効くのは依存の項（§2.2 / §3.12 / §5.1）だけで、**本段階は devDependency を 1 本減らす**
+（`xslt-processor`）。lock ファイルは更新済み。`innerHTML` 経路は増えておらず（§3.5）、
+実行時に `db/*/output.xsl` を fetch していた経路が無くなったぶん配信も減っている。
+生成する DDL は人が読んでから実行するもので、アプリ自身は SQL を実行しない。
+
+**次段階への入力 —— 6-5b（§6.3 の規約と既知不具合の是正）**。生成器は
+[`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) が「囲まない側」の判定を持ち、囲む側は
+`quote` 属性を前後に足すだけ（#11）。**PG だけを strict として直し、未現代化 4 本は 6-8 まで
+1 バイトも動かさない** —— 6-3 / 6-4 と同じ型紙で、共通層に規則を置いて `palette.isStrict()` で
+有効化すれば 6-8 で自動的に効く。`CREATE INDEX` 経路は fixture が無いので golden では
+検証できず、[`tests/browser/template.spec.ts`](tests/browser/template.spec.ts) と同じ形の
+恒久テストを 1 本立てること。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
 |---|---|---|
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事。**6-1 でも触っていない**が、`backend/php-cubrid/index.php:37` が消えた `db/cubrid/datatypes.xml` を読む dangling ができた（段階6-1 の記録） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
-| XML 永続化（`toXML()` / `save` の body） | **段階4-3b でユーザーに見える保存経路から撤去**。読み込みは互換で残す（形式は中身で判別）。`toXML()` の呼び手は DDL 生成の 1 か所だけ。**段階4-4 で `tests/golden/ddl-input/` に改名し、決定論・well-formed にした** | 完了。DDL 入力としての XML が消えるのは §6.3（`output.xsl` の TS 化） |
-| DDL 生成 `db/<db>/output.xsl`（XSLT 1.0） | 保持。**§7 で golden 固定済み**（`tests/golden/ddl/`）。**段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本） | 残る 5 本は 6-5 で TS 生成器へ置換（§6.3 の規約もここ）。**新設 3 本は TS 生成器の上に載せる**（6-7。いま XSLT で書くと直後に捨てることになる）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。**6-5 は `js/io/ddl-xml.ts` が 6-4 で持った式判定（`DEFAULT uuidv7()` を囲まない）と known-issue #11（値の中の `'` をエスケープしない）も引き取る** |
+| ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
+| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。§6.3 の規約と known-issue #6 / #11 の是正は **6-5b**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離）は **6-8** |
 | 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |

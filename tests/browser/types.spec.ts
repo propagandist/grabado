@@ -1,11 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFixture, readKnownIssueFixture, SERIALIZER_DB } from "../support/fixtures.ts";
-import { loadFixture, openDesigner, toXml, useDatatypes } from "./harness.ts";
+import { generateDdl, loadFixture, openDesigner, toJson, useDatatypes } from "./harness.ts";
 
 /**
  * 型解決の特性化（HANDOVER §6 段階6-2 / 6-3）。
  *
- * serialize.spec.ts が toXML/fromXML の形式を、json.spec.ts が正本フォーマットを見るのに対し、
+ * serialize.spec.ts が読込互換と形式非依存の性質を、json.spec.ts が正本フォーマットを見るのに対し、
  * ここは**型パレットを引く経路**だけを見る。tests/known-issues/ にあった #3（6-2）と
  * #4（6-3・PG 分）の「直った後の挙動」の受け皿でもある（README の運用 3）。
  *
@@ -97,7 +97,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
          * 「設計が別の型で開く」事故は起きない（設計 JSON 側は 4-2b から同じ立場）。
          * 落ちても**今開いている設計は変わらない**ことを同時に見る。
          */
-        const before = await toXml(page);
+        const before = await toJson(page);
         const result = await page.evaluate(() => {
             const xml =
                 `<sql><table x="0" y="0" name="t">` +
@@ -112,7 +112,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         expect(result).toContain('型 "MEDIUMTEXT" が現在の型パレット（db=postgresql）に無い');
-        expect(await toXml(page)).toBe(before);
+        expect(await toJson(page)).toBe(before);
     });
 
     test("未現代化のプロファイルでは従来どおり先頭型に落ちる（#4 は 6-8 まで残る）", async () => {
@@ -139,7 +139,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
     test("型セレクタが新しいパレットの 24 型を出す（golden が張らない UI の面）", async () => {
         /*
          * Row.buildTypeSelect は **パレットを読む唯一の UI 面**で、golden には 1 ビットも
-         * 写らない（golden はすべて toXML / toJson 経由で採るため）。6-3 は label を動かし
+         * 写らない（golden はすべて toDdl / toJson 経由で採るため）。6-3 は label を動かし
          * 型を 5 本減らしたので、ここが動いたことに気づける経路を 1 本だけ置く。
          * マウス操作の経路そのものは今も誰も張っていない（docs/TESTING.md）。
          */
@@ -168,16 +168,22 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
         expect(menu.labels).not.toContain("JSON");
     });
 
-    test("XML 往復で型がドリフトしない", async () => {
+    test("XML を読み直しても型がドリフトしない", async () => {
+        /*
+         * 段階6-5a まで「toXML -> fromXML -> toXML」の往復で見ていた。XML の書き出しが
+         * 消えたので、同じ XML を 2 回読んで生成 DDL の型名が動かないことを見る。
+         * ドリフトは**読み込み時の型解決**の問題なので、観測面が <datatype> から
+         * DDL の型名に変わっても主張は同じ。
+         */
         await useDatatypes(page, SERIALIZER_DB);
         await loadFixture(page, readKnownIssueFixture("bigint-drift"));
 
-        const first = await toXml(page);
-        await loadFixture(page, first);
-        const second = await toXml(page);
+        const first = await generateDdl(page, SERIALIZER_DB);
+        await loadFixture(page, readKnownIssueFixture("bigint-drift"));
+        const second = await generateDdl(page, SERIALIZER_DB);
 
         /* 6-2 以前は BIGINT -> Real(BIGINT) と 1 回化けてから収束していた */
-        expect(first).toContain("<datatype>BIGINT</datatype>");
+        expect(first).toContain("BIGINT");
         expect(second).toBe(first);
     });
 

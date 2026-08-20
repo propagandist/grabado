@@ -42,11 +42,17 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
             expect(third).toBe(second);
         });
 
-        test(`情報保存: ${fixture.name} — XML 経由と JSON 経由で状態が一致する`, () => {
-            // 経路 A: fixture -> toXML -> fromXML
+        test(`情報保存: ${fixture.name} — XML から読んだ状態と JSON を往復した状態が一致する`, () => {
+            /*
+             * 段階6-5a まで経路 A は「fixture -> toXML -> fromXML」だった。XML の書き出しが
+             * 消えたので、**fixture をもう一度読む**形に変えてある。比べたいのは
+             * 「JSON が落とした / 変えた情報」なので、基準側が grabado の書いた XML から
+             * 元の fixture に変わっても主張は同じ（むしろ外部由来の XML が基準になる）。
+             */
+            // 経路 A: fixture(XML) を 2 回読む
             h.useDatatypes(SERIALIZER_DB);
             h.loadFixture(readFixture(fixture.name));
-            h.loadFixture(h.toXML());
+            h.loadFixture(readFixture(fixture.name));
             const viaXml = h.captureState();
 
             // 経路 B: fixture -> toJson -> fromJson
@@ -56,7 +62,7 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
             const viaJson = h.captureState();
 
             // どちらも「2 回目の読み込み」に揃えてあるので履歴依存は相殺される。
-            // 本段階でいちばん効くテスト（tests/browser/json.spec.ts の同名テストと同じ根拠）。
+            // 差が出たらそれがそのまま「JSON が落とした / 変えた情報」の一覧になる。
             expect(viaJson).toBe(viaXml);
         });
     }

@@ -40,7 +40,7 @@ import { Options } from "./options.ts";
 import { Window as SqlWindow } from "./window.ts";
 import { TypePalette } from "./io/palette.ts";
 import { extractModel } from "./io/extract.ts";
-import { buildDdlInputXml } from "./io/ddl-xml.ts";
+import { generateDdl } from "./io/ddl/generate.ts";
 import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
 import { applyDesignModel } from "./io/apply.ts";
 import { serializeDesignJson } from "./io/json-serializer.ts";
@@ -457,20 +457,21 @@ export class Designer extends Visual<DesignerDom> {
     }
 
     /*
-     * grabado: 本体は段階4-1a で js/io/extract.ts と js/io/ddl-xml.ts に分けた。
+     * grabado: 本体は段階4-1a で js/io/extract.ts に、段階6-5a で js/io/ddl/ に分けた。
      * このメソッド自体は残す —— 両ハーネス（node は new Designer() の戻り値、page は
      * window.d）が触る面で、名前と到達性が変わるとテストが要改修になる。
-     * override が外れたのは基底 Visual の空 toXML() を同時に撤去したため。
      *
-     * **段階4-3b で出荷側の呼び手は js/io.ts の finish()（DDL 生成）1 か所になった。**
-     * 保存/読込 8 経路は toJson() / loadDesignText() に移り、ここに残る XML は
-     * output.xsl（XSLT）への入力だけ。メソッドごと消えるのは §6.3。
+     * **段階6-5a で toXML() から toDdl() になった。** 4-3b 以降ここに残っていた XML は
+     * db/<db>/output.xsl（XSLT）への入力でしかなく、その XSLT が TS 生成器になったので
+     * 中間表現ごと消えた（js/io/ddl-xml.ts と tests/golden/ddl-input/ も同時に撤去）。
+     * DDL 生成だけが「モデル -> 中間 XML -> XSLT -> 文字列」の 3 段だったのが、
+     * 他の形式と同じ 1 段になっている。
      *
-     * **段階4-4 で location.href の評価が消えた。** 4-1a で引数に押し出してあった
-     * 唯一の環境依存で、これで出力は同一モデル→同一バイト列になる。
+     * 出荷側の呼び手は引き続き js/io.ts の finish() 1 か所（段階4-3b 以来）。
+     * 出力が同一モデル→同一バイト列であることは 4-4 から変わらない。
      */
-    toXML(): string {
-        return buildDdlInputXml(extractModel(this), this.palette);
+    toDdl(): string {
+        return generateDdl(extractModel(this), this.palette);
     }
 
     /*

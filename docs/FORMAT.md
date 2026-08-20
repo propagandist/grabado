@@ -104,7 +104,8 @@ cookie の `db` は変わらないのでリロードで元に戻る半端な状�
 
 `type` は **parser も serializer も値を検査しない**（文字列であることだけを見る）。選択肢を持つのは
 UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.ts) は falsy を `INDEX` に
-倒す。DDL でどう出るかは `db/<db>/output.xsl` 次第で、**PostgreSQL は `PRIMARY` / `UNIQUE` 以外を
+倒す。DDL でどう出るかは [`../js/io/ddl/`](../js/io/ddl/) 次第で（段階6-5a まで
+`db/<db>/output.xsl`）、**PostgreSQL は `PRIMARY` / `UNIQUE` 以外を
 すべて `ADD CONSTRAINT <table>_pkey KEY (...)` に落とす**（`INDEX` も `FULLTEXT` も同じ。
 制約名の衝突は known-issues #6）。値を列挙して拒む案は §6.3（エクスポート規約）の判断に送る ——
 形式側で拒むと、いま開ける設計が読めなくなる側の変更になる。
@@ -223,7 +224,9 @@ UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.
 **列挙するのは「囲まない側」だけ**で、判定漏れは「囲む」（＝従来どおり）に倒れる。
 未現代化プロファイルは `CURRENT_TIMESTAMP` だけを特例にする従来規則のままで、6-8 で移る。
 **囲む側の規則（値の中の `'` をエスケープしない）は 6-4 では直していない** ——
-known-issues #11 に隔離し、`output.xsl` を TS 生成器にする 6-5 でまとめて設計する。
+known-issues #11 に隔離してある。**段階6-5a は規則を 1 文字も変えずに
+[`../js/io/ddl/shared.ts`](../js/io/ddl/shared.ts) へ移設しただけ**で、囲む側の規則ごと
+設計し直すのは 6-5b。
 
 #### パレットを差し替えるときの移行（**規則は段階6-3 で確定**）
 

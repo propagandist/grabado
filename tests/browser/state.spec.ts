@@ -7,7 +7,7 @@ import { captureState, loadFixture, openDesigner, useDatatypes } from "./harness
 /**
  * 読み込み方向（fromXML）の特性化。HANDOVER §4 段階4-1b の安全網。
  *
- * 既存の serializer golden は toXML() の結果しか押さえていない。fromXML は
+ * 書き出しの golden は結果しか押さえていない。fromXML は
  * 「XML を再生する UI 操作列」なので、XML に出ない状態 —— 選択クラス・型パレット由来の色・
  * z-index・relation がどの**実体**に繋がったか・clearTables() の後始末 —— が丸ごと
  * 素通りする。ここで固定してから js/io/ への移設に入る（CLAUDE.md 制約1）。

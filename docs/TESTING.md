@@ -161,8 +161,8 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 
 ### DDL golden — `tests/golden/ddl/<db>/<fixture>.sql`
 
-7 fixture × 7 DB = **49 本**（§6 段階6-7a で `sql-standard`、6-7b で `h2` が入った。
-6-7c で `mariadb` が続き、対応 DB 8 本がそろうと 56 本になる）。
+7 fixture × 8 DB = **56 本**（§6 段階6-7a〜6-7c で `sql-standard` / `h2` / `mariadb` が
+入り、**対応 DB 8 本がそろった**）。
 [js/io.ts](../js/io.ts) の `clientsql()` と同じ経路（`Designer.toDdl()` → `.trim()`）で採る。
 UI の `#textarea` に入る値と一致する。
 入力は**そのプロファイルの fixture**（`tests/fixtures/<db>/`。§6 段階6-6a）。
@@ -248,7 +248,7 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は
 キー管理 UI から `CREATE INDEX` に届く経路（`KeyManager.add()` → avail から列を選んで `←`）。
-`INDEX` / `FULLTEXT` を持つ fixture が 1 本も無いので **49 本の golden に `CREATE INDEX` は
+`INDEX` / `FULLTEXT` を持つ fixture が 1 本も無いので **56 本の golden に `CREATE INDEX` は
 1 行も出ない** —— 名前の規約そのものは [`../tests/node/ddl.test.ts`](../tests/node/ddl.test.ts) が
 押さえ、ここは「人がそこへ辿り着けるか」だけを見る。
 

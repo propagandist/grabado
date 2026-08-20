@@ -26,6 +26,7 @@ export const CONFIG = {
         "oracle",
         "sql-standard",
         "h2",
+        "mariadb",
     ],
     DEFAULT_DB: "postgresql",
 

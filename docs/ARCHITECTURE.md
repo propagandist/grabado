@@ -32,7 +32,7 @@ js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS
     generate.ts              入口。DesignModel + TypePalette → DDL 文字列
     shared.ts                型解決と既定値の引用（XSLT が見ていた入力に相当する構造体を組む）
     ansi.ts                  CREATE TABLE ＋ ALTER TABLE 系の共通骨格（postgresql / sql-standard / h2）
-    postgresql.ts            7 プロファイル。mysql / mssql / oracle / sqlite は骨格が違うので独立
+    postgresql.ts            8 プロファイル。mysql 系 / mssql / oracle / sqlite は骨格が違うので独立
   io/xml-parser.ts         ★ §4 段階4-1b で追加。XML → DesignModel（形式側・ライブツリーに触らない）
   io/apply.ts              ★ §4 段階4-1b で追加。DesignModel → ライブツリー（形式を知らない）
   config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
@@ -532,7 +532,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 
 | 何を固定するか | どこで採るか | 出力 |
 |---|---|---|
-| DDL（`Designer.toDdl()` の出力） | 実ブラウザ（Chromium）。§5.2 の `clientsql()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 7 DB = 49 本。§6 段階6-7b） |
+| DDL（`Designer.toDdl()` の出力） | 実ブラウザ（Chromium）。§5.2 の `clientsql()` と同一経路 | `tests/golden/ddl/<db>/<fixture>.sql`（7 fixture × 8 DB = 56 本。§6 段階6-7c） |
 | round-trip / 決定論 | 同上 | アサートのみ（golden なし） |
 | 高速回帰 | Node（jsdom）。同じ fixture・**同じ golden**を読むだけ | — |
 | 既知の不具合 | 実ブラウザ。golden を持たず「現在こう壊れている」を直接アサート | `tests/known-issues/` |

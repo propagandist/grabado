@@ -7,7 +7,7 @@
 **意図しない挙動変化が起きたら赤くする**こと。CLAUDE.md の Hard Constraint 1 が言う安全網の実体。
 
 ```
-ddl/<db>/<fixture>.sql   Designer.toDdl() の出力。7 DB × 7 fixture
+ddl/<db>/<fixture>.sql   Designer.toDdl() の出力。8 DB × 7 fixture
 state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
@@ -24,6 +24,9 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 - `sql-standard` はベンダ非依存で、`COMMENT ON` も `CREATE INDEX` も標準に無いため**行コメントで出る**
 - `h2` は **house 既定をほぼそのまま置ける唯一の非 PostgreSQL**（uuid / tz 付き timestamp /
   JSON / boolean がすべてネイティブ）。失うのは `uuidv7()` → `RANDOM_UUID()`（v4）だけ
+- `mariadb` は MySQL 系文法（バッククォート・`AUTO_INCREMENT`・列定義内 `COMMENT`）だが
+  **現代化済み**なので、未現代化の `mysql` と並べると 6-8 が何を直すのかがそのまま読める
+  （命名規約・引用・コメントの完全保持・FK 名）
 
 **これで非 PG の golden が初めて「その DB の DDL」になった。** 6-6a まではどれも
 PG 用の型名を読ませた結果で、`oracle` は uuid / jsonb / timestamptz が全部 `INTEGER`、

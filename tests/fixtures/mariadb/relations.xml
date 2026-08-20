@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: リレーションの形を網羅する。
+    - employees.manager_id -> employees.id           自己参照 FK
+    - projects.owner_id / projects.team_id           1 テーブルに複数 FK
+    - employee_projects                              多対多の中間テーブル（複合 PK）
+  Designer.fromXML は relation を「全テーブル生成後に名前解決」するため、
+  参照先が後方のテーブルでも解決できる（projects -> teams の順に注意）。
+
+  **構造は全プロファイルで同じ。型だけ MariaDB のもの**（段階6-6b）——
+  ここで見たいのは FK と複合 PK の出方で、型の違いが混ざると 5 本の golden を
+  突き合わせられなくなる。
+-->
+<sql>
+<table x="20" y="20" name="employees">
+<row name="id" null="0" autoincrement="0">
+<datatype>INT</datatype>
+</row>
+<row name="name" null="0" autoincrement="0">
+<datatype>VARCHAR(255)</datatype>
+</row>
+<row name="manager_id" null="1" autoincrement="0">
+<datatype>INT</datatype>
+<relation table="employees" row="id" />
+<comment>直属の上長（自己参照）</comment>
+</row>
+<key type="PRIMARY" name="employees_pkey">
+<part>id</part>
+</key>
+</table>
+<table x="360" y="20" name="projects">
+<row name="id" null="0" autoincrement="0">
+<datatype>INT</datatype>
+</row>
+<row name="title" null="0" autoincrement="0">
+<datatype>VARCHAR(255)</datatype>
+</row>
+<row name="owner_id" null="0" autoincrement="0">
+<datatype>INT</datatype>
+<relation table="employees" row="id" />
+</row>
+<row name="team_id" null="1" autoincrement="0">
+<datatype>INT</datatype>
+<relation table="teams" row="id" />
+</row>
+<key type="PRIMARY" name="projects_pkey">
+<part>id</part>
+</key>
+</table>
+<table x="700" y="20" name="teams">
+<row name="id" null="0" autoincrement="0">
+<datatype>INT</datatype>
+</row>
+<row name="name" null="0" autoincrement="0">
+<datatype>VARCHAR(255)</datatype>
+</row>
+<key type="PRIMARY" name="teams_pkey">
+<part>id</part>
+</key>
+</table>
+<table x="360" y="320" name="employee_projects">
+<row name="employee_id" null="0" autoincrement="0">
+<datatype>INT</datatype>
+<relation table="employees" row="id" />
+</row>
+<row name="project_id" null="0" autoincrement="0">
+<datatype>INT</datatype>
+<relation table="projects" row="id" />
+</row>
+<key type="PRIMARY" name="employee_projects_pkey">
+<part>employee_id</part>
+<part>project_id</part>
+</key>
+</table>
+</sql>

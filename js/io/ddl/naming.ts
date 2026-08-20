@@ -11,6 +11,7 @@
  *              -> 6-8 は**呼ぶだけ**
  *   引用       dialect 依存。囲む文字が 5 通りある（" / ` / [ ] / ' / 大文字の扱い）
  *              -> 6-8 は IdentifierRules を 4 つ足す。規則本体（裸で出せる条件）は共有
+ *              **6-7c の mariadb が ` を使う初めてのプロファイル**で、規則本体は変えずに済んだ
  *
  * **段階6-7a で sql-standard が、6-7b で h2 が入った。** 命名規約はどちらもそのまま呼ぶだけで
  * 済み（dialect 非依存という切り方が効いた）、足したのは IdentifierRules と語彙表だけ。
@@ -21,7 +22,12 @@
  */
 
 import type { DdlKey } from "./shared.ts";
-import { H2_RESERVED, POSTGRESQL_RESERVED, SQL_STANDARD_RESERVED } from "./keywords.ts";
+import {
+    H2_RESERVED,
+    MARIADB_RESERVED,
+    POSTGRESQL_RESERVED,
+    SQL_STANDARD_RESERVED,
+} from "./keywords.ts";
 
 /** プロファイルごとの識別子の囲み方 */
 export interface IdentifierRules {
@@ -69,6 +75,20 @@ export const H2_IDENTIFIER: IdentifierRules = {
     close: '"',
     escape: (name) => name.split('"').join('""'),
     reserved: H2_RESERVED,
+};
+
+/**
+ * MariaDB のバッククォート識別子（段階6-7c）。**囲む記号が " ではない初めてのプロファイル。**
+ *
+ * 値の中のバッククォートは 2 重にして逃がす（MariaDB / MySQL の規則。PG の " と同じ形）。
+ * 語彙は 247 語で、**型名まで予約されている**ぶん他の 3 本より遥かに多い
+ * （bigint / char / blob …。js/io/ddl/keywords.ts の採取手順）。
+ */
+export const MARIADB_IDENTIFIER: IdentifierRules = {
+    open: "`",
+    close: "`",
+    escape: (name) => name.split("`").join("``"),
+    reserved: MARIADB_RESERVED,
 };
 
 /**

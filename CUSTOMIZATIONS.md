@@ -4333,6 +4333,145 @@ CI のワークフローは増やしていない。**`test:browser` は 1.8 分 
   まとめるのかが決まる
 
 
+---
+
+### 2026-08-21 HANDOVER §6「機能」段階6-7c —— `mariadb` を入れ、**対応 DB 8 本がそろった**
+
+**新設 3 本の最後。** 6-0 が決めた対応 DB 8 本
+（`postgresql` / `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`）が
+これで全部 UI に出て DDL を生成できるようになった。**§6 の「対応 DB を広げる」側はここで閉じる**
+（残るのは 6-8 の「既存 4 本の現代化」と 6-9 の ORM 出力）。
+
+#### 決めたこと 1: 予約語は 247 語。ここも「実物に総当たりで聞く」
+
+**MariaDB の `INFORMATION_SCHEMA.KEYWORDS` は `WORD` 列しか持たない**（MySQL 8.0 の同名ビューに
+ある `RESERVED` 列が無い）ので、702 語のうちどれが予約語かはそこから分からない。H2 と同じ方式:
+
+```
+$ docker run -d --rm --name mdb -e MARIADB_ROOT_PASSWORD=x mariadb:11
+$ // 母集団の各語で CREATE TABLE p<n>(<語> INT) を流し、作れなかった n を予約語とする
+$ mariadb -uroot -px --force < probe.sql
+$ mariadb -uroot -px -N -e "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA='probe'"
+
+  採取日 2026-08-21 / MariaDB 11.8.8 / 母集団 874 語（KEYWORDS 702 ∪ SQL:2016 365 ∪ PG 101）
+  -> **247 語**
+```
+
+**PG の 101 語や H2 の 90 語より遥かに多いのは、型名まで予約されているため**
+（`bigint` / `char` / `character` / `blob` / `binary` …）。house 標準の snake_case な列名は
+当たらないが、`char` や `binary` という列名を書くと引用される。
+
+#### 決めたこと 2: 型は設計表どおりだった（h2 と違い訂正なし）
+
+6-7 の設計表を実測で確かめ、**4 点とも一致**した:
+
+| | 実測（`INFORMATION_SCHEMA.COLUMNS` の `COLUMN_TYPE`） |
+|---|---|
+| `UUID` | `uuid` —— **ネイティブ**（MySQL には無い） |
+| `INET4` / `INET6` | `inet4` / `inet6` —— **ネイティブ**（同上） |
+| `JSON` | **`longtext`**（エイリアス。型としては受けられる） |
+| `BOOLEAN` | **`tinyint(1)`**（エイリアス） |
+| `XML` / `INTERVAL` / `TIMESTAMP WITH TIME ZONE` | **無い**（`Unknown data type` / 構文エラー） |
+
+**`TIMESTAMPTZ` / `TIMESTAMP WITH TIME ZONE` を `timestamp` の `aka` に入れない。**
+入れると PG で書いた設計を読んだときに **tz が黙って落ちる**。読めないほうが安全 ——
+`aka` は「同じ意味の別名」を受けるためのもので、意味が変わる寄せ先に使わない。
+
+#### 決めたこと 3: `mariadb` は `ansi.ts` に載らない（MySQL 系はもう 1 つの骨格）
+
+6-7b が抽出した [`ansi.ts`](js/io/ddl/ansi.ts) は「CREATE TABLE ＋ ALTER TABLE ADD CONSTRAINT で
+組み立てる系」で、MySQL 系は骨格からして違う:
+
+| | ansi 系（postgresql / sql-standard / h2） | MySQL 系（mariadb / mysql） |
+|---|---|---|
+| キー | `ALTER TABLE ... ADD CONSTRAINT` | **テーブル定義の中**（`PRIMARY KEY (...)`） |
+| コメント | `COMMENT ON TABLE / COLUMN` | **列定義と表定義の `COMMENT` 属性** |
+| identity | `GENERATED ALWAYS AS IDENTITY` | **`AUTO_INCREMENT`**（列属性） |
+| 識別子 | `"` | **`` ` ``** |
+
+**`mariadb.ts` は独立実装にした。** ただし §6.3 の命名規約（`naming.ts`）は共有していて、
+足したのは `MARIADB_IDENTIFIER` 1 つだけ —— **6-5b が「命名は dialect 非依存・引用は
+dialect 依存」と割った切り方が、囲む記号が `"` でない初めてのプロファイルでも効いた。**
+
+#### 決めたこと 4: 未現代化の `mysql` から意図的に落としたもの
+
+`mariadb.ts` は `mysql.ts`（upstream の逐語）のコピーではない。**落としたのは 3 つ**:
+
+| 落としたもの | 理由 |
+|---|---|
+| **`DROP TABLE IF EXISTS`** | 生成した DDL が既存データを消しうる。人が読んで実行する成果物として危険 |
+| Globals / Table Properties / Test Data の飾りブロック | 設計の情報ではない（upstream の装飾） |
+| コメントの 60 字切り詰め | **情報が黙って消える**（6-5a が記録した粗さの 1 つ） |
+
+加えて §6.3 の規約を適用した。**`mysql` と `mariadb` の golden を並べると 6-8 が何を直すのかが
+そのまま読める**:
+
+```
+mysql    ALTER TABLE `articles` ADD FOREIGN KEY (author_id) REFERENCES `users` (`id`);
+mariadb  ALTER TABLE articles ADD CONSTRAINT fk_articles_author_id FOREIGN KEY (author_id) REFERENCES users (id);
+```
+
+**FULLTEXT は MariaDB がネイティブに持つ**ので `FULLTEXT KEY` としてそのまま出す
+（`postgresql` は btree の `CREATE INDEX` に落とす。docs/FORMAT.md の判断）。
+**PRIMARY だけ名前を出さない** —— MariaDB の主キー名は常に `PRIMARY` で、別名を付けると構文エラー。
+
+#### 決めたこと 5: 生成した DDL を実物に流して確かめた（h2 に続き 2 本目）
+
+```
+$ docker exec mdb mariadb -uroot -px v < tests/golden/ddl/mariadb/<name>.sql
+  -> minimal / house-defaults / relations / types-matrix / autoincrement / quotes-i18n
+     すべてエラー無し（日本語識別子を含む quotes-i18n も通る）
+```
+
+**8 プロファイル中 2 本（`h2` / `mariadb`）が「実物で動く」ところまで確かめられた。**
+残る 6 本のうち `postgresql` / `mysql` / `mssql` / `oracle` は docker で同じことができ、
+`sqlite` と `sql-standard` は実物が無い（前者は CLI、後者は規格）。**6-8 で 4 本を現代化する
+ときに同じ手当てをする**かは、そのときの判断（恒久テストにはしない。依存が増える）。
+
+#### 決めたこと 6: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| `mysql` を `mariadb.ts` の上に載せ替える | **6-8** | 現代化と一体。**`mariadb.ts` がその型紙**になっている |
+| MySQL 系の骨格を `mysql-style.ts` として括る | **6-8** | いま括ると「未現代化の mysql」と「現代化済みの mariadb」の両方を満たす形になり、6-8 で作り直しになる |
+| 既存 4 本の現代化（#4 / #10 / #12 / #13 / #14） | **6-8** | 変わらず |
+| ORM 出力（`sqlalchemy` 復活 ＋ JPA / Prisma / Drizzle） | **6-9** | 変わらず |
+
+#### 検証
+
+**完了判定は「既存 49 本が 1 バイトも動かず、新設 7 本が増える」。**
+
+```
+$ git status --porcelain tests/golden/
+?? tests/golden/ddl/mariadb/       # 新規 7 本だけ
+```
+
+| | 6-7b | 6-7c |
+|---|---|---|
+| `npm test` | 287 passed | **305 passed** |
+| `npm run test:browser` | 123 passed | **130 passed** |
+| `npm run known-issues` | 6 passed | 6 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読済み。
+**依存は 1 本も増やしていない** —— MariaDB は使い捨てコンテナで、リポジトリにも配布物にも
+痕跡を残していない（6-5b の `postgres:18`・6-7b の H2 jar と同じ扱い）。
+CI のワークフローは増やしていない。**`test:browser` は 2 分台**（DDL golden 49 → 56 件）。
+
+#### §6 の残り
+
+| 段階 | 内容 | 状態 |
+|---|---|---|
+| 6-0 〜 6-7c | 目的の記録・撤去・型解決・PG18 パレット・テンプレート・TS 生成器・DB 別 fixture・新設 3 本 | **完了** |
+| **6-8** | 既存主要 4 本（`mysql` / `mssql` / `oracle` / `sqlite`）の現代化 | 次 |
+| 6-9 | ORM 出力の再設計（`sqlalchemy` 復活 ＋ JPA / Prisma / Drizzle の検討） | 未着手 |
+
+**6-8 で赤くなるのは known-issues #4 / #10 / #12 / #13 / #14 と、未現代化 4 本の DDL golden 28 本。**
+型紙は 3 つそろっている —— パレットは `db/mariadb/datatypes.xml`（MySQL 系）と
+`db/h2/datatypes.xml`（ansi 系）、生成器は `mariadb.ts` と `ansi.ts`、規約は `naming.ts`。
+
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -4341,7 +4480,7 @@ CI のワークフローは増やしていない。**`test:browser` は 1.8 分 
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
 | ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離。**#14 が 6-6b で 10 件目として出た**）は **6-8**。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
-| 型パレット `db/<db>/datatypes.xml` | **段階6-7a で 6 本目（`sql-standard`）、6-7b で 7 本目（`h2`）が新設で入った**（どちらも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
+| 型パレット `db/<db>/datatypes.xml` | **段階6-7a〜6-7c で新設 3 本（`sql-standard` / `h2` / `mariadb`）が入り、対応 DB 8 本がそろった**（3 本とも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 / MariaDB 11.8.8 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

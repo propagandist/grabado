@@ -25,6 +25,7 @@ export const CONFIG = {
         "mssql",
         "oracle",
         "sql-standard",
+        "h2",
     ],
     DEFAULT_DB: "postgresql",
 

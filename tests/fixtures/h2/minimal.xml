@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- 特性化テスト fixture: 1 テーブル / 1 カラム（最小） -->
+<sql>
+<table x="10" y="20" name="things">
+<row name="id" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+</row>
+</table>
+</sql>

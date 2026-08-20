@@ -12,8 +12,8 @@
  *   引用       dialect 依存。囲む文字が 5 通りある（" / ` / [ ] / ' / 大文字の扱い）
  *              -> 6-8 は IdentifierRules を 4 つ足す。規則本体（裸で出せる条件）は共有
  *
- * **段階6-7a で sql-standard が 2 本目として入った。** 命名規約はそのまま呼ぶだけで済み
- * （dialect 非依存という切り方が効いた）、足したのは IdentifierRules 1 つと語彙表だけ。
+ * **段階6-7a で sql-standard が、6-7b で h2 が入った。** 命名規約はどちらもそのまま呼ぶだけで
+ * 済み（dialect 非依存という切り方が効いた）、足したのは IdentifierRules と語彙表だけ。
  *
  * **順序の規約: 名前は引用前の生名で組み、返り値を呼び手が quoteIdentifier() へ通す。**
  * 逆にすると fk_"顧客"_"参照" のような名前ができる。正しくは "fk_顧客_参照"。
@@ -21,7 +21,7 @@
  */
 
 import type { DdlKey } from "./shared.ts";
-import { POSTGRESQL_RESERVED, SQL_STANDARD_RESERVED } from "./keywords.ts";
+import { H2_RESERVED, POSTGRESQL_RESERVED, SQL_STANDARD_RESERVED } from "./keywords.ts";
 
 /** プロファイルごとの識別子の囲み方 */
 export interface IdentifierRules {
@@ -54,6 +54,21 @@ export const SQL_STANDARD_IDENTIFIER: IdentifierRules = {
     close: '"',
     escape: (name) => name.split('"').join('""'),
     reserved: SQL_STANDARD_RESERVED,
+};
+
+/**
+ * H2 2.x の区切り識別子（段階6-7b）。囲み方は上の 2 本と同じ " で、**やはり語彙だけが違う**
+ * （H2 2.4.240 で 90 語。標準の 365 語より少なく、PostgreSQL の 101 語とも重ならない部分がある
+ * —— if / key / minus / qualify / rownum / _rowid_ は H2 にしかない）。
+ *
+ * 裸の識別子を H2 は**大文字へ**畳む（標準と同じ。PG は小文字へ）。BARE_IDENTIFIER が
+ * 小文字だけを裸で通すので、どちらでも「囲まなければ一貫する」ことは変わらない。
+ */
+export const H2_IDENTIFIER: IdentifierRules = {
+    open: '"',
+    close: '"',
+    escape: (name) => name.split('"').join('""'),
+    reserved: H2_RESERVED,
 };
 
 /**

@@ -154,8 +154,9 @@ describe("型解決（段階6-2 / 6-3）", () => {
     });
 
     describe("strict の照合（段階6-3）", () => {
-        test("現代化済みは postgresql の 1 本だけ（6-8 で残り 4 本が来る）", () => {
-            expect(STRICT_PROFILES).toEqual(["postgresql"]);
+        test("現代化済みは postgresql と sql-standard（6-8 で残り 4 本が来る）", () => {
+            /* 6-7a で sql-standard が 2 本目。新設プロファイルは最初から strict で作る */
+            expect(STRICT_PROFILES).toEqual(["postgresql", "sql-standard"]);
         });
 
         test("撤去・改名した型の旧名がすべて新しい型に解決する", () => {

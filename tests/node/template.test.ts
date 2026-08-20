@@ -78,7 +78,8 @@ function recordingTable(): Recorded {
 
 describe("初期テーブルテンプレート（段階6-4）", () => {
     test("検査対象のプロファイルがある（空振りしていないこと）", () => {
-        expect(STRICT_PROFILES).toEqual(["postgresql"]);
+        /* 6-7a で sql-standard が 2 本目の strict として入った。6-7b / 6-7c で h2 / mariadb が続く */
+        expect(STRICT_PROFILES).toEqual(["postgresql", "sql-standard"]);
         expect(LEGACY_PROFILES.length).toBe(4);
     });
 
@@ -110,6 +111,35 @@ describe("初期テーブルテンプレート（段階6-4）", () => {
             );
             expect(row.data.def).toBe("now()");
             expect(row.data.nll).toBe(false);
+            expect(row.primary).toBe(false);
+        }
+    });
+
+    /*
+     * sql-standard（段階6-7a）。**標準に UUID 型も生成関数も無い**ので、house 既定の PK は
+     * CHARACTER(36) で既定値を持たない —— 「テンプレートは各プロファイルが house 既定を
+     * 最も近く表す形で持つ」という 6-7a の判断が、いちばんはっきり出るのがこの 1 行。
+     */
+    test("sql-standard の PK は CHARACTER(36) で既定値を持たない", () => {
+        const palette = paletteOf("sql-standard");
+        const rows = readTemplate(palette);
+
+        expect(rows.map((r) => r.name)).toEqual(["id", "created_at", "updated_at"]);
+        expect(rows[0]).toEqual({
+            name: "id",
+            data: {
+                type: palette.indexOfId("char"),
+                size: "36",
+                def: "",
+                nll: false,
+                ai: false,
+            },
+            primary: true,
+        });
+        /* 監査列は標準の TIMESTAMP WITH TIME ZONE ＋ CURRENT_TIMESTAMP（tz を失わない） */
+        for (const row of rows.slice(1)) {
+            expect(row.data.type).toBe(palette.indexOfId("timestamp_with_time_zone"));
+            expect(row.data.def).toBe("CURRENT_TIMESTAMP");
             expect(row.primary).toBe(false);
         }
     });

@@ -4062,6 +4062,128 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
   **19 本の DDL golden** —— どれも「未現代化のまま」を固定している主張なので、
   赤くなること自体が進捗になる。**6-6b がその比較対象を作った**
 
+---
+
+### 2026-08-20 HANDOVER §6「機能」段階6-7a —— `sql-standard` を TS 生成器の上に載せる
+
+**新設 3 本の 1 本目。** 6-0 の分割表は 6-7 を「新設 3 本（`sql-standard` / `mariadb` / `h2`）を
+TS 生成器の上に載せる」としており、型マッピングは 2026-08-16 の設計先行エントリで確定済み。
+実装は **3 段階に割った**（6-6 と同じ理由 —— プロファイルごとに golden が 7 本増えるので、
+1 本ずつなら「増えた 7 本を 1 本ずつ説明する」が完了判定になる）。
+`sql-standard` を最初に置くのは 6-7 の決めたこと 1 のとおり **これが基底**だから。
+
+#### 決めたこと 1: 予約語は SQL:2016 の 365 語。PostgreSQL のソースから採った
+
+6-5b が「予約語の一覧は推測せず実物から採る」を規約にしたが、**ISO/IEC 9075 は有料**で
+起動できるコンテナも無い。一次資料に選んだのは **PostgreSQL のソースツリー** ——
+`doc/src/sgml/keywords/` に各版の予約語が規格から転記されており、付録 C「SQL Key Words」の
+表がそこから生成されている。
+
+```
+$ curl https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/    doc/src/sgml/keywords/sql2016-02-reserved.txt
+  -> 採取日 2026-08-20 / ISO/IEC 9075-2:2016 の <reserved word> / 365 語
+```
+
+**PG の 101 語より遥かに多いのは、標準が関数名まで予約しているため**（`abs` / `acos` /
+`avg` / `count` …）。それでも落とさない —— 標準準拠を名乗るプロファイルで
+「この DDL は SQL:2016 として妥当」と言えることが `sql-standard` の存在理由そのもの。
+実害は `year` や `value` のようなありふれた列名が引用されることだが、囲めば必ず通る。
+
+**この語彙差そのものを恒久テストにした**（[`tests/node/ddl.test.ts`](tests/node/ddl.test.ts)
+の `VOCABULARY` 表）。`year` / `value` / `abs` / `count` は **PG で裸・標準で引用**、
+`analyse` / `ilike` / `freeze` は **PG で引用・標準で裸**。片方の語彙をもう片方に貼り間違えると
+必ず落ちる形にしてある。**golden には 1 行も出ない**（fixture の識別子に標準予約語が無い）。
+
+#### 決めたこと 2: 標準に無い 2 つは「出さない」ではなく「行コメントで出す」
+
+| 構文 | 標準では | 採った形 |
+|---|---|---|
+| `COMMENT ON` | 無い（PostgreSQL / Oracle の拡張） | `-- users.email: ログイン用メールアドレス` |
+| `CREATE INDEX` | **索引は標準の範囲外**（どの版にも無い） | `-- CREATE INDEX idx_... ; (索引は SQL 標準の範囲外)` |
+
+**設計が持っている情報を落とさない**ほうを採った。このプロファイルの用途は「ベンダ非依存で
+書いて各製品へ持っていく出発点」なので、移し先に渡すものが減るのは損失が大きい。
+コメントなので**標準 SQL として実行できることは変わらない**。
+
+行コメントにしたぶん **改行を空白へ畳む必要がある**（`--` は行末までがコメントなので、
+値に改行が入ると 2 行目から SQL として解釈されて壊れる）。`postgresql` は `'...'` で囲むので
+同じ危険が無く、この処理は `sql-standard` に閉じている。
+
+#### 決めたこと 3: テンプレートは各プロファイルが house 既定を最も近く表す形で持つ
+
+6-4 は「テンプレートを持つのは strict なプロファイルだけ」と決め、当時それは `postgresql` の
+1 本だった。**新設は最初から strict なので、テンプレートも同時に要る。**
+
+```xml
+<row name="id" type="char" size="36" null="0" key="PRIMARY" />
+```
+
+**標準に UUID 型も生成関数も無い**ので、house 既定の PK は `CHARACTER(36)` で
+**既定値を持たない**（採番はアプリ側）。監査列は `TIMESTAMP WITH TIME ZONE` ＋
+`CURRENT_TIMESTAMP` で、**tz は失わない** —— 標準にある型で、PG の `TIMESTAMPTZ` のほうが短縮形。
+6-6b で実測した 4 プロファイルが全部失う tz を、このプロファイルは保つ。
+
+`newrowtype` は `varchar`。house 標準は「text 優先」だが**標準の text 相当は
+`CHARACTER LARGE OBJECT`（CLOB）**で、新規行の既定が CLOB になるのは実用的でない。
+
+#### 決めたこと 4: 共通骨格の抽出は 3 本そろうまで待つ
+
+6-5a が 6-7 へ送った項目。**まだやらない。** `sql-standard.ts` は `postgresql.ts` と骨格が
+同じで、違うのは決めたこと 2 の 2 点だけ。いま括れば「2 本の共通項」しか見えない。
+`h2`（標準に近い）と `mariadb`（MySQL 系文法）を書くと**別系統の差が出る**ので、
+3 本そろってから括るほうが正しい抽象になる。6-7c の後半でやる。
+
+既存 5 本には 1 行も触っていない。**新設プロファイルは既存の出力に触れない**のが本段階の
+安全性の根拠で、それが下の完了判定そのもの。
+
+#### 決めたこと 5: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| `h2` / `mariadb` | **6-7b / 6-7c** | 決めたこと 4 の分割 |
+| 8 本の共通骨格の抽出 | **6-7c** | 決めたこと 4 |
+| 未現代化 4 本の現代化（#4 / #10 / #12 / #13 / #14） | **6-8** | 変わらず |
+| `sql-standard` を UI の既定にする案 | **採らない（記録のみ）** | house 標準は PostgreSQL 18。既定を動かす理由が無い |
+
+#### 検証
+
+**完了判定は「既存 35 本が 1 バイトも動かず、新設 7 本が増える」。**
+
+```
+$ git status --porcelain tests/golden/
+?? tests/golden/ddl/sql-standard/      # 新規 7 本だけ。既存に M は 1 つも付かない
+```
+
+| | 6-6b | 6-7a |
+|---|---|---|
+| `npm test` | 247 passed | **269 passed** |
+| `npm run test:browser` | 109 passed | **116 passed**（DDL golden が 7 件増えた） |
+| `npm run known-issues` | 6 passed | 6 passed |
+| `npm run test:dist` | 3 passed | 3 passed（`dist/db/sql-standard/` も入っている） |
+| `npm run typecheck` | 緑 | 緑 |
+
+`js/` に足したのは **新設 1 ファイル**（`ddl/sql-standard.ts`）＋ `keywords.ts` / `naming.ts` /
+`generate.ts` / `config.ts` への追記。**既存プロファイルの生成器は 1 行も変えていない。**
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読済み。
+**依存は 1 本も増やしていない**（予約語表は自前の定数。取得に使った `curl` は採取時 1 回きりで、
+リポジトリにも配布物にもネットワーク経路は残らない。§2.2 / §3.12 / §5.1）。
+CI のワークフローは増やしていないが、**`test:browser` の実行時間が 35 秒 → 1.8 分に伸びた**
+（DDL golden が 35 → 42 件）。6-7b / 6-7c でさらに 14 件増えるので、
+`ci-strategy.md` の判断規約に照らす必要が出たらそのときに測る。
+
+#### 次段階への入力 —— 6-7b（`h2`）
+
+6-7 の設計表が「**house 既定の 4 点がすべてネイティブ**」と書いたプロファイル
+（`UUID` / `BIGINT GENERATED ALWAYS AS IDENTITY` / `TIMESTAMP WITH TIME ZONE` / `JSON`）。
+**PG で設計して H2 でテストする経路が型レベルで通る**ことが対応 DB に入れた理由そのものなので、
+テンプレートは `postgresql` にいちばん近い形になる（uuid 生成関数だけが無い）。
+
+- 予約語は **H2 の実物から採る**（`INFORMATION_SCHEMA.KEYWORDS` を持つ）。6-5b の PG と同じ手順
+- 生成器は `sql-standard` にいちばん近い。**H2 は `COMMENT ON` を持つ**ので、そこが分岐点
+- **H2 のバージョンを明示する**（1.4 と 2.x で型システムが違う。6-7 の設計エントリの指示）
+
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -4070,7 +4192,7 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
 | ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離。**#14 が 6-6b で 10 件目として出た**）は **6-8**。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
-| 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
+| 型パレット `db/<db>/datatypes.xml` | **段階6-7a で 6 本目（`sql-standard`）が新設で入った**（strict ＝ 最初から現代化済み。予約語は SQL:2016 の 365 語）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

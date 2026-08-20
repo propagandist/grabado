@@ -408,5 +408,109 @@ describe("DDL golden（Node）", () => {
             /* 未現代化プロファイルでも "null" は出ない（6-5b が源流を直したので全 5 本に効く） */
             expect(ddlOf("mssql", xml)).not.toContain("null");
         });
+
+        /*
+         * sql-standard（段階6-7a）。**golden はこのプロファイルの要点を説明しない。**
+         *
+         * 要点は 3 つあり、どれも 7 本の golden に 1 行も現れない:
+         *   1. 引用の語彙が SQL:2016 の 365 語であること —— fixture の識別子に標準予約語が
+         *      1 つも無い（house 標準の snake_case は素直に裸で出る）
+         *   2. 索引が行コメントで出ること —— INDEX / FULLTEXT を持つ fixture が 0 本
+         *   3. コメントの改行が空白へ畳まれること —— fixture のコメントが 1 行しかない
+         */
+        describe("sql-standard（段階6-7a）", () => {
+            /**
+             * **語彙だけが postgresql と違う**ことの対比表。囲む記号も規則も同じで、
+             * 「裸で書けない語」の集合だけが入れ替わる。
+             *
+             * 3 列目までが [識別子, postgresql での姿, sql-standard での姿]。**上 7 行は
+             * 片方でだけ囲まれる**ので、片方の語彙をもう片方に貼り間違えると必ず落ちる。
+             */
+            const VOCABULARY: ReadonlyArray<readonly [string, string, string]> = [
+                /* 標準の予約語。SQL:2016 は関数名まで予約するので PG では普通の列名 */
+                ["year", "year", '"year"'],
+                ["value", "value", '"value"'],
+                ["abs", "abs", '"abs"'],
+                ["count", "count", '"count"'],
+                /* PostgreSQL 固有の予約語。標準には無い語なので sql-standard では裸 */
+                ["analyse", '"analyse"', "analyse"],
+                ["ilike", '"ilike"', "ilike"],
+                ["freeze", '"freeze"', "freeze"],
+                /* どちらでも予約語 */
+                ["select", '"select"', '"select"'],
+                ["primary", '"primary"', '"primary"'],
+                /* どちらでも予約語でない（house 標準の名前はここに収まる） */
+                ["created_at", "created_at", "created_at"],
+                ["email", "email", "email"],
+            ];
+
+            test("引用の語彙が SQL:2016 の 365 語に入れ替わる（規則は postgresql と同じ）", () => {
+                const xml = tableXml(
+                    "probe",
+                    VOCABULARY.map((v) => v[0]),
+                );
+                const pg = ddlOf(SERIALIZER_DB, xml).split("\n");
+                const std = ddlOf("sql-standard", xml).split("\n");
+
+                for (const [name, inPg, inStd] of VOCABULARY) {
+                    expect(
+                        pg.find((l) => l.startsWith(` ${inPg} TEXT`)),
+                        `postgresql: 列 ${name} が ${inPg} として出ていない`,
+                    ).toBeDefined();
+                    expect(
+                        std.find((l) => l.startsWith(` ${inStd} CHARACTER LARGE OBJECT`)),
+                        `sql-standard: 列 ${name} が ${inStd} として出ていない`,
+                    ).toBeDefined();
+                }
+            });
+
+            test("索引は標準の範囲外なので行コメントで出す", () => {
+                const ddl = ddlOf(
+                    "sql-standard",
+                    tableXml(
+                        "probe",
+                        ["c0", "c1"],
+                        [
+                            { type: "PRIMARY", name: "", parts: ["c0"] },
+                            { type: "INDEX", name: "", parts: ["c0", "c1"] },
+                        ],
+                    ),
+                );
+
+                /* 制約は標準どおり出す */
+                expect(ddl).toContain("ALTER TABLE probe ADD CONSTRAINT probe_pkey PRIMARY KEY (c0);");
+                /* CREATE INDEX はどの版の SQL にも無い。情報は落とさずコメントにする */
+                expect(ddl).toContain(
+                    "-- CREATE INDEX idx_probe_c0_c1 ON probe (c0, c1); (索引は SQL 標準の範囲外)",
+                );
+                expect(ddl).not.toMatch(/^CREATE INDEX/m);
+            });
+
+            test("コメントは行コメントで出し、改行を空白へ畳む", () => {
+                /*
+                 * -- は行末までがコメントなので、値に改行が入ると 2 行目から SQL として
+                 * 解釈されて壊れる（postgresql は COMMENT ON ... '...' で囲むので同じ危険が無い）。
+                 */
+                const xml = [
+                    '<?xml version="1.0" encoding="utf-8" ?>',
+                    "<sql>",
+                    '<table x="0" y="0" name="probe">',
+                    '<row name="c0" null="1" autoincrement="0">',
+                    "<datatype>TEXT</datatype>",
+                    "<comment>1 行目\n2 行目</comment>",
+                    "</row>",
+                    "<comment>表\n注記</comment>",
+                    "</table>",
+                    "</sql>",
+                    "",
+                ].join("\n");
+                const ddl = ddlOf("sql-standard", xml);
+
+                expect(ddl).toContain("-- probe: 表 注記");
+                expect(ddl).toContain("-- probe.c0: 1 行目 2 行目");
+                /* COMMENT ON は標準に無いので 1 行も出さない */
+                expect(ddl).not.toContain("COMMENT ON");
+            });
+        });
     });
 });

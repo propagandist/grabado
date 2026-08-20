@@ -1,6 +1,14 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { DB_PROFILES, FIXTURES, FIXTURE_DIR, fixtureDir } from "../support/fixtures.ts";
+import {
+    DB_PROFILES,
+    FIXTURES,
+    FIXTURE_DIR,
+    REPO_ROOT,
+    fixtureDir,
+    readFixture,
+} from "../support/fixtures.ts";
 
 /*
  * fixture の母集団の検査（HANDOVER §6 段階6-6a）。
@@ -52,4 +60,75 @@ describe("fixture の母集団（DB × 名前）", () => {
 
         expect(dirs).toEqual([...DB_PROFILES].sort());
     });
+});
+
+/*
+ * types-matrix の網羅の検査（HANDOVER §6 段階6-6b）。
+ *
+ * 6-6b で types-matrix は「そのプロファイルのパレットを 1 型 1 列で網羅するもの」になった。
+ * **網羅は放っておくと必ず腐る** —— 6-8 が各パレットを現代化し、6-7 が 3 本足すたびに
+ * 型が増減するのに、fixture 側は人が手で足すため。ここが 1 本あれば、パレットに型を足して
+ * fixture を忘れた瞬間に**足りない型名を名指しで**落ちる。
+ *
+ * 見るのは**入力側の網羅だけ**で、解決結果は見ない —— oracle の INTEGER のように
+ * 「書いた型に到達できない」ものがあり（known-issue #10）、そちらは golden と
+ * tests/node/type-resolution.test.ts の仕事。混ぜると 6-8 でどちらが直ったのか分からなくなる。
+ */
+describe("types-matrix の網羅（DB × 型）", () => {
+    interface PaletteType {
+        /** 出力される型名。落ちているときにこれを名指しで出す */
+        readonly sql: string;
+        /** この型に到達できる書き方（sql ∪ aka。大文字化して持つ） */
+        readonly names: ReadonlySet<string>;
+    }
+
+    /** パレットの型（palette-id.test.ts と同じく属性だけを正規表現で読む） */
+    function paletteTypes(db: string): PaletteType[] {
+        const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+        return (xml.match(/<type\s[^>]*?\/>/g) ?? []).map((tag) => {
+            const sql = /\ssql="([^"]*)"/.exec(tag)?.[1] ?? "";
+            const aka = /\saka="([^"]*)"/.exec(tag)?.[1]?.split("|") ?? [];
+            return { sql: sql, names: new Set([sql, ...aka].map((one) => one.toUpperCase())) };
+        });
+    }
+
+    /** fixture に書かれた型名（js/io/xml-parser.ts と同じくサイズを外す） */
+    function writtenTypes(db: string, fixture: string): string[] {
+        return [...readFixture(db, fixture).matchAll(/<datatype>([^<]*)<\/datatype>/g)].map((m) =>
+            m[1]!.replace(/\(.*$/, ""),
+        );
+    }
+
+    for (const db of DB_PROFILES) {
+        test(`${db}: types-matrix がパレットの全型を 1 列以上書いている`, () => {
+            /*
+             * 判定は sql そのものではなく「sql ∪ aka のどれかが書かれているか」。
+             * postgresql の types-matrix は旧名（SERIAL / DECIMAL / TIMESTAMP …）で
+             * 書いてあり、aka で読む互換経路を fixture 由来の実バイト列で通す役目も
+             * 兼ねている。**別名で書いても入力としてはその型を網羅している。**
+             */
+            const written = writtenTypes(db, "types-matrix").map((one) => one.toUpperCase());
+            const missing = paletteTypes(db)
+                .filter((type) => !written.some((one) => type.names.has(one)))
+                .map((type) => type.sql);
+
+            expect(missing).toEqual([]);
+        });
+
+        /*
+         * 逆向き。パレットの sql にも aka にも無い型名を書くと、未現代化プロファイルでは
+         * 黙って先頭型に落ち（#4）、strict では例外になる。どちらも「fixture の書き間違い」
+         * なのに現れ方が違うので、入力の時点で捕まえる。
+         */
+        test(`${db}: どの fixture もパレットが知らない型名を書いていない`, () => {
+            const known = new Set(paletteTypes(db).flatMap((type) => [...type.names]));
+            const unknown = FIXTURES.flatMap((f) =>
+                writtenTypes(db, f.name)
+                    .filter((one) => !known.has(one.toUpperCase()))
+                    .map((one) => `${f.name}: ${one}`),
+            );
+
+            expect(unknown).toEqual([]);
+        });
+    }
 });

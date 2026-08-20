@@ -1,6 +1,7 @@
 CREATE TABLE type_samples (
  c_integer INTEGER,
  c_smallint SMALLINT,
+ c_bigint BIGINT,
  c_decimal NUMERIC(12,2),
  c_serial BIGINT GENERATED ALWAYS AS IDENTITY,
  c_bigserial BIGINT GENERATED ALWAYS AS IDENTITY,
@@ -18,6 +19,7 @@ CREATE TABLE type_samples (
  c_timestamp TIMESTAMPTZ(3),
  c_timestamp_tz TIMESTAMPTZ,
  c_timestamp_wo_tz TIMESTAMPTZ,
+ c_uuid UUID,
  c_xml XML,
  c_bit BIT(8),
  c_varbit VARBIT(8),

@@ -18,6 +18,11 @@
           "nullable": true
         },
         {
+          "name": "c_bigint",
+          "type": "bigint",
+          "nullable": true
+        },
+        {
           "name": "c_decimal",
           "type": "decimal",
           "size": "12,2",
@@ -103,6 +108,11 @@
         {
           "name": "c_timestamp_wo_tz",
           "type": "timestamp_with_time_zone",
+          "nullable": true
+        },
+        {
+          "name": "c_uuid",
+          "type": "uuid",
           "nullable": true
         },
         {

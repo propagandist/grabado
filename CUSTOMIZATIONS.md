@@ -3902,6 +3902,166 @@ golden に現れる形**で、6-8 で直すときにその行が動くことが�
 
 ---
 
+### 2026-08-20 HANDOVER §6「機能」段階6-6b —— 4 プロファイルの fixture を実型で書き直す
+
+**入力の母集団を作り替える段階の後半。** 6-6a が配線だけを変え（golden 無差分）、
+本段階が中身を各 DB の実型・実既定値にする。**非 PG の DDL golden が初めて
+「その DB の DDL」になった**段階。
+
+#### 決めたこと 1: パレットも生成器も 1 バイトも触らない
+
+書けるのは**現行パレットに実在する型だけ**。mysql の `JSON`、oracle の
+`TIMESTAMP WITH TIME ZONE`、mssql の `date` はどれもパレットに無いので使えない。
+足すのは 6-8 で、**6-6b の golden は「6-8 直前のベースライン」**であってその DB の
+理想形ではない。
+
+これを外すと段階が混ざる —— golden が動いた理由が「入力を変えたから」なのか
+「パレットを変えたから」なのか切り分けられなくなる。6-6a が
+「移動由来と実型化由来を混ぜない」ために段階を割ったのと同じ論法。
+
+#### 決めたこと 2: house-defaults は「その DB で普通に書く形」にする
+
+型だけ機械的に置き換えるのではなく、**その DB の制約に従って設計そのものを寄せた**。
+判断が要ったのは 3 つで、どれも「house 既定をそのまま訳すと壊れる」箇所:
+
+| 箇所 | 機械的な訳 | 採った形 | 理由 |
+|---|---|---|---|
+| `oracle` の `email`（UNIQUE 付き） | `text` → `CLOB` | **`VARCHAR2(255)`** | **CLOB には UNIQUE も PRIMARY KEY も張れない** |
+| `mysql` の `email` / `tag`（UNIQUE・複合 PK） | `text` → `MEDIUMTEXT` | **`VARCHAR(255)` / `VARCHAR(64)`** | TEXT 系にキーを張るには prefix 長が要る |
+| `mysql` の `preferences` | `jsonb` → `MEDIUMTEXT` ＋ `DEFAULT '{}'` | **既定値を持たせない** | **MySQL は TEXT 系に DEFAULT を付けられない** |
+
+`sqlite` の `id` も既定値を持たない —— **SQLite に uuid 生成関数が無い**ため（4 本で唯一）。
+
+#### 決めたこと 3: types-matrix はパレット全型を 1 列ずつ。網羅は機械的に見る
+
+| プロファイル | 6-6a まで | 6-6b |
+|---|---|---|
+| `mysql` | PG 用 27 列（16 列が INTEGER 系に落ちる） | **23 列 = パレット全型** |
+| `mssql` | PG 用 27 列（22 列が未知型） | **26 列** |
+| `oracle` | PG 用 27 列（18 列が未知型） | **15 列** |
+| `sqlite` | PG 用 27 列（25 列が TEXT） | **5 列**（型ではなく型親和性。これが SQLite の全部） |
+| `postgresql` | 27 列（24 型中 22 型を網羅） | 29 列（**`BIGINT` / `UUID` を追加**。決めたこと 4） |
+
+検査は [`tests/node/fixture-set.test.ts`](tests/node/fixture-set.test.ts) に 2 種
+× 5 プロファイル（計 10 件）:
+
+- `types-matrix` がパレットの全型を 1 列以上書いている
+- どの fixture もパレットが知らない型名を書いていない（書き間違いは未現代化では
+  黙って先頭型に落ち、strict では例外になる。**現れ方が違うので入力の時点で捕まえる**）
+
+**判定は `sql` そのものではなく `sql` ∪ `aka`。** `postgresql` の types-matrix は旧名
+（`SERIAL` / `DECIMAL` / `TIMESTAMP` …）で書いてあり、それは `aka` で読む互換経路を
+fixture 由来の実バイト列で通す役目を兼ねている。別名で書いてもその型を網羅している。
+
+**見るのは入力側の網羅だけで、解決結果は見ない。** `oracle` の `INTEGER` のように
+書いた型に到達できないものがあり（下）、そちらは golden と
+[`type-resolution.test.ts`](tests/node/type-resolution.test.ts) の仕事。混ぜると
+6-8 でどちらが直ったのか分からなくなる。
+
+#### 決めたこと 4: `postgresql` に `BIGINT` / `UUID` を足した（6-2 が送った項目）
+
+6-2 は「#3 が直ったので `BIGINT` を正常系に入れられるが、列を足すと golden が動いて
+完了判定がぼやける」として **6-6 へ送っていた**。母集団を再編する 6-6 がその送り先そのもの。
+この 2 型を足すまで PG の types-matrix は 24 型中 22 型しか覆っておらず、決めたこと 3 の
+網羅検査が通らない。**旧名の列は残してある**（決めたこと 3 の後段）。
+
+#### 決めたこと 5: known-issue **#14** を新設した
+
+`mssql` の UNIQUE キーが **T-SQL に無い `UNIQUE KEY (...)` 構文**（MySQL のもの）で出る。
+[`js/io/ddl/mssql.ts:63`](js/io/ddl/mssql.ts#L63) が `db/mssql/output.xsl` の逐語で、
+正しくは `CONSTRAINT <name> UNIQUE ( <cols> )`。**6-5a が移植した upstream の粗さで、
+当時の 9 件の一覧から漏れていたもの** —— 4 本の fixture を実型で書き直すときに
+house 既定の UNIQUE を読み直して見つかった。house 既定は `users` に UNIQUE を 1 本持つので
+**この DB では必ず踏む**。直すのは 6-8。
+
+#### 6-6b で初めて golden に写った粗さ（どれも 6-8 の材料）
+
+fixture が PG 用のままだった間は「未知型が先頭型に落ちる」ことに隠れて見えなかったもの。
+
+| 現象 | 実物 | 記録 |
+|---|---|---|
+| `oracle`: `INTEGER` と書いた列が `NUMBER` になる（**このパレットで `integer` 型には到達できない**） | `ddl/oracle/types-matrix.sql` の `c_integer` | known-issue **#10** |
+| `mssql`: `DEFAULT` が 1 つも出ない（生成器に分岐が無い） | `ddl/mssql/house-defaults.sql` —— `NEWID()` も `GETDATE()` も既定値 `1` も丸ごと落ちる | 6-5a の 9 件の 1 つ。**golden 未カバー → カバー済みに昇格** |
+| `mssql`: `UNIQUE KEY (...)` | 同上 | known-issue **#14**（本段階で新設） |
+| `sqlite`: コメントが 1 つも出ない | `ddl/sqlite/house-defaults.sql` に 1 行も無い（`mysql` の同じ fixture は 7 行出す） | 6-5a の 9 件の 1 つ |
+| 未現代化 4 本: 式の既定値が引用符で囲まれる | `DEFAULT 'UUID()'`（mysql）／ `DEFAULT 'SYS_GUID()'`（oracle） | known-issue **#11** の未現代化ぶん |
+
+**`CURRENT_TIMESTAMP` だけが裸で出る**のは upstream が特例を 1 つだけ持っているため
+（[`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) の `quoteDefault`）。strict なら
+`isSqlExpression()` が式全般を見るので、6-8 で `UUID()` も `SYS_GUID()` も裸になる。
+
+**`mysql` の「コメントを 60 字で無言に切り詰める」は golden に出ていない**
+（fixture のコメントが最長 26 文字のため）。出ていないことのほうを
+`tests/golden/README.md` に書いた。
+
+#### house 既定が各 DB で何を失うか（**現行パレットでの実測**）
+
+6-7 が `sql-standard` / `mariadb` / `h2` について設計として書いた表の、**残り 4 本の実測版**。
+6-8 でパレットを現代化すると改善する行があるので、○×は「いまの `db/<db>/datatypes.xml` で
+書ける範囲」であることに注意。
+
+| house 既定 | `postgresql` | `mysql` | `mssql` | `oracle` | `sqlite` |
+|---|---|---|---|---|---|
+| uuid PK | ○ `UUID` | × `CHAR(36)` | **○ `uniqueidentifier`** | × `RAW(16)` | × `TEXT` |
+| uuid の生成 | ○ `uuidv7()` | △ `UUID()`（v4） | △ `NEWID()`（v4） | △ `SYS_GUID()` | **× 関数が無い（既定値を持てない）** |
+| 監査列の tz | ○ `TIMESTAMPTZ` | × `TIMESTAMP` | × `datetime` | × `TIMESTAMP`（パレットに tz 付きが無い） | × `TEXT` |
+| jsonb | ○ | × `MEDIUMTEXT` | × `nvarchar` | × `CLOB` | × `TEXT` |
+| boolean | ○ | △ `bit` | △ `bit` | △ `NUMBER(1)` | △ `INTEGER` |
+| date | ○ | ○ `DATE` | **× `datetime`**（日付だけの型がパレットに無い） | ○ `DATE` | × `TEXT` |
+| numeric(p,s) | ○ | ○ | ○ | ○ | **× `NUMERIC`**（`length="0"` で精度を書けない） |
+| 既定値が DDL に出るか | ○ | ○（式は引用される） | **× 1 つも出ない** | ○（式は引用される） | ○ |
+
+**この表そのものが公開プロダクトの価値情報**（ユーザーが DB を選ぶときに見る）。
+6-8 の後にもう一度採り直し、利用者向けドキュメントへ出す。
+
+#### 検証
+
+**動いた golden は 21 本。** DB ごとに 1 本ずつ理由を説明できる形にした
+（コミットも DB 単位で割ってある）。
+
+| プロファイル | 本数 | 動かなかったもの | 主な内訳 |
+|---|---|---|---|
+| `mysql` | **4** | `empty` / `minimal` / `autoincrement` —— 型が `INTEGER` と `VARCHAR(64)` だけで PG 版と一致 | 型が `CHAR(36)` / `VARCHAR` / `bit` / `MEDIUMTEXT` / `TIMESTAMP` へ、既定値が `UUID()` / `CURRENT_TIMESTAMP` へ |
+| `mssql` | **6** | `empty` のみ | PG 用の `INTEGER` / `VARCHAR` がパレットに無く `bigint` / `tinyint` に落ちていたので `minimal` と `autoincrement` も動いた |
+| `oracle` | **5** | `empty` / `minimal` —— `INTEGER` は実型版でも `NUMBER` に化けるので結果が同じ | `RAW(16)` / `VARCHAR2` / `NUMBER(1)` / `CLOB` / `TIMESTAMP(6)` へ |
+| `sqlite` | **3** | `minimal` / `relations` / `quotes-i18n` —— PG 用の `INTEGER` と `TEXT` がどちらも実在する | `types-matrix` が 27 → 5 列、既定値の是正、`TEXT(64)` → `TEXT` |
+| `postgresql` | **3** | `ddl` 6 本 | `types-matrix` の 2 列追加だけ（`ddl` 2 行 / `json` 10 行 / `state` 44 行） |
+
+```
+$ git diff --shortstat <6-6a> -- tests/golden/
+ 22 files changed, 248 insertions(+), 217 deletions(-)   # 21 本 ＋ README.md
+```
+
+| | 6-6a | 6-6b |
+|---|---|---|
+| `npm test` | 237 passed | **247 passed**（網羅検査 10 件） |
+| `npm run test:browser` | 109 passed | 109 passed |
+| `npm run known-issues` | 5 passed | **6 passed**（#14 を新設） |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+`js/` の差分は **0 行**（本段階も触ったのは `tests/` と `docs/` だけ）。
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読済み。
+**依存は 1 本も増やしていない。** §2.1 の「実データをテストの入力に置かない」は 28 ファイルを
+書き直したので改めて確認した —— スキーマは `users` / `articles` / `article_tags` の架空のもので、
+実データも実在の資格情報も 1 行も含まない。CI のワークフローは増やしていない
+（テスト件数は +11、実行時間は不変）。
+
+#### 次段階への入力
+
+**6-6 は閉じた。** 6-0 の分割表の次は 6-7（新設 3 本）。
+
+- **6-7**: `db/sql-standard` / `db/mariadb` / `db/h2` を置き、
+  `tests/fixtures/<db>/` を 3 つ増やす。**fixture の置き忘れは
+  `fixture-set.test.ts` が名指しで落とす**（6-6a の決めたこと 5）。型マッピングは
+  2026-08-16 の設計先行エントリが確定済み
+- **6-8**: 4 本のパレットに `strict="1"` と `aka` を入れ、`re` を落とす。
+  そのとき **`naming.ts` に `IdentifierRules` を 4 つ足す**（6-5b の決めたこと 8）。
+  赤くなるのは known-issues **#4 / #10 / #12 / #13 / #14** と、本段階が採り直した
+  **19 本の DDL golden** —— どれも「未現代化のまま」を固定している主張なので、
+  赤くなること自体が進捗になる。**6-6b がその比較対象を作った**
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -3909,7 +4069,7 @@ golden に現れる形**で、6-8 で直すときにその行が動くことが�
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事。**6-1 でも触っていない**が、`backend/php-cubrid/index.php:37` が消えた `db/cubrid/datatypes.xml` を読む dangling ができた（段階6-1 の記録） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
-| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離）は **6-8** |
+| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離。**#14 が 6-6b で 10 件目として出た**）は **6-8**。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
 | 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |

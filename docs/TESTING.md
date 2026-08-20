@@ -13,7 +13,7 @@
 npm ci
 npx playwright install chromium     # 初回のみ
 
-npm test              # Node 側（jsdom + xslt-processor）。速い。日常はこれ
+npm test              # Node 側（jsdom）。速い。日常はこれ
 npm run test:browser  # 実ブラウザ側（Chromium）。golden の権威
 npm run test:all      # 両方
 npm run known-issues  # 既知の不具合の再現確認（上記いずれにも含まれない）
@@ -39,7 +39,7 @@ root はリポジトリルートのままなので、`index.html` / `db/` / `loc
 
 ```
 TypeError: Cannot read properties of undefined (reading 'config')
- ❯ tests/node/serialize.test.ts:8:1
+ ❯ tests/node/ddl.test.ts:23:1
  Test Files  2 failed (2)
       Tests  no tests
 ```
@@ -65,18 +65,20 @@ node -e "process.chdir('d:/projects/grabado'); require('child_process').spawnSyn
 
 ## なぜ 2 系統あるのか
 
-DDL 生成の実体は JS ではなく **`db/<db>/output.xsl`（XSLT 1.0）をブラウザの `XSLTProcessor` で適用**
-したもの（[js/io.ts](../js/io.ts) の `clientsql()` / `finish()`）。Node に `XSLTProcessor` は無い。
-モデル層も描画 DOM と密結合で、DOM 無しでは動かない（[ARCHITECTURE.md](ARCHITECTURE.md) §5）。
+モデル層が描画 DOM と密結合で、DOM 無しでは動かない（[ARCHITECTURE.md](ARCHITECTURE.md) §5）。
+
+**段階6-5a まではもう 1 つ理由があった** —— DDL 生成の実体が `db/<db>/output.xsl`（XSLT 1.0）を
+ブラウザの `XSLTProcessor` で適用したもので、Node に `XSLTProcessor` が無かった。
+生成が TS になった（[`../js/io/ddl/`](../js/io/ddl/)）ので、いま 2 系統を分ける理由は DOM だけ。
 
 そこで役割を分けた。
 
 | | 実ブラウザ（`tests/browser/`） | Node（`tests/node/`） |
 |---|---|---|
-| 実行系 | Playwright + Chromium。本物の `XSLTProcessor` / `DOMParser` / 描画 DOM | vitest + jsdom + `xslt-processor`（純 JS の XSLT 1.0）。アプリは vite が束ねた IIFE を jsdom で eval |
+| 実行系 | Playwright + Chromium。本物の `DOMParser` / 描画 DOM | vitest + jsdom。アプリは vite が束ねた IIFE を jsdom で eval |
 | golden | **生成・確定する（唯一の正）** | 読むだけ。**絶対に書かない** |
 | 速さ | 数秒 | 速い |
-| カバー範囲 | 全 5 DB プロファイル | 4 DB（`oracle` だけが parity 例外、下記） |
+| カバー範囲 | 全 5 DB プロファイル | **全 5 DB プロファイル**（段階6-5a まで `oracle` だけが parity 例外だった。下記） |
 
 現行コードは**抽出せずそのまま動かす**。ロジックを先に抜き出すと「抜き出した後のコード」を
 特性化することになり、安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。
@@ -159,18 +161,13 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 
 ### DDL golden — `tests/golden/ddl/<db>/<fixture>.sql`
 
-7 fixture × 5 DB = **35 本**。[js/io.ts](../js/io.ts) の `finish()` と同じ経路
-（`toXML()` → `DOMParser` → `XSLTProcessor` → `documentElement.textContent` → `trim`）で採る。
-UI の `#textarea` に入る値と一致する。
+7 fixture × 5 DB = **35 本**。[js/io.ts](../js/io.ts) の `clientsql()` と同じ経路
+（`Designer.toDdl()` → `.trim()`）で採る。UI の `#textarea` に入る値と一致する。
 
-### DDL 入力 golden — `tests/golden/ddl-input/<fixture>.xml`
-
-7 fixture。`Designer.toXML()` の出力を postgresql の型パレットで解決したもの。
-serializer は型解決以外 DB 非依存なので DB 横断はしない（その根拠自体もテストで固定してある）。
-
-**§4 段階4-4 で `golden/xml/` から改名した。** 4-3b でユーザーに見える保存経路が JSON に
-なったので、この 7 本が押さえているのは「設計の保存形式」ではなく
-**`db/<db>/output.xsl` への入力**（＝上の DDL golden の一段手前）である。
+**§6 段階6-5a で `tests/golden/ddl-input/` の 7 本が消えた。** あれは `Designer.toXML()` の
+出力＝`db/<db>/output.xsl` への入力で、DDL 生成が「モデル → 中間 XML → XSLT → 文字列」の
+3 段だったことの副産物だった。XSLT が TS 生成器になって中間表現ごと不要になり、
+**grabado から XML の書き出しが 1 つ残らず消えている**（読み込みは互換で残る）。
 
 ### 状態スナップショット golden — `tests/golden/state/<fixture>.json`
 
@@ -251,8 +248,10 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 穴は塞いでいない —— 塞いだのは「テンプレートが何を作るか」であって、ドラッグや選択の経路ではない。
 
 なお `<default>` を型の `quote` で囲むかどうかの規則（6-4 が strict 側で式判定にした箇所）は
-[`../tests/node/serialize.test.ts`](../tests/node/serialize.test.ts) が入力値と出力の表で固定している。
-fixture を足していないのは、`DDL_FIXTURES` に入れると golden が 5 プロファイル分増えるため。
+[`../tests/node/ddl.test.ts`](../tests/node/ddl.test.ts) が入力値と出力の表で固定している
+（**段階6-5a まで `serialize.test.ts` が `<default>` 要素の中身として見ていた**。XML の書き出しが
+消えたので観測面を生成 DDL に移した）。fixture を足していないのは、`DDL_FIXTURES` に入れると
+golden が 5 プロファイル分増えるため。
 
 差分テストの主張は段階ごとに引き継いでいる。6-2 は「旧規則と違うのは `postgresql/BIGINT` の
 1 件だけ」を完了判定にしていたが、**6-3 でその原因（`x_real`）ごと撤去され、`postgresql` が
@@ -261,15 +260,15 @@ strict 側へ移った**ので、いまは「**未現代化の 4 プロファイ
 
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 
-**golden はここを 1 ビットも押さえない。** 上の golden 85 本はすべて Designer のファサード
-（`toXML` / `toJson` / `fromXML` / `fromJson`）経由で採るので [`../js/io.ts`](../js/io.ts) を通らず、
-**「UI が JSON に切り替わったこと」は golden 不変と両立してしまう**。だから 4-3b の完了判定は
-「golden 85 本が無差分」＋この 2 本の 2 本立てになっている。
+**golden はここを 1 ビットも押さえない。** golden 50 本（`ddl` 35 ＋ `json` 7 ＋ `state` 8）は
+すべて Designer のファサード（`toDdl` / `toJson` / `fromXML` / `fromJson`）経由で採るので
+[`../js/io.ts`](../js/io.ts) を通らず、**「UI が JSON に切り替わったこと」は golden 不変と
+両立してしまう**。だから 4-3b の完了判定は「golden 無差分」＋この 2 本の 2 本立てになっていた。
 
 | ファイル | 担当 |
 |---|---|
 | [`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts) | **server 経路の契約** —— URL（`keyword` の `.json`）・`Content-type`・body が serializer の出力とバイト一致・`load` が応答をテキストで受ける・`import` は XML のまま。**段階4-6 から外部変更検知**（save の前に load・衝突時に confirm・断れば save を投げない）も。ハーネスが `OZ.Request`（全通信の唯一の入口）の差し替え先で記録する |
-| [`../tests/browser/io-ui.spec.ts`](../tests/browser/io-ui.spec.ts) | **jsdom では見られないもの** —— download の `suggestedFilename`・localStorage・`XSLTProcessor` 経由の DDL 生成（UI ボタンからの実経路 1 本）・ボタンが DOM に実在すること |
+| [`../tests/browser/io-ui.spec.ts`](../tests/browser/io-ui.spec.ts) | **jsdom では見られないもの** —— download の `suggestedFilename`・localStorage・DDL 生成（UI ボタンからの実経路 1 本）・ボタンが DOM に実在すること |
 
 両方が押さえるのは「読み込みが JSON と XML の**両方**を受ける」ことと、「読めない入力で
 今開いている設計が壊れない」こと。特に**壊れた JSON を XML として読み直さない**（フォールバックが
@@ -287,7 +286,7 @@ dialog ハンドラと衝突しない）。
 4-6 で保存が read-before-write（save の前に load を 1 回投げる）になり、**「サーバ上に何が
 置いてあるか」を作り分けられないと一致 / 不一致が試せない**。Node ハーネスの `OZ.Request`
 差し替えは URL をリポジトリ内ファイルに解決するだけなので、`backend/` で始まる URL だけを
-`php-file` の `data/` に相当する Map へ分岐させてある（`locale` / `datatypes` / `output.xsl` の
+`php-file` の `data/` に相当する Map へ分岐させてある（`locale` / `datatypes` の
 fs 経路はそのまま）。
 
 | ハーネスの口 | 用途 |
@@ -333,7 +332,7 @@ fs 経路はそのまま）。
 | `relations` | 自己参照 FK・多対多・1 テーブルに複数 FK |
 | `types-matrix` | 型パレット網羅（サイズ付き含む） |
 | `autoincrement` | `autoincrement="1"`（PG の `BIGSERIAL` 分岐） |
-| `quotes-i18n` | コメント内の `'`（XSLT の `replace-substring`）・識別子の `"`・日本語識別子 |
+| `quotes-i18n` | コメント内の `'`（生成器の `replaceSubstring`。段階6-5a まで XSLT の `replace-substring`）・識別子の `"`・日本語識別子 |
 
 **fixture は §6 のパレット差し替えでも動かさない。** 6-3 は `postgresql` のパレットだけを
 差し替えたが、fixture を 1 行でも触ると**全 5 プロファイルの DDL golden が動き**、
@@ -356,17 +355,19 @@ npm test                  # Node 側も新しい golden で緑になるか
   `UPDATE_GOLDEN=1` のときだけで、その環境変数を立てるのはブラウザ用の npm script だけ。
 - 差分が出たら「意図した変更か」を必ず判断する。意図しない差分が出たまま golden を上書きすると
   安全網が無くなる。判断は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) に記録する。
-- `tests/golden/**` と `tests/fixtures/**` は `.gitattributes` で **LF 固定**。
-  `db/**` と `locale/**` は `-text`（改行変換なし）で、コミットされたバイトのままチェックアウトされる。
-  `db/**` の改行は生成 SQL のバイト列を左右する（`output.xsl` の `xsl:text` 内の改行はそのまま
-  出力に出る）ので、環境依存の変換を挟まないのが最も強い保証になるため。**唯一 CRLF だった
-  `db/vfp9/output.xsl` は段階6-1 で消えた**が、`locale/ko.xml` が CRLF のまま残っている。
+- `tests/golden/**` / `tests/fixtures/**` / **`db/**`** は `.gitattributes` で **LF 固定**。
+  `locale/**` だけが `-text`（改行変換なし）で、コミットされたバイトのままチェックアウトされる
+  （`locale/ko.xml` が今も CRLF のため）。
+  **`db/**` は段階6-5a まで `-text` だった** —— `output.xsl` の `xsl:text` 内の改行はそのまま
+  生成 SQL に出るので、`db/` の改行コードが DDL golden のバイト列を左右していた。DDL 生成が
+  TS に移ってその経路が消え、`db/` に残るのは属性を読むだけの `datatypes.xml` だけになったので
+  LF 固定へ揃えた（5 本とも既に LF でコミットされていたのでバイト列は動いていない）。
 
 ## fixture の追加手順
 
 1. `tests/fixtures/<name>.xml` を手書きで置く（`<datatypes>` は入れない）。
 2. [`tests/support/fixtures.ts`](../tests/support/fixtures.ts) の `FIXTURES` に 1 行足す。
-3. `npm run golden:update` → 生成された golden を読んで、XSL / serializer から予想した形と合うか確認。
+3. `npm run golden:update` → 生成された golden を読んで、生成器 / serializer から予想した形と合うか確認。
 4. `npm test` と `npm run test:browser` が緑になることを確認。
 
 既知の不具合を踏む入力は `tests/fixtures/` ではなく
@@ -389,33 +390,28 @@ golden に写り込んでいる癖の一覧は [`tests/golden/README.md`](../tes
 
 ---
 
-## parity 例外（Node 側だけ届かない `oracle`）
+## parity 例外（段階6-5a で消えた）
 
-`xslt-processor` 5.1.0 は XSLT 1.0 の一部を満たしておらず、次の DB でブラウザと結果が一致しない。
-実測で原因を特定してあり、内容は [`tests/node/parity-exceptions.ts`](../tests/node/parity-exceptions.ts)。
+**段階6-5a まで、`oracle` だけが Node 側の DDL 回帰から外れていた。**
+`xslt-processor` 5.1.0 が XSLT 1.0 の一部を満たしておらず、`db/oracle/output.xsl` の
+トップレベル `xsl:variable` を解決できずに `XPST0008: Unresolved variable reference: $crlf`
+で落ちていたため（XSLT 1.0 としては正当な書き方で、エンジン側の未対応だった）。
+Node 側の [`ddl.test.ts`](../tests/node/ddl.test.ts) には、エンジンの非準拠を補う adapter も
+2 本あった —— XML 1.0 の line-end normalization をしないこと、`method="text"` でも
+`& < >` を XML エスケープしてしまうこと。
 
-| DB | 症状 | エンジン側の不足 |
-|---|---|---|
-| `oracle` | `XPST0008: Unresolved variable reference: $crlf` で失敗 | トップレベル `xsl:variable` を解決できない |
+**DDL 生成が TS になり、その 3 つ（parity 例外・adapter 2 本・`xslt-processor` 依存）が
+まとめて消えた。** ブラウザと Node で同じ [`../js/io/ddl/`](../js/io/ddl/) が動くのでエンジン差が
+存在しない。**`oracle` の 7 件が Node 回帰に復帰し、`npm test` の skipped は 0 になった。**
 
-**段階6-1 で `sqlalchemy`（`position()` / `last()`）と `vfp9`（`substring($s, 2, -1)`）が
-対応 DB から外れ、Node 側がカバーしないのは `oracle` 1 本だけになった。**
-この 1 本の DDL 回帰は **`npm run test:browser` だけが張っている**。
-`npm test` だけで済ませないこと。
+段階6-1 で `sqlalchemy`（`position()` / `last()`）と `vfp9`（`substring($s, 2, -1)`）が
+対応 DB から外れたのも同じ性質の話だったが、そちらは対応 DB ごと消えている。
 
-エンジン側の以下 2 点は [`tests/node/ddl.test.ts`](../tests/node/ddl.test.ts) の adapter で補正済み
-（準拠した XML パーサ / text 出力の振る舞いを取り戻すだけの可逆な前後処理で、golden は歪めていない）。
+**この節が残っているのは記録のため。** いま Node 側が届かない DB は 1 本も無い。
 
-- XML 1.0 の line-end normalization をしない
-- `method="text"` でも `& < >` を XML エスケープする
-
-どちらも 6-1 時点では実際に踏むプロファイルが無い（CRLF の XSL は消え、残る 35 本の golden に
-`& < >` は 1 文字も無い）が、**`&` を含む識別子を入れた瞬間に効く**ので残してある
-（[`tests/known-issues/fixtures/amp-in-name.xml`](../tests/known-issues/fixtures/amp-in-name.xml) がその形）。
-adapter ごと消えるのは 6-5（XSLT 経路そのものが無くなる段階）。
-
-例外が静かに増えたり静かに消えたりしないよう、
-「その例外がまだ実在すること」自体もテストにしてある。エンジンが対応したら赤くなり棚卸しを促す。
+「その例外がまだ実在すること」自体をテストにしておく（エンジンが対応したら赤くなり棚卸しを促す）
+というイディオムは [`workarounds.test.ts`](../tests/node/workarounds.test.ts) に残っている ——
+vitest の cwd 正規化ラッパーがそれで、**vitest を上げると必ず 1 回赤くなる**。
 
 ---
 

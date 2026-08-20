@@ -21,7 +21,7 @@ import type { GrabadoTestApi } from "./app-entry.ts";
  * 実ブラウザとの構造的な違いは 2 つだけ:
  *   1. OZ.Request を fs 読みに差し替える（jsdom で XHR を実際に飛ばさないため）
  *   2. offsetWidth/offsetHeight が常に 0（jsdom はレイアウトしない）
- *      -> toXML() が使うのは x/y だけなのでシリアライズの特性化には影響しない
+ *      -> 書き出しが使うのは x/y だけなのでシリアライズの特性化には影響しない
  */
 
 /*
@@ -58,7 +58,8 @@ export interface NodeHarness {
     useDatatypes(db: string): void;
     /** fixture を読み込む。alert が出たら例外にする */
     loadFixture(xml: string): void;
-    toXML(): string;
+    /** DDL 生成（段階6-5a で toXML() から置き換わった。js/io/ddl/generate.ts） */
+    toDdl(): string;
     /** 設計 JSON の書き出し / 読み込み（段階4-2 で新設。UI への配線は 4-3b） */
     toJson(): string;
     /** 読み込みは alert ではなく例外で落ちる（js/io/json-parser.ts） */
@@ -267,7 +268,7 @@ export async function createHarness(): Promise<NodeHarness> {
             return false;
         }
         const path = resolveRequestUrl(url);
-        /* locale / datatypes / output.xsl は今までどおり fs から読む */
+        /* locale / datatypes は今までどおり fs から読む（output.xsl は段階6-5a で消えた） */
         if (path.indexOf("backend/") === 0) {
             respondAsBackend(url, callback, options);
             return false;
@@ -333,8 +334,8 @@ export async function createHarness(): Promise<NodeHarness> {
                 throw new Error(`fixture の読み込みに失敗:\n${failures.join("\n")}`);
             }
         },
-        toXML(): string {
-            return designer.toXML();
+        toDdl(): string {
+            return designer.toDdl();
         },
         toJson(): string {
             return designer.toJson();

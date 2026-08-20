@@ -156,11 +156,6 @@ export async function setIoTextarea(page: Page, value: string): Promise<void> {
     }, value);
 }
 
-/** 現行 SQL.designer.toXML() の生出力 */
-export function toXml(page: Page): Promise<string> {
-    return page.evaluate(() => window.d!.toXML());
-}
-
 /** 設計 JSON の書き出し（HANDOVER §4 段階4-2。UI 未配線なので Designer の面を直接叩く） */
 export function toJson(page: Page): Promise<string> {
     return page.evaluate(() => window.d!.toJson());
@@ -189,33 +184,26 @@ export function captureState(page: Page): Promise<string> {
 }
 
 /**
- * 任意の設計 XML に db/<db>/output.xsl を適用する。
- * js/io.js:538-562 の finish() と同じ経路
- * （DOMParser → XSLTProcessor → documentElement.textContent → trim）。
+ * DDL 生成。UI の #textarea に入る値と一致する。
+ *
+ * **段階6-5a で XSLT 経路が消えた。** それまでは fetch('/db/<db>/output.xsl') した
+ * スタイルシートを DOMParser + XSLTProcessor に通しており（js/io.ts の finish() と
+ * 同じ経路）、任意の XML を直接食わせる transformXml() もここに居た。生成が
+ * js/io/ddl/generate.ts になったので、入口は Designer の面 1 つだけになっている。
+ *
+ * db 引数は「呼び手が意図したプロファイル」で、パレットの実体と突き合わせる。
+ * XSLT 経路では db が XSL の選択に効いたが、いまは toDdl() が palette.db() を見るので
+ * **引数だけ変えてもパレットが変わらない**（useDatatypes() の呼び忘れが静かに通る）。
+ * その事故を塞ぐためにここで検査する。
  */
-export function transformXml(page: Page, db: string, xml: string): Promise<string> {
-    return page.evaluate(
-        async ([dbName, source]) => {
-            const res = await fetch(`/db/${dbName}/output.xsl`);
-            if (!res.ok) {
-                throw new Error(`output.xsl が取れない: ${dbName} (${res.status})`);
-            }
-            const xslDoc = new DOMParser().parseFromString(await res.text(), "text/xml");
-
-            const xmlDoc = new DOMParser().parseFromString(source ?? "", "text/xml");
-            const proc = new XSLTProcessor();
-            proc.importStylesheet(xslDoc);
-            const result = proc.transformToDocument(xmlDoc);
-            if (!result?.documentElement) {
-                throw new Error(`XSLT 変換が空を返した: ${dbName}`);
-            }
-            return (result.documentElement.textContent ?? "").trim();
-        },
-        [db, xml] as const,
-    );
-}
-
-/** 現行の DDL 生成。UI の #textarea に入る値と一致する */
 export async function generateDdl(page: Page, db: string): Promise<string> {
-    return transformXml(page, db, await toXml(page));
+    return page.evaluate((expected) => {
+        const actual = window.d!.palette.db();
+        if (actual !== expected) {
+            throw new Error(
+                `型パレットが ${actual} のまま（期待は ${expected}）。useDatatypes() の呼び忘れ`,
+            );
+        }
+        return window.d!.toDdl();
+    }, db);
 }

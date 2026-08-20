@@ -28,10 +28,15 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 |---|---|---|---|---|
 | 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/io/xml-parser.ts](../../js/io/xml-parser.ts)） | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（`postgresql` は段階6-3 で解消） | §6 段階6-8 |
 | 10 | `<type re="...">` の照合が壊れている。アンカーされておらず部分一致し、大文字小文字を区別し、`sql` の完全一致を後から上書きする | [js/io/palette.ts](../../js/io/palette.ts) の `indexOfTypeNameLegacy` が `re` を後勝ちで見る。壊れているのは規則よりパレット側で、`oracle` は `re="INT"` を integer と number の 2 型に、`mssql` は 4 型（tinyint/smallint/int/bigint）に振っている | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（同上） | §6 段階6-8 |
-| 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る壊れた SQL が出る | [db/postgresql/output.xsl:58-64](../../db/postgresql/output.xsl#L58-L64) が要素の存在だけを見る。現行 introspection は値の無いカラムにも空の `<default>` を出す（[docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.5） | **introspection 出力のみ** | §6.3 |
-| 6 | key が複数あると制約名が `<table>_pkey` で衝突する | [db/postgresql/output.xsl:90-92](../../db/postgresql/output.xsl#L90-L92) が `key/@name` を無視してテーブル名から生成する | DDL 生成 | §6.3 |
+| 6 | key が複数あると制約名が `<table>_pkey` で衝突する | [js/io/ddl/postgresql.ts](../../js/io/ddl/postgresql.ts) が `key/@name` を無視してテーブル名から生成する（`db/postgresql/output.xsl:90-92` の逐語） | DDL 生成 | §6 段階6-5b |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
-| 11 | 既定値を型の `quote` で囲むとき、値の中の `'` がエスケープされない（`O'Brien` → `'O'Brien'`） | [js/io/ddl-xml.ts](../../js/io/ddl-xml.ts) が `quote` 属性を前後に足すだけで、値の中を見ない（upstream から一度も見ていない） | DDL 生成 | §6 段階6-5 |
+| 11 | 既定値を型の `quote` で囲むとき、値の中の `'` がエスケープされない（`O'Brien` → `'O'Brien'`） | [js/io/ddl/shared.ts](../../js/io/ddl/shared.ts) が `quote` 属性を前後に足すだけで、値の中を見ない（upstream から一度も見ていない） | DDL 生成 | §6 段階6-5b |
+| 12 | `mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれ、続く `CONSTRAINT` 行が列定義に繋がらない（T-SQL として壊れる） | [js/io/ddl/mssql.ts](../../js/io/ddl/mssql.ts) がカンマをコメントより先に出す（`db/mssql/output.xsl:34-45` の逐語） | DDL 生成 | §6 段階6-8 |
+| 13 | `sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち、PRIMARY KEY が 1 つも無い DDL になる | [js/io/ddl/sqlite.ts](../../js/io/ddl/sqlite.ts) が「UNIQUE、または part 2 個以上の PRIMARY」をまとめて UNIQUE として出す（`db/sqlite/output.xsl:61-64` の逐語） | DDL 生成 | §6 段階6-8 |
+
+**#12 / #13 は §6 段階6-5a で新設した。** XSLT を TS へ逐語移植する過程で読み直したときに
+見つかった upstream からの粗さで、**6-5a が作った欠陥ではない**。挙動不変が 6-5a の要件なので
+TS 側でも忠実に再現してあり、直すのは 6-8。**黙って持ち込まないための隔離**がこの 2 本。
 
 **#11 は §6 段階6-4 で新設した。**6-4 が作った欠陥ではなく、囲む側の規則が upstream から
 値の中を見ていないもの。6-4 まで golden に出ていなかったのは fixture の既定値が式と数値しか
@@ -61,8 +66,9 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
   直接 XSLT に食わせる経路だけ。
 
 `PRIMARY` / `UNIQUE` 以外の key type が PostgreSQL で `ADD CONSTRAINT <table>_pkey KEY (...)` に
-落ちる件（`INDEX` も `FULLTEXT` も同じ）は #6 と同じ [output.xsl](../../db/postgresql/output.xsl) の
-粗さで、**同じ §6.3 で一緒に直す**。テストは足していない —— #6 の fixture が同じ経路を既に踏んでいて、
+落ちる件（`INDEX` も `FULLTEXT` も同じ）は #6 と同じ
+[js/io/ddl/postgresql.ts](../../js/io/ddl/postgresql.ts) の粗さで、**同じ §6.3（段階6-5b）で
+一緒に直す**。テストは足していない —— #6 の fixture が同じ経路を既に踏んでいて、
 制約名を直す作業が必ずここを通るため（[docs/FORMAT.md](../../docs/FORMAT.md) の `tables[].keys[]` に記録）。
 
 ### 直したもの（このディレクトリから出た不具合）
@@ -71,16 +77,19 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 **§4（IO）が引き受けた分は 1 / 2 / 7 / 8 の 4 本で尽きている**（段階4-5 の記録）。
 §6 は 6-2 で #3 を引き取り、**6-3 で #4 / #10 の `postgresql` 分**を引き取った
 （現象そのものは未現代化の 4 本に残るので、表からは消していない）。
+**6-5a で #5 が引き取られた** —— こちらは直したというより、現象に到達する経路
+（introspection の XML を直接 XSLT に食わせる）が XSLT ごと無くなった。
 
 | # | 現象 | 直した段階 | 移設先 |
 |---|---|---|---|
-| 1 | 識別子に `&` を含めると `toXML()` が well-formed でない XML を吐き、保存したファイルを二度と開けない | §4 段階4-4 | [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)「識別子に `&` を含んでも well-formed な XML を吐く」 |
-| 2 | nullable かつ default 未指定の行が、保存すると `<default>NULL</default>` を獲得する（情報が増える） | §4 段階4-5 | 同上「既定値の無い行は保存しても `<default>` を獲得しない」＋「nullable な行の default 欄に NULL と打っても `<default>` は出ない」 |
+| 1 | 識別子に `&` を含めると `toXML()` が well-formed でない XML を吐き、保存したファイルを二度と開けない | §4 段階4-4 | [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)「識別子に & を含んでも書き出し・読み直しが壊れない」（**段階6-5a で XML の書き出しが消えたので、主張を JSON と DDL に移した**） |
+| 2 | nullable かつ default 未指定の行が、保存すると `<default>NULL</default>` を獲得する（情報が増える） | §4 段階4-5 | 同上「既定値の無い行は保存しても既定値を獲得しない」＋「nullable な行の default 欄に NULL と打っても既定値は出ない」（6-5a で観測面を JSON に移した） |
 | 7 | `alignTables()` が `tables` を破壊的ソートし、テーブル順と座標を変える | §4 段階4-4 | 同上「`alignTables()` はテーブル順を変えない」 |
-| 8 | `<default>` だけ末尾に改行が付かず diff が読みにくい | §4 段階4-4 | 同上「`<default>` の後にも改行が入る」 |
-| 3 | `BIGINT` が Big Integer ではなく **Real** に解決される（`sql="BIGINT"` の重複を後勝ちで拾う） | §6 段階6-2 | [`../browser/types.spec.ts`](../browser/types.spec.ts)「BIGINT は Big Integer に解決される」＋「XML 往復で型がドリフトしない」／[`../browser/json.spec.ts`](../browser/json.spec.ts)「型を id で持つので後勝ちドリフトが起きない」 |
+| 8 | `<default>` だけ末尾に改行が付かず diff が読みにくい | §4 段階4-4 | **段階6-5a で XML の書き出しごと消滅**（XML 固有の主張なので移設先を持たない。CUSTOMIZATIONS.md の 6-5a「消える主張の始末」） |
+| 3 | `BIGINT` が Big Integer ではなく **Real** に解決される（`sql="BIGINT"` の重複を後勝ちで拾う） | §6 段階6-2 | [`../browser/types.spec.ts`](../browser/types.spec.ts)「BIGINT は Big Integer に解決される」＋「XML を読み直しても型がドリフトしない」／[`../browser/json.spec.ts`](../browser/json.spec.ts)「型を id で持つので後勝ちドリフトが起きない」 |
 | 4（PG のみ） | `UUID` が型パレットに無く `INTEGER` に落ちる | §6 段階6-3 | [`../browser/types.spec.ts`](../browser/types.spec.ts)「UUID が uuid に解決される」＋「strict なパレットでは未知の型が例外になる」 |
 | 10（PG のみ） | `re` が大文字小文字を区別し `NUMERIC` に当たらない | §6 段階6-3 | [`../node/type-resolution.test.ts`](../node/type-resolution.test.ts)「大文字小文字を無視する」＋「部分一致しない」 |
+| 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る | §6 段階6-5a | [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)「空の `<default></default>` を読んでも DEFAULT 句は出ない」 |
 
 #3 の記述にあった「`re` もアンカー無しの部分一致」は **#10 が引き継いだ**（6-2 で新設）。
 6-2 が直したのは `sql` の完全一致どうしの順序だけで、**6-3 で `postgresql` が `re` を

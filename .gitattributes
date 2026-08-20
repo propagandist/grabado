@@ -10,11 +10,12 @@ scripts/*.ps1 text eol=crlf
 tests/fixtures/** text eol=lf
 tests/golden/**   text eol=lf
 
-# db/*/output.xsl の xsl:text 内の改行はそのまま生成 SQL に出る。
-# つまり db/ の改行コードが golden のバイト列を左右する。改行を変換せず
-# 「コミットされたバイトのまま」チェックアウトさせることで、どの環境でも golden が一致する。
-# （唯一 CRLF だった db/vfp9/output.xsl は段階6-1 で消えたが、環境依存の変換を
-#  挟まないという保証のほうが強いので -text は残す。db/ に何を置くかは
-#  output.xsl が TS 生成器になる 6-5 で決め直す。locale/ko.xml は今も CRLF。）
-db/**     -text
+# db/ は段階6-5a で datatypes.xml だけになった（output.xsl は TS 生成器 js/io/ddl/ へ）。
+# それまで -text だったのは「xsl:text 内の改行がそのまま生成 SQL に出る」ため
+# ——つまり db/ の改行コードが DDL golden のバイト列を左右していた。生成が TS に移って
+# その経路が無くなり、いま db/ が持つのは属性を読むだけの XML なので、他の text ファイルと
+# 同じ LF 固定に揃える（5 本とも既に LF でコミットされているのでバイト列は動かない）。
+db/**     text eol=lf
+
+# locale/ko.xml は今も CRLF。こちらは実体に合わせて変換しないままにする。
 locale/** -text

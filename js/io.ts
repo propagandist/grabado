@@ -18,10 +18,11 @@
  * **保存はすべて JSON、読み込みは JSON と XML の両方**（HANDOVER §4 / CLAUDE.md 制約4）。
  * 書き出し 5 経路は toJsonOrAlert()、読込 5 経路は loadDesignText() を通る。
  *
- * XML の書き出しが残る場所は 1 つだけ —— clientsql() -> finish() の DDL 生成で、
- * output.xsl（XSLT）の入力に XML が要るため（js/io/ddl-xml.ts）。**この 1 か所が
- * Designer.toXML() の唯一の呼び手**で、消えるのは §6.3 で output.xsl を TS 実装に
- * 置き換えるとき。introspection（serverimport）も XML のままで、こちらは §5.2。
+ * **段階6-5a で XML の書き出しが 1 つ残らず消えた。** 4-3b の時点で残っていたのは
+ * clientsql() の DDL 生成だけで（output.xsl の入力に XML が要った）、その XSLT が
+ * TS 生成器になったので中間 XML ごと落ちている（js/io/ddl-xml.ts の撤去）。
+ * 読み込みが JSON と XML の両方なのは変わらない。introspection（serverimport）も
+ * XML のままで、こちらは §5.2。
  *
  * ## 段階4-6（外部変更検知）
  *
@@ -543,40 +544,27 @@ export class IO {
         this.listresponse(data, code);
     }
 
+    /**
+     * DDL を生成して textarea に入れる（「SQLを生成」ボタン）。
+     *
+     * **段階6-5a で XHR と XSLT が消え、同期の 1 行になった。** それまでは
+     * db/<db>/output.xsl を OZ.Request で取りに行き（throbber を出し）、応答の
+     * Document を finish() が XSLTProcessor に食わせていた。生成が TS になったので
+     * 待ち時間そのものが無くなり、throbber も finish() も要らない。
+     *
+     * 失敗の伝え方は現行のまま alert（js/io.ts の他経路と同じ）。生成器が投げるのは
+     * 「型パレットに db 属性が無い」「対応していない DB プロファイル」「パレットに
+     * 無い型の添字」で、XSLT 経路の 404 / No XSLT processor available より理由が細かい。
+     */
     clientsql(): void {
-        var bp = this.owner.getOption("staticpath");
-        var path = bp + "db/" + this.owner.palette.db() + "/output.xsl";
-        var h = this.owner.getXhrHeaders();
-        this.owner.window.showThrobber();
-        OZ.Request(path, this.finish.bind(this), { xml: true, headers: h });
-    }
-
-    finish(xslDoc: unknown): void {
-        this.owner.window.hideThrobber();
-        var xml = this.owner.toXML();
         var sql = "";
         try {
-            /*
-             * grabado: ActiveXObject 分岐だけを撤去した（HANDOVER §3 段階3-3b）。
-             * window.XSLTProcessor の判定は残す — Chromium では true だが jsdom では
-             * false で（実測）、条件ごと畳むと Node ハーネス側の挙動が変わる。
-             * XSLTProcessor が無い実行系は現行どおり下の throw に落ちる。
-             */
-            if (window.XSLTProcessor && window.DOMParser) {
-                var parser = new DOMParser();
-                var xmlDoc = parser.parseFromString(xml, "text/xml");
-                var xsl = new XSLTProcessor();
-                xsl.importStylesheet(xslDoc as Document);
-                var result = xsl.transformToDocument(xmlDoc);
-                sql = result.documentElement.textContent!;
-            } else {
-                throw new Error("No XSLT processor available");
-            }
+            sql = this.owner.toDdl();
         } catch (e) {
             alert(_("xmlerror") + ": " + (e as Error).message);
             return;
         }
-        this.dom.ta.value = sql.trim();
+        this.dom.ta.value = sql;
     }
 
     /**

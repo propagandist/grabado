@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-import { FIXTURES, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
+import {
+    FIXTURES,
+    SERIALIZER_DB,
+    readFixture,
+    readKnownIssueFixture,
+} from "../support/fixtures.ts";
 import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";
 import {
@@ -8,7 +13,6 @@ import {
     loadJson,
     openDesigner,
     toJson,
-    toXml,
     useDatatypes,
 } from "./harness.ts";
 
@@ -66,11 +70,15 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
             expect(third).toBe(second);
         });
 
-        test(`情報保存: ${fixture.name} — XML 経由と JSON 経由で状態が一致する`, async () => {
-            // 経路 A: fixture -> toXML -> fromXML
+        test(`情報保存: ${fixture.name} — XML から読んだ状態と JSON を往復した状態が一致する`, async () => {
+            /*
+             * 段階6-5a まで経路 A は「fixture -> toXML -> fromXML」だった。XML の書き出しが
+             * 消えたので、**fixture をもう一度読む**形に変えてある（Node 側の同名テストも同じ）。
+             */
+            // 経路 A: fixture(XML) を 2 回読む
             await useDatatypes(page, SERIALIZER_DB);
             await loadFixture(page, readFixture(fixture.name));
-            await loadFixture(page, await toXml(page));
+            await loadFixture(page, readFixture(fixture.name));
             const viaXml = await captureState(page);
 
             // 経路 B: fixture -> toJson -> fromJson
@@ -137,11 +145,12 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
         await loadJson(page, source);
         expect(await toJson(page)).toBe(source);
 
-        // XML 経由で往復させても化けない —— 段階6-2 で sql の完全一致を先勝ちにしたため
+        // XML を読み直しても化けない —— 段階6-2 で sql の完全一致を先勝ちにしたため
         // （6-2 以前はここが "x_real" で、その差が known-issue #3 だった）。
         // 型キーが id である利点は消えていない: パレットの sql 名が重複しても、
         // 正本フォーマットは 4-2b の id 照合なのでそもそもこの経路を通らない。
-        await loadFixture(page, await toXml(page));
+        // 段階6-5a まではここが toXml() の往復だった（XML の書き出しごと消えた）。
+        await loadFixture(page, readKnownIssueFixture("bigint-drift"));
         const drifted = JSON.parse(await toJson(page));
         expect(drifted.tables[0].columns[0].type).toBe("bigint");
     });

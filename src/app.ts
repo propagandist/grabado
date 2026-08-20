@@ -21,15 +21,18 @@ import "../js/oz.ts";
 import "../js/config.ts";
 import "../js/globals.ts";
 /*
- * 段階4-1a で新設した書き出し層と、段階4-1b の読み込み層。ddl-xml が globals の _ に
- * 値依存するので globals より後に置く（他の 5 本は import type だけなので位置の制約は
- * 無いが、io/ の 6 本を離さない）。型だけの js/io/model.ts と js/io/json-format.ts は
+ * 段階4-1a で新設した書き出し層と、段階4-1b の読み込み層。
+ * **段階6-5a で ddl-xml.ts が消えた**（DDL 生成が XSLT から js/io/ddl/ へ移り、
+ * その入力だった中間 XML ごと不要になった）。ddl-xml だけが globals の _ に値依存して
+ * いたので、いま io/ に順序の制約は 1 つも無い（残りは import type だけ）。並びは
+ * 「io/ をひと固まりに保つ」ためのもの。型だけの js/io/model.ts と js/io/json-format.ts は
  * emit が空なので載せない。
  */
 import "../js/io/extract.ts";
-import "../js/io/ddl-xml.ts";
 import "../js/io/xml-parser.ts";
 import "../js/io/apply.ts";
+/* 段階6-5a で新設した DDL 生成層（db/<db>/output.xsl の置き換え） */
+import "../js/io/ddl/generate.ts";
 /* 段階4-2 の JSON 形式側 2 本。段階4-3b で js/io.ts の保存/読込経路に配線した */
 import "../js/io/json-serializer.ts";
 import "../js/io/json-parser.ts";

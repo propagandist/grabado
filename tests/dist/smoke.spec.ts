@@ -28,7 +28,7 @@ test.afterAll(async () => {
 
 test("バンドルされた index.html から Designer が初期化される", async () => {
     // openDesigner() が map / io / 型パレットの生成を待っている。ここでは実体の型だけ確かめる。
-    const ready = await page.evaluate(() => typeof window.d!.toXML === "function");
+    const ready = await page.evaluate(() => typeof window.d!.toDdl === "function");
     expect(ready).toBe(true);
 });
 

@@ -7,11 +7,16 @@
 **意図しない挙動変化が起きたら赤くする**こと。CLAUDE.md の Hard Constraint 1 が言う安全網の実体。
 
 ```
-ddl-input/<fixture>.xml  Designer.toXML() の出力＝output.xsl への入力（postgresql の型パレットで解決）
-ddl/<db>/<fixture>.sql   db/<db>/output.xsl を適用した DDL。5 DB × 7 fixture
+ddl/<db>/<fixture>.sql   Designer.toDdl() の出力。5 DB × 7 fixture
 state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
+
+**§6 段階6-5a で `ddl-input/` の 7 本が消えた。** あれは `Designer.toXML()` の出力＝
+`db/<db>/output.xsl` への入力で、DDL 生成だけが「モデル -> 中間 XML -> XSLT -> 文字列」の
+3 段だったことの副産物だった。XSLT が TS 生成器（[`../../js/io/ddl/`](../../js/io/ddl/)）に
+なって中間表現が要らなくなり、**XML の書き出しそのものが grabado から無くなっている**
+（読み込みは互換で残る）。
 
 `json/` だけは他の 3 つと性格が違う。**現行実装の実出力ではなく、grabado が決めた新しい正本
 フォーマット**（`formatVersion: 2`。仕様は [`../../docs/FORMAT.md`](../../docs/FORMAT.md)）で、
@@ -22,7 +27,7 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 「この形が設計を過不足なく運べる」ことの根拠は golden ではなく、XML 経由と JSON 経由で
 状態スナップショットが一致することを見る「情報保存」テストのほう。
 
-`ddl-input/` と `ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
+`ddl/` が押さえるのは**書き出しの結果**だけで、読み込みが撒く副作用
 （選択クラス・型パレット由来の色・relation がどの実体に繋がったか・`clearTables()` の後始末）は
 1 つも写らない。`state/` はその穴を埋める。採取項目と**意図的に採らないもの**（レイアウト由来の値と
 relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
@@ -30,7 +35,8 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 
 ## 生成元は実ブラウザだけ
 
-すべて Chromium（本物の `XSLTProcessor` / `DOMParser` / 描画 DOM）で採取している。
+すべて Chromium（本物の `DOMParser` / 描画 DOM）で採取している。段階6-5a まではここに
+`XSLTProcessor` も入っていた（DDL 生成が XSLT だったため）。
 更新は必ず `npm run golden:update`。Node 側（vitest）は**読むだけで書かない**。
 理由と手順は [`../../docs/TESTING.md`](../../docs/TESTING.md)。
 
@@ -46,7 +52,11 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
   —— つまり**この癖はもうどの golden にも無い**。囲む側の規則（値の中の `'` を
   エスケープしない）は残っており、known-issues #11 に隔離してある
 - `BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL` のように制約が重なる
-  （`sql` に制約句が入っており、`output.xsl` はその後ろに `NOT NULL` を足すだけのため。同じく 6-5）
+  （`sql` に制約句が入っており、生成器はその後ろに `NOT NULL` を足すだけのため。直すのは 6-5b）
+- **`mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれる**（known-issues #12。
+  `ddl/mssql/relations.sql` に実物がある）
+- **`sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える**（known-issues #13。
+  `ddl/sqlite/relations.sql`）
 - **未現代化のプロファイル**（`mysql` / `mssql` / `oracle` / `sqlite`）では `UUID` が
   型パレットに無く `INTEGER` に落ちている（known-issues #4）
 
@@ -83,3 +93,8 @@ golden はすべて fixture を読み込んでから採るので、「テーブ�
 [`../support/normalize.ts`](../support/normalize.ts) から正規化関数ごと落とした。
 
 **改行コードを含めてバイト一致で比較する。**
+
+**§6 段階6-5a（`output.xsl` の TS 生成器化）で `ddl/` は 1 バイトも動いていない。**
+5 本の XSLT（計 952 行）を [`../../js/io/ddl/`](../../js/io/ddl/) へ**逐語移植**した段階なので、
+それが完了判定そのもの。上に挙げた癖はすべて TS 側で忠実に再現してある（PG のぶんを直すのが
+6-5b、未現代化 4 本のぶんが 6-8）。**動いたのは `ddl-input/` の 7 本が消えたことだけ。**

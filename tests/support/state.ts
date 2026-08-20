@@ -3,7 +3,7 @@ import type { Designer } from "../../js/wwwsqldesigner.ts";
 /**
  * 読み込み後の「ライブツリー＋DOM」の状態スナップショット（HANDOVER §4 段階4-1b）。
  *
- * golden（xml 7 ＋ ddl 63）は toXML() の**結果**を押さえるが、fromXML は
+ * 書き出しの golden（ddl 35 ＋ json 7）は**結果**を押さえるが、fromXML は
  * 「XML を再生する UI 操作列」なので、XML に出ない状態（選択クラス・型パレット由来の色・
  * z-index・relation がどの**実体**に繋がったか・DOM の後始末）を 1 つも押さえていない。
  * 4-1b は読み込み方向を js/io/ へ移す段階なので、その安全網をここで足す。

@@ -1,4 +1,4 @@
 CREATE TABLE [things] (
-  [id] bigint NOT NULL 
+  [id] int NOT NULL 
 ) ON [PRIMARY]
 GO

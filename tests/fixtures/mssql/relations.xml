@@ -1,33 +1,26 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  **段階6-6a の暫定コピー。中身は postgresql 版と同一で、型名も postgresql のもの。**
-
-  6-6a が変えるのは配線だけ（tests/fixtures/<db>/ への分割と readFixture(db, name) への
-  署名変更）で、**DDL golden が 1 バイトも動かないこと**が完了判定。そのため中身を
-  postgresql 版と揃えてある —— この段階では mssql のパレットで読んでも解決結果は 6-5b までと
-  1 ビットも変わらない（未知型が先頭型へ落ちる known-issue #4 の姿がそのまま残る）。
-
-  <datatype> と <default> を mssql の実型・実関数へ書き直すのは **6-6b**。
-  経緯と段階の切り方は CUSTOMIZATIONS.md の段階6-6a。
--->
-<!--
   特性化テスト fixture: リレーションの形を網羅する。
     - employees.manager_id -> employees.id           自己参照 FK
     - projects.owner_id / projects.team_id           1 テーブルに複数 FK
     - employee_projects                              多対多の中間テーブル（複合 PK）
   Designer.fromXML は relation を「全テーブル生成後に名前解決」するため、
-  参照先が後方のテーブルでも解決できる（articles -> teams の順に注意）。
+  参照先が後方のテーブルでも解決できる（projects -> teams の順に注意）。
+
+  **構造は全プロファイルで同じ。型だけ SQL Server のもの**（段階6-6b）——
+  ここで見たいのは FK と複合 PK の出方で、型の違いが混ざると 5 本の golden を
+  突き合わせられなくなる。
 -->
 <sql>
 <table x="20" y="20" name="employees">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 </row>
 <row name="name" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>nvarchar(255)</datatype>
 </row>
 <row name="manager_id" null="1" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 <relation table="employees" row="id" />
 <comment>直属の上長（自己参照）</comment>
 </row>
@@ -37,17 +30,17 @@
 </table>
 <table x="360" y="20" name="projects">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 </row>
 <row name="title" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>nvarchar(255)</datatype>
 </row>
 <row name="owner_id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 <relation table="employees" row="id" />
 </row>
 <row name="team_id" null="1" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 <relation table="teams" row="id" />
 </row>
 <key type="PRIMARY" name="projects_pkey">
@@ -56,10 +49,10 @@
 </table>
 <table x="700" y="20" name="teams">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 </row>
 <row name="name" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>nvarchar(255)</datatype>
 </row>
 <key type="PRIMARY" name="teams_pkey">
 <part>id</part>
@@ -67,11 +60,11 @@
 </table>
 <table x="360" y="320" name="employee_projects">
 <row name="employee_id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 <relation table="employees" row="id" />
 </row>
 <row name="project_id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 <relation table="projects" row="id" />
 </row>
 <key type="PRIMARY" name="employee_projects_pkey">

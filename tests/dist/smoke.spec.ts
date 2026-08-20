@@ -47,7 +47,7 @@ test("Rollup の依存グラフに乗らない資産が dist に入っている"
 
 test(`配布物でも DDL が golden と一致する（${SERIALIZER_DB} / ${SMOKE_FIXTURE}）`, async () => {
     await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readFixture(SMOKE_FIXTURE));
+    await loadFixture(page, readFixture(SERIALIZER_DB, SMOKE_FIXTURE));
 
     const actual = await generateDdl(page, SERIALIZER_DB);
     assertNoCarriageReturn(actual, `DDL(${SERIALIZER_DB}/${SMOKE_FIXTURE})`);

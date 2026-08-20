@@ -30,7 +30,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
 
     beforeEach(() => {
         h.useDatatypes(SERIALIZER_DB);
-        h.loadFixture(readFixture("house-defaults"));
+        h.loadFixture(readFixture(SERIALIZER_DB, "house-defaults"));
         h.takeAlerts();
         h.takeRequests();
         /* 段階4-6: 仮想 backend・派生元の記録・confirm の答えを初期化する */
@@ -298,7 +298,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
     describe("loadDesignText", () => {
         test("設計 JSON を読む", () => {
             const source = h.toJson();
-            h.loadFixture(readFixture("minimal"));
+            h.loadFixture(readFixture(SERIALIZER_DB, "minimal"));
 
             h.io.loadDesignText(source);
 
@@ -312,10 +312,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
              * 作っていた。XML の書き出しが消えたので fixture をそのまま食わせる
              * （tests/fixtures/ は手書きの upstream 互換 XML）。
              */
-            const xml = readFixture("house-defaults");
+            const xml = readFixture(SERIALIZER_DB, "house-defaults");
             h.loadFixture(xml);
             const source = h.toJson();
-            h.loadFixture(readFixture("minimal"));
+            h.loadFixture(readFixture(SERIALIZER_DB, "minimal"));
 
             h.io.loadDesignText(xml);
 

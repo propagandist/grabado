@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  **段階6-6a の暫定コピー。中身は postgresql 版と同一で、型名も postgresql のもの。**
+
+  6-6a が変えるのは配線だけ（tests/fixtures/<db>/ への分割と readFixture(db, name) への
+  署名変更）で、**DDL golden が 1 バイトも動かないこと**が完了判定。そのため中身を
+  postgresql 版と揃えてある —— この段階では mssql のパレットで読んでも解決結果は 6-5b までと
+  1 ビットも変わらない（未知型が先頭型へ落ちる known-issue #4 の姿がそのまま残る）。
+
+  <datatype> と <default> を mssql の実型・実関数へ書き直すのは **6-6b**。
+  経緯と段階の切り方は CUSTOMIZATIONS.md の段階6-6a。
+-->
+<!--
+  特性化テスト fixture: autoincrement="1"。
+  postgresql は段階6-5b から <datatype> を残して GENERATED ALWAYS AS IDENTITY を足す
+  （6-5a まで db/postgresql/output.xsl:38-51 の分岐で <datatype> が無視され BIGSERIAL が出ていた）。
+  DB プロファイルごとに書き分けが最も大きい箇所なので全 DB で golden を採る。
+-->
+<sql>
+<table x="20" y="20" name="counters">
+<row name="id" null="0" autoincrement="1">
+<datatype>INTEGER</datatype>
+</row>
+<row name="label" null="0" autoincrement="0">
+<datatype>VARCHAR(64)</datatype>
+</row>
+<row name="hits" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+<default>0</default>
+</row>
+<key type="PRIMARY" name="counters_pkey">
+<part>id</part>
+</key>
+</table>
+</sql>

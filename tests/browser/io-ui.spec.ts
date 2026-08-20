@@ -41,7 +41,7 @@ test.afterAll(async () => {
 
 test.beforeEach(async () => {
     await useDatatypes(page, SERIALIZER_DB);
-    await loadFixture(page, readFixture("house-defaults"));
+    await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
     await setIoTextarea(page, "");
 });
 
@@ -77,7 +77,7 @@ test.describe("保存（すべて JSON になる）", () => {
         expect(stored).toBe(expected);
 
         /* 別の設計に切り替えてから読み戻す */
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
         expect(await clickIo(page, "clientlocalload", "io-ui-test")).toEqual([]);
         expect(await toJson(page)).toBe(expected);
     });
@@ -86,7 +86,7 @@ test.describe("保存（すべて JSON になる）", () => {
 test.describe("読み込み（JSON と XML の両方を受ける）", () => {
     test("clientload は textarea の JSON を読む", async () => {
         const source = await toJson(page);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
         await setIoTextarea(page, source);
 
         expect(await clickIo(page, "clientload")).toEqual([]);
@@ -100,11 +100,11 @@ test.describe("読み込み（JSON と XML の両方を受ける）", () => {
      * という読込互換の主張としてはむしろ純度が上がる。
      */
     test("clientload は設計 XML も読む（読込互換）", async () => {
-        const xml = readFixture("house-defaults");
+        const xml = readFixture(SERIALIZER_DB, "house-defaults");
         await loadFixture(page, xml);
         const expected = await toJson(page);
 
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
         await setIoTextarea(page, xml);
 
         expect(await clickIo(page, "clientload")).toEqual([]);
@@ -112,14 +112,14 @@ test.describe("読み込み（JSON と XML の両方を受ける）", () => {
     });
 
     test("4-3b より前に localStorage へ保存した XML も読める", async () => {
-        const xml = readFixture("house-defaults");
+        const xml = readFixture(SERIALIZER_DB, "house-defaults");
         await loadFixture(page, xml);
         const expected = await toJson(page);
 
         await page.evaluate((value) => {
             localStorage.setItem("wwwsqldesigner_databases_io-ui-legacy", value);
         }, xml);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         expect(await clickIo(page, "clientlocalload", "io-ui-legacy")).toEqual([]);
         expect(await toJson(page)).toBe(expected);

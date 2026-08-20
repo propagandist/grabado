@@ -42,7 +42,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
     for (const fixture of FIXTURES) {
         test(`golden: ${fixture.name} — ${fixture.purpose}`, async () => {
             await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture(fixture.name));
+            await loadFixture(page, readFixture(SERIALIZER_DB, fixture.name));
 
             const actual = await toJson(page);
             assertNoCarriageReturn(actual, `toJson(${fixture.name})`);
@@ -56,7 +56,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
 
         test(`round-trip: ${fixture.name}`, async () => {
             await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture(fixture.name));
+            await loadFixture(page, readFixture(SERIALIZER_DB, fixture.name));
 
             // fixture -> toJson -> fromJson -> toJson -> fromJson -> toJson
             const first = await toJson(page);
@@ -77,13 +77,13 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
              */
             // 経路 A: fixture(XML) を 2 回読む
             await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture(fixture.name));
-            await loadFixture(page, readFixture(fixture.name));
+            await loadFixture(page, readFixture(SERIALIZER_DB, fixture.name));
+            await loadFixture(page, readFixture(SERIALIZER_DB, fixture.name));
             const viaXml = await captureState(page);
 
             // 経路 B: fixture -> toJson -> fromJson
             await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture(fixture.name));
+            await loadFixture(page, readFixture(SERIALIZER_DB, fixture.name));
             await loadJson(page, await toJson(page));
             const viaJson = await captureState(page);
 
@@ -95,14 +95,14 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
 
     test("決定論: 同一モデルから toJson() を 2 回呼ぶと完全に一致する", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         expect(await toJson(page)).toBe(await toJson(page));
     });
 
     test("整形: 2 スペース・末尾 LF 1 つ（CLAUDE.md 制約3）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const actual = await toJson(page);
 
@@ -114,7 +114,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
 
     test("キー順は js/io/json-format.ts の宣言順に固定", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const design = JSON.parse(await toJson(page));
         expect(Object.keys(design)).toEqual(["formatVersion", "db", "tables"]);
@@ -132,7 +132,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
 
     test("型を id で持つので後勝ちドリフトが起きない（known-issue #3 を持ち込まない）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         // db/postgresql/datatypes.xml は sql="BIGINT" を Big Integer（添字 2）と
         // Real（添字 6）の 2 か所に持つ。型を sql 名で焼く形式だと
@@ -157,7 +157,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
 
     test("diff フレンドリー: テーブル追加は独立ブロックの追加だけになる", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("relations"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
         const before = await toJson(page);
 
         // relations fixture の末尾にテーブルを 1 つ足した設計を作る
@@ -185,7 +185,7 @@ test.describe("設計 JSON 特性化（toJson / fromJson）", () => {
     test.describe("壊れた入力は読み込まず例外にする", () => {
         test.beforeEach(async () => {
             await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture("minimal"));
+            await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
         });
 
         test("formatVersion が 2 でなければ拒む", async () => {

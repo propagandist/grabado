@@ -31,7 +31,7 @@ test.describe("読み込み後の状態 特性化（fromXML）", () => {
     for (const fixture of FIXTURES) {
         test(`state golden: ${fixture.name} — ${fixture.purpose}`, async () => {
             await useDatatypes(page, SERIALIZER_DB);
-            await loadFixture(page, readFixture(fixture.name));
+            await loadFixture(page, readFixture(SERIALIZER_DB, fixture.name));
 
             const actual = await captureState(page);
             assertNoCarriageReturn(actual, `state(${fixture.name})`);
@@ -44,9 +44,12 @@ test.describe("読み込み後の状態 特性化（fromXML）", () => {
     // postgresql だけだと <default> の quote 剥がしと sql/re 照合が 1 パレットぶんしか
     // 通らない。別プロファイルを 1 本だけ足して、パレット依存の解決が parser 側に
     // 移っても結果が変わらないことを押さえる。
+    //
+    // **入力は postgresql の fixture のまま**（段階6-6a）。見たいのは「同じ入力を別のパレットで
+    // 読むと解決がどう変わるか」なので、mysql の fixture に差し替えるとこの主張が消える。
     test("state golden: house-defaults を mysql パレットで読む", async () => {
         await useDatatypes(page, "mysql");
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const actual = await captureState(page);
         assertNoCarriageReturn(actual, "state(mysql/house-defaults)");
@@ -60,7 +63,7 @@ test.describe("読み込み後の状態 特性化（fromXML）", () => {
 
     test("冪等: 同じ XML を 2 回読んでも状態が一致する（clearTables() の後始末）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        const xml = readFixture("relations");
+        const xml = readFixture(SERIALIZER_DB, "relations");
 
         await loadFixture(page, xml);
         const first = await captureState(page);

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  **段階6-6a の暫定コピー。中身は postgresql 版と同一で、型名も postgresql のもの。**
+
+  6-6a が変えるのは配線だけ（tests/fixtures/<db>/ への分割と readFixture(db, name) への
+  署名変更）で、**DDL golden が 1 バイトも動かないこと**が完了判定。そのため中身を
+  postgresql 版と揃えてある —— この段階では sqlite のパレットで読んでも解決結果は 6-5b までと
+  1 ビットも変わらない（未知型が先頭型へ落ちる known-issue #4 の姿がそのまま残る）。
+
+  <datatype> と <default> を sqlite の実型・実関数へ書き直すのは **6-6b**。
+  経緯と段階の切り方は CUSTOMIZATIONS.md の段階6-6a。
+-->
+<!-- 特性化テスト fixture: テーブル 0 件（境界） -->
+<sql>
+</sql>

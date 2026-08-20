@@ -12,6 +12,12 @@ state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
 
+**§6 段階6-6a で入力が DB 別になった。** `ddl/<db>/` は
+[`../fixtures/<db>/`](../fixtures/) を読んで採る（`state/` と `json/` は
+`postgresql` の fixture 固定）。**6-6a の時点では 4 プロファイルの fixture が
+postgresql 版の暫定コピー**なので、この 35 本は 6-5b から 1 バイトも動いていない ——
+それが 6-6a の完了判定そのもの。各 DB の実型へ書き直して 28 本を動かすのは **6-6b**。
+
 **§6 段階6-5a で `ddl-input/` の 7 本が消えた。** あれは `Designer.toXML()` の出力＝
 `db/<db>/output.xsl` への入力で、DDL 生成だけが「モデル -> 中間 XML -> XSLT -> 文字列」の
 3 段だったことの副産物だった。XSLT が TS 生成器（[`../../js/io/ddl/`](../../js/io/ddl/)）に
@@ -63,7 +69,11 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 - **`sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える**（known-issues #13。
   `ddl/sqlite/relations.sql`）
 - **未現代化のプロファイル**（`mysql` / `mssql` / `oracle` / `sqlite`）では `UUID` が
-  型パレットに無く `INTEGER` に落ちている（known-issues #4）
+  型パレットに無く `INTEGER` に落ちている（known-issues #4）。
+  **これは入力が PG 用のままであることの帰結でもある** —— 6-6b で各 DB の fixture を
+  その DB の型で書き直すと、この 4 本の golden から「PG の型名を読ませた結果」が消える
+  （#4 そのものは 6-8 まで残る。再現は known-issues 側が
+  **postgresql の fixture を明示的に読む**形で保つ）
 
 **§6 段階6-5b で `postgresql` の 5 本・31 行が動いた**（`autoincrement` 1 / `types-matrix` 2 /
 `quotes-i18n` 6 / `relations` 7 / `house-defaults` 15）。内訳は 1 行ずつ

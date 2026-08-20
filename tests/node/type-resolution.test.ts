@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
 import { TypePalette } from "../../js/io/palette.ts";
 import { parseDesignXml } from "../../js/io/xml-parser.ts";
-import { DB_PROFILES, FIXTURE_DIR, REPO_ROOT } from "../support/fixtures.ts";
+import { DB_PROFILES, REPO_ROOT, fixtureDir } from "../support/fixtures.ts";
 
 /*
  * 型解決の検査（HANDOVER §6 段階6-2 / 6-3）。
@@ -78,7 +78,11 @@ function candidateNames(): string[] {
         }
     }
 
-    const fixtureDirs = [FIXTURE_DIR, join(REPO_ROOT, "tests", "known-issues", "fixtures")];
+    /* 段階6-6a で fixture は DB 別になった —— 母集団は全プロファイルの和集合 */
+    const fixtureDirs = [
+        ...DB_PROFILES.map((db) => fixtureDir(db)),
+        join(REPO_ROOT, "tests", "known-issues", "fixtures"),
+    ];
     for (const dir of fixtureDirs) {
         for (const file of readdirSync(dir).filter((f) => f.endsWith(".xml"))) {
             const xml = readFileSync(join(dir, file), "utf8");

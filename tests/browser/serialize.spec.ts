@@ -55,7 +55,7 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
      */
     test("環境依存が無い: location.href が出力に現れない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("minimal"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         const json = await toJson(page);
         const ddl = await generateDdl(page, SERIALIZER_DB);
@@ -113,7 +113,7 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
      */
     test("既定値の無い行は保存しても既定値を獲得しない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const design = JSON.parse(await toJson(page)) as {
             tables: { name: string; columns: { name: string; default?: string }[] }[];
@@ -123,7 +123,7 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
             .columns.find((c) => c.name === "body")!;
 
         /* fixture の articles.body は <default> を持たない。保存しても持たないまま */
-        expect(readFixture("house-defaults")).toContain(
+        expect(readFixture(SERIALIZER_DB, "house-defaults")).toContain(
             '<row name="body" null="1" autoincrement="0">\n<datatype>TEXT</datatype>\n</row>',
         );
         expect(body.default).toBeUndefined();
@@ -181,7 +181,7 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
      */
     test("nullable な行の default 欄に NULL と打っても既定値は出ない", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("house-defaults"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const typed = await page.evaluate(() => {
             /* articles.body（null="1"・既定なし） */
@@ -224,7 +224,7 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
      */
     test("alignTables() はテーブル順を変えない（座標だけを動かす）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("relations"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
 
         const before = await page.evaluate(() =>
             (window.d!.tables as { getTitle(): string }[]).map((t) => t.getTitle())
@@ -259,7 +259,7 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
      * 型解決の結果がいちばん素直に出るのが <datatype> の後継である DDL の型名だから。
      */
     test("型解決は型パレット依存（DB 横断 golden を持たない根拠）", async () => {
-        const xml = readFixture("types-matrix");
+        const xml = readFixture(SERIALIZER_DB, "types-matrix");
 
         await useDatatypes(page, "postgresql");
         await loadFixture(page, xml);

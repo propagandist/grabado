@@ -81,7 +81,7 @@ function addRowByUi(page: Page): Promise<string | null> {
 test.describe("初期テーブルテンプレート（段階6-4）", () => {
     test("postgresql: house 既定の 3 列と PRIMARY ができる", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("empty"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
 
         const added = await addTableByUi(page);
 
@@ -108,7 +108,7 @@ test.describe("初期テーブルテンプレート（段階6-4）", () => {
 
     test("postgresql: 作った直後の DDL がそのまま PG に流せる形で出る", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("empty"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
         await addTableByUi(page);
 
         const ddl = await generateDdl(page, SERIALIZER_DB);
@@ -127,7 +127,7 @@ test.describe("初期テーブルテンプレート（段階6-4）", () => {
 
     test("postgresql: Add row の既定型は text（6-3 が 6-4 へ送った判断）", async () => {
         await useDatatypes(page, SERIALIZER_DB);
-        await loadFixture(page, readFixture("empty"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
         await addTableByUi(page);
 
         expect(await addRowByUi(page)).toBe("text");
@@ -135,7 +135,7 @@ test.describe("初期テーブルテンプレート（段階6-4）", () => {
 
     test("mysql（未現代化）: 従来どおり id 1 列 ＋ autoincrement", async () => {
         await useDatatypes(page, "mysql");
-        await loadFixture(page, readFixture("empty"));
+        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
 
         const added = await addTableByUi(page);
 

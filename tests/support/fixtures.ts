@@ -29,39 +29,65 @@ export interface Fixture {
     readonly name: string;
     /** このテストで何を押さえるのか */
     readonly purpose: string;
-    /** DDL golden を全 5 DB で採る対象か */
+    /** DDL golden を全 DB で採る対象か */
     readonly ddl: boolean;
 }
 
 /**
  * 正常系 fixture。既知の不具合を踏むケースはここに入れず tests/known-issues/ に隔離する
  * （golden がバグを正当化して見えるのを避けるため）。
+ *
+ * **段階6-6a で fixture は DB 別になった**（tests/fixtures/<db>/<name>.xml）。この表は
+ * 「どのプロファイルにも同じ名前で存在する 7 本」という母集団の定義で、中身は DB ごとに違う
+ * （6-6a の時点では 4 本が postgresql 版の暫定コピーで、実型へ書き直すのは 6-6b）。
+ * 全プロファイル分が実在することは tests/node/fixture-set.test.ts が機械的に押さえる。
  */
 export const FIXTURES: readonly Fixture[] = Object.freeze([
     { name: "empty", purpose: "テーブル 0 件", ddl: true },
     { name: "minimal", purpose: "1 テーブル / 1 カラム", ddl: true },
     {
         name: "house-defaults",
-        purpose: "uuidv7 PK・timestamptz 監査列・jsonb・複合 PK・UNIQUE key・日本語コメント",
+        purpose: "house 既定をそのプロファイルで表せる範囲・複合 PK・UNIQUE key・日本語コメント",
         ddl: true,
     },
     { name: "relations", purpose: "自己参照 FK・多対多・1 テーブルに複数 FK", ddl: true },
-    { name: "types-matrix", purpose: "型パレット網羅（サイズ付きを含む）", ddl: true },
-    { name: "autoincrement", purpose: "autoincrement=1（PG の BIGSERIAL 分岐）", ddl: true },
+    {
+        name: "types-matrix",
+        purpose: "そのプロファイルの型パレット網羅（サイズ付きを含む）",
+        ddl: true,
+    },
+    { name: "autoincrement", purpose: "autoincrement=1", ddl: true },
     { name: "quotes-i18n", purpose: "コメント内のシングルクォート・日本語識別子", ddl: true },
 ]);
 
 export const DDL_FIXTURES = FIXTURES.filter((f) => f.ddl);
 
-export function readFixture(name: string): string {
-    return readFileSync(join(FIXTURE_DIR, `${name}.xml`), "utf8");
+/** そのプロファイルの fixture が置かれたディレクトリ（段階6-6a で DB 別になった） */
+export function fixtureDir(db: string): string {
+    return join(FIXTURE_DIR, db);
+}
+
+/**
+ * fixture を読む。
+ *
+ * **db を省略できないのは意図的**（段階6-6a）。既定値を持たせると「どのプロファイル向けの
+ * 入力を、どのパレットで読んでいるか」が呼び出し側から消える。**その 2 つがずれていること
+ * 自体が主張になっているテストがある** —— known-issues #4 / #10 と
+ * golden/state/mysql-house-defaults.json は「postgresql の fixture を mysql / oracle の
+ * パレットで読む」ことを見ているので、db を書かせる形でないと 6-6b で黙って壊れる。
+ */
+export function readFixture(db: string, name: string): string {
+    return readFileSync(join(fixtureDir(db), `${name}.xml`), "utf8");
 }
 
 /**
  * tests/known-issues/fixtures/ の fixture。
  *
+ * こちらは DB 別にしない（段階6-6a）。既知の不具合はどれも「特定のパレットで読んだときに
+ * 何が起きるか」が主張なので、入力を DB ごとに分けると再現条件そのものが消える。
+ *
  * 不具合が直っても fixture は動かさない（§4 段階4-4 で #1 を直したときの判断）。
- * 正常系へ昇格させると FIXTURES の母集団が増えて DDL golden が 35 -> 40 になり、
+ * 正常系へ昇格させると FIXTURES の母集団が増えて DDL golden がプロファイル数ぶん増え、
  * 「DDL golden が無差分」という段階の完了判定がぼやける。
  */
 export function readKnownIssueFixture(name: string): string {

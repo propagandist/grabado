@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { detectDesignFormat } from "../../js/io/detect.ts";
-import { FIXTURES, GOLDEN_DIR, readFixture } from "../support/fixtures.ts";
+import { FIXTURES, GOLDEN_DIR, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
 
 /*
  * 形式判別の検査（HANDOVER §4 段階4-3b）。
@@ -64,7 +64,7 @@ describe("形式判別（段階4-3b）", () => {
          * fixture（XML）と golden/json（serializer の出力）が判別の両端。
          */
         const actual = FIXTURES.flatMap((f) => [
-            `${f.name}.xml: ${detectDesignFormat(readFixture(f.name))}`,
+            `${f.name}.xml: ${detectDesignFormat(readFixture(SERIALIZER_DB, f.name))}`,
             `${f.name}.json: ${detectDesignFormat(
                 readFileSync(join(GOLDEN_DIR, "json", `${f.name}.json`), "utf8"),
             )}`,

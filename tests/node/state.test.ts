@@ -22,7 +22,7 @@ describe("読み込み後の状態 特性化（Node / jsdom）", () => {
     for (const fixture of FIXTURES) {
         test(`state golden: ${fixture.name} — ${fixture.purpose}`, () => {
             h.useDatatypes(SERIALIZER_DB);
-            h.loadFixture(readFixture(fixture.name));
+            h.loadFixture(readFixture(SERIALIZER_DB, fixture.name));
 
             const actual = h.captureState();
             assertNoCarriageReturn(actual, `state(${fixture.name})`);
@@ -31,9 +31,10 @@ describe("読み込み後の状態 特性化（Node / jsdom）", () => {
         });
     }
 
+    /* 入力は postgresql の fixture のまま（段階6-6a）。理由は tests/browser/state.spec.ts の同名テスト */
     test("state golden: house-defaults を mysql パレットで読む", () => {
         h.useDatatypes("mysql");
-        h.loadFixture(readFixture("house-defaults"));
+        h.loadFixture(readFixture(SERIALIZER_DB, "house-defaults"));
 
         const actual = h.captureState();
         assertNoCarriageReturn(actual, "state(mysql/house-defaults)");
@@ -43,7 +44,7 @@ describe("読み込み後の状態 特性化（Node / jsdom）", () => {
 
     test("冪等: 同じ XML を 2 回読んでも状態が一致する（clearTables() の後始末）", () => {
         h.useDatatypes(SERIALIZER_DB);
-        const xml = readFixture("relations");
+        const xml = readFixture(SERIALIZER_DB, "relations");
 
         h.loadFixture(xml);
         const first = h.captureState();

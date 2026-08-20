@@ -20,7 +20,7 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
     for (const fixture of FIXTURES) {
         test(`golden: ${fixture.name} — ${fixture.purpose}`, () => {
             h.useDatatypes(SERIALIZER_DB);
-            h.loadFixture(readFixture(fixture.name));
+            h.loadFixture(readFixture(SERIALIZER_DB, fixture.name));
 
             const actual = h.toJson();
             assertNoCarriageReturn(actual, `toJson(${fixture.name})`);
@@ -30,7 +30,7 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
 
         test(`round-trip: ${fixture.name}`, () => {
             h.useDatatypes(SERIALIZER_DB);
-            h.loadFixture(readFixture(fixture.name));
+            h.loadFixture(readFixture(SERIALIZER_DB, fixture.name));
 
             const first = h.toJson();
             h.loadJson(first);
@@ -51,13 +51,13 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
              */
             // 経路 A: fixture(XML) を 2 回読む
             h.useDatatypes(SERIALIZER_DB);
-            h.loadFixture(readFixture(fixture.name));
-            h.loadFixture(readFixture(fixture.name));
+            h.loadFixture(readFixture(SERIALIZER_DB, fixture.name));
+            h.loadFixture(readFixture(SERIALIZER_DB, fixture.name));
             const viaXml = h.captureState();
 
             // 経路 B: fixture -> toJson -> fromJson
             h.useDatatypes(SERIALIZER_DB);
-            h.loadFixture(readFixture(fixture.name));
+            h.loadFixture(readFixture(SERIALIZER_DB, fixture.name));
             h.loadJson(h.toJson());
             const viaJson = h.captureState();
 
@@ -69,14 +69,14 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
 
     test("決定論: 同一モデルから toJson() を 2 回呼ぶと完全に一致する", () => {
         h.useDatatypes(SERIALIZER_DB);
-        h.loadFixture(readFixture("house-defaults"));
+        h.loadFixture(readFixture(SERIALIZER_DB, "house-defaults"));
 
         expect(h.toJson()).toBe(h.toJson());
     });
 
     test("壊れた入力は例外にし、今開いている設計を消さない", () => {
         h.useDatatypes(SERIALIZER_DB);
-        h.loadFixture(readFixture("minimal"));
+        h.loadFixture(readFixture(SERIALIZER_DB, "minimal"));
         const before = h.toJson();
 
         // js/wwwsqldesigner.ts の fromJson は parse を clearTables() より先に置いてある
@@ -89,7 +89,7 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
 
     test("formatVersion 1 は読まず、移行コマンドを名指しする", () => {
         h.useDatatypes(SERIALIZER_DB);
-        h.loadFixture(readFixture("minimal"));
+        h.loadFixture(readFixture(SERIALIZER_DB, "minimal"));
         const before = h.toJson();
 
         // 4-2 が書いていた形（型キーが label、db は任意）
@@ -116,7 +116,7 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
         // postgresql の設計を mysql パレットで開く。label 時代はこれが通り、
         // 共有していた 12 label（Integer / Text / Timestamp ...）が黙って別の型に化けていた。
         h.useDatatypes(SERIALIZER_DB);
-        h.loadFixture(readFixture("minimal"));
+        h.loadFixture(readFixture(SERIALIZER_DB, "minimal"));
         const pgDesign = h.toJson();
 
         h.useDatatypes("mysql");
@@ -126,7 +126,7 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
     test("型 id は db をまたいで解決しない（同じ id が両方にあっても）", () => {
         // integer は postgresql にも mysql にもある id。db 照合が無ければ通ってしまう。
         h.useDatatypes("mysql");
-        h.loadFixture(readFixture("minimal"));
+        h.loadFixture(readFixture(SERIALIZER_DB, "minimal"));
         const mysqlDesign = h.toJson();
 
         expect(mysqlDesign).toContain('"db": "mysql"');

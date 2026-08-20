@@ -22,15 +22,17 @@
  * 段階4-1b の追補 —— **入りと出でモデルは完全には対称でない**。
  *
  *   1. 型が嘘をつく箇所が入り側だけにある。TableModel.title / RowModel.title /
- *      KeyModel.type / KeyModel.name / RelationRef.table / RelationRef.row は
- *      parser が getAttribute の生値を入れるので、属性が無ければ**実行時 null**。
- *      現行の 4 実装がそれぞれ !（non-null assertion）や早期 return で受けていた癖を
- *      そのまま持っている。extract 側は必ず string を入れる。
+ *      KeyModel.type / RelationRef.table / RelationRef.row は parser が getAttribute の
+ *      生値を入れるので、属性が無ければ**実行時 null**。現行の 4 実装がそれぞれ
+ *      !（non-null assertion）や早期 return で受けていた癖をそのまま持っている。
+ *      extract 側は必ず string を入れる。**KeyModel.name は段階6-5b で外れた**（下記）。
  *   2. RowModel.def は入り側では「XML / JSON が言った値」で、出側では「ツリーが保持して
  *      いる値」。"NULL" -> "" の正規化が Row.update() の中で起きるため。
  *
- * 1 は 4-4 で消す予定だったが残っている（KeyModel.name の実行時 null は段階4-4 の
- * 決めたこと 3 のとおり、serializer が String() で受けて "null" を書く現行仕様を保つ）。
+ * 1 は 4-4 で消す予定だったが残っている。**KeyModel.name だけは段階6-5b で解消した** ——
+ * 「serializer が String() で受けて name="null" を書く現行仕様を保つ」（段階4-4 の決めたこと 3）
+ * の相手だった XML の書き出しが 6-5a で消え、DDL 側にだけ "null" という制約名が残る形に
+ * なっていたため、xml-parser.ts が "" に正規化する側へ倒した。
  * 2 は **意図して残す** —— 段階4-5 で「既定 NULL」の内部表現（null）は撤去したが、
  * 正規化そのものは Row.update() の 1 箇所に置いたままにした。parser 側にも同じ規則を
  * 書くと、同じ規則が 2 箇所に分かれて片方だけ直す事故の余地が残る（4-1b の決めたこと 3
@@ -105,10 +107,11 @@ export interface KeyModel {
     /** Key.getType()。setType() が null を握りつぶすので既定 "INDEX" から動かない */
     readonly type: string;
     /**
-     * Key.getName()。型は string だが、name 属性の無い <key> を読み込むと
-     * 実行時は null が入り name="null" と書き出される（現行の癖。fixture の
-     * <key> 11 個はすべて name を持つので golden も known-issues も検出しない）。
-     * 現行と同じ嘘をそのまま持つ。
+     * Key.getName()。**常に string**（段階6-5b）。name 属性の無い <key> は
+     * xml-parser.ts が "" にする —— それまでは実行時 null が入り、DDL 生成が
+     * String() で受けて制約名 "null" を作っていた。fixture の <key> 11 個は
+     * すべて name を持つので golden はこの違いを 1 行も写さない
+     * （tests/node/ddl.test.ts に恒久テストがある）。
      */
     readonly name: string;
     /** <part> に書く行名（Key.rows の getTitle()） */

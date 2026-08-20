@@ -3514,6 +3514,239 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 
 ---
 
+### 2026-08-20 HANDOVER §6「機能」段階6-5b —— §6.3 の規約へ寄せ、known-issue #6 / #11 を直す
+
+6-5a が割った片割れ。**`tests/golden/ddl/postgresql/` の 5 本・31 行が動き、未現代化 4 本の
+28 本は 1 バイトも動いていない。** 6-5a の完了判定が「無差分そのもの」だったのに対し、
+本段階は**動いた 31 行を 1 行ずつ説明できること**が完了判定で、下の対応表がそれ。
+
+直したのは [`js/io/ddl/postgresql.ts`](js/io/ddl/postgresql.ts) が自分のヘッダに列挙していた
+7 点 ＋ known-issue #11 の計 8 件。6-5a は挙動不変が要件だったので upstream の粗さを
+逐語で持ち込んであり、その一覧がそのまま本段階の作業リストになっていた。
+
+#### 決めたこと 1: FK 名の `<ref>` は**参照元の列名**（`fk_projects_owner_id`）
+
+§6.3 の `fk_<table>_<ref>` は `<ref>` が両義的だった。参照先テーブル名を採ると
+`orders.billing_address_id` と `shipping_address_id` がどちらも `fk_orders_addresses` になって
+**制約名が衝突する**（PG は同一スキーマ内で制約名の重複を拒む）。列名は 1 テーブル内で必ず
+一意なので、名前も必ず一意になる。`idx_<table>_<cols>` が列を並べる規約なのとも揃う。
+
+**FK 名はモデルに保存先が無い**（[`docs/FORMAT.md`](docs/FORMAT.md) の `references[]` は
+`table` / `column` だけ）。introspection で読んだ外部由来の FK 名は保持されず、生成のたびに
+組み直される —— 制約名を保持できる key（`keys[].name`）との非対称はここに記録しておく。
+
+同じ規約を名乗っている [`docs/samples/introspection-sample-schema.sql`](docs/samples/introspection-sample-schema.sql)
+が `fk_articles_users` のままだったので同じ PR で直した。house 規約を名乗るサンプルが規約違反の
+まま残るのは、公開プロダクトとしてはコードの不具合と同じ。
+
+#### 決めたこと 2: 識別子は**必要なときだけ**囲む。予約語は実 PG18 から採った
+
+6-5a まで、本体は識別子を裸で出すのに `COMMENT ON` だけ `"` で囲み、しかも値の中の `"` を
+エスケープしていなかった（`COMMENT ON COLUMN "顧客"."say "hi""` という壊れた行が golden にある）。
+規則を 1 つに揃え、`/^[a-z_][a-z0-9_]*$/` に収まり予約語でなければ裸、それ以外は `"` で囲んで
+値の中の `"` を `""` にする。
+
+常に囲む案は却下した —— PG としては最も安全だが `"users"."id"` だらけの DDL になる。
+**house 標準（snake_case・複数形）に従っていれば 1 つも囲まれない**のが要点で、
+`house-defaults.sql` が丸ごとその証拠になっている（引用が増えた行は 1 行も無く、
+むしろ `COMMENT ON` の 8 行から `"` が**外れた**）。
+
+**予約語の一覧は推測せず、`postgres:18` コンテナで採った。**
+
+```
+$ docker exec kw psql -U postgres -Atc \
+    "SELECT word FROM pg_get_keywords() WHERE catcode IN ('R','T') ORDER BY 1;"
+  -> PostgreSQL 18.4 / catcode R 78 語 ＋ T 23 語 = 101 語
+```
+
+`T`（reserved (can be function or type name)）を**含める**のが判断の要点。`left` / `is` /
+`like` / `join` / `full` は関数名・型名にはなれるが**列名にはなれない**ので、落とすと
+`left text` のような壊れた DDL が出る。逆に `C`（`integer` / `varchar` / `between`）は
+列名に使えるので入れない —— 入れると house 標準の名前まで囲まれる。採取クエリと版と採取日は
+[`js/io/ddl/keywords.ts`](js/io/ddl/keywords.ts) の頭に書いてあり、6-8 で 4 プロファイルぶんが
+同じ形で足される。
+
+#### 決めたこと 3: autoincrement は**型を尊重して IDENTITY 句を足す**
+
+6-3 が送った 2 件（`BIGSERIAL` 固定 / `NOT NULL` の重複）は同じ列定義の話なので一緒に直した。
+
+| 入口 | 6-5a まで | 6-5b |
+|---|---|---|
+| `@autoincrement=1`（UI のチェック） | `<datatype>` を捨てて `BIGSERIAL` 固定 | `INTEGER GENERATED ALWAYS AS IDENTITY`（型はそのまま・句だけ足す） |
+| 型そのもの（パレットの `bigint_identity`） | 句の後ろに `NOT NULL` を足す | 足さない（identity は暗黙で NOT NULL） |
+
+**identity 列には `DEFAULT` も出さない。** PG は identity と DEFAULT の併用を構文レベルで拒むが、
+UI では ai チェックと既定値欄が同時に触れるので到達できる。`NOT NULL` を抑止するのと同じ `if` の
+中で 1 行なので同時に塞いだ（PG の golden に該当ケースは無く、0 行）。
+
+`hasIdentityClause()` は `postgresql.ts` に閉じている —— mssql は `IDENTITY(1,1)`、mysql は
+列属性 `AUTO_INCREMENT` と、6-8 では各プロファイルが別の判定を持つため、共通層に上げなかった。
+
+#### 決めたこと 4: 制約名は `key/@name` を優先し、空のときだけ規約で組む（#6）
+
+known-issue #6 の実害は `house-defaults.sql` に出ていた —— `users` が PRIMARY と UNIQUE の
+2 本を持つのに、どちらも `users_pkey` という名前で出て PG が 2 つ目を弾く。原因は
+「`key/@name` を読まずテーブル名から組む」ことなので、**名前欄を読む**のが直し方の本体。
+名前欄は [`js/keymanager.ts`](js/keymanager.ts) が持つ編集可能な値で、無視してよいものではない。
+
+空のときの生成規約は **PG が自分で付ける名前に合わせた**（`<table>_pkey` / `<table>_<cols>_key`）。
+introspection で読み直しても名前が動かないため。**index だけは例外**で、PG の自動名は
+`<table>_<cols>_idx` だが §6.3 が `idx_<table>_<cols>` を明記しているのでそちらを採った ——
+index 名は `keys[].name` に残るので、往復しても動かない（FK と違う点。決めたこと 1）。
+
+`PRIMARY` / `UNIQUE` 以外が `ADD CONSTRAINT <table>_pkey KEY (...)`（PG に無い構文）に落ちる件も
+ここで消えた。`INDEX` / `FULLTEXT` は `CREATE INDEX` として、テーブルブロックの中・key の順のまま出す
+（FK と違って順序制約が無く、「1 テーブル = 独立ブロック」の diff 局所性を保てる）。
+
+**`FULLTEXT` は PG では btree の `CREATE INDEX` に落ちる。** PG の全文検索索引は
+`USING gin (to_tsvector('config', col))` という式インデックスで、モデルは式も config も持てない
+（`keys[].columns` は列名の配列）。`docs/FORMAT.md` が「値を列挙して拒む案は §6.3 の判断に送る」と
+書いていた件は、**4 種すべて受ける**で決着させた —— 形式側で拒むと、いま開ける設計が読めなくなる。
+
+#### 決めたこと 5: 列を 1 つも持たないキーは 1 文字も出さない
+
+`KeyManager.add()` は `table.keys.length ? "INDEX" : "PRIMARY"` で **name も列も空**のキーを作る。
+つまり「2 本目のキーを足す」だけで `ALTER TABLE users ADD CONSTRAINT users_pkey KEY ();` という
+三重に壊れた行（PG に無い構文 ＋ 列が空 ＋ PRIMARY と同名）が出ていた。規約名も cols が空だと
+`users__key` / `idx_users_` に退化するので、出力そのものを止めた。**列を持たないキーに情報は無い。**
+
+#### 決めたこと 6: `key/@name` の実行時 null を**源流で**塞いだ（4 本の挙動を意図的に動かした 1 件）
+
+name 属性の無い `<key>` を読むと `getAttribute` が null を返し、DDL 生成が `String()` で受けて
+**`"null"` という文字列の制約名**を作っていた。mssql は `CONSTRAINT null`、sqlite は
+`CREATE INDEX 'null'` を実際に出す。
+
+この癖を残す根拠は [`js/io/model.ts`](js/io/model.ts) が書いていた「serializer が `String()` で
+受けて `name="null"` を書く現行仕様を保つ」（段階4-4 の決めたこと 3）だが、**その相手の XML
+serializer は 6-5a で撤去済み**。[`js/io/json-serializer.ts`](js/io/json-serializer.ts) は falsy を
+キーごと落とすので、同じモデルから **JSON は「名前なし」・DDL は「名前は `null`」**という
+食い違いだけが残っていた。半移行そのものなので [`js/io/xml-parser.ts`](js/io/xml-parser.ts) で
+`?? ""` に正規化した。
+
+**これは未現代化 4 本の挙動を意図的に動かした本段階唯一の変更**（golden は 0 バイト差 ——
+`tests/fixtures/` の `<key>` 11 個と `tests/known-issues/fixtures/` のすべてが name 属性を持つため）。
+「PG だけ整えて他を放置しない」の逆側（4 本の品質が上がる）なので採った。golden が見ていない
+以上、恒久テストを 1 本置いてある（`tests/node/ddl.test.ts`）。
+
+#### 決めたこと 7: §6.3 の「snake_case・複数形」は生成器では**何もしない**
+
+6-4 が 6-5 へ送っていた項目。**生成器が識別子を書き換えるのは採らない。**
+
+1. **設計と DDL が食い違う。** 画面の `Customer` が DDL では `customers` になると、`COMMENT ON` や
+   FK の参照先を人が追えなくなる。
+2. **introspection の往復が壊れる。** 既存 DB から読んだ `顧客` を `customers` として出したら、
+   それはもう同じテーブルではない。
+3. **正しさが保証できない。** 複数形化は英語の形態論で、`person` → `people` / `data` → `data` を
+   機械で正しく倒せない。決定論（同一モデル → 同一バイト列）は守れても、規則自体が当てにならない。
+
+かわりに受けるのは 3 つ。(1) §6.2 のテンプレートが最初から house 規約の列名を作る（6-4 で実装済み）、
+(2) **予約語の引用**（本段階）—— §6.3 括弧書きの「予約語回避」の実体はこれで、`order` という
+テーブル名が `"order"` として安全に出るようになった、(3) 命名の**検査**（lint）は「警告して人が直す」
+性質のものなので **6-9 以降**へ送る（§11 の AI リファクタ提案が review-first で受けるのが素直）。
+
+#### 決めたこと 8: 規則の置き場所を性質で 2 つに割った
+
+`generatePostgresql(tables)` の署名も `DdlTable` も変えていない。**strict フラグを生成器へ配線する
+必要が無かった**ため —— #11 を直す `quoteDefault()` は `shared.ts` にあり、そこには既に
+`palette` が引数で来ている。
+
+| 規則 | 置き場所 | 6-8 での効き方 |
+|---|---|---|
+| 命名規約（dialect 非依存） | [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) | **呼ぶだけ** |
+| 識別子の引用（dialect 依存。囲む文字が 5 通り） | 同上の `quoteIdentifier(name, rules)` ＋ [`keywords.ts`](js/io/ddl/keywords.ts) | `IdentifierRules` を 4 つ足す。規則本体は共有 |
+| 既定値の `'` エスケープ（#11） | [`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) の `isStrict()` の中 | `strict="1"` が付いた瞬間に効く |
+
+**`naming.ts` の順序規約**: 名前は引用前の生名で組み、返り値を呼び手が `quoteIdentifier()` に通す。
+逆にすると `fk_"顧客"_"参照"` のような名前ができる（正しくは `"fk_顧客_参照"`）。
+
+**未現代化 4 本が 0 バイト差であることは、検算する事実ではなく 4 ファイルを開いていないという
+構造的事実**にした。唯一のゲートは #11 を `isStrict()` の内側に置くことで、外へ出すと
+`tests/golden/ddl/sqlite/house-defaults.sql:6` の `DEFAULT ''{}'::jsonb'` が動く（28 本中この 1 行だけ。
+mysql / oracle の同じ列は INTEGER に落ちて `quote=""`、mssql は DEFAULT を出さない）。
+
+#### 決めたこと 9: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| 未現代化 4 本の命名・引用・#11 | **6-8** | 6-3 / 6-4 と同じ型紙。`naming.ts` に `IdentifierRules` を 4 つ足せば効く |
+| known-issue **#12** / **#13**（mssql のカンマ / sqlite の複合 PK） | **6-8** | プロファイルごとの現代化と一体 |
+| 63 バイトを超える識別子 | **未定（記録のみ）** | PG は黙って切り詰めるので `fk_<長table>_<長column>` が衝突しうる。切り詰め規則を持ち込むと決定論と可読性の両方を損なうので、規則を決める前に実害を見る |
+| 空文字の識別子 | 同上 | 現行も裸の空文字で壊れている。入力側（UI）で止める話 |
+| 命名の検査（snake_case / 複数形） | **6-9 以降** | 決めたこと 7 |
+| `FULLTEXT` を UI の選択肢から外すか | **6-8 / UI 側** | 生成器は 4 種すべて受ける形で決着済み。選択肢の整理は別テーマ |
+
+#### 検証
+
+**golden が動いた 31 行の内訳。** 実装前に立てた予測表と**ファイル単位・行数単位で完全に一致**した
+（1 項目直すごとに差分行数を数え、予測との差が出たらそこで止める手順を採った）。
+
+| ファイル | 行 | 内訳 |
+|---|---|---|
+| `empty.sql` | 0 | 0 バイトのまま |
+| `minimal.sql` | 0 | 識別子が裸のまま・コメント無し・key 無し・ai 無し |
+| `autoincrement.sql` | **1** | ` id BIGSERIAL NOT NULL,` → ` id INTEGER GENERATED ALWAYS AS IDENTITY,`（決めたこと 3。PK 名は fixture が `counters_pkey` を持つので不変） |
+| `types-matrix.sql` | **2** | `c_serial` / `c_bigserial` の末尾 ` NOT NULL` が落ちる（同 3）。**両方 `autoincrement="0"`** で、identity は**型**から来ている |
+| `quotes-i18n.sql` | **6** | `CREATE TABLE "顧客"` ／ `"氏名"` `"say ""hi"""` `"メモ"` の 3 列（引用 ＋ インラインコメント除去）／ `ADD CONSTRAINT "顧客_pkey"`（**制約名も識別子**）／ `COMMENT ON COLUMN "顧客"."say ""hi"""`（壊れていた行の是正）。`COMMENT ON TABLE "顧客"` ほか 3 行は**不変** —— 元々引用されており値に `"` を含まない |
+| `relations.sql` | **7** | インラインコメント除去 1 ／ `COMMENT ON COLUMN employees.manager_id` の引用が外れる 1 ／ FK 5 本が `fk_employees_manager_id` ほかへ |
+| `house-defaults.sql` | **15** | インラインコメント除去 4 ／ 制約名 2（`users_pkey` → **`users_email_key`**（#6 の実害）・`article_tags_pkey` → **`pk_article_tags`**（fixture が持っていた名前が初めて出た））／ `COMMENT ON` の引用が外れる 7 ／ FK 2 |
+
+```
+$ git diff --stat tests/golden/
+ 5 files changed, 31 insertions(+), 31 deletions(-)
+$ git status --porcelain tests/golden/json tests/golden/state tests/golden/ddl/{mysql,mssql,oracle,sqlite}
+                                    # 空 ← 未現代化 4 本と他形式は 1 バイトも動いていない
+```
+
+**列コメントの二重出力**（列定義の `/* ... */` と `COMMENT ON COLUMN`）も同時に落とした。
+上の表の「インラインコメント除去」7 行がそれで、`COMMENT ON COLUMN` 側が残る ——
+`/* */` は PG では単なるコメントで、`COMMENT ON` と違いカタログに載らない。
+
+テスト件数（左が 6-5a、右が本段階）:
+
+| | 前 | 後 |
+|---|---|---|
+| `npm test` | 228 passed | **234 passed**（命名・引用・#11 の恒久テストを 6 本追加） |
+| `npm run test:browser` | 108 passed | **109 passed**（`tests/browser/keys.spec.ts` を新設） |
+| `npm run known-issues` | 7 passed | **5 passed**（#6 / #11 が出た） |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**golden で説明できない主張はすべて恒久テストに置いた。** fixture を 1 本も足していないのは
+6-5a と同じ理由 —— `DDL_FIXTURES` に足すと golden が 5 プロファイル分増え、「動いた行を 1 行ずつ
+説明する」という完了判定がぼやける。触ったのは `tests/fixtures/autoincrement.xml` の**先頭コメント
+1 行だけ**で（「`<datatype>` が無視され BIGSERIAL が出る」という説明が嘘になったため）、
+`<sql>` の中身は 1 バイトも動いていない。
+
+| 主張 | golden | 恒久テスト |
+|---|---|---|
+| name 空 → `<t>_pkey` / `<t>_<cols>_key` / `idx_<t>_<cols>` | **説明できない**（fixture 11 個すべてが name を持つ） | `tests/node/ddl.test.ts`（#6 の移設先） |
+| `CREATE INDEX` の経路 | **1 行も出ない**（`INDEX` / `FULLTEXT` の fixture が 0 本） | 同上 ＋ `tests/browser/keys.spec.ts`（UI からの到達点） |
+| 予約語の引用 | **出ない**（fixture の識別子に予約語が無い） | 同上。**裸のままであること**も表に入れた（引用しすぎる側の退行が捕まらなくなるため） |
+| #11 の `'` エスケープ | 出ない（PG 側の既定値が全部「式」判定） | `LITERALS` 表に `O'Brien` → `'O''Brien'` |
+| #11 が未現代化 4 本では**直っていない** | 28 本の 0 バイト差 | 同ファイルの mysql のテスト（規則側の裏付け） |
+| `key/@name` の `"null"` | 出ない | `tests/node/ddl.test.ts`（mssql で `CONSTRAINT null` が出ないこと） |
+
+org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 ／ §5.1）は着手前に一読した。
+**本段階は依存を 1 本も増やしていない**（予約語表は自前の定数。§2.2 / §3.12 / §5.1）。
+`innerHTML` 経路は増えておらず（§3.5）、生成する DDL は人が読んでから実行するもので
+アプリ自身は SQL を実行しない。予約語の採取に使った `postgres:18` は使い捨てコンテナ
+（`--rm`）で、リポジトリにも配布物にも痕跡を残していない。
+
+#### 次段階への入力 —— 6-6（DB 別 fixture）
+
+6-0 の分割表では次が 6-6。**6-5b が「規則は共通層・有効化は `isStrict()`」という形を作った**ので、
+6-8（未現代化 4 本の現代化）は `naming.ts` に `IdentifierRules` を 4 つ足し、`datatypes.xml` に
+`strict="1"` を付けるのが主な作業になる。引用文字は mysql が `` ` ``、mssql が `[ ]`、
+oracle と sqlite が `"`（sqlite は `'` も受ける）で、**予約語表だけが 4 本ぶん要る** ——
+`keywords.ts` の頭にある採取手順が mysql / mssql / oracle にもそのまま使える
+（`INFORMATION_SCHEMA.KEYWORDS` / `sys.dm_exec_describe_first_result_set` ではなく、
+各 DB のドキュメント付録に相当するものを実物から採ること）。
+
+**6-8 で赤くなるのは 28 本の golden と known-issues #4 / #10 / #12 / #13。** どれも
+「未現代化のまま」を固定している主張なので、赤くなること自体が進捗になる。
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -3521,7 +3754,7 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事。**6-1 でも触っていない**が、`backend/php-cubrid/index.php:37` が消えた `db/cubrid/datatypes.xml` を読む dangling ができた（段階6-1 の記録） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
-| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。§6.3 の規約と known-issue #6 / #11 の是正は **6-5b**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離）は **6-8** |
+| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離）は **6-8** |
 | 型パレット `db/<db>/datatypes.xml` | 保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |

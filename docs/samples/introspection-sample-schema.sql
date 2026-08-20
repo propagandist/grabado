@@ -2,7 +2,8 @@
 -- house 既定 (HANDOVER §6) に沿わせる:
 --   PK = uuid DEFAULT uuidv7() (PG18)、テーブル名 = snake_case 複数形、
 --   監査列 = timestamptz NOT NULL DEFAULT now()、text / jsonb / numeric / timestamptz を使う、
---   FK = fk_<table>_<ref>、index = idx_<table>_<cols>。
+--   FK = fk_<table>_<参照元の列>、index = idx_<table>_<cols>（§6.3 の <ref> は段階6-5b で
+--   参照元の列名に確定した。列名はテーブル内で一意なので制約名が必ず衝突しない）。
 -- 目的は「house 標準のスキーマを現行 introspection に通すと XML がどう出るか」を固定すること。
 
 CREATE TABLE users (
@@ -30,7 +31,7 @@ CREATE TABLE articles (
     published_on  date,
     created_at    timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz NOT NULL DEFAULT now(),
-    CONSTRAINT fk_articles_users FOREIGN KEY (author_id) REFERENCES users (id)
+    CONSTRAINT fk_articles_author_id FOREIGN KEY (author_id) REFERENCES users (id)
 );
 
 CREATE INDEX idx_articles_author_id ON articles (author_id);
@@ -46,7 +47,7 @@ CREATE TABLE article_tags (
     tag        text NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT pk_article_tags PRIMARY KEY (article_id, tag),
-    CONSTRAINT fk_article_tags_articles FOREIGN KEY (article_id) REFERENCES articles (id)
+    CONSTRAINT fk_article_tags_article_id FOREIGN KEY (article_id) REFERENCES articles (id)
 );
 
 COMMENT ON TABLE article_tags IS '記事とタグの対応';

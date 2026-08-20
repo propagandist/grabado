@@ -104,11 +104,40 @@ cookie の `db` は変わらないのでリロードで元に戻る半端な状�
 
 `type` は **parser も serializer も値を検査しない**（文字列であることだけを見る）。選択肢を持つのは
 UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.ts) は falsy を `INDEX` に
-倒す。DDL でどう出るかは [`../js/io/ddl/`](../js/io/ddl/) 次第で（段階6-5a まで
-`db/<db>/output.xsl`）、**PostgreSQL は `PRIMARY` / `UNIQUE` 以外を
-すべて `ADD CONSTRAINT <table>_pkey KEY (...)` に落とす**（`INDEX` も `FULLTEXT` も同じ。
-制約名の衝突は known-issues #6）。値を列挙して拒む案は §6.3（エクスポート規約）の判断に送る ——
-形式側で拒むと、いま開ける設計が読めなくなる側の変更になる。
+倒す。**値を列挙して拒まない**というのが §6.3 の判断（段階6-5b）—— 形式側で拒むと、いま開ける
+設計が読めなくなる側の変更になる。かわりに生成器が 4 種すべてを受ける。
+
+`name` は空でよい。**空のときだけ**生成器が §6.3 の規約で名前を組む（段階6-5b）。
+name 属性の無い XML を読んだ場合も `""` になる（それまでは実行時 `null` が入り、DDL に
+`null` という制約名が出ていた）。
+
+## SQL エクスポート規約（HANDOVER §6.3・段階6-5b）
+
+**PostgreSQL のみ。** 未現代化の 4 プロファイル（`mysql` / `mssql` / `oracle` / `sqlite`）は
+6-8 でこちら側に移る。規則の実体は [`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts)。
+
+| 対象 | 名前 | 備考 |
+|---|---|---|
+| PRIMARY | `<table>_pkey` | PG の自動生成名と一致 |
+| UNIQUE | `<table>_<cols>_key` | 同上 |
+| INDEX / FULLTEXT | `idx_<table>_<cols>` | `CREATE INDEX` で出す。PG に `KEY (...)` 構文は無い。PG の自動名は `<table>_<cols>_idx` だが、**§6.3 の規約を優先**（index 名はモデルに残るので往復では動かない） |
+| FK | `fk_<table>_<参照元の列>` | 列名はテーブル内で一意なので必ず衝突しない。**FK 名はモデルに保存先が無い**（`references[]` は `table` / `column` だけ）ので、外部由来の名前は保持されず必ず組み直される |
+
+いずれも `keys[].name` が空のときだけ。**列を 1 つも持たないキーは 1 文字も出さない**
+（`PRIMARY KEY ();` を作らない）。`FULLTEXT` は PG では btree の `CREATE INDEX` に落ちる ——
+PG の全文検索索引は `USING gin (to_tsvector(...))` という式インデックスで、モデルは式も
+config も持てないため。
+
+### 識別子の引用
+
+`/^[a-z_][a-z0-9_]*$/` に収まり、かつ **PostgreSQL 18 の予約語**（`pg_get_keywords()` の
+catcode `R` / `T`。一覧は [`../js/io/ddl/keywords.ts`](../js/io/ddl/keywords.ts)）でなければ**裸**。
+それ以外は `"` で囲み、値の中の `"` は `""` にする。テーブル名・列名・制約名・index 名・
+FK の参照先まで同じ規則で、`COMMENT ON` だけ別扱いということはない。
+
+house 標準（snake_case・複数形）に従っていれば 1 つも囲まれない。**生成器は識別子を書き換えない**
+——「snake_case にする」「複数形にする」を出力側でやると設計と DDL が食い違い、introspection の
+往復も壊れる。命名の検査（lint）は 6-9 以降へ送った（CUSTOMIZATIONS.md の段階6-5b）。
 
 ## 決定論と diff フレンドリー（CLAUDE.md 制約3）
 

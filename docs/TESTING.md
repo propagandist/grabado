@@ -243,7 +243,13 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 | [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../js/io/template.ts`](../js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。`postgresql` が §6.2 の 3 列を返すこと・未現代化 4 本が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外・`newrowtype` |
 | [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・`mysql` では従来経路に落ちること |
 
-**マウス操作そのものを張るテストは 6-4 でも 0 本のまま。** `#area` の実クリックではなく
+**段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は
+キー管理 UI から `CREATE INDEX` に届く経路（`KeyManager.add()` → avail から列を選んで `←`）。
+`INDEX` / `FULLTEXT` を持つ fixture が 1 本も無いので **35 本の golden に `CREATE INDEX` は
+1 行も出ない** —— 名前の規約そのものは [`../tests/node/ddl.test.ts`](../tests/node/ddl.test.ts) が
+押さえ、ここは「人がそこへ辿り着けるか」だけを見る。
+
+**マウス操作そのものを張るテストは 6-5b でも 0 本のまま。** `#area` の実クリックではなく
 同じ入口を叩いている（座標だけを持つ event で足りる）。上の「`.ts` 化そのものが張れない層」の
 穴は塞いでいない —— 塞いだのは「テンプレートが何を作るか」であって、ドラッグや選択の経路ではない。
 
@@ -331,7 +337,7 @@ fs 経路はそのまま）。
 | `house-defaults` | uuidv7 PK・timestamptz 監査列・jsonb・複合 PK・UNIQUE・FK・日本語コメント |
 | `relations` | 自己参照 FK・多対多・1 テーブルに複数 FK |
 | `types-matrix` | 型パレット網羅（サイズ付き含む） |
-| `autoincrement` | `autoincrement="1"`（PG の `BIGSERIAL` 分岐） |
+| `autoincrement` | `autoincrement="1"`（PG は段階6-5b から `<datatype>` ＋ `GENERATED ALWAYS AS IDENTITY`。それまでは `BIGSERIAL` 固定） |
 | `quotes-i18n` | コメント内の `'`（生成器の `replaceSubstring`。段階6-5a まで XSLT の `replace-substring`）・識別子の `"`・日本語識別子 |
 
 **fixture は §6 のパレット差し替えでも動かさない。** 6-3 は `postgresql` のパレットだけを

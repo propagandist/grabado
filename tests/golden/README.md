@@ -12,11 +12,16 @@ state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§
 json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
 
-**§6 段階6-6a で入力が DB 別になった。** `ddl/<db>/` は
-[`../fixtures/<db>/`](../fixtures/) を読んで採る（`state/` と `json/` は
-`postgresql` の fixture 固定）。**6-6a の時点では 4 プロファイルの fixture が
-postgresql 版の暫定コピー**なので、この 35 本は 6-5b から 1 バイトも動いていない ——
-それが 6-6a の完了判定そのもの。各 DB の実型へ書き直して 28 本を動かすのは **6-6b**。
+**§6 段階6-6a で入力が DB 別になり、6-6b でその中身が各 DB の実型になった。**
+`ddl/<db>/` は [`../fixtures/<db>/`](../fixtures/) を読んで採る（`state/` と `json/` は
+`postgresql` の fixture 固定）。6-6b で **21 本が動いている** ——
+`mysql` 4 / `mssql` 6 / `oracle` 5 / `sqlite` 3 / `postgresql` 3（`types-matrix` に
+`BIGINT` と `UUID` を足したぶん。`ddl` / `json` / `state` の 1 本ずつ）。
+
+**これで非 PG の golden が初めて「その DB の DDL」になった。** 6-6a まではどれも
+PG 用の型名を読ませた結果で、`oracle` は uuid / jsonb / timestamptz が全部 `INTEGER`、
+`sqlite` は全列 `TEXT` に落ちていた。ただし**書けるのは現行パレットに実在する型だけ**なので、
+21 本は「**6-8 直前のベースライン**」であってその DB の理想形ではない。
 
 **§6 段階6-5a で `ddl-input/` の 7 本が消えた。** あれは `Designer.toXML()` の出力＝
 `db/<db>/output.xsl` への入力で、DDL 生成だけが「モデル -> 中間 XML -> XSLT -> 文字列」の
@@ -68,12 +73,21 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
   `ddl/mssql/relations.sql` に実物がある）
 - **`sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える**（known-issues #13。
   `ddl/sqlite/relations.sql`）
-- **未現代化のプロファイル**（`mysql` / `mssql` / `oracle` / `sqlite`）では `UUID` が
-  型パレットに無く `INTEGER` に落ちている（known-issues #4）。
-  **これは入力が PG 用のままであることの帰結でもある** —— 6-6b で各 DB の fixture を
-  その DB の型で書き直すと、この 4 本の golden から「PG の型名を読ませた結果」が消える
-  （#4 そのものは 6-8 まで残る。再現は known-issues 側が
-  **postgresql の fixture を明示的に読む**形で保つ）
+- ~~**未現代化のプロファイルでは `UUID` が型パレットに無く `INTEGER` に落ちている**~~
+  **§6 段階6-6b で golden から消えた** —— 各 DB の fixture がその DB の型で書かれ、
+  もう PG の型名を読ませていないため。**#4 / #10 そのものは 6-8 まで残り**、再現は
+  known-issues 側が **postgresql の fixture を明示的に読む**形で保っている
+- **`oracle`: `INTEGER` と書いた列が `NUMBER` になる**（known-issues #10）。
+  `number` の `re="INT"` が `integer` の `sql` 完全一致を後勝ちで上書きするので、
+  **このパレットで `integer` 型にはどう書いても到達できない**。
+  `ddl/oracle/types-matrix.sql` の `c_integer` がその実物
+- **`mssql`: `DEFAULT` が 1 つも出ない**（生成器に分岐が無い。6-5a が記録した 9 件の 1 つ）。
+  `ddl/mssql/house-defaults.sql` では `NEWID()` も `GETDATE()` も既定値 `1` も丸ごと落ちる
+- **`mssql`: UNIQUE キーが T-SQL に無い `UNIQUE KEY (...)` で出る**（known-issues #14）
+- **`sqlite`: コメントが 1 つも出ない**（6-5a が記録した粗さ）。`ddl/sqlite/house-defaults.sql`
+  にテーブルコメントも列コメントも 1 行も無いのがその実物 —— `mysql` の同じ fixture は
+  7 行出す。**`mysql` の「60 字で無言に切り詰める」ほうは golden に出ていない**
+  （fixture のコメントが最長 26 文字のため）
 
 **§6 段階6-5b で `postgresql` の 5 本・31 行が動いた**（`autoincrement` 1 / `types-matrix` 2 /
 `quotes-i18n` 6 / `relations` 7 / `house-defaults` 15）。内訳は 1 行ずつ

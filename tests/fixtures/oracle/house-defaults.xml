@@ -1,58 +1,49 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  **段階6-6a の暫定コピー。中身は postgresql 版と同一で、型名も postgresql のもの。**
+  特性化テスト fixture: house 既定（HANDOVER §6）を Oracle の型パレットで表したもの。
+  postgresql 版と同じスキーマ（tests/fixtures/postgresql/house-defaults.xml）を、
+  db/oracle/datatypes.xml に実在する型だけで書き直してある。
 
-  6-6a が変えるのは配線だけ（tests/fixtures/<db>/ への分割と readFixture(db, name) への
-  署名変更）で、**DDL golden が 1 バイトも動かないこと**が完了判定。そのため中身を
-  postgresql 版と揃えてある —— この段階では oracle のパレットで読んでも解決結果は 6-5b までと
-  1 ビットも変わらない（未知型が先頭型へ落ちる known-issue #4 の姿がそのまま残る）。
+  **house 既定が Oracle で失うもの**（記録は CUSTOMIZATIONS.md 段階6-6b）:
+    - uuid         -> RAW(16) ＋ SYS_GUID()（v4 相当。uuidv7 の順序性は失う）
+    - timestamptz  -> TIMESTAMP（TIMESTAMP WITH TIME ZONE はパレットに無い。足すのは 6-8）
+    - jsonb        -> CLOB（JSON 型がパレットに無い）
+    - boolean      -> NUMBER(1)（Oracle 23ai 未満に BOOLEAN 列型が無い）
 
-  <datatype> と <default> を oracle の実型・実関数へ書き直すのは **6-6b**。
-  経緯と段階の切り方は CUSTOMIZATIONS.md の段階6-6a。
--->
-<!--
-  特性化テスト fixture: house 既定（HANDOVER §6）に沿ったスキーマ。
-  docs/samples/introspection-sample-schema.sql を設計 XML として書き起こしたもの。
-  uuidv7 PK / timestamptz 監査列 / jsonb / 複合 PK / UNIQUE / FK / 日本語コメントを含む。
+  email と tag が VARCHAR2 なのは Oracle の制約 —— CLOB には UNIQUE も PRIMARY KEY も
+  張れない。「その DB で普通に書く形」を採っている。
 
-  **段階6-3 で UUID が解決するようになった。** それまで db/postgresql/datatypes.xml に
-  uuid 型が無く、先頭の型（INTEGER）へ黙って落ちていた（known-issue #4 の実害）。
-  golden がその変化を捉えている（tests/golden/ddl/postgresql/house-defaults.sql）。
-
-  未現代化のプロファイル（mysql / mssql / oracle / sqlite）では今も落ちるので、
-  この fixture は #4 の再現にも使われている（tests/known-issues/known-issues.spec.ts）。
-  監査列の TIMESTAMP WITH TIME ZONE は PG の新パレットでは sql が TIMESTAMPTZ に
-  変わったが、aka で標準名を受けるのでこの fixture は 1 行も動かない。
+  **view_count の INTEGER は NUMBER に解決される**（known-issue #10）。書いた型に
+  到達できないことがそのまま golden に出る。直すのは 6-8。
 -->
 <sql>
 <table x="20" y="20" name="users">
 <row name="id" null="0" autoincrement="0">
-<datatype>UUID</datatype>
-<default>uuidv7()</default>
+<datatype>RAW(16)</datatype>
+<default>SYS_GUID()</default>
 </row>
 <row name="email" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>VARCHAR2(255)</datatype>
 <comment>ログイン用メールアドレス</comment>
 </row>
 <row name="display_name" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>VARCHAR2(255)</datatype>
 </row>
 <row name="is_active" null="0" autoincrement="0">
-<datatype>BOOLEAN</datatype>
-<default>true</default>
+<datatype>NUMBER(1)</datatype>
+<default>1</default>
 </row>
 <row name="preferences" null="0" autoincrement="0">
-<datatype>JSONB</datatype>
-<default>'{}'::jsonb</default>
+<datatype>CLOB</datatype>
 <comment>UI 設定などの任意項目</comment>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
-<default>now()</default>
+<datatype>TIMESTAMP(6)</datatype>
+<default>SYSTIMESTAMP</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
-<default>now()</default>
+<datatype>TIMESTAMP(6)</datatype>
+<default>SYSTIMESTAMP</default>
 </row>
 <key type="PRIMARY" name="users_pkey">
 <part>id</part>
@@ -64,19 +55,19 @@
 </table>
 <table x="420" y="20" name="articles">
 <row name="id" null="0" autoincrement="0">
-<datatype>UUID</datatype>
-<default>uuidv7()</default>
+<datatype>RAW(16)</datatype>
+<default>SYS_GUID()</default>
 </row>
 <row name="author_id" null="0" autoincrement="0">
-<datatype>UUID</datatype>
+<datatype>RAW(16)</datatype>
 <relation table="users" row="id" />
 <comment>執筆者 (users.id)</comment>
 </row>
 <row name="title" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>VARCHAR2(255)</datatype>
 </row>
 <row name="body" null="1" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>CLOB</datatype>
 </row>
 <row name="view_count" null="0" autoincrement="0">
 <datatype>INTEGER</datatype>
@@ -84,18 +75,18 @@
 </row>
 <row name="price" null="1" autoincrement="0">
 <datatype>DECIMAL(12,2)</datatype>
-<comment>有料記事の価格。money ではなく numeric を使う</comment>
+<comment>有料記事の価格。浮動小数ではなく decimal を使う</comment>
 </row>
 <row name="published_on" null="1" autoincrement="0">
 <datatype>DATE</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
-<default>now()</default>
+<datatype>TIMESTAMP(6)</datatype>
+<default>SYSTIMESTAMP</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
-<default>now()</default>
+<datatype>TIMESTAMP(6)</datatype>
+<default>SYSTIMESTAMP</default>
 </row>
 <key type="PRIMARY" name="articles_pkey">
 <part>id</part>
@@ -104,15 +95,15 @@
 </table>
 <table x="820" y="20" name="article_tags">
 <row name="article_id" null="0" autoincrement="0">
-<datatype>UUID</datatype>
+<datatype>RAW(16)</datatype>
 <relation table="articles" row="id" />
 </row>
 <row name="tag" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>VARCHAR2(64)</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP WITH TIME ZONE</datatype>
-<default>now()</default>
+<datatype>TIMESTAMP(6)</datatype>
+<default>SYSTIMESTAMP</default>
 </row>
 <key type="PRIMARY" name="pk_article_tags">
 <part>article_id</part>

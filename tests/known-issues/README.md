@@ -30,11 +30,16 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 | 10 | `<type re="...">` の照合が壊れている。アンカーされておらず部分一致し、大文字小文字を区別し、`sql` の完全一致を後から上書きする | [js/io/palette.ts](../../js/io/palette.ts) の `indexOfTypeNameLegacy` が `re` を後勝ちで見る。壊れているのは規則よりパレット側で、`oracle` は `re="INT"` を integer と number の 2 型に、`mssql` は 4 型（tinyint/smallint/int/bigint）に振っている | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（同上） | §6 段階6-8 |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
 | 12 | `mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれ、続く `CONSTRAINT` 行が列定義に繋がらない（T-SQL として壊れる） | [js/io/ddl/mssql.ts](../../js/io/ddl/mssql.ts) がカンマをコメントより先に出す（`db/mssql/output.xsl:34-45` の逐語） | DDL 生成 | §6 段階6-8 |
+| 14 | `mssql`: UNIQUE キーが T-SQL に無い `UNIQUE KEY (...)` 構文で出る（MySQL の構文） | [js/io/ddl/mssql.ts:63](../../js/io/ddl/mssql.ts#L63) が `db/mssql/output.xsl` の逐語。正しくは `CONSTRAINT <name> UNIQUE ( <cols> )` | DDL 生成 | §6 段階6-8 |
 | 13 | `sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち、PRIMARY KEY が 1 つも無い DDL になる | [js/io/ddl/sqlite.ts](../../js/io/ddl/sqlite.ts) が「UNIQUE、または part 2 個以上の PRIMARY」をまとめて UNIQUE として出す（`db/sqlite/output.xsl:61-64` の逐語） | DDL 生成 | §6 段階6-8 |
 
 **#12 / #13 は §6 段階6-5a で新設した。** XSLT を TS へ逐語移植する過程で読み直したときに
 見つかった upstream からの粗さで、**6-5a が作った欠陥ではない**。挙動不変が 6-5a の要件なので
 TS 側でも忠実に再現してあり、直すのは 6-8。**黙って持ち込まないための隔離**がこの 2 本。
+
+**#14 は §6 段階6-6b で新設した。** これも 6-5a が移植した upstream の粗さで、当時の
+9 件の一覧から漏れていたもの —— 4 プロファイルの fixture を実型で書き直したときに
+house 既定の UNIQUE を読み直して見つかった。同じく直すのは 6-8。
 
 **#11 は §6 段階6-4 で新設し、6-5b で PG から消えた**（下の「直したもの」）。囲む側の規則が
 upstream から値の中を見ていないもので、6-4 が作った欠陥ではない。未現代化の 4 本には残っている。

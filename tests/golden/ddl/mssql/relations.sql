@@ -1,30 +1,30 @@
 CREATE TABLE [employees] (
-  [id] bigint NOT NULL ,
-  [name] tinyint NOT NULL ,
-  [manager_id] bigint  -- 直属の上長（自己参照）, 
+  [id] int NOT NULL ,
+  [name] nvarchar(255) NOT NULL ,
+  [manager_id] int  -- 直属の上長（自己参照）, 
 CONSTRAINT employees_pkey PRIMARY KEY ([id])
 ) ON [PRIMARY]
 GO
 
 CREATE TABLE [projects] (
-  [id] bigint NOT NULL ,
-  [title] tinyint NOT NULL ,
-  [owner_id] bigint NOT NULL ,
-  [team_id] bigint , 
+  [id] int NOT NULL ,
+  [title] nvarchar(255) NOT NULL ,
+  [owner_id] int NOT NULL ,
+  [team_id] int , 
 CONSTRAINT projects_pkey PRIMARY KEY ([id])
 ) ON [PRIMARY]
 GO
 
 CREATE TABLE [teams] (
-  [id] bigint NOT NULL ,
-  [name] tinyint NOT NULL , 
+  [id] int NOT NULL ,
+  [name] nvarchar(255) NOT NULL , 
 CONSTRAINT teams_pkey PRIMARY KEY ([id])
 ) ON [PRIMARY]
 GO
 
 CREATE TABLE [employee_projects] (
-  [employee_id] bigint NOT NULL ,
-  [project_id] bigint NOT NULL , 
+  [employee_id] int NOT NULL ,
+  [project_id] int NOT NULL , 
 CONSTRAINT employee_projects_pkey PRIMARY KEY ([employee_id], [project_id])
 ) ON [PRIMARY]
 GO

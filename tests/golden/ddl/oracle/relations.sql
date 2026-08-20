@@ -15,9 +15,9 @@ DROP TABLE "employee_projects" PURGE;
 -------------------------------------------------------------------------------
 
 CREATE TABLE "employees" (
-    "id"                              NUMBER              NOT NULL
-  , "name"                            NCLOB               NOT NULL
-  , "manager_id"                      NUMBER
+    "id"                              NUMBER(10)          NOT NULL
+  , "name"                            VARCHAR2(255)       NOT NULL
+  , "manager_id"                      NUMBER(10)
   , CONSTRAINT "employees_pkey" PRIMARY KEY ( "id" )
 );
 
@@ -28,10 +28,10 @@ COMMENT ON COLUMN "employees"."manager_id"                      IS '直属の上
 -------------------------------------------------------------------------------
 
 CREATE TABLE "projects" (
-    "id"                              NUMBER              NOT NULL
-  , "title"                           NCLOB               NOT NULL
-  , "owner_id"                        NUMBER              NOT NULL
-  , "team_id"                         NUMBER
+    "id"                              NUMBER(10)          NOT NULL
+  , "title"                           VARCHAR2(255)       NOT NULL
+  , "owner_id"                        NUMBER(10)          NOT NULL
+  , "team_id"                         NUMBER(10)
   , CONSTRAINT "projects_pkey" PRIMARY KEY ( "id" )
 );
 
@@ -41,8 +41,8 @@ CREATE TABLE "projects" (
 -------------------------------------------------------------------------------
 
 CREATE TABLE "teams" (
-    "id"                              NUMBER              NOT NULL
-  , "name"                            NCLOB               NOT NULL
+    "id"                              NUMBER(10)          NOT NULL
+  , "name"                            VARCHAR2(255)       NOT NULL
   , CONSTRAINT "teams_pkey" PRIMARY KEY ( "id" )
 );
 
@@ -52,8 +52,8 @@ CREATE TABLE "teams" (
 -------------------------------------------------------------------------------
 
 CREATE TABLE "employee_projects" (
-    "employee_id"                     NUMBER              NOT NULL
-  , "project_id"                      NUMBER              NOT NULL
+    "employee_id"                     NUMBER(10)          NOT NULL
+  , "project_id"                      NUMBER(10)          NOT NULL
   , CONSTRAINT "employee_projects_pkey" PRIMARY KEY ( "employee_id", "project_id" )
 );
 

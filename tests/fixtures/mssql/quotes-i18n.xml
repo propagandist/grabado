@@ -1,37 +1,30 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  **段階6-6a の暫定コピー。中身は postgresql 版と同一で、型名も postgresql のもの。**
-
-  6-6a が変えるのは配線だけ（tests/fixtures/<db>/ への分割と readFixture(db, name) への
-  署名変更）で、**DDL golden が 1 バイトも動かないこと**が完了判定。そのため中身を
-  postgresql 版と揃えてある —— この段階では mssql のパレットで読んでも解決結果は 6-5b までと
-  1 ビットも変わらない（未知型が先頭型へ落ちる known-issue #4 の姿がそのまま残る）。
-
-  <datatype> と <default> を mssql の実型・実関数へ書き直すのは **6-6b**。
-  経緯と段階の切り方は CUSTOMIZATIONS.md の段階6-6a。
--->
-<!--
   特性化テスト fixture: 引用符と多言語。
-    - コメント内のシングルクォート -> db/*/output.xsl の replace-substring（'' への二重化）
+    - コメント内のシングルクォート -> 生成器の replaceSubstring（'' への二重化）
     - カラム名の二重引用符       -> Row.toXML の " -> &quot; 置換（属性値のみ）
     - 日本語のテーブル名・カラム名・コメント（UTF-8 の往復）
   & と < は現行 XML を壊すため、正常系ではなく tests/known-issues/ に置いている。
+
+  **構造は全プロファイルで同じ。型だけ SQL Server のもの**（段階6-6b）——
+  識別子の囲い方はプロファイルごとに違う（SQL Server は角かっこ）ので、
+  同じ入力から採った 5 本の golden がそのまま比較表になる。
 -->
 <sql>
 <table x="20" y="20" name="顧客">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>int</datatype>
 </row>
 <row name="氏名" null="0" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>nvarchar(255)</datatype>
 <comment>姓と名は分けない</comment>
 </row>
 <row name="say &quot;hi&quot;" null="1" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>nvarchar(255)</datatype>
 <comment>識別子に " が入る場合の属性エスケープ確認</comment>
 </row>
 <row name="メモ" null="1" autoincrement="0">
-<datatype>TEXT</datatype>
+<datatype>nvarchar(4000)</datatype>
 <comment>顧客の'愛称'をここに書く</comment>
 </row>
 <key type="PRIMARY" name="顧客_pkey">

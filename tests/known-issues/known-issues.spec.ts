@@ -202,3 +202,26 @@ test("#13 sqlite: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消え�
     expect(createTable).toContain("UNIQUE (employee_id, project_id)");
     expect(createTable).not.toContain("PRIMARY KEY");
 });
+
+/*
+ * §6 段階6-6b で新設。**6-6b が作った欠陥ではない** —— 6-5a が逐語移植した upstream の
+ * 粗さで、当時の 9 件の一覧から漏れていたもの。4 プロファイルの fixture を実型で
+ * 書き直したときに house 既定の UNIQUE を読み直して見つかった。直すのは 6-8。
+ *
+ * 入力は #12 / #13 と揃えて postgresql の fixture のままにしてある —— 生成器が出す
+ * 構文の話で、列の型には依存しないため。
+ */
+test("#14 mssql: UNIQUE キーが T-SQL に無い UNIQUE KEY 構文で出る", async () => {
+    await useDatatypes(page, "mssql");
+    await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
+
+    const ddl = await generateDdl(page, "mssql");
+
+    /*
+     * js/io/ddl/mssql.ts:63（db/mssql/output.xsl の逐語）が MySQL の構文をそのまま出す。
+     * T-SQL の正しい形は CONSTRAINT <name> UNIQUE ( <cols> ) で、KEY は付かない。
+     * house 既定は users に UNIQUE を 1 本持つので、**この DB では必ず踏む**。
+     */
+    expect(ddl).toContain("CONSTRAINT users_email_key UNIQUE KEY ([email])");
+    expect(ddl).not.toContain("CONSTRAINT users_email_key UNIQUE ([email])");
+});

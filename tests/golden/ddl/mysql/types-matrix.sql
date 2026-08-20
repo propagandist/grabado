@@ -14,33 +14,29 @@ DROP TABLE IF EXISTS `type_samples`;
 		
 CREATE TABLE `type_samples` (
   `c_integer` INTEGER NULL,
+  `c_tinyint` TINYINT NULL,
   `c_smallint` SMALLINT NULL,
+  `c_mediumint` MEDIUMINT NULL,
+  `c_int` INT NOT NULL,
+  `c_bigint` BIGINT NULL,
   `c_decimal` DECIMAL(12,2) NULL,
-  `c_serial` INTEGER NOT NULL,
-  `c_bigserial` INTEGER NOT NULL,
   `c_float` FLOAT NULL,
   `c_double` DOUBLE NULL,
   `c_char` CHAR(10) NULL,
   `c_varchar` VARCHAR(255) NULL,
-  `c_text` MEDIUMTEXT NULL,
-  `c_bytea` INTEGER NULL,
-  `c_boolean` INTEGER NULL,
+  `c_mediumtext` MEDIUMTEXT NULL,
+  `c_binary` BINARY(16) NULL,
+  `c_varbinary` VARBINARY(255) NULL,
+  `c_blob` BLOB NULL,
   `c_date` DATE NULL,
-  `c_time` TIME(3) NULL,
-  `c_time_tz` INTEGER NULL,
-  `c_interval` INTEGER(6) NULL,
-  `c_timestamp` TIMESTAMP(3) NULL,
-  `c_timestamp_tz` INTEGER NULL,
-  `c_timestamp_wo_tz` INTEGER NULL,
-  `c_xml` INTEGER NULL,
-  `c_bit` INTEGER(8) NULL,
-  `c_varbit` INTEGER(8) NULL,
-  `c_inet` INTEGER NULL,
-  `c_cidr` INTEGER NULL,
-  `c_geometry` INTEGER NULL,
-  `c_json` INTEGER NULL,
-  `c_jsonb` INTEGER NULL,
-  PRIMARY KEY (`c_serial`)
+  `c_time` TIME NULL,
+  `c_datetime` DATETIME NULL,
+  `c_year` YEAR NULL,
+  `c_timestamp` TIMESTAMP NULL,
+  `c_enum` ENUM('draft','published') NULL,
+  `c_set` SET('a','b') NULL,
+  `c_bit` bit NULL,
+  PRIMARY KEY (`c_int`)
 );
 
 -- ---
@@ -58,5 +54,5 @@ CREATE TABLE `type_samples` (
 -- Test Data
 -- ---
 
--- INSERT INTO `type_samples` (`c_integer`,`c_smallint`,`c_decimal`,`c_serial`,`c_bigserial`,`c_float`,`c_double`,`c_char`,`c_varchar`,`c_text`,`c_bytea`,`c_boolean`,`c_date`,`c_time`,`c_time_tz`,`c_interval`,`c_timestamp`,`c_timestamp_tz`,`c_timestamp_wo_tz`,`c_xml`,`c_bit`,`c_varbit`,`c_inet`,`c_cidr`,`c_geometry`,`c_json`,`c_jsonb`) VALUES
--- ('','','','','','','','','','','','','','','','','','','','','','','','','','','');
+-- INSERT INTO `type_samples` (`c_integer`,`c_tinyint`,`c_smallint`,`c_mediumint`,`c_int`,`c_bigint`,`c_decimal`,`c_float`,`c_double`,`c_char`,`c_varchar`,`c_mediumtext`,`c_binary`,`c_varbinary`,`c_blob`,`c_date`,`c_time`,`c_datetime`,`c_year`,`c_timestamp`,`c_enum`,`c_set`,`c_bit`) VALUES
+-- ('','','','','','','','','','','','','','','','','','','','','','','');

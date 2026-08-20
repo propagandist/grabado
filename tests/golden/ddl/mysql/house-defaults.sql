@@ -13,13 +13,13 @@
 DROP TABLE IF EXISTS `users`;
 		
 CREATE TABLE `users` (
-  `id` INTEGER NOT NULL DEFAULT uuidv7(),
-  `email` MEDIUMTEXT NOT NULL COMMENT 'ログイン用メールアドレス',
-  `display_name` MEDIUMTEXT NOT NULL,
-  `is_active` INTEGER NOT NULL DEFAULT true,
-  `preferences` INTEGER NOT NULL DEFAULT '{}'::jsonb COMMENT 'UI 設定などの任意項目',
-  `created_at` INTEGER NOT NULL DEFAULT now(),
-  `updated_at` INTEGER NOT NULL DEFAULT now(),
+  `id` CHAR(36) NOT NULL DEFAULT 'UUID()',
+  `email` VARCHAR(255) NOT NULL COMMENT 'ログイン用メールアドレス',
+  `display_name` VARCHAR(255) NOT NULL,
+  `is_active` bit NOT NULL DEFAULT 1,
+  `preferences` MEDIUMTEXT NOT NULL COMMENT 'UI 設定などの任意項目',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY (`email`)
 ) COMMENT 'ユーザー';
@@ -32,15 +32,15 @@ CREATE TABLE `users` (
 DROP TABLE IF EXISTS `articles`;
 		
 CREATE TABLE `articles` (
-  `id` INTEGER NOT NULL DEFAULT uuidv7(),
-  `author_id` INTEGER NOT NULL COMMENT '執筆者 (users.id)',
-  `title` MEDIUMTEXT NOT NULL,
+  `id` CHAR(36) NOT NULL DEFAULT 'UUID()',
+  `author_id` CHAR(36) NOT NULL COMMENT '執筆者 (users.id)',
+  `title` VARCHAR(255) NOT NULL,
   `body` MEDIUMTEXT NULL,
   `view_count` INTEGER NOT NULL DEFAULT 0,
-  `price` DECIMAL(12,2) NULL COMMENT '有料記事の価格。money ではなく numeric を使う',
+  `price` DECIMAL(12,2) NULL COMMENT '有料記事の価格。浮動小数ではなく decimal を使う',
   `published_on` DATE NULL,
-  `created_at` INTEGER NOT NULL DEFAULT now(),
-  `updated_at` INTEGER NOT NULL DEFAULT now(),
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) COMMENT '記事';
 
@@ -52,9 +52,9 @@ CREATE TABLE `articles` (
 DROP TABLE IF EXISTS `article_tags`;
 		
 CREATE TABLE `article_tags` (
-  `article_id` INTEGER NOT NULL,
-  `tag` MEDIUMTEXT NOT NULL,
-  `created_at` INTEGER NOT NULL DEFAULT now(),
+  `article_id` CHAR(36) NOT NULL,
+  `tag` VARCHAR(64) NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`article_id`, `tag`)
 ) COMMENT '記事とタグの対応';
 

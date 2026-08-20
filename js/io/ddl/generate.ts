@@ -38,6 +38,7 @@ import { generateOracle } from "./oracle.ts";
 import { generateSqlite } from "./sqlite.ts";
 import { generateSqlStandard } from "./sql-standard.ts";
 import { generateH2 } from "./h2.ts";
+import { generateMariadb } from "./mariadb.ts";
 
 export function generateDdl(model: DesignModel, palette: TypePalette): string {
     const db = palette.db();
@@ -66,6 +67,8 @@ export function generateDdl(model: DesignModel, palette: TypePalette): string {
             return generateSqlStandard(tables).trim();
         case "h2":
             return generateH2(tables).trim();
+        case "mariadb":
+            return generateMariadb(tables).trim();
         default:
             throw new Error(`DDL 生成に対応していない DB プロファイル: ${db}`);
     }

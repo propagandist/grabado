@@ -154,9 +154,9 @@ describe("型解決（段階6-2 / 6-3）", () => {
     });
 
     describe("strict の照合（段階6-3）", () => {
-        test("現代化済みは h2 / postgresql / sql-standard（6-8 で残り 4 本が来る）", () => {
-            /* 新設プロファイルは最初から strict で作る（6-7a で sql-standard、6-7b で h2） */
-            expect(STRICT_PROFILES).toEqual(["h2", "postgresql", "sql-standard"]);
+        test("現代化済みは新設 3 本 ＋ postgresql（6-8 で残り 4 本が来る）", () => {
+            /* 新設プロファイルは最初から strict で作る（6-7a / 6-7b / 6-7c） */
+            expect(STRICT_PROFILES).toEqual(["h2", "mariadb", "postgresql", "sql-standard"]);
         });
 
         test("撤去・改名した型の旧名がすべて新しい型に解決する", () => {

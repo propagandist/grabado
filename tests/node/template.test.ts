@@ -78,8 +78,8 @@ function recordingTable(): Recorded {
 
 describe("初期テーブルテンプレート（段階6-4）", () => {
     test("検査対象のプロファイルがある（空振りしていないこと）", () => {
-        /* 6-7a で sql-standard、6-7b で h2。6-7c で mariadb が続く */
-        expect(STRICT_PROFILES).toEqual(["h2", "postgresql", "sql-standard"]);
+        /* 新設 3 本（6-7a sql-standard / 6-7b h2 / 6-7c mariadb）はすべて strict */
+        expect(STRICT_PROFILES).toEqual(["h2", "mariadb", "postgresql", "sql-standard"]);
         expect(LEGACY_PROFILES.length).toBe(4);
     });
 

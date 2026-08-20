@@ -24,6 +24,7 @@ export const CONFIG = {
         "sqlite",
         "mssql",
         "oracle",
+        "sql-standard",
     ],
     DEFAULT_DB: "postgresql",
 

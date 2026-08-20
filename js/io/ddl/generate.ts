@@ -18,6 +18,10 @@
  * 「挙動不変」の主張が弱くなる。4-1a が toXML() 4 実装を移設したときと同じ立場で、
  * 共通骨格の抽出は sql-standard を基底に置く 6-7 の仕事（CUSTOMIZATIONS.md 段階6-7）。
  *
+ * **段階6-7a で sql-standard が 6 本目として入った。** 骨格は postgresql と同じで、
+ * 標準に無い COMMENT ON と CREATE INDEX だけが違う。**共通化は h2 / mariadb を書いてから**
+ * —— 2 本の比較では正しい抽象が決まらない（CUSTOMIZATIONS.md 段階6-7a）。
+ *
  * export は 1 本だけにしてある。未使用の export を出すと、ツリーシェイクを切っている
  * Node ハーネス（tests/node/harness.ts）の束と dist の束が構造的にずれる。
  */
@@ -30,6 +34,7 @@ import { generateMysql } from "./mysql.ts";
 import { generateMssql } from "./mssql.ts";
 import { generateOracle } from "./oracle.ts";
 import { generateSqlite } from "./sqlite.ts";
+import { generateSqlStandard } from "./sql-standard.ts";
 
 export function generateDdl(model: DesignModel, palette: TypePalette): string {
     const db = palette.db();
@@ -54,6 +59,8 @@ export function generateDdl(model: DesignModel, palette: TypePalette): string {
             return generateOracle(tables).trim();
         case "sqlite":
             return generateSqlite(tables).trim();
+        case "sql-standard":
+            return generateSqlStandard(tables).trim();
         default:
             throw new Error(`DDL 生成に対応していない DB プロファイル: ${db}`);
     }

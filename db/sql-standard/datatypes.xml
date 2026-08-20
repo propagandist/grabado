@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ANSI SQL 型パレット（HANDOVER §6 / 段階6-7a で新設）。
+
+  **ベンダ非依存のプロファイル。** どの製品でもなく ISO/IEC 9075（SQL:2016 / SQL:2023）が
+  定める型だけを持つ。用途は 2 つ:
+    1. 特定 DB に縛られない設計を書き、そこから各製品へ持っていく出発点にする
+    2. **他プロファイルの基底**——同じ意味の型に同じ id を振ってあるので、
+       CUSTOMIZATIONS.md 段階6-7 の差分表がそのまま読める
+
+  属性の契約は docs/FORMAT.md（db/postgresql/datatypes.xml の頭に一覧がある）。
+  strict="1" は「現代化済み」の印で、照合は sql / aka の完全一致だけになり、
+  一致しない型は先頭型に落ちず例外になる。
+
+  **標準に無くて落とした型**（PG18 パレットとの差。段階6-7 の設計表）:
+    uuid    SQL に UUID 型は無い -> CHARACTER(36) で表す（テンプレートがそうしている）
+    bit / varbit   SQL:1999 で入り **SQL:2003 で削除された**
+    inet / cidr    標準外（PostgreSQL の拡張）
+    geometry       SQL/MM Spatial（ISO 13249-3）は別規格
+
+  **標準にあって PG と綴りが違うもの**: text -> CHARACTER LARGE OBJECT、
+  bytea -> BINARY LARGE OBJECT、varchar -> CHARACTER VARYING、jsonb -> JSON（SQL:2023 で標準化）。
+  どれも aka に PG 綴りを入れてあるので、PG で書いた設計をこのプロファイルで読める。
+
+  newrowtype は varchar。house 標準の「text 優先」に対して**標準の text 相当は CLOB** で、
+  新規行の既定が CLOB になるのは実用的でないため（段階6-7a の判断）。
+-->
+<datatypes db="sql-standard" strict="1" newrowtype="varchar">
+	<!--
+	  §6.2 初期テーブルテンプレート。標準には uuid 型も生成関数も無いので、
+	  **PK は CHARACTER(36) で既定値を持たない**（採番はアプリ側）。
+	  監査列の CURRENT_TIMESTAMP は標準の関数なのでそのまま書ける。
+	-->
+	<template>
+		<row name="id" type="char" size="36" null="0" key="PRIMARY" />
+		<row name="created_at" type="timestamp_with_time_zone" null="0" default="CURRENT_TIMESTAMP" />
+		<row name="updated_at" type="timestamp_with_time_zone" null="0" default="CURRENT_TIMESTAMP" />
+	</template>
+
+	<group label="Numeric" color="rgb(238,238,170)">
+		<type id="integer" label="Integer" length="0" sql="INTEGER" aka="INT" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" quote="" />
+		<type id="bigint_identity" label="Big Integer (identity)" length="0" sql="BIGINT GENERATED ALWAYS AS IDENTITY" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
+		<type id="decimal" label="Numeric" length="1" sql="NUMERIC" aka="DECIMAL|DEC" quote="" />
+		<type id="float" label="Single precision" length="0" sql="REAL" aka="FLOAT" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE PRECISION" aka="DOUBLE" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="char" label="Character" length="1" sql="CHARACTER" aka="CHAR" quote="'" />
+		<type id="varchar" label="Varchar" length="1" sql="CHARACTER VARYING" aka="VARCHAR" quote="'" />
+		<type id="text" label="Text (CLOB)" length="0" sql="CHARACTER LARGE OBJECT" aka="CLOB|TEXT" quote="'" />
+		<type id="bytea" label="Binary (BLOB)" length="0" sql="BINARY LARGE OBJECT" aka="BLOB|BYTEA" quote="'" />
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" aka="BOOL" quote="'" />
+	</group>
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+		<type id="date" label="Date" length="0" sql="DATE" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" quote="'" />
+		<type id="time_with_time_zone" label="Time w/ TZ" length="1" sql="TIME WITH TIME ZONE" aka="TIMETZ" quote="'" />
+		<type id="interval" label="Interval" length="1" sql="INTERVAL" quote="'" />
+		<type id="timestamp_with_time_zone" label="Timestamp w/ TZ" length="1" sql="TIMESTAMP WITH TIME ZONE" aka="TIMESTAMPTZ|TIMESTAMP" quote="'" />
+	</group>
+
+	<group label="Miscellaneous" color="rgb(200,200,255)">
+		<type id="xml" label="XML" length="0" sql="XML" quote="'" />
+		<type id="jsonb" label="JSON" length="0" sql="JSON" aka="JSONB" quote="'" />
+	</group>
+</datatypes>

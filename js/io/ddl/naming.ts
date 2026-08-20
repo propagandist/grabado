@@ -12,13 +12,16 @@
  *   引用       dialect 依存。囲む文字が 5 通りある（" / ` / [ ] / ' / 大文字の扱い）
  *              -> 6-8 は IdentifierRules を 4 つ足す。規則本体（裸で出せる条件）は共有
  *
+ * **段階6-7a で sql-standard が 2 本目として入った。** 命名規約はそのまま呼ぶだけで済み
+ * （dialect 非依存という切り方が効いた）、足したのは IdentifierRules 1 つと語彙表だけ。
+ *
  * **順序の規約: 名前は引用前の生名で組み、返り値を呼び手が quoteIdentifier() へ通す。**
  * 逆にすると fk_"顧客"_"参照" のような名前ができる。正しくは "fk_顧客_参照"。
  * keyConstraintName() / foreignKeyName() はどちらも**引用しない文字列**を返す。
  */
 
 import type { DdlKey } from "./shared.ts";
-import { POSTGRESQL_RESERVED } from "./keywords.ts";
+import { POSTGRESQL_RESERVED, SQL_STANDARD_RESERVED } from "./keywords.ts";
 
 /** プロファイルごとの識別子の囲み方 */
 export interface IdentifierRules {
@@ -37,6 +40,20 @@ export const POSTGRESQL_IDENTIFIER: IdentifierRules = {
     close: '"',
     escape: (name) => name.split('"').join('""'),
     reserved: POSTGRESQL_RESERVED,
+};
+
+/**
+ * ANSI SQL の区切り識別子（段階6-7a）。囲み方は PostgreSQL と同じ " で、**違うのは語彙だけ**
+ * （SQL:2016 は 365 語。関数名まで予約しているため PG の 101 語より遥かに多い）。
+ *
+ * 裸の識別子を標準は**大文字へ**畳み、PG は小文字へ畳む。BARE_IDENTIFIER が小文字だけを
+ * 裸で通すので、どちらでも「囲まなければ一貫する」ことは変わらない。
+ */
+export const SQL_STANDARD_IDENTIFIER: IdentifierRules = {
+    open: '"',
+    close: '"',
+    escape: (name) => name.split('"').join('""'),
+    reserved: SQL_STANDARD_RESERVED,
 };
 
 /**

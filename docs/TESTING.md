@@ -161,8 +161,10 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 
 ### DDL golden — `tests/golden/ddl/<db>/<fixture>.sql`
 
-7 fixture × 5 DB = **35 本**。[js/io.ts](../js/io.ts) の `clientsql()` と同じ経路
-（`Designer.toDdl()` → `.trim()`）で採る。UI の `#textarea` に入る値と一致する。
+7 fixture × 6 DB = **42 本**（§6 段階6-7a で `sql-standard` が入った。6-7b / 6-7c で
+`h2` / `mariadb` が続き、対応 DB 8 本がそろうと 56 本になる）。
+[js/io.ts](../js/io.ts) の `clientsql()` と同じ経路（`Designer.toDdl()` → `.trim()`）で採る。
+UI の `#textarea` に入る値と一致する。
 入力は**そのプロファイルの fixture**（`tests/fixtures/<db>/`。§6 段階6-6a）。
 
 **§6 段階6-5a で `tests/golden/ddl-input/` の 7 本が消えた。** あれは `Designer.toXML()` の
@@ -246,7 +248,7 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は
 キー管理 UI から `CREATE INDEX` に届く経路（`KeyManager.add()` → avail から列を選んで `←`）。
-`INDEX` / `FULLTEXT` を持つ fixture が 1 本も無いので **35 本の golden に `CREATE INDEX` は
+`INDEX` / `FULLTEXT` を持つ fixture が 1 本も無いので **42 本の golden に `CREATE INDEX` は
 1 行も出ない** —— 名前の規約そのものは [`../tests/node/ddl.test.ts`](../tests/node/ddl.test.ts) が
 押さえ、ここは「人がそこへ辿り着けるか」だけを見る。
 
@@ -258,7 +260,7 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 [`../tests/node/ddl.test.ts`](../tests/node/ddl.test.ts) が入力値と出力の表で固定している
 （**段階6-5a まで `serialize.test.ts` が `<default>` 要素の中身として見ていた**。XML の書き出しが
 消えたので観測面を生成 DDL に移した）。fixture を足していないのは、`DDL_FIXTURES` に入れると
-golden が 5 プロファイル分増えるため。
+golden がプロファイル数ぶん増えるため。
 
 差分テストの主張は段階ごとに引き継いでいる。6-2 は「旧規則と違うのは `postgresql/BIGINT` の
 1 件だけ」を完了判定にしていたが、**6-3 でその原因（`x_real`）ごと撤去され、`postgresql` が

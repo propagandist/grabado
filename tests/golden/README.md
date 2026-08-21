@@ -89,10 +89,11 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
   **§6 段階6-6b で golden から消えた** —— 各 DB の fixture がその DB の型で書かれ、
   もう PG の型名を読ませていないため。**#4 / #10 そのものは 6-8 まで残り**、再現は
   known-issues 側が **postgresql の fixture を明示的に読む**形で保っている
-- **`oracle`: `INTEGER` と書いた列が `NUMBER` になる**（known-issues #10）。
-  `number` の `re="INT"` が `integer` の `sql` 完全一致を後勝ちで上書きするので、
-  **このパレットで `integer` 型にはどう書いても到達できない**。
-  `ddl/oracle/types-matrix.sql` の `c_integer` がその実物
+- ~~**`oracle`: `INTEGER` と書いた列が `NUMBER` になる**~~
+  **§6 段階6-8c で消えた**（oracle の現代化）。**これで `re` を持つパレットが 1 つも無くなり、
+  known-issue #10 は実例ごと尽きた**。あわせて桁揃えと DROP のコメントブロックが落ち、
+  SEQUENCE ＋ TRIGGER が identity 列になり、`BOOLEAN` / `JSON` /
+  `TIMESTAMP WITH TIME ZONE` がパレットに入った（23ai で実測）
 - ~~**`mssql`: `DEFAULT` が 1 つも出ない** ／ **UNIQUE キーが `UNIQUE KEY (...)` で出る**~~
   **§6 段階6-8b で消えた**（mssql の現代化）。あわせて known-issue #12（最終列のコメントが
   区切りカンマを飲む）も直り、`datetimeoffset` / `date` がパレットに入って

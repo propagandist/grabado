@@ -152,7 +152,7 @@ describe("型解決（段階6-2 / 6-3）", () => {
              * **6-8 で 1 本ずつ現代化するたびにこの配列が縮み、4 本とも移ると空になる**
              * （そのとき差分テストごと消える）。6-8a で mysql が抜けて 3 本。
              */
-            expect(LEGACY_PROFILES).toEqual(["oracle", "sqlite"]);
+            expect(LEGACY_PROFILES).toEqual(["sqlite"]);
             expect(candidateNames().length).toBeGreaterThan(70);
         });
     });
@@ -165,6 +165,7 @@ describe("型解決（段階6-2 / 6-3）", () => {
                 "mariadb",
                 "mssql",
                 "mysql",
+                "oracle",
                 "postgresql",
                 "sql-standard",
             ]);
@@ -285,25 +286,34 @@ describe("型解決（段階6-2 / 6-3）", () => {
     });
 
     describe("indexOfTypeName（未現代化プロファイル）", () => {
-        test("re は後勝ちのまま（known-issue #10・6-8 で直す）", () => {
+        /*
+         * **known-issue #10 は 6-8c で実例が尽きた。**
+         *
+         * 「re が sql の完全一致を後勝ちで上書きする」規則そのものは
+         * js/io/palette.ts の indexOfTypeNameLegacy に残っているが、**re 属性を持つ
+         * パレットが 1 つも無くなった** —— 6-8a / 6-8b / 6-8c で mysql / mssql / oracle が
+         * strict になり、最後に残った sqlite は元から re を 1 つも持たない。
+         *
+         * ここに在った 2 本（oracle の INTEGER が NUMBER に化ける／re がアンカーされていない）は
+         * **直った側の主張**に書き換えて下に移してある。規則ごと消えるのは 6-8d。
+         */
+        test("oracle の INTEGER は integer に解決する（known-issue #10 が消えた）", () => {
             /*
-             * oracle は integer と number が両方 re="INT" を持つ。入力 INTEGER は integer の
-             * sql に完全一致するが、後ろの number が re の部分一致で上書きする。
-             * 素朴に先勝ちへ倒すと mssql が INTEGER -> tinyint と縮むので、直す場所は 6-8。
+             * 6-8c まで number の re="INT" が integer の sql 完全一致を上書きし、
+             * **このパレットで integer 型に到達する書き方が無かった**。strict は re を
+             * 見ないので、書いた型がそのまま出る。
              */
             const oracle = paletteOf("oracle");
-            expect(oracle.idAt(oracle.indexOfTypeName("INTEGER"))).toBe("number");
+            expect(oracle.idAt(oracle.indexOfTypeName("INTEGER"))).toBe("integer");
+            expect(oracle.idAt(oracle.indexOfTypeName("NUMBER"))).toBe("number");
         });
 
-        test("re はアンカーされていない（known-issue #10・6-8 で直す）", () => {
-            /*
-             * oracle の number は re="INT"。**INTEGER に部分一致して sql の完全一致を
-             * 上書きする**ので、このパレットで integer 型には到達できない（#10 の実害）。
-             * **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える）。
-             */
-            const oracle = paletteOf("oracle");
-            expect(oracle.idAt(oracle.indexOfTypeName("INTEGER"))).toBe("number");
-            expect(oracle.idAt(oracle.indexOfTypeName("NUMBER"))).toBe("number");
+        test("re 属性を持つパレットはもう 1 つも無い（#10 の実例が尽きた）", () => {
+            const withRe = DB_PROFILES.filter((db) =>
+                readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8").includes(' re="'),
+            );
+
+            expect(withRe).toEqual([]);
         });
 
         test("sql の完全一致が複数あれば最初が勝つ（known-issue #3 の直り方）", () => {
@@ -323,8 +333,8 @@ describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         test("一致が無ければ -1（先頭型へのフォールバックは呼び手の責任）", () => {
-            /* PG の型。oracle パレットには無い。0 に倒すのは js/io/xml-parser.ts（#4・6-8 で解消） */
-            expect(paletteOf("oracle").indexOfTypeName("BYTEA")).toBe(-1);
+            /* PG の型。sqlite パレットには無い。0 に倒すのは js/io/xml-parser.ts（#4・6-8d で解消） */
+            expect(paletteOf("sqlite").indexOfTypeName("BYTEA")).toBe(-1);
         });
     });
 
@@ -341,10 +351,10 @@ describe("型解決（段階6-2 / 6-3）", () => {
             const pg = paletteOf("postgresql");
             expect(pg.fkIndexFor(pg.indexOfId("text"))).toBe(pg.indexOfId("text"));
 
-            /* fk 属性を 1 つも持たないプロファイルでは全型が恒等（6-8a で mysql は持つようになった） */
-            const oracle = paletteOf("oracle");
-            const identity = [...Array(oracle.types().length).keys()].every(
-                (i) => oracle.fkIndexFor(i) === i,
+            /* fk 属性を 1 つも持たないプロファイルでは全型が恒等（寄せ先は 6-8c で sqlite へ） */
+            const sqlite = paletteOf("sqlite");
+            const identity = [...Array(sqlite.types().length).keys()].every(
+                (i) => sqlite.fkIndexFor(i) === i,
             );
             expect(identity).toBe(true);
         });
@@ -454,8 +464,8 @@ describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         test("未現代化プロファイルでは未知の型が黙って先頭型になる（#4 が残る）", () => {
-            /* oracle に BYTEA は無い。添字 0 に落ちる。6-8c でここが例外になる */
-            const row = parseOneRow("BYTEA", "oracle");
+            /* sqlite に BYTEA は無い。添字 0（text）に落ちる。6-8d でここが例外になる */
+            const row = parseOneRow("BYTEA", "sqlite");
             expect(row.type).toBe(0);
         });
 
@@ -476,15 +486,15 @@ describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         test("未現代化プロファイルでは size を捨てない（6-3 は PG 以外を触っていない）", () => {
-            /* oracle の clob は length="0" だが、strict ではないので size はそのまま残る */
-            const row = parseOneRow("CLOB(10)", "oracle");
+            /* sqlite の numeric は length="0" だが、strict ではないので size はそのまま残る */
+            const row = parseOneRow("NUMERIC(10)", "sqlite");
             expect(row.size).toBe("10");
         });
     });
 
     describe("isStrict", () => {
         test("属性が無ければ false（未現代化プロファイルと旧パレット）", () => {
-            expect(paletteOf("oracle").isStrict()).toBe(false);
+            expect(paletteOf("sqlite").isStrict()).toBe(false);
             expect(
                 paletteFromXml(`<datatypes db="x"><group label="g"/></datatypes>`).isStrict(),
             ).toBe(false);

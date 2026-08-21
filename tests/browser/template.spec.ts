@@ -133,9 +133,9 @@ test.describe("初期テーブルテンプレート（段階6-4）", () => {
         expect(await addRowByUi(page)).toBe("text");
     });
 
-    test("oracle（未現代化）: 従来どおり id 1 列 ＋ autoincrement", async () => {
+    test("sqlite（未現代化）: 従来どおり id 1 列 ＋ autoincrement", async () => {
         /*
-         * **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える）。
+         * 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた（6-8d で消える）。
          *
          * **空にしてからパレットを差し替える**のが要点。逆にすると、前のテストが
          * postgresql のテンプレート（24 型）で作ったテーブルが残ったまま oracle（15 型）に
@@ -144,16 +144,16 @@ test.describe("初期テーブルテンプレート（段階6-4）", () => {
          * UI では db の切り替えにリロードが要る（現行契約）ので、この順序はテスト側の制約。
          */
         await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
-        await useDatatypes(page, "oracle");
+        await useDatatypes(page, "sqlite");
 
         const added = await addTableByUi(page);
 
         /* テンプレートを持たないプロファイルは 6-3 以前と 1 バイトも変わらない */
         expect(added.rows).toEqual([
-            { title: "id", type: "integer", def: "", nll: true, ai: true },
+            { title: "id", type: "text", def: "", nll: true, ai: true },
         ]);
         expect(added.keys).toEqual([{ type: "PRIMARY", parts: ["id"] }]);
         /* 既定型も先頭の型のまま（newrowtype を持たない） */
-        expect(await addRowByUi(page)).toBe("integer");
+        expect(await addRowByUi(page)).toBe("text");
     });
 });

@@ -6,15 +6,16 @@
 
   **house 既定が Oracle で失うもの**（記録は CUSTOMIZATIONS.md 段階6-6b）:
     - uuid         -> RAW(16) ＋ SYS_GUID()（v4 相当。uuidv7 の順序性は失う）
-    - timestamptz  -> TIMESTAMP（TIMESTAMP WITH TIME ZONE はパレットに無い。足すのは 6-8）
-    - jsonb        -> CLOB（JSON 型がパレットに無い）
-    - boolean      -> NUMBER(1)（Oracle 23ai 未満に BOOLEAN 列型が無い）
+    - timestamptz  -> **TIMESTAMP WITH TIME ZONE**（6-8c でパレットに入った。tz を保つ）
+    - jsonb        -> **JSON**（21c から。6-8c でパレットに入った）
+    - boolean      -> **BOOLEAN**（**23ai からネイティブ**。6-8c まで NUMBER(1) だった）
 
   email と tag が VARCHAR2 なのは Oracle の制約 —— CLOB には UNIQUE も PRIMARY KEY も
   張れない。「その DB で普通に書く形」を採っている。
 
-  **view_count の INTEGER は NUMBER に解決される**（known-issue #10）。書いた型に
-  到達できないことがそのまま golden に出る。直すのは 6-8。
+  **view_count の INTEGER が INTEGER のまま出る** —— 6-8c まで known-issue #10 で NUMBER に
+  化けていた（number の re="INT" が integer の sql 完全一致を上書きしていた）。
+  strict なパレットは re を見ないので、このプロファイルで #10 が消えた。
 -->
 <sql>
 <table x="20" y="20" name="users">
@@ -30,19 +31,19 @@
 <datatype>VARCHAR2(255)</datatype>
 </row>
 <row name="is_active" null="0" autoincrement="0">
-<datatype>NUMBER(1)</datatype>
-<default>1</default>
+<datatype>BOOLEAN</datatype>
+<default>TRUE</default>
 </row>
 <row name="preferences" null="0" autoincrement="0">
-<datatype>CLOB</datatype>
+<datatype>JSON</datatype>
 <comment>UI 設定などの任意項目</comment>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP(6)</datatype>
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
 <default>SYSTIMESTAMP</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP(6)</datatype>
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
 <default>SYSTIMESTAMP</default>
 </row>
 <key type="PRIMARY" name="users_pkey">
@@ -81,11 +82,11 @@
 <datatype>DATE</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP(6)</datatype>
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
 <default>SYSTIMESTAMP</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP(6)</datatype>
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
 <default>SYSTIMESTAMP</default>
 </row>
 <key type="PRIMARY" name="articles_pkey">
@@ -102,7 +103,7 @@
 <datatype>VARCHAR2(64)</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>TIMESTAMP(6)</datatype>
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
 <default>SYSTIMESTAMP</default>
 </row>
 <key type="PRIMARY" name="pk_article_tags">

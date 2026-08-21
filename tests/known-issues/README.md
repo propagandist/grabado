@@ -29,7 +29,12 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 | 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/io/xml-parser.ts](../../js/io/xml-parser.ts)） | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（`postgresql` は段階6-3 で解消） | §6 段階6-8 |
 | 10 | `<type re="...">` の照合が壊れている。アンカーされておらず部分一致し、大文字小文字を区別し、`sql` の完全一致を後から上書きする | [js/io/palette.ts](../../js/io/palette.ts) の `indexOfTypeNameLegacy` が `re` を後勝ちで見る。壊れているのは規則よりパレット側で、`oracle` は `re="INT"` を integer と number の 2 型に、`mssql` は 4 型（tinyint/smallint/int/bigint）に振っている | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（同上） | §6 段階6-8 |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
+| 15 | `oracle`: 識別子に `"` を含むと実行できない DDL になる（ORA-25716）。**grabado の欠陥ではなく Oracle の制約**だが出力は実行できない | 他の 7 本と同じ `""` エスケープで出す。**Oracle だけが識別子内の `"` を許さない** | DDL 生成 | **6-9 以降**（直し方が生成器の中に無く、入力側で止めるしかない） |
 | 13 | `sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち、PRIMARY KEY が 1 つも無い DDL になる | [js/io/ddl/sqlite.ts](../../js/io/ddl/sqlite.ts) が「UNIQUE、または part 2 個以上の PRIMARY」をまとめて UNIQUE として出す（`db/sqlite/output.xsl:61-64` の逐語） | DDL 生成 | §6 段階6-8 |
+
+**#15 は §6 段階6-8c で新設した。** 生成した DDL を Oracle 23ai に流して見つけたもので、
+**実物に流さなければ golden は緑のまま実行できない DDL を固定していた**（6-8a の
+`DEFAULT (UUID())` に続く 2 件目）。
 
 **#12 / #13 は §6 段階6-5a、#14 は 6-6b で新設した。** どれも XSLT を TS へ移植する過程や
 fixture を実型で書き直す過程で見つかった upstream からの粗さで、**移植が作った欠陥ではない**。
@@ -43,8 +48,9 @@ upstream から値の中を見ていないもので、6-4 が作った欠陥で�
 **§4 を通したことで 3 本は届く範囲が狭まっている** —— そのぶん §6 で直すときの影響も狭い。
 **§6 段階6-3 で #4 / #10 はさらに狭まり、`postgresql` から消えた。**
 段階6-5b で #6 / #11 が出て、**6-8a（mysql）と 6-8b（mssql）でさらに 2 本が出た**。
-**残るのは 4 本** —— #4 / #10 は未現代化の 2 本（`oracle` / `sqlite`）の話で 6-8c 以降、
-#13 は sqlite で 6-8d、#9 は introspection で §5.2。
+**6-8c で #10 は実例が尽きて消えた**（`re` を持つパレットが 1 つも無くなった）。
+**残るのは 4 本** —— #4 と #13 は `sqlite` の話で 6-8d、#15 は Oracle の制約で 6-9 以降、
+#9 は introspection で §5.2。
 
 - **#4 / #10 の再現は `postgresql` の fixture を別のパレットで読むことに依る**（段階6-6a）。
   6-6a で fixture が DB 別になったので、ここは `readFixture(SERIALIZER_DB, ...)` と

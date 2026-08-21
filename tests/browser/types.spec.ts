@@ -116,8 +116,9 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
     });
 
     test("未現代化のプロファイルでは従来どおり先頭型に落ちる（#4 は 6-8 まで残る）", async () => {
-        /* **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える） */
-        await useDatatypes(page, "oracle");
+        /* 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた（6-8d で消える） */
+        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
+        await useDatatypes(page, "sqlite");
         await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
@@ -133,8 +134,8 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
             return window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type);
         });
 
-        /* oracle パレットの先頭型 */
-        expect(id).toBe("integer");
+        /* sqlite パレットの先頭型 */
+        expect(id).toBe("text");
     });
 
     test("型セレクタが新しいパレットの 24 型を出す（golden が張らない UI の面）", async () => {
@@ -210,19 +211,20 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
         /* ここで旧実装は Designer.fkTypeFor を postgresql の内容で焼いていた */
         expect(await createFkChildId(page, "bigint_identity")).toBe("bigint");
 
-        await useDatatypes(page, "oracle");
+        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
+        await useDatatypes(page, "sqlite");
         await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
-         * oracle は fk 属性を 1 つも持たないので、FK 子行は親と同じ型でなければならない。
+         * sqlite は fk 属性を 1 つも持たないので、FK 子行は親と同じ型でなければならない。
          * 旧実装では postgresql の fkTypeFor[5]=2 が残り、BIGINT の FK が **SMALLINT** に
          * なっていた（実測は CUSTOMIZATIONS.md の段階6-2）。差し替えでキャッシュが
          * 捨てられないことが原因で、キャッシュごと廃止して塞いだ。
          *
-         * **寄せ先は 6-8a で mysql から oracle へ動いた** —— 現代化した mysql は
-         * bigint_identity に fk="bigint" を持つので「fk を 1 つも持たない」側ではなくなった。
+         * **寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた** ——
+         * 現代化したプロファイルは bigint_identity に fk を持つので、この側ではなくなる。
          */
-        expect(await createFkChildId(page, "number")).toBe("number");
-        expect(await createFkChildId(page, "clob")).toBe("clob");
+        expect(await createFkChildId(page, "numeric")).toBe("numeric");
+        expect(await createFkChildId(page, "text")).toBe("text");
     });
 });

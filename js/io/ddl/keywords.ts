@@ -5,8 +5,8 @@
  * js/io/ddl/naming.ts の quoteIdentifier() が唯一の読み手で、規則そのものは向こうにある。
  * ここは語彙表だけを持つ —— 6-8 で mysql（約 260 語）/ mssql / oracle / sqlite が足されると
  * 規則本体が語彙に埋もれるため、最初からファイルを分けてある。
- * **段階6-7a〜6-7c で sql-standard / h2 / mariadb、6-8a で mysql、6-8b で mssql が入った**
- * （採取元はそれぞれ下）。
+ * **段階6-7a〜6-7c で sql-standard / h2 / mariadb、6-8a〜6-8c で mysql / mssql / oracle が
+ * 入った**（採取元はそれぞれ下）。
  *
  * **一覧は推測ではなく実 PG18 から採った。** 採取手順（そのまま再現できる）:
  *
@@ -362,4 +362,42 @@ export const MSSQL_RESERVED: ReadonlySet<string> = new Set([
     "tsequal", "union", "unique", "unpivot", "update", "updatetext",
     "use", "user", "values", "varying", "view", "waitfor",
     "when", "where", "while", "with", "writetext",
+]);
+
+/*
+ * Oracle 23ai の予約語（段階6-8c）。
+ *
+ * **一覧を引けるのに、それだけでは足りなかった唯一のプロファイル。** Oracle は
+ * V を持ち reserved='Y' で 81 語を返すが、**総当たりでは 92 語が拒まれた**:
+ *
+ *   $ docker run -d --rm --name ora -e ORACLE_PASSWORD=... gvenzl/oracle-free:slim
+ *   $ sqlplus ... "SELECT keyword FROM v WHERE reserved='Y'"   -> 81 語
+ *   $ // 母集団 588 語（ビュー 81 ∪ SQL:2016 ∪ 他 5 本の予約語）で CREATE TABLE p<n>(<語> NUMBER)
+ *                                                                              -> **92 語**
+ *
+ *   採取日 2026-08-21 / Oracle AI Database 26ai Free Release 23.26.2.0.0
+ *
+ * **ビューに無いのに列名として拒まれた 11 語**: add / column / current / file / initial /
+ * row / rownum / rows / user / whenever / _rowid_。**実物のほうが厳しい**ので実測を採る
+ * （mssql はドキュメントのほうが広く、逆向きだった）。基準は他の 5 本と同じ「列名に使えるか」。
+ */
+
+/** 列名・テーブル名として裸で書けない語（Oracle 23ai） */
+export const ORACLE_RESERVED: ReadonlySet<string> = new Set([
+    "add", "all", "alter", "and", "any", "as",
+    "asc", "between", "by", "char", "check", "cluster",
+    "column", "compress", "connect", "create", "current", "date",
+    "decimal", "default", "delete", "desc", "distinct", "drop",
+    "else", "except", "exclusive", "exists", "file", "float",
+    "for", "from", "grant", "group", "having", "identified",
+    "in", "index", "initial", "insert", "integer", "intersect",
+    "into", "is", "like", "lock", "long", "minus",
+    "mode", "nocompress", "not", "nowait", "null", "number",
+    "of", "on", "option", "or", "order", "pctfree",
+    "prior", "public", "raw", "rename", "resource", "revoke",
+    "row", "rownum", "rows", "select", "set", "share",
+    "size", "smallint", "start", "synonym", "table", "then",
+    "to", "trigger", "union", "unique", "update", "user",
+    "values", "varchar", "varchar2", "view", "whenever", "where",
+    "with", "_rowid_",
 ]);

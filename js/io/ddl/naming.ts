@@ -27,6 +27,7 @@ import {
     MARIADB_RESERVED,
     MSSQL_RESERVED,
     MYSQL_RESERVED,
+    ORACLE_RESERVED,
     POSTGRESQL_RESERVED,
     SQL_STANDARD_RESERVED,
 } from "./keywords.ts";
@@ -41,13 +42,44 @@ export interface IdentifierRules {
     escape(name: string): string;
     /** 裸で書けない語（小文字で持つ。js/io/ddl/keywords.ts） */
     readonly reserved: ReadonlySet<string>;
+    /**
+     * 裸で書ける識別子の形（段階6-8c で足した）。**畳む向きがプロファイルで違う。**
+     *
+     * 大半の DB は裸の識別子を小文字へ畳む（PostgreSQL）か、大小を保つ（MySQL 系・SQL Server）
+     * ので BARE_LOWER でよい。**Oracle と H2 と標準は大文字へ畳む** —— そのうち Oracle だけは
+     * 引用符を使わない限り必ず大文字になるので、house 標準の snake_case を保つには
+     * **すべて囲むしかない**（BARE_UPPER を渡すと小文字の名前は 1 つも裸で通らない）。
+     *
+     * h2 / sql-standard も大文字へ畳むが、**そちらは畳んだ結果で一貫していれば動く**ので
+     * 小文字を裸で出している（6-7a / 6-7b の判断）。Oracle と違うのは、この 2 本が
+     * introspection の対象ではなく「書いて渡す」用途だから —— 読み直して設計と突き合わせる
+     * 経路（§5.2）を持つのは Oracle のほう。
+     */
+    readonly bare: RegExp;
 }
+
+/**
+ * 裸で書ける識別子の形。**小文字・数字・アンダースコアだけ**で、先頭が数字でないもの。
+ *
+ * house 標準が snake_case なので通常の DDL は 1 つも囲まれない（tests/golden/ddl/postgresql/
+ * house-defaults.sql が丸ごとその証拠）。囲まれるのは日本語・大文字混じり・記号入り・
+ * 予約語の 4 通りで、そのどれもが**囲まないと壊れる**か**意味が変わる**（PG は裸の識別子を
+ * 小文字へ畳むので Table と table が同じ列になる）。
+ */
+const BARE_LOWER = /^[a-z_][a-z0-9_]*$/;
+
+/**
+ * 大文字へ畳むプロファイル用（段階6-8c）。**小文字の識別子は 1 つも通らない**ので、
+ * house 標準の snake_case な設計はすべて引用される。
+ */
+const BARE_UPPER = /^[A-Z_][A-Z0-9_]*$/;
 
 export const POSTGRESQL_IDENTIFIER: IdentifierRules = {
     open: '"',
     close: '"',
     escape: (name) => name.split('"').join('""'),
     reserved: POSTGRESQL_RESERVED,
+    bare: BARE_LOWER,
 };
 
 /**
@@ -62,6 +94,7 @@ export const SQL_STANDARD_IDENTIFIER: IdentifierRules = {
     close: '"',
     escape: (name) => name.split('"').join('""'),
     reserved: SQL_STANDARD_RESERVED,
+    bare: BARE_LOWER,
 };
 
 /**
@@ -77,6 +110,7 @@ export const H2_IDENTIFIER: IdentifierRules = {
     close: '"',
     escape: (name) => name.split('"').join('""'),
     reserved: H2_RESERVED,
+    bare: BARE_LOWER,
 };
 
 /**
@@ -91,6 +125,7 @@ export const MARIADB_IDENTIFIER: IdentifierRules = {
     close: "`",
     escape: (name) => name.split("`").join("``"),
     reserved: MARIADB_RESERVED,
+    bare: BARE_LOWER,
 };
 
 /**
@@ -102,6 +137,7 @@ export const MYSQL_IDENTIFIER: IdentifierRules = {
     close: "`",
     escape: (name) => name.split("`").join("``"),
     reserved: MYSQL_RESERVED,
+    bare: BARE_LOWER,
 };
 
 /**
@@ -115,17 +151,25 @@ export const MSSQL_IDENTIFIER: IdentifierRules = {
     close: "]",
     escape: (name) => name.split("]").join("]]"),
     reserved: MSSQL_RESERVED,
+    bare: BARE_LOWER,
 };
 
 /**
- * 裸で書ける識別子の形。**小文字・数字・アンダースコアだけ**で、先頭が数字でないもの。
+ * Oracle の区切り識別子（段階6-8c）。**bare が BARE_UPPER の唯一のプロファイル。**
  *
- * house 標準が snake_case なので通常の DDL は 1 つも囲まれない（tests/golden/ddl/postgresql/
- * house-defaults.sql が丸ごとその証拠）。囲まれるのは日本語・大文字混じり・記号入り・
- * 予約語の 4 通りで、そのどれもが**囲まないと壊れる**か**意味が変わる**（PG は裸の識別子を
- * 小文字へ畳むので Table と table が同じ列になる）。
+ * Oracle は引用符の無い識別子を**必ず大文字へ畳む**ので、house 標準の snake_case を
+ * そのまま保つには全部囲むしかない。囲まないと設計の `users` が DB では `USERS` になり、
+ * introspection（§5.2）で読み直したときに設計と突き合わせられなくなる。
+ * 6-5b の「囲まないと意味が変わるものだけ囲む」という基準の、いちばん広い側に当たる。
  */
-const BARE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
+export const ORACLE_IDENTIFIER: IdentifierRules = {
+    open: '"',
+    close: '"',
+    escape: (name) => name.split('"').join('""'),
+    reserved: ORACLE_RESERVED,
+    bare: BARE_UPPER,
+};
+
 
 /**
  * 識別子を必要なときだけ囲む（段階6-5b の決定 2）。
@@ -135,7 +179,7 @@ const BARE_IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
  * BARE_IDENTIFIER と reserved の 2 つだけで、迷ったら囲む側に倒れる。
  */
 export function quoteIdentifier(name: string, rules: IdentifierRules): string {
-    if (BARE_IDENTIFIER.test(name) && !rules.reserved.has(name)) {
+    if (rules.bare.test(name) && !rules.reserved.has(name)) {
         return name;
     }
     return rules.open + rules.escape(name) + rules.close;

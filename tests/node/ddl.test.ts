@@ -92,15 +92,18 @@ describe("DDL golden（Node）", () => {
             const lines = ddl.split("\n");
             return Array.from({ length: count }, (_, i) => {
                 /*
-                 * 列の見つけ方が 3 通りあるのは、プロファイルごとに識別子の囲み方が違うため
-                 * （裸 / バッククォート / 二重引用符）。**6-8a で寄せ先が oracle になって
-                 * 3 つ目が要った。**
+                 * 列の見つけ方が 4 通りあるのは、プロファイルごとに識別子の囲み方が違うため
+                 * （裸 / バッククォート / 二重引用符 / **シングルクォート**）。
+                 * **6-8 で寄せ先が 1 本ずつ動くたびに増えた** —— 6-8a で oracle の `"`、
+                 * 6-8c で sqlite の `'`（upstream の sqlite は識別子を文字列リテラルの
+                 * 記号で囲む。known-issues に挙がっている粗さの 1 つで、6-8d で直る）。
                  */
                 const line = lines.find(
                     (l) =>
                         l.includes(`c${i} `) ||
                         l.includes(`\`c${i}\` `) ||
-                        l.includes(`"c${i}"`),
+                        l.includes(`"c${i}"`) ||
+                        l.includes(`'c${i}'`),
                 );
                 if (line === undefined) {
                     throw new Error(`列 c${i} が DDL に無い:\n${ddl}`);
@@ -177,11 +180,11 @@ describe("DDL golden（Node）", () => {
             ).toEqual(cases.map((c) => c[1]));
         });
 
-        test("oracle（未現代化）: 6-4 以前のまま CURRENT_TIMESTAMP だけが特例", () => {
+        test("sqlite（未現代化）: 6-4 以前のまま CURRENT_TIMESTAMP だけが特例", () => {
             /*
              * 未現代化プロファイルの規則は 1 文字も変えていない（6-8 で 1 本ずつこちら側に移る）。
-             * **6-8a で mysql が抜けたので寄せ先を oracle にした**（6-8c で消える）。
-             * ddl/{mssql,oracle,sqlite} の golden 21 本が 1 バイトも動かないことの
+             * **6-8c で oracle が抜けたので寄せ先は sqlite だけになった**（6-8d で消える）。
+             * ddl/sqlite の golden 7 本が 1 バイトも動かないことの
              * 裏付けがこれ —— golden 側は「動かなかった」しか言えないが、ここは
              * 「動かない規則が実際に何か」を書いてある。
              *
@@ -198,8 +201,8 @@ describe("DDL golden（Node）", () => {
                 "hello",
                 "O'Brien",
             ];
-            /* **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える） */
-            expect(ddlDefaults("oracle", inputs)).toEqual([
+            /* **6-8c で oracle が現代化されたので寄せ先を sqlite に移した**（6-8d で消える） */
+            expect(ddlDefaults("sqlite", inputs)).toEqual([
                 "'0'",
                 "'now()'",
                 "'uuidv7()'",

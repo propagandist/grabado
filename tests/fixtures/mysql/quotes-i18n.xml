@@ -13,7 +13,7 @@
 <sql>
 <table x="20" y="20" name="顧客">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>INT</datatype>
 </row>
 <row name="氏名" null="0" autoincrement="0">
 <datatype>VARCHAR(255)</datatype>
@@ -24,7 +24,7 @@
 <comment>識別子に " が入る場合の属性エスケープ確認</comment>
 </row>
 <row name="メモ" null="1" autoincrement="0">
-<datatype>MEDIUMTEXT</datatype>
+<datatype>LONGTEXT</datatype>
 <comment>顧客の'愛称'をここに書く</comment>
 </row>
 <key type="PRIMARY" name="顧客_pkey">

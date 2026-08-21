@@ -265,15 +265,16 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
         await loadFixture(page, xml);
         const pg = await generateDdl(page, "postgresql");
 
-        await useDatatypes(page, "mysql");
+        await useDatatypes(page, "oracle");
         await loadFixture(page, xml);
-        const my = await generateDdl(page, "mysql");
+        const other = await generateDdl(page, "oracle");
 
-        // 同じ入力・同じ生成器でも解決結果が変わる。mysql に BYTEA / JSONB は
-        // 無いので、一致が無いときの初期値 0（＝先頭の型 INTEGER）に落ちる
-        // ——known-issue #4 そのもの。
+        // 同じ入力・同じ生成器でも解決結果が変わる。oracle に BYTEA / JSONB は
+        // 無いので、一致が無いときの初期値 0（＝先頭の型）に落ちる
+        // ——known-issue #4 そのもの。**6-8a で mysql が現代化されたので寄せ先を移した**
+        // （mysql は BYTEA を aka で受けるようになり、#4 の例に使えない）。
         expect(pg).toContain("BYTEA");
-        expect(my).not.toContain("BYTEA");
-        expect(pg).not.toBe(my);
+        expect(other).not.toContain("BYTEA");
+        expect(pg).not.toBe(other);
     });
 });

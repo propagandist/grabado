@@ -78,9 +78,19 @@ function recordingTable(): Recorded {
 
 describe("初期テーブルテンプレート（段階6-4）", () => {
     test("検査対象のプロファイルがある（空振りしていないこと）", () => {
-        /* 新設 3 本（6-7a sql-standard / 6-7b h2 / 6-7c mariadb）はすべて strict */
-        expect(STRICT_PROFILES).toEqual(["h2", "mariadb", "postgresql", "sql-standard"]);
-        expect(LEGACY_PROFILES.length).toBe(4);
+        /*
+         * 新設 3 本（6-7a sql-standard / 6-7b h2 / 6-7c mariadb）はすべて strict。
+         * **6-8 で 1 本ずつ既存プロファイルが移り、4 本とも移ると LEGACY が空になる**
+         * （そのとき下の「テンプレートを持たない」テストごと消える）。6-8a で mysql が移った。
+         */
+        expect(STRICT_PROFILES).toEqual([
+            "h2",
+            "mariadb",
+            "mysql",
+            "postgresql",
+            "sql-standard",
+        ]);
+        expect(LEGACY_PROFILES.length).toBe(3);
     });
 
     test("postgresql は §6.2 の 3 列を返す", () => {

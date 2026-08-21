@@ -133,9 +133,18 @@ test.describe("初期テーブルテンプレート（段階6-4）", () => {
         expect(await addRowByUi(page)).toBe("text");
     });
 
-    test("mysql（未現代化）: 従来どおり id 1 列 ＋ autoincrement", async () => {
-        await useDatatypes(page, "mysql");
+    test("oracle（未現代化）: 従来どおり id 1 列 ＋ autoincrement", async () => {
+        /*
+         * **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える）。
+         *
+         * **空にしてからパレットを差し替える**のが要点。逆にすると、前のテストが
+         * postgresql のテンプレート（24 型）で作ったテーブルが残ったまま oracle（15 型）に
+         * 切り替わり、clearTables() の後始末が範囲外の型添字を引いて Row.getColor で落ちる。
+         * mysql（23 型）が寄せ先だった間は添字が収まっていたので露出しなかった。
+         * UI では db の切り替えにリロードが要る（現行契約）ので、この順序はテスト側の制約。
+         */
         await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
+        await useDatatypes(page, "oracle");
 
         const added = await addTableByUi(page);
 

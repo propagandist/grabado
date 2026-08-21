@@ -24,9 +24,11 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 - `sql-standard` はベンダ非依存で、`COMMENT ON` も `CREATE INDEX` も標準に無いため**行コメントで出る**
 - `h2` は **house 既定をほぼそのまま置ける唯一の非 PostgreSQL**（uuid / tz 付き timestamp /
   JSON / boolean がすべてネイティブ）。失うのは `uuidv7()` → `RANDOM_UUID()`（v4）だけ
-- `mariadb` は MySQL 系文法（バッククォート・`AUTO_INCREMENT`・列定義内 `COMMENT`）だが
-  **現代化済み**なので、未現代化の `mysql` と並べると 6-8 が何を直すのかがそのまま読める
-  （命名規約・引用・コメントの完全保持・FK 名）
+- `mariadb` は MySQL 系文法（バッククォート・`AUTO_INCREMENT`・列定義内 `COMMENT`）で
+  **現代化済み**。**§6 段階6-8a で `mysql` が同じ骨格へ移り**、7 本が動いた
+  （飾りブロックと `DROP TABLE IF EXISTS` が消え、`empty.sql` は 192 → 0 バイト）。
+  **MySQL だけ `DEFAULT (UUID())` と括弧が付く** —— MySQL 8 の式デフォルトの構文で、
+  包まないと構文エラーになる（MariaDB は包まなくても通る）
 
 **これで非 PG の golden が初めて「その DB の DDL」になった。** 6-6a まではどれも
 PG 用の型名を読ませた結果で、`oracle` は uuid / jsonb / timestamptz が全部 `INTEGER`、

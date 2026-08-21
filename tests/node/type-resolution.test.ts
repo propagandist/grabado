@@ -146,9 +146,13 @@ describe("型解決（段階6-2 / 6-3）", () => {
             expect(diffs).toEqual([]);
         });
 
-        test("母集団が空振りしていない（プロファイル 4 本 × 候補名 70 種以上）", () => {
-            /* 上の差分テストは母集団が空でも緑になるので、規模だけ別に押さえる */
-            expect(LEGACY_PROFILES).toEqual(["mssql", "mysql", "oracle", "sqlite"]);
+        test("母集団が空振りしていない（未現代化プロファイル × 候補名 70 種以上）", () => {
+            /*
+             * 上の差分テストは母集団が空でも緑になるので、規模だけ別に押さえる。
+             * **6-8 で 1 本ずつ現代化するたびにこの配列が縮み、4 本とも移ると空になる**
+             * （そのとき差分テストごと消える）。6-8a で mysql が抜けて 3 本。
+             */
+            expect(LEGACY_PROFILES).toEqual(["mssql", "oracle", "sqlite"]);
             expect(candidateNames().length).toBeGreaterThan(70);
         });
     });
@@ -156,7 +160,13 @@ describe("型解決（段階6-2 / 6-3）", () => {
     describe("strict の照合（段階6-3）", () => {
         test("現代化済みは新設 3 本 ＋ postgresql（6-8 で残り 4 本が来る）", () => {
             /* 新設プロファイルは最初から strict で作る（6-7a / 6-7b / 6-7c） */
-            expect(STRICT_PROFILES).toEqual(["h2", "mariadb", "postgresql", "sql-standard"]);
+            expect(STRICT_PROFILES).toEqual([
+                "h2",
+                "mariadb",
+                "mysql",
+                "postgresql",
+                "sql-standard",
+            ]);
         });
 
         test("撤去・改名した型の旧名がすべて新しい型に解決する", () => {
@@ -285,10 +295,14 @@ describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         test("re はアンカーされていない（known-issue #10・6-8 で直す）", () => {
-            /* mysql の int は re="INT"。SMALLINT にも部分一致する（後ろの sql 一致が勝つ） */
-            const mysql = paletteOf("mysql");
-            expect(mysql.idAt(mysql.indexOfTypeName("INT"))).toBe("int");
-            expect(mysql.idAt(mysql.indexOfTypeName("SMALLINT"))).toBe("smallint");
+            /*
+             * oracle の number は re="INT"。**INTEGER に部分一致して sql の完全一致を
+             * 上書きする**ので、このパレットで integer 型には到達できない（#10 の実害）。
+             * **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える）。
+             */
+            const oracle = paletteOf("oracle");
+            expect(oracle.idAt(oracle.indexOfTypeName("INTEGER"))).toBe("number");
+            expect(oracle.idAt(oracle.indexOfTypeName("NUMBER"))).toBe("number");
         });
 
         test("sql の完全一致が複数あれば最初が勝つ（known-issue #3 の直り方）", () => {
@@ -308,8 +322,8 @@ describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         test("一致が無ければ -1（先頭型へのフォールバックは呼び手の責任）", () => {
-            /* PG の型。mysql パレットには無い。0 に倒すのは js/io/xml-parser.ts（#4・6-8 で解消） */
-            expect(paletteOf("mysql").indexOfTypeName("BYTEA")).toBe(-1);
+            /* PG の型。oracle パレットには無い。0 に倒すのは js/io/xml-parser.ts（#4・6-8 で解消） */
+            expect(paletteOf("oracle").indexOfTypeName("BYTEA")).toBe(-1);
         });
     });
 
@@ -326,10 +340,10 @@ describe("型解決（段階6-2 / 6-3）", () => {
             const pg = paletteOf("postgresql");
             expect(pg.fkIndexFor(pg.indexOfId("text"))).toBe(pg.indexOfId("text"));
 
-            /* fk 属性を 1 つも持たないプロファイルでは全型が恒等 */
-            const mysql = paletteOf("mysql");
-            const identity = [...Array(mysql.types().length).keys()].every(
-                (i) => mysql.fkIndexFor(i) === i,
+            /* fk 属性を 1 つも持たないプロファイルでは全型が恒等（6-8a で mysql は持つようになった） */
+            const oracle = paletteOf("oracle");
+            const identity = [...Array(oracle.types().length).keys()].every(
+                (i) => oracle.fkIndexFor(i) === i,
             );
             expect(identity).toBe(true);
         });
@@ -439,8 +453,8 @@ describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         test("未現代化プロファイルでは未知の型が黙って先頭型になる（#4 が残る）", () => {
-            /* mysql に BYTEA は無い。添字 0（TINYINT）に落ちる。6-8 でここが例外になる */
-            const row = parseOneRow("BYTEA", "mysql");
+            /* oracle に BYTEA は無い。添字 0 に落ちる。6-8c でここが例外になる */
+            const row = parseOneRow("BYTEA", "oracle");
             expect(row.type).toBe(0);
         });
 
@@ -461,15 +475,15 @@ describe("型解決（段階6-2 / 6-3）", () => {
         });
 
         test("未現代化プロファイルでは size を捨てない（6-3 は PG 以外を触っていない）", () => {
-            /* mysql の text は length="0" だが、strict ではないので size はそのまま残る */
-            const row = parseOneRow("TEXT(10)", "mysql");
+            /* oracle の clob は length="0" だが、strict ではないので size はそのまま残る */
+            const row = parseOneRow("CLOB(10)", "oracle");
             expect(row.size).toBe("10");
         });
     });
 
     describe("isStrict", () => {
         test("属性が無ければ false（未現代化プロファイルと旧パレット）", () => {
-            expect(paletteOf("mysql").isStrict()).toBe(false);
+            expect(paletteOf("oracle").isStrict()).toBe(false);
             expect(
                 paletteFromXml(`<datatypes db="x"><group label="g"/></datatypes>`).isStrict(),
             ).toBe(false);

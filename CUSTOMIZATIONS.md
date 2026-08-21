@@ -4472,6 +4472,169 @@ CI のワークフローは増やしていない。**`test:browser` は 2 分台
 `db/h2/datatypes.xml`（ansi 系）、生成器は `mariadb.ts` と `ansi.ts`、規約は `naming.ts`。
 
 
+---
+
+### 2026-08-21 HANDOVER §6「機能」段階6-8a —— `mysql` を現代化する
+
+**既存主要 4 本の現代化の 1 本目。** 6-0 の分割表の 6-8 を **4 段階に割った**
+（プロファイルごとに golden 7 本が動くので、1 本ずつなら増減を全部説明できる）。
+`mysql` を最初に置くのは **6-7c の `mariadb` がそのまま型紙**だから。
+
+#### 決めたこと 1: MySQL 系の骨格を `mysql-style.ts` に括った（6-7c が送った項目）
+
+6-7c は「いま括ると『未現代化の mysql』と『現代化済みの mariadb』の両方を満たす形になり、
+6-8 で作り直しになる」として送っていた。**mysql を現代化する本段階が正しい時期。**
+
+[`js/io/ddl/ansi.ts`](js/io/ddl/ansi.ts)（6-7b）の対で、8 本が 2 つの骨格 ＋ 3 本の独立実装に分かれた:
+
+| 骨格 | プロファイル | 特徴 |
+|---|---|---|
+| [`ansi.ts`](js/io/ddl/ansi.ts) | `postgresql` / `sql-standard` / `h2` | `ALTER TABLE ADD CONSTRAINT` ／ `COMMENT ON` ／ `"` |
+| [`mysql-style.ts`](js/io/ddl/mysql-style.ts) | **`mariadb` / `mysql`** | テーブル定義内のキー ／ `COMMENT` 属性 ／ `AUTO_INCREMENT` ／ `` ` `` |
+| 独立 | `mssql` / `oracle` / `sqlite` | 6-8b 〜 6-8d で現代化 |
+
+**mariadb の出力はバイト単位で不変**（golden 7 本が 1 バイトも動いていない）。
+
+#### 決めたこと 2: 予約語は 262 語。**ビューと総当たりが完全に一致した**
+
+MySQL の `INFORMATION_SCHEMA.KEYWORDS` は MariaDB と違って `RESERVED` 列を持つ。
+**それでも総当たりで検算した**（母集団 914 語）:
+
+```
+$ docker run -d --rm --name msq -e MYSQL_ROOT_PASSWORD=x mysql:8
+$ mysql -uroot -px -N -e "SELECT WORD FROM INFORMATION_SCHEMA.KEYWORDS WHERE RESERVED=1"
+  -> 262 語
+$ // 母集団 914 語（KEYWORDS 734 ∪ SQL:2016 365 ∪ PG 101）で CREATE TABLE p<n>(<語> INT)
+  -> 262 語。**両者は 1 語も違わない**
+
+  採取日 2026-08-21 / MySQL 8.4.11
+```
+
+**この一致は総当たり方式そのものの傍証になる。** H2 は KEYWORDS ビューが無く、MariaDB は
+`RESERVED` 列が無いので、どちらも総当たりの結果しか根拠が無い。ここで一致したことで、
+その 2 本の 90 語 / 247 語も同じ方法で正しく採れていると言える。
+
+#### 決めたこと 3: パレットの移行表（3 型を撤去）
+
+| 旧 `id` | 旧 `sql` | 新 `id` | 影響 |
+|---|---|---|---|
+| `int` | `INT` | `integer` | MySQL の `INTEGER` は `INT` の別名で**同じ型**。id を 1 つに統合した |
+| `mediumtext` | `MEDIUMTEXT` | `text` | **上限が 16MB → 4GB に広がる**（安全側）。house は text 優先 |
+| `blob` | `BLOB` | `bytea` | **上限が 64KB → 4GB に広がる**（安全側） |
+
+追加は `bigint_identity` / `boolean` / `jsonb` の 3 型で、どれも house 既定に要る。
+旧名はすべて `aka` が受けるので、既存の設計 XML はそのまま読める。
+
+**型は MySQL 8.4.11 の実物に聞いた** —— `UUID` / `INET4` は**無く**（MariaDB との最大の差）、
+`JSON` は**ネイティブ**（MariaDB は `longtext` のエイリアス）。
+
+#### 決めたこと 4: **MySQL 8 は式の既定値に括弧が要る**（実物に流して見つけた）
+
+golden を採った後で MySQL 8.4.11 に流したところ、`house-defaults` だけが構文エラーになった:
+
+```
+ERROR 1064 (42000): ... right syntax to use near 'UUID(),
+```
+
+MySQL 8.0.13 で入った**式デフォルト**の構文で、`DEFAULT (UUID())` と包む必要がある。
+**MariaDB は `DEFAULT UUID()` をそのまま受ける**ので、2 本の間の実際の差。
+
+規則は「**関数呼び出しだけ**を包む」にした（[`shared.ts`](js/io/ddl/shared.ts) の
+`isFunctionCall` を切り出し、`MysqlDialect.parenthesizeFunctionDefaults` で切り替える）。
+`isSqlExpression` 全体ではないのは、**キーワードを包むと意味が変わる**ため ——
+MySQL の `DEFAULT CURRENT_TIMESTAMP` は TIMESTAMP 列の自動初期化で、
+`DEFAULT (CURRENT_TIMESTAMP)` にすると式デフォルトとして扱われる。
+
+実物に流していなければ **golden は緑のまま壊れた DDL を固定していた**。
+6-7b で始めた「生成 DDL を実物で確かめる」がここで初めて**バグを捕まえた**。
+
+ついでに分かったこと: **MySQL の JSON 列はリテラルの既定値を持てない**
+（`DEFAULT '{}'` は ERROR 1101、`DEFAULT ('{}')` なら通る）。fixture の `preferences` は
+6-6b の判断で既定値を持たないので実害は無いが、6-9 以降で JSON の既定値を扱うときに効く。
+
+#### 決めたこと 5: 未現代化テストの寄せ先を 1 本ずつ動かす
+
+`mysql` が strict 側へ移ったので、**「未現代化プロファイルではこうなる」と書いてあるテストの
+寄せ先を移した**。6-8b 〜 6-8d でも同じ作業が起きる（最後は寄せ先が無くなり、テストごと消える）。
+
+| テスト | 6-8a まで | 6-8a から |
+|---|---|---|
+| known-issue #4（未知型が先頭型に落ちる） | `mysql` | **`oracle`** |
+| known-issue #10 の (2)（`re` の後勝ち） | `mysql` | **`mssql`**（`re="INT"` を 4 型に持つ） |
+| `state` golden（PG の設計を別パレットで読む） | `mysql-house-defaults.json` | **`oracle-house-defaults.json`** |
+| `type-resolution` の 5 本（-1 / fk 恒等 / size / isStrict ほか） | `mysql` | **`oracle`** |
+| `ddl.test.ts` の「未現代化の DEFAULT 規則」 | `mysql` | **`oracle`** |
+
+**`state` golden はファイル名ごと移した**（削除 ＋ 新規採取）。strict なパレットは未知の型を
+例外にするので、PG の設計（`UUID` / `JSONB`）を読ませられるのは未現代化のものだけ ——
+`mysql` のまま残すと**テストが落ちる**（それは #4 が解消した証明であって、状態スナップショットの
+主張ではない）。
+
+**寄せ先を動かすと、テスト側の隠れた前提が 4 つ露出した。** どれも mysql では成り立ち、
+oracle では成り立たなかったもの:
+
+| 露出した前提 | 直し方 |
+|---|---|
+| `probe` の型が `VARCHAR` | **oracle に `VARCHAR` は無い**（`VARCHAR2`）。先頭型（`INTEGER`・`quote=""`）に落ちて空振りしていた。両方が `quote="'"` で持つ `CHAR` に変えた |
+| `defaultsOf()` が識別子の囲みを `` ` `` と裸しか見ない | oracle の `"` を足した。値の切り出しも「最初の空白まで」に変えて一度壊し（`'new table'` が切れた）、「末尾から `NOT NULL` を削る」に落ち着いた |
+| `serialize.spec.ts` が `mysql` に `BYTEA` が無いことを #4 の例にしていた | 現代化した mysql は `aka` で `BYTEA` を受ける。oracle へ移した |
+| `template.spec.ts` が**パレットを差し替えてから空にしていた** | 下記 |
+
+最後の 1 つは**この段階でいちばん危ない発見**だった。前のテストが postgresql のテンプレート
+（24 型）で作ったテーブルが残ったまま oracle（**15 型**）へ切り替えると、`clearTables()` の
+後始末が**範囲外の型添字**を引いて `Row.getColor` で落ちる。mysql（23 型）が寄せ先だった間は
+添字が収まっていたので露出しなかった。**空にしてからパレットを差し替える**順に直した ——
+UI では db の切り替えにリロードが要る（現行契約）ので実アプリには届かないが、
+**型数の少ないプロファイルへ切り替えると壊れる**という性質そのものは残っている
+（6-8d の sqlite は 5 型。同じ形の事故が起きうる）。
+
+#### 決めたこと 6: この段階に入れなかったもの
+
+| 項目 | 送り先 | 理由 |
+|---|---|---|
+| `mssql` / `oracle` / `sqlite` の現代化 | **6-8b / 6-8c / 6-8d** | 1 本ずつ golden を説明する |
+| known-issues **#12** / **#13** / **#14** | 同上 | それぞれ mssql / sqlite / mssql の話 |
+| `mariadb` にも括弧を付けるか | **採らない（記録のみ）** | MariaDB は包まなくても通る。既存の golden を動かす理由が無い |
+| 生成 DDL の実物検証をテスト化する案 | **見送り（6-7b と同じ）** | docker / jar が依存になる |
+
+#### 検証
+
+**動いた golden は 7 本 ＋ state の 1 本（名前ごと移動）。**
+
+| ファイル | 変化 |
+|---|---|
+| `ddl/mysql/empty.sql` | **192 → 0 バイト**（Globals / Table Properties / Test Data の飾りが消えた） |
+| `ddl/mysql/house-defaults.sql` | 型が `CHAR(36)` / `JSON` / `BOOLEAN` へ、`DEFAULT (UUID())`、FK 名 `fk_articles_author_id` |
+| `ddl/mysql/types-matrix.sql` | 23 → 25 列（パレットの全型） |
+| 他 4 本 | 飾りブロックの除去と識別子の引用規則 |
+| `state/mysql-house-defaults.json` | **削除**し `oracle-house-defaults.json` として採り直し |
+
+**他 7 プロファイルの golden 49 本は 1 バイトも動いていない**（骨格の抽出でも動いていない）。
+
+| | 6-7c | 6-8a |
+|---|---|---|
+| `npm test` | 305 passed | **303 passed**（`LEGACY_PROFILES` ごとに回るテストが 4 → 3 本になった 2 件ぶん） |
+| `npm run test:browser` | 130 passed | 130 passed |
+| `npm run known-issues` | 6 passed | 6 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**生成した DDL 6 本を MySQL 8.4.11 で実際に実行して確かめた**（決めたこと 4 の修正後）。
+使い捨てコンテナで、リポジトリにも配布物にも痕跡を残していない。
+org のセキュリティ基準（分類 B）は着手前に一読済み。**依存は 1 本も増やしていない。**
+
+#### 次段階への入力 —— 6-8b（`mssql`）
+
+- known-issues **#12**（最終列のコメントが区切りカンマを飲む）と **#14**（`UNIQUE KEY` は
+  T-SQL に無い）が**同時に直る**。#10 の (2) もここが寄せ先なので 6-8b で動く
+- 骨格は **独立実装**（`GO` 区切り・`[ ]` の識別子・`IDENTITY(1,1)`）。`ansi.ts` にも
+  `mysql-style.ts` にも載らない
+- 予約語は **SQL Server の実物から採る**（docker の `mcr.microsoft.com/mssql/server`。
+  `sys.dm_exec_describe_first_result_set` ではなく、他の 3 本と同じ総当たりで）
+- パレットに `date` / `datetime2` / `datetimeoffset` が無いのは 6-6b で実測済み。
+  現代化で足す（house 既定の `timestamptz` は `datetimeoffset` が受けられる）
+
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

@@ -2,7 +2,7 @@
 <!--
   特性化テスト fixture: autoincrement="1"。
   DB プロファイルごとに書き分けが最も大きい箇所なので全 DB で golden を採る
-  （MySQL は列属性 AUTO_INCREMENT、mssql は IDENTITY(1,1)、postgresql は
+  （MySQL / MariaDB は列属性 AUTO_INCREMENT、mssql は IDENTITY(1,1)、postgresql は
   段階6-5b から <datatype> を残して GENERATED ALWAYS AS IDENTITY を足す）。
 
   **構造は全プロファイルで同じ。型だけ MySQL のもの**（段階6-6b）。
@@ -10,13 +10,13 @@
 <sql>
 <table x="20" y="20" name="counters">
 <row name="id" null="0" autoincrement="1">
-<datatype>INTEGER</datatype>
+<datatype>INT</datatype>
 </row>
 <row name="label" null="0" autoincrement="0">
 <datatype>VARCHAR(64)</datatype>
 </row>
 <row name="hits" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>INT</datatype>
 <default>0</default>
 </row>
 <key type="PRIMARY" name="counters_pkey">

@@ -1,36 +1,34 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  特性化テスト fixture: db/mysql/datatypes.xml の型パレットを網羅する（23 型）。
+  特性化テスト fixture: db/mysql/datatypes.xml の型パレットを網羅する（25 型）。
   サイズ付き（length="1"）の型は括弧つきで書き、Row.fromXML のサイズ抽出も通す。
 
   **1 列 = パレットの 1 型**で、書く型名はパレットの sql 属性そのもの。
-  網羅は tests/node/fixture-set.test.ts が機械的に見るので、6-8 でパレットを
-  現代化したときの入れ忘れ・消し忘れがその場で赤くなる。
+  網羅は tests/node/fixture-set.test.ts が機械的に見る。
 
-  bit だけ小文字なのは **db/mysql/datatypes.xml の sql が小文字 "bit" だから**。
-  未現代化プロファイルの照合は大文字小文字を区別する完全一致なので、BIT と書くと
-  どの型にも当たらず先頭型（integer）に落ちる（known-issue #4 / #10）。
-  6-8 で strict になると大小無視の照合になり、この 1 行が普通に書けるようになる。
+  **書いてある型はすべて MySQL 8.4.11 の実物に聞いて通ることを確かめてある**
+  （db/mysql/datatypes.xml の頭）。**mariadb 版との差は UUID / INET4 / INET6 の 3 列が
+  無いことだけ** —— MySQL にその 3 型が無いのが「mariadb は mysql のコピーではない」の実体。
 -->
 <sql>
 <table x="20" y="20" name="type_samples">
 <row name="c_integer" null="1" autoincrement="0">
-<datatype>INTEGER</datatype>
-</row>
-<row name="c_tinyint" null="1" autoincrement="0">
-<datatype>TINYINT</datatype>
+<datatype>INT</datatype>
 </row>
 <row name="c_smallint" null="1" autoincrement="0">
 <datatype>SMALLINT</datatype>
 </row>
+<row name="c_tinyint" null="1" autoincrement="0">
+<datatype>TINYINT</datatype>
+</row>
 <row name="c_mediumint" null="1" autoincrement="0">
 <datatype>MEDIUMINT</datatype>
 </row>
-<row name="c_int" null="0" autoincrement="0">
-<datatype>INT</datatype>
-</row>
 <row name="c_bigint" null="1" autoincrement="0">
 <datatype>BIGINT</datatype>
+</row>
+<row name="c_bigint_identity" null="0" autoincrement="0">
+<datatype>BIGINT AUTO_INCREMENT</datatype>
 </row>
 <row name="c_decimal" null="1" autoincrement="0">
 <datatype>DECIMAL(12,2)</datatype>
@@ -47,8 +45,11 @@
 <row name="c_varchar" null="1" autoincrement="0">
 <datatype>VARCHAR(255)</datatype>
 </row>
-<row name="c_mediumtext" null="1" autoincrement="0">
-<datatype>MEDIUMTEXT</datatype>
+<row name="c_text" null="1" autoincrement="0">
+<datatype>LONGTEXT</datatype>
+</row>
+<row name="c_bytea" null="1" autoincrement="0">
+<datatype>LONGBLOB</datatype>
 </row>
 <row name="c_binary" null="1" autoincrement="0">
 <datatype>BINARY(16)</datatype>
@@ -56,23 +57,26 @@
 <row name="c_varbinary" null="1" autoincrement="0">
 <datatype>VARBINARY(255)</datatype>
 </row>
-<row name="c_blob" null="1" autoincrement="0">
-<datatype>BLOB</datatype>
+<row name="c_boolean" null="1" autoincrement="0">
+<datatype>BOOLEAN</datatype>
 </row>
 <row name="c_date" null="1" autoincrement="0">
 <datatype>DATE</datatype>
 </row>
 <row name="c_time" null="1" autoincrement="0">
-<datatype>TIME</datatype>
+<datatype>TIME(3)</datatype>
 </row>
 <row name="c_datetime" null="1" autoincrement="0">
-<datatype>DATETIME</datatype>
+<datatype>DATETIME(6)</datatype>
+</row>
+<row name="c_timestamp" null="1" autoincrement="0">
+<datatype>TIMESTAMP</datatype>
 </row>
 <row name="c_year" null="1" autoincrement="0">
 <datatype>YEAR</datatype>
 </row>
-<row name="c_timestamp" null="1" autoincrement="0">
-<datatype>TIMESTAMP</datatype>
+<row name="c_json" null="1" autoincrement="0">
+<datatype>JSON</datatype>
 </row>
 <row name="c_enum" null="1" autoincrement="0">
 <datatype>ENUM('draft','published')</datatype>
@@ -81,10 +85,10 @@
 <datatype>SET('a','b')</datatype>
 </row>
 <row name="c_bit" null="1" autoincrement="0">
-<datatype>bit</datatype>
+<datatype>BIT(8)</datatype>
 </row>
 <key type="PRIMARY" name="type_samples_pkey">
-<part>c_int</part>
+<part>c_bigint_identity</part>
 </key>
 </table>
 </sql>

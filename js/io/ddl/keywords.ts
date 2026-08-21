@@ -5,7 +5,7 @@
  * js/io/ddl/naming.ts の quoteIdentifier() が唯一の読み手で、規則そのものは向こうにある。
  * ここは語彙表だけを持つ —— 6-8 で mysql（約 260 語）/ mssql / oracle / sqlite が足されると
  * 規則本体が語彙に埋もれるため、最初からファイルを分けてある。
- * **段階6-7a で sql-standard、6-7b で h2、6-7c で mariadb が入った**（採取元はそれぞれ下）。
+ * **段階6-7a〜6-7c で sql-standard / h2 / mariadb、6-8a で mysql が入った**（採取元はそれぞれ下）。
  *
  * **一覧は推測ではなく実 PG18 から採った。** 採取手順（そのまま再現できる）:
  *
@@ -237,4 +237,71 @@ export const MARIADB_RESERVED: ReadonlySet<string> = new Set([
     "varbinary", "varchar", "varcharacter", "varying", "vector", "when",
     "where", "while", "with", "write", "xor", "year_month",
     "zerofill",
+]);
+
+/*
+ * MySQL 8.4.11 の予約語（段階6-8a）。
+ *
+ * **ここだけは一覧が引ける** —— MySQL の INFORMATION_SCHEMA.KEYWORDS は MariaDB と違って
+ * RESERVED 列を持つ。ただし**総当たりでも検算した**（他の 3 本と同じ手順で 914 語を試した）:
+ *
+ *   $ docker run -d --rm --name msq -e MYSQL_ROOT_PASSWORD=x mysql:8
+ *   $ mysql -uroot -px -N -e "SELECT WORD FROM INFORMATION_SCHEMA.KEYWORDS WHERE RESERVED=1"
+ *       -> 262 語
+ *   $ // 母集団 914 語（KEYWORDS 734 ∪ SQL:2016 365 ∪ PG 101）で CREATE TABLE p<n>(<語> INT)
+ *       -> 262 語。**両者は 1 語も違わない**
+ *
+ *   採取日 2026-08-21 / MySQL 8.4.11
+ *
+ * **ビューと総当たりが完全に一致したのはこのプロファイルだけ。** MariaDB は RESERVED 列を
+ * 持たず、H2 は KEYWORDS ビュー自体が無いので、どちらも総当たりの結果しか根拠が無い。
+ * ここで両者が一致したことは、**総当たり方式そのものが正しく採れている**ことの傍証になる。
+ */
+
+/** 列名・テーブル名として裸で書けない語（MySQL 8.4.11） */
+export const MYSQL_RESERVED: ReadonlySet<string> = new Set([
+    "accessible", "add", "all", "alter", "analyze", "and",
+    "as", "asc", "asensitive", "before", "between", "bigint",
+    "binary", "blob", "both", "by", "call", "cascade",
+    "case", "change", "char", "character", "check", "collate",
+    "column", "condition", "constraint", "continue", "convert", "create",
+    "cross", "cube", "cume_dist", "current_date", "current_time", "current_timestamp",
+    "current_user", "cursor", "database", "databases", "day_hour", "day_microsecond",
+    "day_minute", "day_second", "dec", "decimal", "declare", "default",
+    "delayed", "delete", "dense_rank", "desc", "describe", "deterministic",
+    "distinct", "distinctrow", "div", "double", "drop", "dual",
+    "each", "else", "elseif", "empty", "enclosed", "escaped",
+    "except", "exists", "exit", "explain", "false", "fetch",
+    "first_value", "float", "float4", "float8", "for", "force",
+    "foreign", "from", "fulltext", "function", "generated", "get",
+    "grant", "group", "grouping", "groups", "having", "high_priority",
+    "hour_microsecond", "hour_minute", "hour_second", "if", "ignore", "in",
+    "index", "infile", "inner", "inout", "insensitive", "insert",
+    "int", "int1", "int2", "int3", "int4", "int8",
+    "integer", "intersect", "interval", "into", "io_after_gtids", "io_before_gtids",
+    "is", "iterate", "join", "json_table", "key", "keys",
+    "kill", "lag", "last_value", "lateral", "lead", "leading",
+    "leave", "left", "like", "limit", "linear", "lines",
+    "load", "localtime", "localtimestamp", "lock", "long", "longblob",
+    "longtext", "loop", "low_priority", "match", "maxvalue", "mediumblob",
+    "mediumint", "mediumtext", "middleint", "minute_microsecond", "minute_second", "mod",
+    "modifies", "natural", "not", "no_write_to_binlog", "nth_value", "ntile",
+    "null", "numeric", "of", "on", "optimize", "optimizer_costs",
+    "option", "optionally", "or", "order", "out", "outer",
+    "outfile", "over", "partition", "percent_rank", "precision", "primary",
+    "procedure", "purge", "qualify", "range", "rank", "read",
+    "reads", "read_write", "real", "recursive", "references", "regexp",
+    "release", "rename", "repeat", "replace", "require", "resignal",
+    "restrict", "return", "revoke", "right", "rlike", "row",
+    "rows", "row_number", "schema", "schemas", "second_microsecond", "select",
+    "sensitive", "separator", "set", "show", "signal", "smallint",
+    "spatial", "specific", "sql", "sqlexception", "sqlstate", "sqlwarning",
+    "sql_big_result", "sql_calc_found_rows", "sql_small_result", "ssl", "starting", "stored",
+    "straight_join", "system", "table", "tablesample", "terminated", "then",
+    "tinyblob", "tinyint", "tinytext", "to", "trailing", "trigger",
+    "true", "undo", "union", "unique", "unlock", "unsigned",
+    "update", "usage", "use", "using", "utc_date", "utc_time",
+    "utc_timestamp", "values", "varbinary", "varchar", "varcharacter", "varying",
+    "virtual", "when", "where", "while", "window", "with",
+    "write", "xor", "year_month", "zerofill",
 ]);

@@ -32,14 +32,14 @@ describe("読み込み後の状態 特性化（Node / jsdom）", () => {
     }
 
     /* 入力は postgresql の fixture のまま（段階6-6a）。理由は tests/browser/state.spec.ts の同名テスト */
-    test("state golden: house-defaults を sqlite パレットで読む", () => {
-        h.useDatatypes("sqlite");
+    test("state golden: house-defaults を h2 パレットで読む", () => {
+        h.useDatatypes("h2");
         h.loadFixture(readFixture(SERIALIZER_DB, "house-defaults"));
 
         const actual = h.captureState();
-        assertNoCarriageReturn(actual, "state(sqlite/house-defaults)");
+        assertNoCarriageReturn(actual, "state(h2/house-defaults)");
 
-        expect(actual).toBe(readGolden(goldenPath("state", "sqlite-house-defaults.json")));
+        expect(actual).toBe(readGolden(goldenPath("state", "h2-house-defaults.json")));
     });
 
     test("冪等: 同じ XML を 2 回読んでも状態が一致する（clearTables() の後始末）", () => {

@@ -93,16 +93,18 @@ describe("DDL golden（Node）", () => {
             return Array.from({ length: count }, (_, i) => {
                 /*
                  * 列の見つけ方が 4 通りあるのは、プロファイルごとに識別子の囲み方が違うため
-                 * （裸 / バッククォート / 二重引用符 / **シングルクォート**）。
+                 * （裸 / バッククォート / 二重引用符 / **角括弧**）。
                  * **6-8 で寄せ先が 1 本ずつ動くたびに増えた** —— 6-8a で oracle の `"`、
-                 * 6-8c で sqlite の `'`（upstream の sqlite は識別子を文字列リテラルの
-                 * 記号で囲む。known-issues に挙がっている粗さの 1 つで、6-8d で直る）。
+                 * 6-8c で sqlite の `'`。**6-8d で `'` が消え**（sqlite が `"` に移った）、
+                 * かわりに mssql の `[ ]` が入った —— 規則を 8 プロファイル横断で見るように
+                 * したため（下の LITERALS のテスト）。
                  */
                 const line = lines.find(
                     (l) =>
                         l.includes(`c${i} `) ||
                         l.includes(`\`c${i}\` `) ||
                         l.includes(`"c${i}"`) ||
+                        l.includes(`[c${i}]`) ||
                         l.includes(`'c${i}'`),
                 );
                 if (line === undefined) {

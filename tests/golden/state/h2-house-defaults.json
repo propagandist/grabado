@@ -19,7 +19,7 @@
       "rows": [
         {
           "title": "id",
-          "type": 0,
+          "type": 19,
           "size": "",
           "def": "uuidv7()",
           "nll": false,
@@ -33,8 +33,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 200, 255)",
+            "borderColor": "rgb(200, 200, 255)",
             "titleClass": "title primary key",
             "titleHtml": "id",
             "typehint": "",
@@ -43,7 +43,7 @@
         },
         {
           "title": "email",
-          "type": 0,
+          "type": 11,
           "size": "",
           "def": "",
           "nll": false,
@@ -67,7 +67,7 @@
         },
         {
           "title": "display_name",
-          "type": 0,
+          "type": 11,
           "size": "",
           "def": "",
           "nll": false,
@@ -89,7 +89,7 @@
         },
         {
           "title": "is_active",
-          "type": 0,
+          "type": 14,
           "size": "",
           "def": "true",
           "nll": false,
@@ -111,7 +111,7 @@
         },
         {
           "title": "preferences",
-          "type": 0,
+          "type": 20,
           "size": "",
           "def": "'{}'::jsonb",
           "nll": false,
@@ -123,8 +123,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "UI 設定などの任意項目",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 200, 255)",
+            "borderColor": "rgb(200, 200, 255)",
             "titleClass": "title",
             "titleHtml": "preferences",
             "typehint": "",
@@ -133,7 +133,7 @@
         },
         {
           "title": "created_at",
-          "type": 0,
+          "type": 18,
           "size": "",
           "def": "now()",
           "nll": false,
@@ -145,8 +145,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
             "titleClass": "title",
             "titleHtml": "created_at",
             "typehint": "",
@@ -155,7 +155,7 @@
         },
         {
           "title": "updated_at",
-          "type": 0,
+          "type": 18,
           "size": "",
           "def": "now()",
           "nll": false,
@@ -167,8 +167,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
             "titleClass": "title",
             "titleHtml": "updated_at",
             "typehint": "",
@@ -212,7 +212,7 @@
       "rows": [
         {
           "title": "id",
-          "type": 0,
+          "type": 19,
           "size": "",
           "def": "uuidv7()",
           "nll": false,
@@ -226,8 +226,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 200, 255)",
+            "borderColor": "rgb(200, 200, 255)",
             "titleClass": "title primary key",
             "titleHtml": "id",
             "typehint": "",
@@ -236,7 +236,7 @@
         },
         {
           "title": "author_id",
-          "type": 0,
+          "type": 19,
           "size": "",
           "def": "",
           "nll": false,
@@ -248,8 +248,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "執筆者 (users.id)",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 200, 255)",
+            "borderColor": "rgb(200, 200, 255)",
             "titleClass": "title",
             "titleHtml": "author_id",
             "typehint": "",
@@ -258,7 +258,7 @@
         },
         {
           "title": "title",
-          "type": 0,
+          "type": 11,
           "size": "",
           "def": "",
           "nll": false,
@@ -280,7 +280,7 @@
         },
         {
           "title": "body",
-          "type": 0,
+          "type": 11,
           "size": "",
           "def": "",
           "nll": true,
@@ -302,7 +302,7 @@
         },
         {
           "title": "view_count",
-          "type": 2,
+          "type": 0,
           "size": "",
           "def": "0",
           "nll": false,
@@ -324,7 +324,7 @@
         },
         {
           "title": "price",
-          "type": 0,
+          "type": 5,
           "size": "12,2",
           "def": "",
           "nll": true,
@@ -336,8 +336,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "有料記事の価格。money ではなく numeric を使う",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
             "titleClass": "title",
             "titleHtml": "price",
             "typehint": "",
@@ -346,7 +346,7 @@
         },
         {
           "title": "published_on",
-          "type": 0,
+          "type": 15,
           "size": "",
           "def": "",
           "nll": true,
@@ -358,8 +358,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
             "titleClass": "title",
             "titleHtml": "published_on",
             "typehint": "",
@@ -368,7 +368,7 @@
         },
         {
           "title": "created_at",
-          "type": 0,
+          "type": 18,
           "size": "",
           "def": "now()",
           "nll": false,
@@ -380,8 +380,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
             "titleClass": "title",
             "titleHtml": "created_at",
             "typehint": "",
@@ -390,7 +390,7 @@
         },
         {
           "title": "updated_at",
-          "type": 0,
+          "type": 18,
           "size": "",
           "def": "now()",
           "nll": false,
@@ -402,8 +402,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
             "titleClass": "title",
             "titleHtml": "updated_at",
             "typehint": "",
@@ -440,7 +440,7 @@
       "rows": [
         {
           "title": "article_id",
-          "type": 0,
+          "type": 19,
           "size": "",
           "def": "",
           "nll": false,
@@ -454,8 +454,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 200, 255)",
+            "borderColor": "rgb(200, 200, 255)",
             "titleClass": "title primary key",
             "titleHtml": "article_id",
             "typehint": "",
@@ -464,7 +464,7 @@
         },
         {
           "title": "tag",
-          "type": 0,
+          "type": 11,
           "size": "",
           "def": "",
           "nll": false,
@@ -488,7 +488,7 @@
         },
         {
           "title": "created_at",
-          "type": 0,
+          "type": 18,
           "size": "",
           "def": "now()",
           "nll": false,
@@ -500,8 +500,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "",
-            "backgroundColor": "rgb(255, 200, 200)",
-            "borderColor": "rgb(255, 200, 200)",
+            "backgroundColor": "rgb(200, 255, 200)",
+            "borderColor": "rgb(200, 255, 200)",
             "titleClass": "title",
             "titleHtml": "created_at",
             "typehint": "",

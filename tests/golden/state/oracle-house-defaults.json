@@ -43,7 +43,7 @@
         },
         {
           "title": "email",
-          "type": 11,
+          "type": 7,
           "size": "",
           "def": "",
           "nll": false,
@@ -67,7 +67,7 @@
         },
         {
           "title": "display_name",
-          "type": 11,
+          "type": 7,
           "size": "",
           "def": "",
           "nll": false,
@@ -258,7 +258,7 @@
         },
         {
           "title": "title",
-          "type": 11,
+          "type": 7,
           "size": "",
           "def": "",
           "nll": false,
@@ -280,7 +280,7 @@
         },
         {
           "title": "body",
-          "type": 11,
+          "type": 7,
           "size": "",
           "def": "",
           "nll": true,
@@ -302,7 +302,7 @@
         },
         {
           "title": "view_count",
-          "type": 0,
+          "type": 1,
           "size": "",
           "def": "0",
           "nll": false,
@@ -324,7 +324,7 @@
         },
         {
           "title": "price",
-          "type": 6,
+          "type": 12,
           "size": "12,2",
           "def": "",
           "nll": true,
@@ -336,8 +336,8 @@
           "dom": {
             "containerClass": "",
             "containerTooltip": "有料記事の価格。money ではなく numeric を使う",
-            "backgroundColor": "rgb(238, 238, 170)",
-            "borderColor": "rgb(238, 238, 170)",
+            "backgroundColor": "rgb(200, 200, 255)",
+            "borderColor": "rgb(200, 200, 255)",
             "titleClass": "title",
             "titleHtml": "price",
             "typehint": "",
@@ -346,7 +346,7 @@
         },
         {
           "title": "published_on",
-          "type": 15,
+          "type": 8,
           "size": "",
           "def": "",
           "nll": true,
@@ -464,7 +464,7 @@
         },
         {
           "title": "tag",
-          "type": 11,
+          "type": 7,
           "size": "",
           "def": "",
           "nll": false,

@@ -116,7 +116,8 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
     });
 
     test("未現代化のプロファイルでは従来どおり先頭型に落ちる（#4 は 6-8 まで残る）", async () => {
-        await useDatatypes(page, "mysql");
+        /* **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える） */
+        await useDatatypes(page, "oracle");
         await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
@@ -132,7 +133,7 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
             return window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type);
         });
 
-        /* mysql パレットの先頭型 */
+        /* oracle パレットの先頭型 */
         expect(id).toBe("integer");
     });
 
@@ -209,16 +210,19 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
         /* ここで旧実装は Designer.fkTypeFor を postgresql の内容で焼いていた */
         expect(await createFkChildId(page, "bigint_identity")).toBe("bigint");
 
-        await useDatatypes(page, "mysql");
+        await useDatatypes(page, "oracle");
         await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
         /*
-         * mysql は fk 属性を 1 つも持たないので、FK 子行は親と同じ型でなければならない。
+         * oracle は fk 属性を 1 つも持たないので、FK 子行は親と同じ型でなければならない。
          * 旧実装では postgresql の fkTypeFor[5]=2 が残り、BIGINT の FK が **SMALLINT** に
          * なっていた（実測は CUSTOMIZATIONS.md の段階6-2）。差し替えでキャッシュが
          * 捨てられないことが原因で、キャッシュごと廃止して塞いだ。
+         *
+         * **寄せ先は 6-8a で mysql から oracle へ動いた** —— 現代化した mysql は
+         * bigint_identity に fk="bigint" を持つので「fk を 1 つも持たない」側ではなくなった。
          */
-        expect(await createFkChildId(page, "bigint")).toBe("bigint");
-        expect(await createFkChildId(page, "int")).toBe("int");
+        expect(await createFkChildId(page, "number")).toBe("number");
+        expect(await createFkChildId(page, "clob")).toBe("clob");
     });
 });

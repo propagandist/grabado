@@ -177,7 +177,10 @@ UI の `#textarea` に入る値と一致する。
 **§4 段階4-1b で追加。読み込み方向（`fromXML`）の安全網。** 上の 2 つは `toXML()` の**結果**しか
 押さえておらず、`fromXML` は「XML を再生する UI 操作列」なので、XML に出ない状態が丸ごと
 素通りしていた —— 選択クラス・型パレット由来の色・z-index・relation がどの**実体**に繋がったか・
-`clearTables()` の後始末。8 本（fixture 7 × postgresql ＋ `house-defaults` × mysql）。
+`clearTables()` の後始末。8 本（fixture 7 × postgresql ＋ `house-defaults` × **未現代化の 1 本**）。
+最後の 1 本の寄せ先は **6-8 で 1 プロファイルずつ動く** —— strict なパレットは未知の型を
+例外にするので、PG の設計（`UUID` / `JSONB`）を読ませられるのは未現代化のものだけ。
+6-8a で `mysql` が現代化されたので `oracle` へ移した（`state/oracle-house-defaults.json`）。
 
 - 採取関数は [`../tests/support/state.ts`](../tests/support/state.ts) の 1 本だけ。**module スコープを
   参照しない自己完結関数**にしてあり、page 側はテンプレートリテラルで関数を展開して
@@ -244,7 +247,7 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 | ファイル | 担当 |
 |---|---|
 | [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../js/io/template.ts`](../js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。`postgresql` が §6.2 の 3 列を返すこと・未現代化 4 本が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外・`newrowtype` |
-| [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・`mysql` では従来経路に落ちること |
+| [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・未現代化プロファイルでは従来経路に落ちること |
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は
 キー管理 UI から `CREATE INDEX` に届く経路（`KeyManager.add()` → avail から列を選んで `←`）。
@@ -337,8 +340,8 @@ fs 経路はそのまま）。
 どのプロファイルにも同じだけ在り、**中身がその DB の型で書かれている**。読むのは
 `readFixture(db, name)` で、**db は省略できない** —— 「どのプロファイル向けの入力を、
 どのパレットで読んでいるか」がずれていること自体が主張になっているテストがあるため
-（known-issues #4 / #10 と `state/mysql-house-defaults.json` は
-**postgresql の fixture を mysql / oracle のパレットで読む**）。全プロファイル分が
+（known-issues #4 / #10 と `state/oracle-house-defaults.json` は
+**postgresql の fixture を未現代化プロファイルのパレットで読む**）。全プロファイル分が
 実在することは [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が
 機械的に見る。
 
@@ -359,14 +362,14 @@ fs 経路はそのまま）。
 書いたまま新しい型に解決する。
 
 **§6 段階6-6b で 4 プロファイルの中身がその DB の実型・実関数になった。**
-`types-matrix` はパレットの全型を 1 列ずつ網羅し（sqlite 5・oracle 15・mysql 23・
+`types-matrix` はパレットの全型を 1 列ずつ網羅し（sqlite 5・oracle 15・mysql 25・
 mssql 26・postgresql 24 型）、`house-defaults` は house 既定を「その DB で普通に書く形」で
 表している（`uniqueidentifier` ＋ `NEWID()` / `RAW(16)` ＋ `SYS_GUID()` など）。
 **網羅とパレットの整合は
 [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が機械的に見る** ——
 パレットに型を足して fixture を忘れると、足りない型名を名指しで落ちる。
 
-**書けるのは現行パレットに実在する型だけ。** mysql の `JSON`、oracle の
+**書けるのは現行パレットに実在する型だけ。** oracle の
 `TIMESTAMP WITH TIME ZONE`、mssql の `date` はパレットに無いので使えず、6-8 で足す。
 つまり **6-6b 時点の非 PG golden は「6-8 直前のベースライン」**であって、その DB の
 理想形ではない。house 既定が各 DB で何を失うかは

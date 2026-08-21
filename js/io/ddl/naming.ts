@@ -25,6 +25,7 @@ import type { DdlKey } from "./shared.ts";
 import {
     H2_RESERVED,
     MARIADB_RESERVED,
+    MYSQL_RESERVED,
     POSTGRESQL_RESERVED,
     SQL_STANDARD_RESERVED,
 } from "./keywords.ts";
@@ -89,6 +90,17 @@ export const MARIADB_IDENTIFIER: IdentifierRules = {
     close: "`",
     escape: (name) => name.split("`").join("``"),
     reserved: MARIADB_RESERVED,
+};
+
+/**
+ * MySQL のバッククォート識別子（段階6-8a）。**mariadb と同じ形で語彙だけが違う**
+ * （MySQL 8.4.11 で 262 語 / MariaDB 11.8.8 で 247 語）。
+ */
+export const MYSQL_IDENTIFIER: IdentifierRules = {
+    open: "`",
+    close: "`",
+    escape: (name) => name.split("`").join("``"),
+    reserved: MYSQL_RESERVED,
 };
 
 /**

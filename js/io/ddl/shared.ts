@@ -160,6 +160,23 @@ const SQL_DEFAULT_KEYWORDS = [
 ];
 
 /**
+ * 既定値が関数呼び出しの形か（`now()` / `UUID()` / `pg_catalog.now()`）。
+ *
+ * **MySQL 8 は式の既定値を括弧で包むことを要求する**（`DEFAULT (UUID())`）。8.0.13 で入った
+ * 式デフォルトの構文で、包まないと構文エラーになる —— **MariaDB は `DEFAULT UUID()` を
+ * そのまま受ける**ので、この 2 本の間の実際の差。段階6-8a で生成 DDL を MySQL 8.4.11 に
+ * 流して見つけた（CUSTOMIZATIONS.md の段階6-8a）。
+ *
+ * キーワード（`CURRENT_TIMESTAMP` ほか）は**包んではいけない** —— MySQL では
+ * `DEFAULT CURRENT_TIMESTAMP` が TIMESTAMP 列の自動初期化という別の意味を持ち、
+ * `DEFAULT (CURRENT_TIMESTAMP)` にすると式デフォルトとして扱われて意味が変わる。
+ * だから isSqlExpression 全体ではなく**関数呼び出しだけ**を切り出してある。
+ */
+export function isFunctionCall(def: string): boolean {
+    return /^[A-Za-z_][\w$]*(\.[A-Za-z_][\w$]*)*\s*\(.*\)$/.test(def);
+}
+
+/**
  * <default> を型の quote で囲まずにそのまま出す値か（段階6-4。**strict プロファイル限定**）。
  *
  * 判定は「囲まない側」を列挙する形にしてある —— 迷ったら囲む（＝従来どおり）に倒れるので、
@@ -176,7 +193,7 @@ function isSqlExpression(def: string): boolean {
         return true;
     }
     /* 関数呼び出し。now() / uuidv7() / gen_random_uuid() / pg_catalog.now() */
-    if (/^[A-Za-z_][\w$]*(\.[A-Za-z_][\w$]*)*\s*\(.*\)$/.test(def)) {
+    if (isFunctionCall(def)) {
         return true;
     }
     /* ユーザーが自分で引用符を書いた（囲むと二重になる） */

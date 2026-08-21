@@ -3,7 +3,7 @@
 <sql>
 <table x="10" y="20" name="things">
 <row name="id" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>INT</datatype>
 </row>
 </table>
 </sql>

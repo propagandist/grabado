@@ -1,18 +1,22 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!--
-  特性化テスト fixture: house 既定（HANDOVER §6）を MySQL の型パレットで表したもの。
+  特性化テスト fixture: house 既定（HANDOVER §6）を MySQL の型で表したもの。
   postgresql 版と同じスキーマ（tests/fixtures/postgresql/house-defaults.xml）を、
   db/mysql/datatypes.xml に実在する型だけで書き直してある。
 
-  **house 既定が MySQL で失うもの**（表現できないぶんは記録として CUSTOMIZATIONS.md 段階6-6b に）:
-    - uuid 型が無い          -> CHAR(36) ＋ UUID()（v4。uuidv7 は MySQL に無い）
-    - timestamptz が無い     -> TIMESTAMP（tz を保持せず UTC 変換のみ）
-    - jsonb が無い           -> MEDIUMTEXT（パレットに JSON 型が無い。足すのは 6-8）
-    - boolean が無い         -> bit（パレットの sql は小文字。types-matrix の注記を参照）
-    - **MEDIUMTEXT に DEFAULT を付けられない**ので preferences は既定値を持たない
+  **mariadb 版（tests/fixtures/mariadb/house-defaults.xml）との差は PK の型だけ**:
 
-  email と tag が VARCHAR なのは MySQL の制約 —— TEXT 系の列に UNIQUE / PRIMARY KEY を
-  張るには prefix 長の指定が要る。「その DB で普通に書く形」を採っている。
+    | house 既定 | mysql               | mariadb         |
+    | uuid PK    | **CHAR(36)**+UUID() | UUID + UUID()   |
+    | jsonb      | JSON（ネイティブ）    | JSON（longtext） |
+
+  **house 既定が MySQL で失うもの**（記録は CUSTOMIZATIONS.md 段階6-8a）:
+    - uuid        -> **CHAR(36)**（MySQL に UUID 型が無い。実測で確認）
+    - timestamptz -> TIMESTAMP（**tz を保持しない**。UTC 変換のみ）
+    - uuidv7()    -> UUID()（v4。時系列の順序性を失う）
+
+  email と tag が VARCHAR なのは MySQL 系の制約 —— LONGTEXT に UNIQUE / PRIMARY KEY を
+  張るには prefix 長の指定が要る。mariadb 版と同じ判断。
 -->
 <sql>
 <table x="20" y="20" name="users">
@@ -28,11 +32,11 @@
 <datatype>VARCHAR(255)</datatype>
 </row>
 <row name="is_active" null="0" autoincrement="0">
-<datatype>bit</datatype>
-<default>1</default>
+<datatype>BOOLEAN</datatype>
+<default>true</default>
 </row>
 <row name="preferences" null="0" autoincrement="0">
-<datatype>MEDIUMTEXT</datatype>
+<datatype>JSON</datatype>
 <comment>UI 設定などの任意項目</comment>
 </row>
 <row name="created_at" null="0" autoincrement="0">
@@ -65,10 +69,10 @@
 <datatype>VARCHAR(255)</datatype>
 </row>
 <row name="body" null="1" autoincrement="0">
-<datatype>MEDIUMTEXT</datatype>
+<datatype>LONGTEXT</datatype>
 </row>
 <row name="view_count" null="0" autoincrement="0">
-<datatype>INTEGER</datatype>
+<datatype>INT</datatype>
 <default>0</default>
 </row>
 <row name="price" null="1" autoincrement="0">

@@ -46,16 +46,22 @@ test.describe("読み込み後の状態 特性化（fromXML）", () => {
     // 移っても結果が変わらないことを押さえる。
     //
     // **入力は postgresql の fixture のまま**（段階6-6a）。見たいのは「同じ入力を別のパレットで
-    // 読むと解決がどう変わるか」なので、mysql の fixture に差し替えるとこの主張が消える。
-    test("state golden: house-defaults を mysql パレットで読む", async () => {
-        await useDatatypes(page, "mysql");
+    // 読むと解決がどう変わるか」なので、その DB の fixture に差し替えるとこの主張が消える。
+    //
+    // **寄せ先は未現代化のプロファイルでなければならない**（段階6-8a）。strict なパレットは
+    // 未知の型を例外にするので、PG の設計（UUID / JSONB）を読ませると落ちる —— それは
+    // known-issue #4 が解消したことの証明であって、状態スナップショットの主張ではない。
+    // 6-8a で mysql が現代化されたので oracle へ移した（6-8 が終わると寄せ先が無くなり、
+    // このテストは「strict どうしで読む」形に作り直すか、役目を終えて消える）。
+    test("state golden: house-defaults を oracle パレットで読む", async () => {
+        await useDatatypes(page, "oracle");
         await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const actual = await captureState(page);
-        assertNoCarriageReturn(actual, "state(mysql/house-defaults)");
+        assertNoCarriageReturn(actual, "state(oracle/house-defaults)");
 
         const expected = writeOrReadGolden(
-            goldenPath("state", "mysql-house-defaults.json"),
+            goldenPath("state", "oracle-house-defaults.json"),
             actual,
         );
         expect(actual).toBe(expected);

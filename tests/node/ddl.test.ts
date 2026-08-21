@@ -60,7 +60,9 @@ describe("DDL golden（Node）", () => {
          *
          * fixture を足していないのは、DDL_FIXTURES に入れると golden が 5 プロファイル分
          * 増えるため。ここで見たいのは「入力値 -> DEFAULT の中身」という 1 対 1 の規則で、
-         * 生成 DDL 全体の姿ではない。probe は VARCHAR（quote="'" を両プロファイルが持つ型）で組む。
+         * 生成 DDL 全体の姿ではない。probe は **CHAR** で組む —— quote="'" を両プロファイルが
+         * 持つ型で、**oracle には VARCHAR が無い**（VARCHAR2）ため。6-8a で寄せ先が mysql から
+         * oracle へ動いたとき、VARCHAR では先頭型（INTEGER・quote=""）に落ちて空振りした。
          *
          * **入力は quote 剥がし（js/io/xml-parser.ts）を通らない値だけ**にしてある ——
          * 剥がされるのは両端が ' の値で、'{}'::jsonb は末尾が b なので当たらない。
@@ -69,7 +71,7 @@ describe("DDL golden（Node）", () => {
             const rows = defs.map(
                 (def, i) =>
                     `<row name="c${i}" null="0" autoincrement="0">\n` +
-                    `<datatype>VARCHAR</datatype>\n` +
+                    `<datatype>CHAR</datatype>\n` +
                     `<default>${def}</default>\n` +
                     `</row>\n`,
             );
@@ -89,7 +91,17 @@ describe("DDL golden（Node）", () => {
         function defaultsOf(ddl: string, count: number): (string | null)[] {
             const lines = ddl.split("\n");
             return Array.from({ length: count }, (_, i) => {
-                const line = lines.find((l) => l.includes(`c${i} `) || l.includes(`\`c${i}\` `));
+                /*
+                 * 列の見つけ方が 3 通りあるのは、プロファイルごとに識別子の囲み方が違うため
+                 * （裸 / バッククォート / 二重引用符）。**6-8a で寄せ先が oracle になって
+                 * 3 つ目が要った。**
+                 */
+                const line = lines.find(
+                    (l) =>
+                        l.includes(`c${i} `) ||
+                        l.includes(`\`c${i}\` `) ||
+                        l.includes(`"c${i}"`),
+                );
                 if (line === undefined) {
                     throw new Error(`列 c${i} が DDL に無い:\n${ddl}`);
                 }
@@ -97,8 +109,17 @@ describe("DDL golden（Node）", () => {
                 if (at === -1) {
                     return null;
                 }
-                const value = line.slice(at + " DEFAULT ".length);
-                return value.endsWith(",") ? value.slice(0, -1) : value;
+                /*
+                 * 値の切り出しは**末尾から削る**。oracle は桁揃えのために
+                 * DEFAULT '0'          NOT NULL と後ろを空白で埋めるので後続を落とす必要が
+                 * あり、かといって「最初の空白まで」にすると 'new table' のように**値自体が
+                 * 空白を含む**ケースが切れる（6-8a で一度そう壊した）。
+                 */
+                const rest = line.slice(at + " DEFAULT ".length);
+                const value = (rest.endsWith(",") ? rest.slice(0, -1) : rest)
+                    .replace(/\s+NOT\s+NULL\s*$/, "")
+                    .trim();
+                return value;
             });
         }
 
@@ -156,10 +177,11 @@ describe("DDL golden（Node）", () => {
             ).toEqual(cases.map((c) => c[1]));
         });
 
-        test("mysql（未現代化）: 6-4 以前のまま CURRENT_TIMESTAMP だけが特例", () => {
+        test("oracle（未現代化）: 6-4 以前のまま CURRENT_TIMESTAMP だけが特例", () => {
             /*
-             * 未現代化プロファイルの規則は 1 文字も変えていない（6-8 でこちら側に移る）。
-             * ddl/{mysql,mssql,oracle,sqlite} の golden 28 本が 1 バイトも動かないことの
+             * 未現代化プロファイルの規則は 1 文字も変えていない（6-8 で 1 本ずつこちら側に移る）。
+             * **6-8a で mysql が抜けたので寄せ先を oracle にした**（6-8c で消える）。
+             * ddl/{mssql,oracle,sqlite} の golden 21 本が 1 バイトも動かないことの
              * 裏付けがこれ —— golden 側は「動かなかった」しか言えないが、ここは
              * 「動かない規則が実際に何か」を書いてある。
              *
@@ -176,7 +198,8 @@ describe("DDL golden（Node）", () => {
                 "hello",
                 "O'Brien",
             ];
-            expect(ddlDefaults("mysql", inputs)).toEqual([
+            /* **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える） */
+            expect(ddlDefaults("oracle", inputs)).toEqual([
                 "'0'",
                 "'now()'",
                 "'uuidv7()'",

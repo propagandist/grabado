@@ -54,16 +54,16 @@ test("#10 <type re> の照合が壊れている（アンカー無し・sql の�
     expect(oracleIds[0]).toBe("number");
     expect(oracleIds[0]).not.toBe("integer");
 
-    // (2) mysql の int は re="INT" なので BIGINT にも部分一致する。ここは後ろにある
-    //     bigint の sql 完全一致が勝つので実害が出ていないだけで、規則としては壊れたまま。
-    await useDatatypes(page, "mysql");
+    // (2) mssql は re="INT" を 4 型（tinyint / smallint / int / bigint）に振っている。
+    //     後勝ちなので INTEGER は bigint に当たり、**素朴に先勝ちへ倒すと tinyint に縮む**。
+    //     **6-8a で mysql が現代化されたので (2) の寄せ先を mssql に移した**（6-8b で消える）。
+    await useDatatypes(page, "mssql");
     await loadFixture(page, readKnownIssueFixture("re-match-drift"));
 
-    const mysqlIds = await page.evaluate(() =>
+    const mssqlIds = await page.evaluate(() =>
         window.d!.tables[0]!.rows.map((r) => window.d!.palette.idAt(r.data.type)),
     );
-    // NUMERIC は mysql パレットに無く、re にも当たらないので先頭型に落ちる（#4 と同じ形）
-    expect(mysqlIds[1]).toBe("integer");
+    expect(mssqlIds[0]).toBe("bigint");
 
     // 段階6-2 は sql の完全一致どうしの順序だけを直し（#3）、ここは意図して残した。
     // 素朴に re を先勝ちへ倒すと mssql が re="INT" を 4 型に持つぶん INTEGER -> tinyint と
@@ -76,30 +76,32 @@ test("#10 <type re> の照合が壊れている（アンカー無し・sql の�
 });
 
 test("#4 型パレットに無い型は黙って先頭の型になる（未現代化プロファイル）", async () => {
-    // **postgresql は段階6-3 で解消した**（uuid 型の追加と strict 化）。移設先は
-    // tests/browser/types.spec.ts の「UUID が uuid に解決される」と
-    // 「strict なパレットでは未知の型が例外になる」。ここに残るのは未現代化の 4 本で、
-    // それぞれのパレットを現代化する 6-8 で消える。
+    // **postgresql は段階6-3 で、mysql は 6-8a で解消した**（uuid 相当の型と strict 化）。
+    // 移設先は tests/browser/types.spec.ts の「UUID が uuid に解決される」と
+    // 「strict なパレットでは未知の型が例外になる」。ここに残るのは未現代化の 3 本で、
+    // それぞれのパレットを現代化する 6-8b 以降で消える。
     //
     // **入力は postgresql の fixture でなければならない**（段階6-6a で fixture が DB 別に
-    // なった）。見たいのは「そのパレットに無い型名を読ませたとき」で、mysql の fixture を
-    // mysql のパレットで読むのは正常系。6-6b が 4 プロファイルの fixture を実型へ書き換えても
+    // なった）。見たいのは「そのパレットに無い型名を読ませたとき」で、oracle の fixture を
+    // oracle のパレットで読むのは正常系。6-6b が 4 プロファイルの fixture を実型へ書き換えても
     // ここは動かない。
-    await useDatatypes(page, "mysql");
+    await useDatatypes(page, "oracle");
     await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
     const id = await page.evaluate(() =>
         window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type),
     );
 
-    // fixture の users.id は UUID。mysql パレットに uuid 型が無く、
+    // fixture の users.id は UUID。oracle パレットに uuid 型が無く、
     // js/io/xml-parser.ts の初期値 type:0 が残るため先頭型（integer）になる
     // （設計 JSON は未知の id を throw するのでこの経路を持たない）。
+    // **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える）。
     expect(id).toBe("integer");
 
-    // 落ちた結果は golden にもそのまま写っている（mysql は識別子をバッククォートで囲む）
-    const ddl = await generateDdl(page, "mysql");
-    expect(ddl).toContain("`id` INTEGER NOT NULL DEFAULT uuidv7()");
+    // 落ちた結果は DDL にもそのまま出る（oracle は #10 で INTEGER が NUMBER に化ける）
+    const ddl = await generateDdl(page, "oracle");
+    expect(ddl).toContain('"id"');
+    expect(ddl).toContain("NUMBER");
 });
 
 /*
@@ -154,7 +156,7 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
 /*
  * #11（既定値を quote で囲むとき値の中の ' がエスケープされない）は §6 段階6-5b で
  * **strict なプロファイルだけ**直した（js/io/ddl/shared.ts の escapeLiteral）。
- * #4 / #10 と同じ形で、現象は未現代化の 4 本（mysql / mssql / oracle / sqlite）に残っている
+ * #4 / #10 と同じ形で、現象は未現代化の 3 本（mssql / oracle / sqlite）に残っている
  * ——直るのは 6-8。fixtures/quote-in-default.xml はそのまま残してある。
  *
  * 「直った後の挙動」は tests/node/ddl.test.ts の LITERALS 表（O'Brien -> 'O''Brien'）、

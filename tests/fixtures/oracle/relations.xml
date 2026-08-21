@@ -14,13 +14,13 @@
 <sql>
 <table x="20" y="20" name="employees">
 <row name="id" null="0" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 </row>
 <row name="name" null="0" autoincrement="0">
 <datatype>VARCHAR2(255)</datatype>
 </row>
 <row name="manager_id" null="1" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 <relation table="employees" row="id" />
 <comment>直属の上長（自己参照）</comment>
 </row>
@@ -30,17 +30,17 @@
 </table>
 <table x="360" y="20" name="projects">
 <row name="id" null="0" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 </row>
 <row name="title" null="0" autoincrement="0">
 <datatype>VARCHAR2(255)</datatype>
 </row>
 <row name="owner_id" null="0" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 <relation table="employees" row="id" />
 </row>
 <row name="team_id" null="1" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 <relation table="teams" row="id" />
 </row>
 <key type="PRIMARY" name="projects_pkey">
@@ -49,7 +49,7 @@
 </table>
 <table x="700" y="20" name="teams">
 <row name="id" null="0" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 </row>
 <row name="name" null="0" autoincrement="0">
 <datatype>VARCHAR2(255)</datatype>
@@ -60,11 +60,11 @@
 </table>
 <table x="360" y="320" name="employee_projects">
 <row name="employee_id" null="0" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 <relation table="employees" row="id" />
 </row>
 <row name="project_id" null="0" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 <relation table="projects" row="id" />
 </row>
 <key type="PRIMARY" name="employee_projects_pkey">

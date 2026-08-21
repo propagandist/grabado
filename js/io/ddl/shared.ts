@@ -145,7 +145,18 @@ function escapeLiteral(def: string, quote: string): string {
     return replaceSubstring(def, quote, quote + quote);
 }
 
-/** 囲まずにそのまま出す SQL キーワード（isSqlExpression の判定 2）。照合は大小を無視する */
+/**
+ * 囲まずにそのまま出す SQL キーワード（isSqlExpression の判定 2）。照合は大小を無視する。
+ *
+ * **SYSDATE / SYSTIMESTAMP は Oracle 固有だが同じ表に置いた**（段階6-8c）。どちらも
+ * **括弧を付けられない擬似列**で、関数呼び出しの判定（isFunctionCall）に掛からないため
+ * ここに無いと `DEFAULT 'SYSTIMESTAMP'` と引用されて壊れる。house 既定の監査列が
+ * Oracle でそのまま踏む道なので、実物に流して見つけた（CUSTOMIZATIONS.md 段階6-8c）。
+ *
+ * dialect ごとにリストを分ける案は採らなかった —— 分けるほどの数ではなく、他プロファイルで
+ * SYSDATE という**文字列**を既定値にしたい場面が現実的に無いため。必要になったら
+ * IdentifierRules と同じ形（プロファイルごとの規則オブジェクト）へ移す。
+ */
 const SQL_DEFAULT_KEYWORDS = [
     "TRUE",
     "FALSE",
@@ -157,6 +168,9 @@ const SQL_DEFAULT_KEYWORDS = [
     "SESSION_USER",
     "LOCALTIME",
     "LOCALTIMESTAMP",
+    /* Oracle の擬似列（括弧を付けられない） */
+    "SYSDATE",
+    "SYSTIMESTAMP",
 ];
 
 /**

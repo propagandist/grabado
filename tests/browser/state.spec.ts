@@ -51,17 +51,23 @@ test.describe("読み込み後の状態 特性化（fromXML）", () => {
     // **寄せ先は未現代化のプロファイルでなければならない**（段階6-8a）。strict なパレットは
     // 未知の型を例外にするので、PG の設計（UUID / JSONB）を読ませると落ちる —— それは
     // known-issue #4 が解消したことの証明であって、状態スナップショットの主張ではない。
-    // 6-8a で mysql が現代化されたので oracle へ移した（6-8 が終わると寄せ先が無くなり、
-    // このテストは「strict どうしで読む」形に作り直すか、役目を終えて消える）。
-    test("state golden: house-defaults を oracle パレットで読む", async () => {
-        await useDatatypes(page, "oracle");
+    // 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた。**6-8d で
+    // 未現代化が尽きる**ので、そのときこのテストは「strict どうしで読む」形に作り直すか、
+    // 役目を終えて消える。
+    //
+    // **空にしてからパレットを差し替える。** sqlite は 5 型しか無く、前のテストが残した
+    // テーブル（postgresql の 24 型で解決済み）を後始末すると範囲外の型添字を引いて落ちる
+    // （6-8a / 6-8b で 2 度踏んだのと同じ形）。
+    test("state golden: house-defaults を sqlite パレットで読む", async () => {
+        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
+        await useDatatypes(page, "sqlite");
         await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const actual = await captureState(page);
-        assertNoCarriageReturn(actual, "state(oracle/house-defaults)");
+        assertNoCarriageReturn(actual, "state(sqlite/house-defaults)");
 
         const expected = writeOrReadGolden(
-            goldenPath("state", "oracle-house-defaults.json"),
+            goldenPath("state", "sqlite-house-defaults.json"),
             actual,
         );
         expect(actual).toBe(expected);

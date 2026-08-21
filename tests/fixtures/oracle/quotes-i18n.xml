@@ -13,7 +13,7 @@
 <sql>
 <table x="20" y="20" name="顧客">
 <row name="id" null="0" autoincrement="0">
-<datatype>NUMBER(10)</datatype>
+<datatype>INTEGER</datatype>
 </row>
 <row name="氏名" null="0" autoincrement="0">
 <datatype>VARCHAR2(255)</datatype>

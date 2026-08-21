@@ -42,60 +42,35 @@ test.afterAll(async () => {
  * 「re もアンカー無しの部分一致」はそちらが引き継ぐ。
  */
 
-test("#10 <type re> の照合が壊れている（アンカー無し・sql の完全一致を上書き）", async () => {
-    // (1) oracle は integer(sql="INTEGER") -> number(re="INT") の順に並ぶ。sql が完全一致した
-    //     後で number の re が部分一致して上書きするので、INTEGER が NUMBER になる。
-    await useDatatypes(page, "oracle");
-    await loadFixture(page, readKnownIssueFixture("re-match-drift"));
-
-    const oracleIds = await page.evaluate(() =>
-        window.d!.tables[0]!.rows.map((r) => window.d!.palette.idAt(r.data.type)),
-    );
-    expect(oracleIds[0]).toBe("number");
-    expect(oracleIds[0]).not.toBe("integer");
-
-    // **(2) は 6-8b で寄せ先が無くなった。** 6-8a まで mysql、6-8b まで mssql が
-    // 「re="INT" を複数の型に振っている」例だったが、どちらも現代化されて re を持たない。
-    // **re を残しているのは oracle と sqlite だけで、sqlite は re 属性を 1 つも持たない**ので、
-    // このケースの実例は上の (1) が最後の 1 つになった（6-8c で #10 ごと消える）。
-
-    // 段階6-2 は sql の完全一致どうしの順序だけを直し（#3）、ここは意図して残した。
-    // 素朴に re を先勝ちへ倒すと oracle が INTEGER -> NUMBER を失うだけでなく、
-    // かつては mssql が INTEGER -> tinyint と縮んだ。直すのは 6-8c。
-    //
-    // **postgresql は段階6-3 でこの不具合から抜けた** —— strict なプロファイルは re を
-    // 見ず、sql / aka の大小無視の完全一致だけで解決する。当時ここが押さえていた
-    // 「decimal の re="numeric" が大文字 NUMERIC に当たらない」の移設先は
-    // tests/node/type-resolution.test.ts の「大文字小文字を無視する」。
-});
-
 test("#4 型パレットに無い型は黙って先頭の型になる（未現代化プロファイル）", async () => {
-    // **postgresql は段階6-3 で、mysql は 6-8a で解消した**（uuid 相当の型と strict 化）。
-    // 移設先は tests/browser/types.spec.ts の「UUID が uuid に解決される」と
-    // 「strict なパレットでは未知の型が例外になる」。ここに残るのは未現代化の 3 本で、
-    // それぞれのパレットを現代化する 6-8b 以降で消える。
+    // **postgresql は 6-3、mysql は 6-8a、mssql は 6-8b、oracle は 6-8c で解消した**
+    // （uuid 相当の型と strict 化）。移設先は tests/browser/types.spec.ts の
+    // 「UUID が uuid に解決される」と「strict なパレットでは未知の型が例外になる」。
+    // **ここに残るのは sqlite だけで、6-8d で消える**（そのとき #4 の項目ごと無くなる）。
     //
     // **入力は postgresql の fixture でなければならない**（段階6-6a で fixture が DB 別に
-    // なった）。見たいのは「そのパレットに無い型名を読ませたとき」で、oracle の fixture を
-    // oracle のパレットで読むのは正常系。6-6b が 4 プロファイルの fixture を実型へ書き換えても
-    // ここは動かない。
-    await useDatatypes(page, "oracle");
+    // なった）。見たいのは「そのパレットに無い型名を読ませたとき」で、sqlite の fixture を
+    // sqlite のパレットで読むのは正常系。
+    //
+    // **空にしてからパレットを差し替える** —— sqlite は 5 型しか無く、前のテストが残した
+    // テーブルを後始末すると範囲外の型添字を引いて落ちる（6-8a / 6-8b で踏んだ形）。
+    await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
+    await useDatatypes(page, "sqlite");
     await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
     const id = await page.evaluate(() =>
         window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type),
     );
 
-    // fixture の users.id は UUID。oracle パレットに uuid 型が無く、
-    // js/io/xml-parser.ts の初期値 type:0 が残るため先頭型（integer）になる
+    // fixture の users.id は UUID。sqlite パレットに uuid 型が無く、
+    // js/io/xml-parser.ts の初期値 type:0 が残るため先頭型（text）になる
     // （設計 JSON は未知の id を throw するのでこの経路を持たない）。
-    // **6-8a で mysql が現代化されたので寄せ先を oracle に移した**（6-8c で消える）。
-    expect(id).toBe("integer");
+    // **寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた。**
+    expect(id).toBe("text");
 
-    // 落ちた結果は DDL にもそのまま出る（oracle は #10 で INTEGER が NUMBER に化ける）
-    const ddl = await generateDdl(page, "oracle");
-    expect(ddl).toContain('"id"');
-    expect(ddl).toContain("NUMBER");
+    // 落ちた結果は DDL にもそのまま出る（sqlite は全列が TEXT に潰れる）
+    const ddl = await generateDdl(page, "sqlite");
+    expect(ddl).toContain("'id' TEXT");
 });
 
 /*
@@ -150,7 +125,7 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
 /*
  * #11（既定値を quote で囲むとき値の中の ' がエスケープされない）は §6 段階6-5b で
  * **strict なプロファイルだけ**直した（js/io/ddl/shared.ts の escapeLiteral）。
- * #4 / #10 と同じ形で、現象は未現代化の 2 本（oracle / sqlite）に残っている
+ * #4 と同じ形で、現象は未現代化の 1 本（sqlite）だけに残っている
  * ——直るのは 6-8。fixtures/quote-in-default.xml はそのまま残してある。
  *
  * 「直った後の挙動」は tests/node/ddl.test.ts の LITERALS 表（O'Brien -> 'O''Brien'）、
@@ -186,4 +161,29 @@ test("#13 sqlite: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消え�
     const createTable = composite.slice(0, composite.indexOf(");"));
     expect(createTable).toContain("UNIQUE (employee_id, project_id)");
     expect(createTable).not.toContain("PRIMARY KEY");
+});
+
+/*
+ * §6 段階6-8c で新設。**grabado の生成器の欠陥ではなく Oracle の制約**だが、
+ * 「実行できない DDL を出す」ことに変わりはないので隔離する。
+ *
+ * 生成した DDL を Oracle 23ai に流して見つけた（6 本のうち quotes-i18n だけが落ちた）。
+ * **直し方が生成器の中に無い**のがこの 1 本の特徴 —— 識別子を書き換えるのは 6-5b の
+ * 決めたこと 7 で採らないと決めており、残る手は「入力側（UI）で止める」しかない。
+ * 6-5b が同じ棚に送った「63 バイトを超える識別子」「空文字の識別子」と同じ性質で、
+ * 直すのは 6-9 以降（§11 の AI リファクタ提案が review-first で受けるのが素直）。
+ */
+test("#15 oracle: 識別子に \" を含むと実行できない DDL になる", async () => {
+    await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
+    await useDatatypes(page, "oracle");
+    await loadFixture(page, readFixture(SERIALIZER_DB, "quotes-i18n"));
+
+    const ddl = await generateDdl(page, "oracle");
+
+    /*
+     * grabado は他の 7 本と同じ規則で "" にエスケープして出す。**Oracle だけがそれを
+     * 受け付けない** —— ORA-25716: The identifier contains a double quotation mark (")
+     * character。他プロファイル（postgresql / h2 / sql-standard）は同じ形で通る。
+     */
+    expect(ddl).toContain('"say ""hi"""');
 });

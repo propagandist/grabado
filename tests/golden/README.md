@@ -93,9 +93,10 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
   `number` の `re="INT"` が `integer` の `sql` 完全一致を後勝ちで上書きするので、
   **このパレットで `integer` 型にはどう書いても到達できない**。
   `ddl/oracle/types-matrix.sql` の `c_integer` がその実物
-- **`mssql`: `DEFAULT` が 1 つも出ない**（生成器に分岐が無い。6-5a が記録した 9 件の 1 つ）。
-  `ddl/mssql/house-defaults.sql` では `NEWID()` も `GETDATE()` も既定値 `1` も丸ごと落ちる
-- **`mssql`: UNIQUE キーが T-SQL に無い `UNIQUE KEY (...)` で出る**（known-issues #14）
+- ~~**`mssql`: `DEFAULT` が 1 つも出ない** ／ **UNIQUE キーが `UNIQUE KEY (...)` で出る**~~
+  **§6 段階6-8b で消えた**（mssql の現代化）。あわせて known-issue #12（最終列のコメントが
+  区切りカンマを飲む）も直り、`datetimeoffset` / `date` がパレットに入って
+  **house 既定の `timestamptz` が tz ごと通る**ようになった
 - **`sqlite`: コメントが 1 つも出ない**（6-5a が記録した粗さ）。`ddl/sqlite/house-defaults.sql`
   にテーブルコメントも列コメントも 1 行も無いのがその実物 —— `mysql` の同じ fixture は
   7 行出す。**`mysql` の「60 字で無言に切り詰める」ほうは golden に出ていない**

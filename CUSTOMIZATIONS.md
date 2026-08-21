@@ -4635,6 +4635,135 @@ org のセキュリティ基準（分類 B）は着手前に一読済み。**依
   現代化で足す（house 既定の `timestamptz` は `datetimeoffset` が受けられる）
 
 
+---
+
+### 2026-08-21 HANDOVER §6「機能」段階6-8b —— `mssql` を現代化する
+
+**既存主要 4 本の現代化の 2 本目。** known-issue **#12** と **#14** が同時に直り、
+**6-6b が実測した「date が無い」「tz 付きの型が無い」も解消**した。
+
+#### 決めたこと 1: 予約語は 179 語。母集団に**公式ドキュメントのソース**を混ぜた
+
+**SQL Server には予約語を返すシステムビューが無い**（PG の `pg_get_keywords()`、MySQL の
+`INFORMATION_SCHEMA.KEYWORDS` にあたるものが存在しない）。総当たりは他の 3 本と同じだが、
+**母集団を他プロファイルの予約語だけで作ると 118 語しか採れず**、`NONCLUSTERED` / `TOP` /
+`BROWSE` / `TEXTSIZE` などが丸ごと漏れた。
+
+```
+$ curl https://raw.githubusercontent.com/MicrosoftDocs/sql-docs/live/    docs/t-sql/language-elements/reserved-keywords-transact-sql.md      -> 184 語
+$ docker run -d --rm --name mss -e ACCEPT_EULA=Y ... mcr.microsoft.com/mssql/server:2022-latest
+$ // 母集団 575 語（他 4 本の予約語 ∪ SQL:2016 ∪ ドキュメント 184）を GO 区切りで流す
+
+  採取日 2026-08-21 / SQL Server 2022 (RTM-CU26) 16.0.4265.3 -> **179 語**
+```
+
+**ドキュメントとの差は 5 語**（`DISK` / `DUMP` / `LOAD` / `PRECISION` / `SECURITYAUDIT`）で、
+どれも**ドキュメントは予約と書くが実物は列名に使える**。逆向き（ドキュメントに無いのに実物が
+拒む）は 0 語。**採るのは実物の 179 語** —— 基準は「列名に使えるか」で、PG の catcode で
+`C`（`integer` / `varchar`）を入れなかったのと同じ考え方。
+
+T-SQL は**バッチ単位でパースする**ので、`CREATE TABLE` ごとに `GO` を入れないと 1 つの
+構文エラーでバッチ全体が実行されない（最初はそれで 0 語しか作れなかった）。
+
+#### 決めたこと 2: パレットに入れた 3 型 ／ 外した 5 型
+
+**入れた**（どれも house 既定に直接効く。6-6b の実測で「無い」と記録していたもの）:
+
+| 型 | 効き方 |
+|---|---|
+| `datetimeoffset` | **timestamptz を tz ごと受けられる**（6-6b では `datetime` に落ちて tz が消えていた） |
+| `date` | **日付だけの型**（同じく `datetime` に落ちていた） |
+| `datetime2` | tz 無しの高精度。`TIMESTAMP` / `TIMESTAMP WITHOUT TIME ZONE` を `aka` で受ける |
+
+**外した**:
+
+| 型 | 理由 |
+|---|---|
+| `text` / `ntext` / `image` | **SQL Server が非推奨にしている**（将来削除予定）。house は非推奨型を勧めない —— 6-0 が PG から `serial` / `char(n)` を外したのと同じ判断。text 相当は `nvarchar` が `aka` で受ける |
+| `money` / `smallmoney` | CLAUDE.md「`numeric`（not `money`）」。PG で外したのと同じ |
+| `numeric` | `decimal` と同義。`aka` に寄せて 1 型に統合した |
+
+**`json` は SQL Server 2022 に無い**（`Msg 2715` で実測。2025 で追加される型）。`nvarchar` で表す。
+
+#### 決めたこと 3: **`bigint_identity` と `text` の id を持たない唯一のプロファイル**
+
+| 持たない id | 理由 |
+|---|---|
+| `bigint_identity` | **T-SQL の `IDENTITY` は型の一部ではなく列の属性。** PG の `BIGINT GENERATED ALWAYS AS IDENTITY` や MySQL の `BIGINT AUTO_INCREMENT` は型名に句が入るが、mssql は `bigint IDENTITY (1, 1)` と分かれる。`autoincrement` のチェックで表し、生成器が句を付ける |
+| `text` | SQL Server の text 相当は `nvarchar(max)` だが、**括弧を含む型名は照合に掛からない**（照合はサイズを外して `sql` と比べるので `nvarchar(max)` は `nvarchar` に当たる）。house の text 優先は `nvarchar` で表す |
+
+#### 決めたこと 4: known-issue **#12** / **#14** が直った
+
+| # | 現象 | 直し方 |
+|---|---|---|
+| **#12** | 最終列にコメントがあると区切りカンマが `--` に飲まれ T-SQL が構文エラー | **コメントを表定義の後ろの行に出す。** 位置を変えたのが是正の本体で、コメント自体は落としていない |
+| **#14** | UNIQUE キーが T-SQL に無い `UNIQUE KEY (...)`（MySQL の構文） | `CONSTRAINT <name> UNIQUE (...)` |
+
+同時に 6-5a が記録した粗さも消えた —— **DEFAULT を 1 つも出さない**（分岐が無かった）/
+FK の参照元列だけ引用符が付かない / 複数列 INDEX の 2 列目以降に `[` が付かない /
+FK 文の後のタブ 4 個 / `ON [PRIMARY]`（ファイルグループ指定。設計の情報ではない）。
+
+**コメントは行コメントで出す。** T-SQL に列コメントの構文は無く、正式には
+`EXEC sp_addextendedproperty` だが 6 引数（スキーマ名・オブジェクト種別…）を要求し、
+設計モデルが持たない前提まで埋めることになる。**情報は落とさず、実行できる形で出す**という
+6-7a の `sql-standard` と同じ判断。
+
+#### 決めたこと 5: known-issue #10 の (2) が**寄せ先を失った**
+
+#10 は「`re` の後勝ちが `sql` の完全一致を上書きする」で、例を 2 つ持っていた。
+(1) は oracle（`INTEGER` → `NUMBER`）、(2) は 6-8a まで mysql・6-8b まで mssql が
+「`re="INT"` を複数の型に振っている」例だった。**どちらも現代化されて `re` を持たない。**
+
+**`re` を残しているのは `oracle` と `sqlite` だけで、sqlite は `re` 属性を 1 つも持たない。**
+(2) を落とし、実例は (1) の 1 つになった（6-8c で #10 ごと消える）。
+
+#### 決めたこと 6: 型添字の範囲外が**また出た**（6-8a の再発）
+
+known-issues の #13 が `useDatatypes(page, "sqlite")` を先に呼んでおり、前のテストが残した
+テーブル（oracle の 15 型で解決済み）を **sqlite の 5 型**で後始末して `Row.getColor` で落ちた。
+6-8a が `template.spec.ts` で踏んだのと同じ形。
+
+**プロファイルが現代化されて寄せ先が動くたびに露出する** —— 型数の少ない側へ切り替えると起きる。
+どちらも「空にしてからパレットを差し替える」で直したが、**性質そのものは残っている**
+（6-8d で sqlite を現代化するときに寄せ先がまた動く）。
+
+#### 検証
+
+**動いた golden は 6 本。** `empty.sql` は 0 バイトのままで不変（mssql は元から飾りを持たない）。
+
+| ファイル | 変化 |
+|---|---|
+| `house-defaults.sql` | `datetimeoffset` ＋ `SYSDATETIMEOFFSET()`、`date`、`DEFAULT NEWID()`、`CONSTRAINT ... UNIQUE`、コメントが表定義の後ろ |
+| `types-matrix.sql` | 27 → 26 列（非推奨 3 型と money 2 型が出て、date / datetime2 / datetimeoffset が入った） |
+| 他 4 本 | 識別子の引用規則と `ON [PRIMARY]` の除去 |
+
+**他 7 プロファイルの golden 50 本は 1 バイトも動いていない。**
+
+| | 6-8a | 6-8b |
+|---|---|---|
+| `npm test` | 303 passed | **303 passed**（#12 / #14 が known-issues から ddl.test.ts へ移っただけ） |
+| `npm run known-issues` | 6 passed | **4 passed**（#12 / #14 が出た） |
+| `npm run test:browser` | 130 passed | 130 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**生成した DDL 6 本を SQL Server 2022 で実際に実行して確かめた**（日本語識別子を含む
+`quotes-i18n` も通る）。使い捨てコンテナで、リポジトリにも配布物にも痕跡を残していない。
+org のセキュリティ基準（分類 B）は着手前に一読済み。**依存は 1 本も増やしていない。**
+
+#### 次段階への入力 —— 6-8c（`oracle`）
+
+- **known-issues #10 と #4 の最後の寄せ先。** oracle を現代化すると #10 は実例が無くなり、
+  #4 は sqlite だけになる。**未現代化テストの寄せ先が軒並み sqlite へ動く**（6-8a / 6-8b と
+  同じ作業だが、**sqlite は 5 型しか無いので型添字の範囲外に注意**）
+- 骨格は**独立実装**（桁揃え・`DROP TABLE ... PURGE` のコメントブロック・`CREATE SEQUENCE`）。
+  6-5a が記録した「複数列が autoincrement だと同名の `CREATE SEQUENCE` が重複」もここで直す
+- パレットは `TIMESTAMP WITH TIME ZONE` と `NUMBER(1)`（boolean 相当）を入れるかが焦点。
+  **Oracle 23ai は BOOLEAN を持つ**ので、対象バージョンの判断が要る（6-7 の h2 と同じ形）
+- 予約語は **Oracle の実物から採る**（`V$RESERVED_WORDS` がある。docker は
+  `gvenzl/oracle-free` などが軽い）
+
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

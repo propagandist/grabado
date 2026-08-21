@@ -5,7 +5,8 @@
  * js/io/ddl/naming.ts の quoteIdentifier() が唯一の読み手で、規則そのものは向こうにある。
  * ここは語彙表だけを持つ —— 6-8 で mysql（約 260 語）/ mssql / oracle / sqlite が足されると
  * 規則本体が語彙に埋もれるため、最初からファイルを分けてある。
- * **段階6-7a〜6-7c で sql-standard / h2 / mariadb、6-8a で mysql が入った**（採取元はそれぞれ下）。
+ * **段階6-7a〜6-7c で sql-standard / h2 / mariadb、6-8a で mysql、6-8b で mssql が入った**
+ * （採取元はそれぞれ下）。
  *
  * **一覧は推測ではなく実 PG18 から採った。** 採取手順（そのまま再現できる）:
  *
@@ -304,4 +305,61 @@ export const MYSQL_RESERVED: ReadonlySet<string> = new Set([
     "utc_timestamp", "values", "varbinary", "varchar", "varcharacter", "varying",
     "virtual", "when", "where", "while", "window", "with",
     "write", "xor", "year_month", "zerofill",
+]);
+
+/*
+ * SQL Server 2022 の予約語（段階6-8b）。
+ *
+ * **SQL Server には予約語を返すシステムビューが無い**（PG の pg_get_keywords()、
+ * MySQL の INFORMATION_SCHEMA.KEYWORDS にあたるものが存在しない）。他の 3 本と同じく
+ * **実物に総当たりで聞き**、母集団に**公式ドキュメントのソース**を混ぜて広げた:
+ *
+ *   $ curl https://raw.githubusercontent.com/MicrosoftDocs/sql-docs/live/ *       docs/t-sql/language-elements/reserved-keywords-transact-sql.md      -> 184 語
+ *   $ docker run -d --rm --name mss -e ACCEPT_EULA=Y ... mcr.microsoft.com/mssql/server:2022-latest
+ *   $ // 母集団の各語で CREATE TABLE p<n>(<語> INT) を GO 区切りで流す
+ *
+ *   採取日 2026-08-21 / SQL Server 2022 (RTM-CU26) 16.0.4265.3
+ *   母集団 575 語（他 4 プロファイルの予約語 ∪ SQL:2016 ∪ ドキュメント 184）-> **179 語**
+ *
+ * **ドキュメントとの差は 5 語**（DISK / DUMP / LOAD / PRECISION / SECURITYAUDIT）で、
+ * どれも**ドキュメントは予約と書くが実物は列名に使える**。逆向き（ドキュメントに無いのに
+ * 実物が拒む）は 0 語。**採るのは実物の 179 語**——基準は「列名に使えるか」で、
+ * PG の catcode（C は入れない）と同じ考え方。
+ *
+ * **母集団の作り方が採取の限界そのもの**なのは H2 / MariaDB と同じ。ドキュメントを混ぜる前は
+ * 118 語しか採れておらず、NONCLUSTERED / TOP / BROWSE / TEXTSIZE などが漏れていた。
+ */
+
+/** 列名・テーブル名として裸で書けない語（SQL Server 2022） */
+export const MSSQL_RESERVED: ReadonlySet<string> = new Set([
+    "add", "all", "alter", "and", "any", "as",
+    "asc", "authorization", "backup", "begin", "between", "break",
+    "browse", "bulk", "by", "cascade", "case", "check",
+    "checkpoint", "close", "clustered", "coalesce", "collate", "column",
+    "commit", "compute", "constraint", "contains", "containstable", "continue",
+    "convert", "create", "cross", "current", "current_date", "current_time",
+    "current_timestamp", "current_user", "cursor", "database", "dbcc", "deallocate",
+    "declare", "default", "delete", "deny", "desc", "distinct",
+    "distributed", "double", "drop", "else", "end", "errlvl",
+    "escape", "except", "exec", "execute", "exists", "exit",
+    "external", "fetch", "file", "fillfactor", "for", "foreign",
+    "freetext", "freetexttable", "from", "full", "function", "goto",
+    "grant", "group", "having", "holdlock", "identity", "identitycol",
+    "identity_insert", "if", "in", "index", "inner", "insert",
+    "intersect", "into", "is", "join", "key", "kill",
+    "left", "like", "lineno", "merge", "national", "nocheck",
+    "nonclustered", "not", "null", "nullif", "of", "off",
+    "offsets", "on", "open", "opendatasource", "openquery", "openrowset",
+    "openxml", "option", "or", "order", "outer", "over",
+    "percent", "pivot", "plan", "primary", "print", "proc",
+    "procedure", "public", "raiserror", "read", "readtext", "reconfigure",
+    "references", "replication", "restore", "restrict", "return", "revert",
+    "revoke", "right", "rollback", "rowcount", "rowguidcol", "rule",
+    "save", "schema", "select", "semantickeyphrasetable", "semanticsimilaritydetailstable", "semanticsimilaritytable",
+    "session_user", "set", "setuser", "shutdown", "some", "statistics",
+    "system_user", "table", "tablesample", "textsize", "then", "to",
+    "top", "tran", "transaction", "trigger", "truncate", "try_convert",
+    "tsequal", "union", "unique", "unpivot", "update", "updatetext",
+    "use", "user", "values", "varying", "view", "waitfor",
+    "when", "where", "while", "with", "writetext",
 ]);

@@ -4,97 +4,97 @@
   サイズ付き（length="1"）の型は括弧つきで書き、Row.fromXML のサイズ抽出も通す。
 
   **1 列 = パレットの 1 型**で、書く型名はパレットの sql 属性そのもの。
-  網羅は tests/node/fixture-set.test.ts が機械的に見るので、6-8 でパレットを
-  現代化したときの入れ忘れ・消し忘れがその場で赤くなる。
+  網羅は tests/node/fixture-set.test.ts が機械的に見る。
 
-  **型名がすべて小文字なのは db/mssql/datatypes.xml の sql が小文字だから。**
-  未現代化プロファイルの照合は大文字小文字を区別する完全一致なので、これで 26 型とも
-  書いた型に解決する。**大文字で INT と書くと re="INT" が 4 型（tinyint / smallint /
-  int / bigint）に部分一致して後勝ちで bigint になる**（known-issue #10）。
-  6-8 で strict になると大小無視の照合になり、どちらで書いても同じになる。
+  **書いてある型はすべて SQL Server 2022 (RTM-CU26) の実物に聞いて通ることを確かめてある**
+  （db/mssql/datatypes.xml の頭）。**6-8b で date / datetime2 / datetimeoffset が入り、
+  非推奨の text / ntext / image と house 方針に反する money / smallmoney が出た。**
+
+  型名がすべて小文字なのはパレットの sql が小文字だから（SQL Server 自身の表記に合わせている）。
+  strict なパレットの照合は大小を無視するので、大文字で書いても同じ型に解決する。
 -->
 <sql>
 <table x="20" y="20" name="type_samples">
-<row name="c_tinyint" null="1" autoincrement="0">
-<datatype>tinyint</datatype>
+<row name="c_integer" null="0" autoincrement="0">
+<datatype>int</datatype>
 </row>
 <row name="c_smallint" null="1" autoincrement="0">
 <datatype>smallint</datatype>
 </row>
-<row name="c_int" null="0" autoincrement="0">
-<datatype>int</datatype>
+<row name="c_tinyint" null="1" autoincrement="0">
+<datatype>tinyint</datatype>
 </row>
 <row name="c_bigint" null="1" autoincrement="0">
 <datatype>bigint</datatype>
 </row>
-<row name="c_money" null="1" autoincrement="0">
-<datatype>money</datatype>
-</row>
-<row name="c_smallmoney" null="1" autoincrement="0">
-<datatype>smallmoney</datatype>
-</row>
-<row name="c_real" null="1" autoincrement="0">
-<datatype>real</datatype>
+<row name="c_decimal" null="1" autoincrement="0">
+<datatype>decimal(12,2)</datatype>
 </row>
 <row name="c_float" null="1" autoincrement="0">
 <datatype>float</datatype>
 </row>
-<row name="c_decimal" null="1" autoincrement="0">
-<datatype>decimal(12,2)</datatype>
-</row>
-<row name="c_numeric" null="1" autoincrement="0">
-<datatype>numeric(18,4)</datatype>
+<row name="c_real" null="1" autoincrement="0">
+<datatype>real</datatype>
 </row>
 <row name="c_char" null="1" autoincrement="0">
-<datatype>char</datatype>
+<datatype>char(10)</datatype>
 </row>
 <row name="c_varchar" null="1" autoincrement="0">
 <datatype>varchar(255)</datatype>
 </row>
-<row name="c_text" null="1" autoincrement="0">
-<datatype>text</datatype>
-</row>
-<row name="c_xml" null="1" autoincrement="0">
-<datatype>xml</datatype>
-</row>
 <row name="c_nchar" null="1" autoincrement="0">
-<datatype>nchar</datatype>
+<datatype>nchar(10)</datatype>
 </row>
 <row name="c_nvarchar" null="1" autoincrement="0">
 <datatype>nvarchar(255)</datatype>
 </row>
-<row name="c_ntext" null="1" autoincrement="0">
-<datatype>ntext</datatype>
-</row>
-<row name="c_datetime" null="1" autoincrement="0">
-<datatype>datetime</datatype>
-</row>
-<row name="c_smalldatetime" null="1" autoincrement="0">
-<datatype>smalldatetime</datatype>
+<row name="c_boolean" null="1" autoincrement="0">
+<datatype>bit</datatype>
 </row>
 <row name="c_binary" null="1" autoincrement="0">
-<datatype>binary</datatype>
+<datatype>binary(16)</datatype>
 </row>
 <row name="c_varbinary" null="1" autoincrement="0">
 <datatype>varbinary(255)</datatype>
 </row>
-<row name="c_bit" null="1" autoincrement="0">
-<datatype>bit</datatype>
+<row name="c_date" null="1" autoincrement="0">
+<datatype>date</datatype>
 </row>
-<row name="c_image" null="1" autoincrement="0">
-<datatype>image</datatype>
+<row name="c_time" null="1" autoincrement="0">
+<datatype>time(3)</datatype>
 </row>
-<row name="c_timestamp" null="1" autoincrement="0">
-<datatype>timestamp</datatype>
+<row name="c_datetime" null="1" autoincrement="0">
+<datatype>datetime</datatype>
+</row>
+<row name="c_datetime2" null="1" autoincrement="0">
+<datatype>datetime2(6)</datatype>
+</row>
+<row name="c_datetimeoffset" null="1" autoincrement="0">
+<datatype>datetimeoffset(6)</datatype>
+</row>
+<row name="c_smalldatetime" null="1" autoincrement="0">
+<datatype>smalldatetime</datatype>
+</row>
+<row name="c_uuid" null="1" autoincrement="0">
+<datatype>uniqueidentifier</datatype>
+</row>
+<row name="c_xml" null="1" autoincrement="0">
+<datatype>xml</datatype>
 </row>
 <row name="c_sql_variant" null="1" autoincrement="0">
 <datatype>sql_variant</datatype>
 </row>
-<row name="c_uniqueidentifier" null="1" autoincrement="0">
-<datatype>uniqueidentifier</datatype>
+<row name="c_rowversion" null="1" autoincrement="0">
+<datatype>rowversion</datatype>
+</row>
+<row name="c_hierarchyid" null="1" autoincrement="0">
+<datatype>hierarchyid</datatype>
+</row>
+<row name="c_geometry" null="1" autoincrement="0">
+<datatype>geometry</datatype>
 </row>
 <key type="PRIMARY" name="type_samples_pkey">
-<part>c_int</part>
+<part>c_integer</part>
 </key>
 </table>
 </sql>

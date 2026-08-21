@@ -86,11 +86,12 @@ describe("初期テーブルテンプレート（段階6-4）", () => {
         expect(STRICT_PROFILES).toEqual([
             "h2",
             "mariadb",
+            "mssql",
             "mysql",
             "postgresql",
             "sql-standard",
         ]);
-        expect(LEGACY_PROFILES.length).toBe(3);
+        expect(LEGACY_PROFILES.length).toBe(2);
     });
 
     test("postgresql は §6.2 の 3 列を返す", () => {

@@ -54,20 +54,14 @@ test("#10 <type re> の照合が壊れている（アンカー無し・sql の�
     expect(oracleIds[0]).toBe("number");
     expect(oracleIds[0]).not.toBe("integer");
 
-    // (2) mssql は re="INT" を 4 型（tinyint / smallint / int / bigint）に振っている。
-    //     後勝ちなので INTEGER は bigint に当たり、**素朴に先勝ちへ倒すと tinyint に縮む**。
-    //     **6-8a で mysql が現代化されたので (2) の寄せ先を mssql に移した**（6-8b で消える）。
-    await useDatatypes(page, "mssql");
-    await loadFixture(page, readKnownIssueFixture("re-match-drift"));
-
-    const mssqlIds = await page.evaluate(() =>
-        window.d!.tables[0]!.rows.map((r) => window.d!.palette.idAt(r.data.type)),
-    );
-    expect(mssqlIds[0]).toBe("bigint");
+    // **(2) は 6-8b で寄せ先が無くなった。** 6-8a まで mysql、6-8b まで mssql が
+    // 「re="INT" を複数の型に振っている」例だったが、どちらも現代化されて re を持たない。
+    // **re を残しているのは oracle と sqlite だけで、sqlite は re 属性を 1 つも持たない**ので、
+    // このケースの実例は上の (1) が最後の 1 つになった（6-8c で #10 ごと消える）。
 
     // 段階6-2 は sql の完全一致どうしの順序だけを直し（#3）、ここは意図して残した。
-    // 素朴に re を先勝ちへ倒すと mssql が re="INT" を 4 型に持つぶん INTEGER -> tinyint と
-    // 縮み、oracle と合わせて DDL golden 12 本が品質を下げる方向に動く。直すのは 6-8。
+    // 素朴に re を先勝ちへ倒すと oracle が INTEGER -> NUMBER を失うだけでなく、
+    // かつては mssql が INTEGER -> tinyint と縮んだ。直すのは 6-8c。
     //
     // **postgresql は段階6-3 でこの不具合から抜けた** —— strict なプロファイルは re を
     // 見ず、sql / aka の大小無視の完全一致だけで解決する。当時ここが押さえていた
@@ -156,7 +150,7 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
 /*
  * #11（既定値を quote で囲むとき値の中の ' がエスケープされない）は §6 段階6-5b で
  * **strict なプロファイルだけ**直した（js/io/ddl/shared.ts の escapeLiteral）。
- * #4 / #10 と同じ形で、現象は未現代化の 3 本（mssql / oracle / sqlite）に残っている
+ * #4 / #10 と同じ形で、現象は未現代化の 2 本（oracle / sqlite）に残っている
  * ——直るのは 6-8。fixtures/quote-in-default.xml はそのまま残してある。
  *
  * 「直った後の挙動」は tests/node/ddl.test.ts の LITERALS 表（O'Brien -> 'O''Brien'）、
@@ -164,30 +158,19 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
  */
 
 /*
- * ここから下は §6 段階6-5a で新設した 2 件。**6-5a が作った欠陥ではない** ——
- * XSLT を TS へ逐語移植する過程で読み直したときに見つかった、upstream からの粗さ。
- * 挙動不変が 6-5a の要件なので TS 側でも忠実に再現してあり、直すのは 6-8
- * （既存主要 4 本の現代化）。**黙って持ち込まないための隔離**がこの 2 本。
+ * §6 段階6-5a が新設した 2 件のうち、**#12 は 6-8b で直った**（mssql の現代化）。
+ * 移設先は tests/node/ddl.test.ts の「mssql（段階6-8b）」。残るのは #13 で、6-8d で消える。
  */
 
-test("#12 mssql: 最終列にコメントがあると区切りカンマが -- に飲まれる", async () => {
-    await useDatatypes(page, "mssql");
-    await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
-
-    const ddl = await generateDdl(page, "mssql");
-
-    /*
-     * 列定義はカンマをコメントより先に出す（db/mssql/output.xsl:34-45 の逐語）。
-     * 最終列にコメントが付くと、そのあと key ループが出す区切りカンマが同じ行の
-     * -- の後ろに来るので、**T-SQL としては次の CONSTRAINT 行が列定義に繋がらない**。
-     * employees の最終列 manager_id は自己参照 FK でコメントを持つ。
-     */
-    expect(ddl).toContain("[manager_id] bigint  -- 直属の上長（自己参照）, ");
-    /* カンマがコメント行の末尾に流れるので、CONSTRAINT が行頭から始まる */
-    expect(ddl).toContain("\nCONSTRAINT employees_pkey PRIMARY KEY ([id])");
-});
-
 test("#13 sqlite: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える", async () => {
+    /*
+     * **空にしてからパレットを差し替える。** 逆にすると、前のテストが残したテーブル
+     * （oracle の 15 型で解決済み）を sqlite の 5 型で後始末することになり、
+     * clearTables() が範囲外の型添字を引いて Row.getColor で落ちる。
+     * 6-8a が template.spec.ts で踏んだのと同じ形で、**プロファイルが現代化されて
+     * 寄せ先が動くたびに露出する**（型数の少ない側へ切り替えると起きる）。
+     */
+    await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
     await useDatatypes(page, "sqlite");
     await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
 
@@ -203,27 +186,4 @@ test("#13 sqlite: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消え�
     const createTable = composite.slice(0, composite.indexOf(");"));
     expect(createTable).toContain("UNIQUE (employee_id, project_id)");
     expect(createTable).not.toContain("PRIMARY KEY");
-});
-
-/*
- * §6 段階6-6b で新設。**6-6b が作った欠陥ではない** —— 6-5a が逐語移植した upstream の
- * 粗さで、当時の 9 件の一覧から漏れていたもの。4 プロファイルの fixture を実型で
- * 書き直したときに house 既定の UNIQUE を読み直して見つかった。直すのは 6-8。
- *
- * 入力は #12 / #13 と揃えて postgresql の fixture のままにしてある —— 生成器が出す
- * 構文の話で、列の型には依存しないため。
- */
-test("#14 mssql: UNIQUE キーが T-SQL に無い UNIQUE KEY 構文で出る", async () => {
-    await useDatatypes(page, "mssql");
-    await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
-
-    const ddl = await generateDdl(page, "mssql");
-
-    /*
-     * js/io/ddl/mssql.ts:63（db/mssql/output.xsl の逐語）が MySQL の構文をそのまま出す。
-     * T-SQL の正しい形は CONSTRAINT <name> UNIQUE ( <cols> ) で、KEY は付かない。
-     * house 既定は users に UNIQUE を 1 本持つので、**この DB では必ず踏む**。
-     */
-    expect(ddl).toContain("CONSTRAINT users_email_key UNIQUE KEY ([email])");
-    expect(ddl).not.toContain("CONSTRAINT users_email_key UNIQUE ([email])");
 });

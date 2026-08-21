@@ -90,7 +90,16 @@ function buildRow(row: RowModel, palette: TypePalette): DdlRow {
 
     /* js/io/ddl-xml.ts:147-154 の逐語。sql 属性の無い型は datatypes.xml に存在しない */
     let datatype = elm.getAttribute("sql")!;
-    if (row.size.length) {
+    /*
+     * **size を取らない型（length="0"）には括弧を付けない**（段階6-8d）。
+     * db/postgresql/datatypes.xml の頭が「UI の size 欄を型ごとに閉じるかは、全プロファイルが
+     * strict になる 6-8 まで片側だけ閉じる形になる」と送っていた、その時点。読み込み側
+     * （js/io/xml-parser.ts）は寄せ先が length="0" なら size を捨てるが、**UI で打った size は
+     * そこを通らない** —— sqlite は全型が length="0" なので、閉じないと TEXT(255) という
+     * STRICT SQLite が必ず拒む DDL が出る。既存 golden 56 本への影響は 0（サイズ付きで
+     * length="0" に解決する列が 1 つも無いため）。UI の size 欄そのものを閉じるのは 6-9。
+     */
+    if (row.size.length && palette.hasSize(row.type)) {
         datatype += "(" + row.size + ")";
     }
 
@@ -98,7 +107,7 @@ function buildRow(row: RowModel, palette: TypePalette): DdlRow {
         name: row.title,
         datatype: datatype,
         hasDefault: row.def !== "",
-        def: row.def === "" ? "" : quoteDefault(row.def, elm, palette),
+        def: row.def === "" ? "" : quoteDefault(row.def, elm),
         nullable: row.nll,
         autoincrement: row.ai,
         comment: row.comment,
@@ -113,19 +122,18 @@ function buildKey(key: KeyModel): DdlKey {
 /**
  * 既定値に型の quote を適用する（js/io/ddl-xml.ts:158-169 の逐語移設）。
  *
- * 「囲まない側」の判定（下の isSqlExpression。段階6-4）と、未現代化プロファイルの
- * CURRENT_TIMESTAMP 特例を持つ。**囲む側の規則は段階6-5b で直した**（known-issues #11。
- * escapeLiteral のコメント）—— ただし **strict なプロファイルだけ**で、未現代化の 4 本は
- * 6-8 までここも従来どおり。この if がその境界そのもので、外へ出すと
- * tests/golden/ddl/sqlite/house-defaults.sql が動く。
+ * 「囲まない側」の判定は下の isSqlExpression（段階6-4）、囲む側の値のエスケープは
+ * escapeLiteral（段階6-5b。known-issues #11）。
+ *
+ * **段階6-8d で規則が 1 つになった。** 6-8c まではここに strict / 未現代化の分岐があり、
+ * 未現代化側は「CURRENT_TIMESTAMP 以外は中を見ずに囲む」という upstream の規則だった
+ * （O'Brien が DEFAULT 'O'Brien' になる #11 が残っていたのはそちら）。sqlite が現代化されて
+ * 寄せ先が尽きたので、分岐ごと落とした —— **#11 は 8 本すべてで消えた**。
  */
-function quoteDefault(def: string, elm: Element, palette: TypePalette): string {
+function quoteDefault(def: string, elm: Element): string {
     /* quote 属性が無い型では現行も "null" が連結される（挙動不変） */
     const q = elm.getAttribute("quote")!;
-    if (palette.isStrict()) {
-        return isSqlExpression(def) ? def : q + escapeLiteral(def, q) + q;
-    }
-    return def != "CURRENT_TIMESTAMP" ? q + def + q : def;
+    return isSqlExpression(def) ? def : q + escapeLiteral(def, q) + q;
 }
 
 /**

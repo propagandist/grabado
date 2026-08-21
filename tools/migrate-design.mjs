@@ -54,7 +54,9 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  *
  * プロファイルごとに持つ —— 型 id はプロファイル内で一意なだけなので、db を見ずに
  * 適用すると別プロファイルの同名 id を巻き込む（js/io/json-parser.ts が db を照合するのと
- * 同じ論法）。6-3 で現代化したのは postgresql だけで、残る 4 本は 6-8 でここに増える。
+ * 同じ論法）。6-3 で現代化したのは postgresql だけで、6-8 で残る 4 本が現代化された ——
+ * **表に増えたのは id を撤去した sqlite（6-8d）だけ**で、mysql / mssql / oracle の分は
+ * 6-8a〜6-8c が入れていない（撤去した id があるのに表が無い。6-9 の宿題）。
  *
  * `dropSize` は寄せ先が length="0"（サイズを持たない型）のとき。落とさないと `TEXT(10)` の
  * ような壊れた DDL が出る。**判断は db/<db>/datatypes.xml の length と一致していなければ
@@ -83,6 +85,20 @@ const TYPE_MIGRATIONS = {
         timestamp_without_time_zone: { to: "timestamp_with_time_zone" },
         /* HANDOVER §6.1「json -> jsonb」 */
         json: { to: "jsonb" },
+    },
+    /*
+     * 段階6-8d。STRICT テーブルが受ける型名は 6 語しか無く、**括弧も書けない**
+     * （TEXT(255) は unknown datatype。実測）ので、**id が変わらない text にも dropSize が
+     * 要る** —— 旧パレットの text は length="1" で、設計 JSON に size を持てた。
+     * integer / real は旧パレットでも length="0" なので表に入れない。
+     */
+    sqlite: {
+        /* STRICT に NUMERIC 親和性の型は無い。ANY は値を変換せずそのまま格納する */
+        numeric: { to: "any" },
+        /* NONE は SQLite に実在しない型名だった（upstream が親和性の名前を型として出していた） */
+        none: { to: "any" },
+        /* id も意味も変わらないが、STRICT は型名に括弧を書けないので size だけ落とす */
+        text: { to: "text", dropSize: true },
     },
 };
 

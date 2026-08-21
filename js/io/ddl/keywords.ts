@@ -3,10 +3,15 @@
  * grabado: DDL 生成で「識別子を引用符で囲まなければならない語」の一覧（HANDOVER §6 段階6-5b）。
  *
  * js/io/ddl/naming.ts の quoteIdentifier() が唯一の読み手で、規則そのものは向こうにある。
- * ここは語彙表だけを持つ —— 6-8 で mysql（約 260 語）/ mssql / oracle / sqlite が足されると
- * 規則本体が語彙に埋もれるため、最初からファイルを分けてある。
- * **段階6-7a〜6-7c で sql-standard / h2 / mariadb、6-8a〜6-8c で mysql / mssql / oracle が
- * 入った**（採取元はそれぞれ下）。
+ * ここは語彙表だけを持つ —— mysql の 262 語を同居させると規則本体が語彙に埋もれるため、
+ * 最初からファイルを分けてある。**段階6-8d で 8 本そろった**（採取元はそれぞれ下）:
+ *
+ *   sql-standard 365 / mysql 262 / mariadb 247 / mssql 179 / postgresql 101 /
+ *   h2 90 / oracle 92 / sqlite 59
+ *
+ * **1 本を除いて実物から総当たりで採ってある。** 例外は sql-standard（規格そのものが一次資料）。
+ * ドキュメントやビューより実物が正しい、という結論は 6-8b（mssql はドキュメントが 5 語広い）と
+ * 6-8c（oracle はビューが 11 語狭い）で**両方向に**確かめた。
  *
  * **一覧は推測ではなく実 PG18 から採った。** 採取手順（そのまま再現できる）:
  *
@@ -400,4 +405,43 @@ export const ORACLE_RESERVED: ReadonlySet<string> = new Set([
     "to", "trigger", "union", "unique", "update", "user",
     "values", "varchar", "varchar2", "view", "whenever", "where",
     "with", "_rowid_",
+]);
+
+/*
+ * SQLite 3.51.2 の予約語（段階6-8d）。
+ *
+ * **一覧を返す SQL 関数もビューも無い。** sqlite_keyword_count() / sqlite_keyword_name() は
+ * C API 専用で SQL からは no such function（pragma_function_list にも 0 件。実測）。
+ * 他の 4 本と同じ総当たりだが、**母集団だけは実物から完全に採れた唯一のプロファイル**:
+ *
+ *   $ // node の実行ファイルに静的リンクされた SQLite の zKWText[]（mkkeywordhash.c が
+ *   $ //   生成するキーワード連結文字列）を binary から /[A-Z_]{120,}/ で拾う -> 666 文字
+ *   $ // その全部分文字列（長さ 2〜20）11,000 語 ∪ 他 7 本の予約語 ∪ SQL:2016 = 12,297 語
+ *   $ // 各語を 3 位置で試す: 列名 / 表名 / 索引名
+ *
+ *   採取日 2026-08-22 / SQLite 3.51.2（node v24.14.0 組み込みの node:sqlite）
+ *   列名 58 語 ∪ 表名 59 語 ∪ 索引名 59 語 -> **59 語**
+ *
+ * **母集団の完全性を主張できるのはここだけ。** zKWText は SQLite のパーサが持つキーワード表
+ * そのものなので、その全部分文字列を試している以上どの語も漏れない（h2 / mariadb / mssql は
+ * 「母集団の作り方が採取の限界」だった）。
+ *
+ * **基準を「列名に使えるか」から「表名・列名・索引名のどれかに使えないか」へ広げた** ——
+ * quoteIdentifier() は 3 位置すべてに同じ規則で当たるため。差は 1 語だけで、
+ * `if` は列名にはできるが CREATE TABLE if(...) / CREATE INDEX if ON ... が構文エラーになる
+ * （CREATE TABLE IF NOT EXISTS と衝突する）。逆向き（列名では拒まれるが表名では通る）は 0 語。
+ */
+
+/** 表名・列名・索引名として裸で書けない語（SQLite 3.51.2） */
+export const SQLITE_RESERVED: ReadonlySet<string> = new Set([
+    "add", "all", "alter", "and", "as", "autoincrement",
+    "between", "case", "check", "collate", "commit", "constraint",
+    "create", "default", "deferrable", "delete", "distinct", "drop",
+    "else", "escape", "except", "exists", "foreign", "from",
+    "group", "having", "if", "in", "index", "insert",
+    "intersect", "into", "is", "isnull", "join", "limit",
+    "not", "nothing", "notnull", "null", "on", "or",
+    "order", "primary", "references", "returning", "select", "set",
+    "table", "then", "to", "transaction", "union", "unique",
+    "update", "using", "values", "when", "where",
 ]);

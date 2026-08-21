@@ -1,3 +1,3 @@
-CREATE TABLE 'things' (
-'id' INTEGER NOT NULL 
-);
+CREATE TABLE things (
+  id INTEGER NOT NULL
+) STRICT;

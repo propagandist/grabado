@@ -29,6 +29,7 @@ import {
     MYSQL_RESERVED,
     ORACLE_RESERVED,
     POSTGRESQL_RESERVED,
+    SQLITE_RESERVED,
     SQL_STANDARD_RESERVED,
 } from "./keywords.ts";
 
@@ -168,6 +169,26 @@ export const ORACLE_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split('"').join('""'),
     reserved: ORACLE_RESERVED,
     bare: BARE_UPPER,
+};
+
+/**
+ * SQLite の区切り識別子（段階6-8d）。**囲み方は postgresql / sql-standard / h2 と同じ "。**
+ *
+ * SQLite は互換のため [ ] や ` ` や ' ' も識別子として受けるが、標準の " を採る ——
+ * 6-8d まで upstream が ' で囲んでいたのが、この段階で消える粗さの 1 つ（' は文字列
+ * リテラルの記号でもあり、文脈で意味が割れる）。値の中の " は "" にする。
+ * **Oracle と違って SQLite は識別子の中の " を受ける**ので、known-issue #15 に
+ * 当たる制約はここには無い（実測: "say ""hi""" が通る）。
+ *
+ * bare は BARE_LOWER。SQLite の裸の識別子は**大小を畳まず書いたまま保つ**（照合が
+ * ASCII 大小無視なだけ）ので、Oracle のように全部囲む理由が無い。
+ */
+export const SQLITE_IDENTIFIER: IdentifierRules = {
+    open: '"',
+    close: '"',
+    escape: (name) => name.split('"').join('""'),
+    reserved: SQLITE_RESERVED,
+    bare: BARE_LOWER,
 };
 
 

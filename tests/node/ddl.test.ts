@@ -441,7 +441,61 @@ describe("DDL golden（Node）", () => {
          *   2. 索引が行コメントで出ること —— INDEX / FULLTEXT を持つ fixture が 0 本
          *   3. コメントの改行が空白へ畳まれること —— fixture のコメントが 1 行しかない
          */
-        describe("sql-standard（段階6-7a）", () => {
+        /*
+     * mssql（段階6-8b）。**known-issues #12 / #14 の移設先。**
+     *
+     * どちらも「直った後の挙動」を固定する形に書き換えてある（known-issues/README.md の運用 3）。
+     * golden にも出るが、**なぜその形なのかは golden からは読めない**ので規則として置く。
+     */
+    describe("mssql（段階6-8b）", () => {
+        test("コメントは列定義の後ろに出す（known-issue #12 の移設先）", () => {
+            /*
+             * 6-8b まで列定義の行末に -- コメントを付けており、**最終列にコメントがあると
+             * 続く区切りカンマが飲まれて T-SQL が構文エラーになっていた**。位置を変えたのが
+             * 是正の本体で、コメント自体は落としていない（T-SQL に列コメントの構文は無く、
+             * sp_addextendedproperty はモデルが持たない引数を要求する）。
+             */
+            const xml = [
+                '<?xml version="1.0" encoding="utf-8" ?>',
+                "<sql>",
+                '<table x="0" y="0" name="probe">',
+                '<row name="c0" null="1" autoincrement="0">',
+                "<datatype>int</datatype>",
+                "<comment>最終列のコメント</comment>",
+                "</row>",
+                '<key type="PRIMARY" name="probe_pkey"><part>c0</part></key>',
+                "</table>",
+                "</sql>",
+                "",
+            ].join("\n");
+            const ddl = ddlOf("mssql", xml);
+
+            /* 列定義の行にコメントが無く、カンマが飲まれない */
+            expect(ddl).toContain("  c0 int");
+            expect(ddl).not.toMatch(/int.*--/);
+            /* コメントは表定義の後ろ */
+            expect(ddl).toContain("-- probe.c0: 最終列のコメント");
+            /* 制約行が列定義から続いている（#12 では繋がらなかった） */
+            expect(ddl).toContain("CONSTRAINT probe_pkey PRIMARY KEY (c0)");
+        });
+
+        test("UNIQUE は T-SQL の構文で出す（known-issue #14 の移設先）", () => {
+            /* 6-8b まで MySQL の UNIQUE KEY (...) を出していた（T-SQL に KEY は無い） */
+            const ddl = ddlOf(
+                "mssql",
+                tableXml(
+                    "probe",
+                    ["c0"],
+                    [{ type: "UNIQUE", name: "probe_c0_key", parts: ["c0"] }],
+                ),
+            );
+
+            expect(ddl).toContain("CONSTRAINT probe_c0_key UNIQUE (c0)");
+            expect(ddl).not.toContain("UNIQUE KEY");
+        });
+    });
+
+    describe("sql-standard（段階6-7a）", () => {
             /**
              * **語彙だけが postgresql と違う**ことの対比表。囲む記号も規則も同じで、
              * 「裸で書けない語」の集合だけが入れ替わる。

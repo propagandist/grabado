@@ -362,8 +362,8 @@ fs 経路はそのまま）。
 書いたまま新しい型に解決する。
 
 **§6 段階6-6b で 4 プロファイルの中身がその DB の実型・実関数になった。**
-`types-matrix` はパレットの全型を 1 列ずつ網羅し（sqlite 5・oracle 15・mysql 25・
-mssql 26・postgresql 24 型）、`house-defaults` は house 既定を「その DB で普通に書く形」で
+`types-matrix` はパレットの全型を 1 列ずつ網羅し（sqlite 5・oracle 15・postgresql 24・
+mysql 25・mssql 26 型ほか）、`house-defaults` は house 既定を「その DB で普通に書く形」で
 表している（`uniqueidentifier` ＋ `NEWID()` / `RAW(16)` ＋ `SYS_GUID()` など）。
 **網羅とパレットの整合は
 [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が機械的に見る** ——

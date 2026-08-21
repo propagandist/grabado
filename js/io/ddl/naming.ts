@@ -25,6 +25,7 @@ import type { DdlKey } from "./shared.ts";
 import {
     H2_RESERVED,
     MARIADB_RESERVED,
+    MSSQL_RESERVED,
     MYSQL_RESERVED,
     POSTGRESQL_RESERVED,
     SQL_STANDARD_RESERVED,
@@ -101,6 +102,19 @@ export const MYSQL_IDENTIFIER: IdentifierRules = {
     close: "`",
     escape: (name) => name.split("`").join("``"),
     reserved: MYSQL_RESERVED,
+};
+
+/**
+ * SQL Server の区切り識別子（段階6-8b）。**囲みが `[ ]` と非対称な唯一のプロファイル。**
+ *
+ * 値の中の `]` を `]]` にして逃がす（開き `[` は中に現れても構わない）。語彙は 179 語で、
+ * PG の 101 語より多く MySQL の 262 語より少ない（js/io/ddl/keywords.ts の採取手順）。
+ */
+export const MSSQL_IDENTIFIER: IdentifierRules = {
+    open: "[",
+    close: "]",
+    escape: (name) => name.split("]").join("]]"),
+    reserved: MSSQL_RESERVED,
 };
 
 /**

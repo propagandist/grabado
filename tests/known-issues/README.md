@@ -29,17 +29,12 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 | 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/io/xml-parser.ts](../../js/io/xml-parser.ts)） | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（`postgresql` は段階6-3 で解消） | §6 段階6-8 |
 | 10 | `<type re="...">` の照合が壊れている。アンカーされておらず部分一致し、大文字小文字を区別し、`sql` の完全一致を後から上書きする | [js/io/palette.ts](../../js/io/palette.ts) の `indexOfTypeNameLegacy` が `re` を後勝ちで見る。壊れているのは規則よりパレット側で、`oracle` は `re="INT"` を integer と number の 2 型に、`mssql` は 4 型（tinyint/smallint/int/bigint）に振っている | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（同上） | §6 段階6-8 |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
-| 12 | `mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれ、続く `CONSTRAINT` 行が列定義に繋がらない（T-SQL として壊れる） | [js/io/ddl/mssql.ts](../../js/io/ddl/mssql.ts) がカンマをコメントより先に出す（`db/mssql/output.xsl:34-45` の逐語） | DDL 生成 | §6 段階6-8 |
-| 14 | `mssql`: UNIQUE キーが T-SQL に無い `UNIQUE KEY (...)` 構文で出る（MySQL の構文） | [js/io/ddl/mssql.ts:63](../../js/io/ddl/mssql.ts#L63) が `db/mssql/output.xsl` の逐語。正しくは `CONSTRAINT <name> UNIQUE ( <cols> )` | DDL 生成 | §6 段階6-8 |
 | 13 | `sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち、PRIMARY KEY が 1 つも無い DDL になる | [js/io/ddl/sqlite.ts](../../js/io/ddl/sqlite.ts) が「UNIQUE、または part 2 個以上の PRIMARY」をまとめて UNIQUE として出す（`db/sqlite/output.xsl:61-64` の逐語） | DDL 生成 | §6 段階6-8 |
 
-**#12 / #13 は §6 段階6-5a で新設した。** XSLT を TS へ逐語移植する過程で読み直したときに
-見つかった upstream からの粗さで、**6-5a が作った欠陥ではない**。挙動不変が 6-5a の要件なので
-TS 側でも忠実に再現してあり、直すのは 6-8。**黙って持ち込まないための隔離**がこの 2 本。
-
-**#14 は §6 段階6-6b で新設した。** これも 6-5a が移植した upstream の粗さで、当時の
-9 件の一覧から漏れていたもの —— 4 プロファイルの fixture を実型で書き直したときに
-house 既定の UNIQUE を読み直して見つかった。同じく直すのは 6-8。
+**#12 / #13 は §6 段階6-5a、#14 は 6-6b で新設した。** どれも XSLT を TS へ移植する過程や
+fixture を実型で書き直す過程で見つかった upstream からの粗さで、**移植が作った欠陥ではない**。
+**#12 と #14 は 6-8b（mssql の現代化）で直り**、下の「直したもの」へ移った。
+残るのは **#13**（sqlite）で、6-8d で消える。
 
 **#11 は §6 段階6-4 で新設し、6-5b で PG から消えた**（下の「直したもの」）。囲む側の規則が
 upstream から値の中を見ていないもので、6-4 が作った欠陥ではない。未現代化の 4 本には残っている。
@@ -47,8 +42,9 @@ upstream から値の中を見ていないもので、6-4 が作った欠陥で�
 **「経路」列は §4 段階4-7 の棚卸しで足した。**残る 5 本はどれも現象が消えていないが、
 **§4 を通したことで 3 本は届く範囲が狭まっている** —— そのぶん §6 で直すときの影響も狭い。
 **§6 段階6-3 で #4 / #10 はさらに狭まり、`postgresql` から消えた。**
-**段階6-5b で #6 / #11 が出て、残るのは 5 本**（#4 / #10 / #12 / #13 は未現代化 4 本の話で 6-8、
-#9 は introspection で §5.2）。
+段階6-5b で #6 / #11 が出て、**6-8a（mysql）と 6-8b（mssql）でさらに 2 本が出た**。
+**残るのは 4 本** —— #4 / #10 は未現代化の 2 本（`oracle` / `sqlite`）の話で 6-8c 以降、
+#13 は sqlite で 6-8d、#9 は introspection で §5.2。
 
 - **#4 / #10 の再現は `postgresql` の fixture を別のパレットで読むことに依る**（段階6-6a）。
   6-6a で fixture が DB 別になったので、ここは `readFixture(SERIALIZER_DB, ...)` と
@@ -100,6 +96,8 @@ PG に `KEY (...)` 構文は無いので `CREATE INDEX idx_<table>_<cols>` に�
 | 10（PG のみ） | `re` が大文字小文字を区別し `NUMERIC` に当たらない | §6 段階6-3 | [`../node/type-resolution.test.ts`](../node/type-resolution.test.ts)「大文字小文字を無視する」＋「部分一致しない」 |
 | 5 | 空の `<default></default>` で ` DEFAULT ` だけが残る | §6 段階6-5a | [`../browser/serialize.spec.ts`](../browser/serialize.spec.ts)「空の `<default></default>` を読んでも DEFAULT 句は出ない」 |
 | 6 | key が複数あると制約名が `<table>_pkey` で衝突する（`INDEX` / `FULLTEXT` が `KEY (...)` に落ちる件も同じ） | §6 段階6-5b | [`../node/ddl.test.ts`](../node/ddl.test.ts)「name が空のキーは §6.3 の規約で名前を組む」ほか 3 本 ＋ [`../browser/keys.spec.ts`](../browser/keys.spec.ts) |
+| 12 | `mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれ T-SQL が構文エラーになる | §6 段階6-8b | [`../node/ddl.test.ts`](../node/ddl.test.ts)「コメントは列定義の後ろに出す」。コメントは落とさず位置を変えた |
+| 14 | `mssql`: UNIQUE キーが T-SQL に無い `UNIQUE KEY (...)` で出る | §6 段階6-8b | 同「UNIQUE は T-SQL の構文で出す」 |
 | 11（PG のみ） | 既定値を `quote` で囲むとき値の中の `'` がエスケープされない | §6 段階6-5b | [`../node/ddl.test.ts`](../node/ddl.test.ts) の `LITERALS` 表（`O'Brien` → `'O''Brien'`）。**未現代化 4 本には残る**ので同ファイルの mysql のテストが「直っていない」側を押さえる |
 
 #3 の記述にあった「`re` もアンカー無しの部分一致」は **#10 が引き継いだ**（6-2 で新設）。

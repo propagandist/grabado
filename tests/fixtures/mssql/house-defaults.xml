@@ -5,15 +5,14 @@
   db/mssql/datatypes.xml に実在する型だけで書き直してある。
 
   **house 既定が SQL Server で失うもの**（記録は CUSTOMIZATIONS.md 段階6-6b）:
-    - uuid            -> **uniqueidentifier がある**（4 プロファイルで唯一。生成は NEWID()）
-    - timestamptz     -> datetime（tz を保持しない。datetimeoffset はパレットに無い）
-    - jsonb           -> nvarchar(4000)（JSON 型が無い。制約で検証する運用）
+    - uuid            -> **uniqueidentifier**（生成は NEWID()。v4 なので順序性は失う）
+    - timestamptz     -> **datetimeoffset**（**tz を保持する**。6-8b でパレットに入った）
+    - jsonb           -> nvarchar(4000)（**SQL Server 2022 に JSON 型は無い**。実測で確認）
     - boolean         -> bit
-    - date            -> **datetime**（日付だけの型がパレットに無い。足すのは 6-8）
+    - date            -> **date**（6-8b でパレットに入った。6-6b までは datetime に落ちていた）
 
   **mssql の timestamp は行バージョンであって日時ではない**（rowversion の別名）。
-  監査列に使うと意味が変わるので datetime を使う —— types-matrix の c_timestamp が
-  その型そのものを押さえている。
+  6-8b のパレットは紛らわしい別名を持たず `rowversion` という名前で置いてある。
 
   型名がすべて小文字なのはパレットの sql が小文字だから（types-matrix の注記を参照）。
 -->
@@ -40,12 +39,12 @@
 <comment>UI 設定などの任意項目</comment>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>datetime</datatype>
-<default>GETDATE()</default>
+<datatype>datetimeoffset</datatype>
+<default>SYSDATETIMEOFFSET()</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>datetime</datatype>
-<default>GETDATE()</default>
+<datatype>datetimeoffset</datatype>
+<default>SYSDATETIMEOFFSET()</default>
 </row>
 <key type="PRIMARY" name="users_pkey">
 <part>id</part>
@@ -80,15 +79,15 @@
 <comment>有料記事の価格。money ではなく decimal を使う</comment>
 </row>
 <row name="published_on" null="1" autoincrement="0">
-<datatype>datetime</datatype>
+<datatype>date</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>datetime</datatype>
-<default>GETDATE()</default>
+<datatype>datetimeoffset</datatype>
+<default>SYSDATETIMEOFFSET()</default>
 </row>
 <row name="updated_at" null="0" autoincrement="0">
-<datatype>datetime</datatype>
-<default>GETDATE()</default>
+<datatype>datetimeoffset</datatype>
+<default>SYSDATETIMEOFFSET()</default>
 </row>
 <key type="PRIMARY" name="articles_pkey">
 <part>id</part>
@@ -104,8 +103,8 @@
 <datatype>nvarchar(64)</datatype>
 </row>
 <row name="created_at" null="0" autoincrement="0">
-<datatype>datetime</datatype>
-<default>GETDATE()</default>
+<datatype>datetimeoffset</datatype>
+<default>SYSDATETIMEOFFSET()</default>
 </row>
 <key type="PRIMARY" name="pk_article_tags">
 <part>article_id</part>

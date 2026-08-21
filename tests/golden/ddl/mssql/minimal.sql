@@ -1,4 +1,4 @@
-CREATE TABLE [things] (
-  [id] int NOT NULL 
-) ON [PRIMARY]
+CREATE TABLE things (
+  id int NOT NULL
+);
 GO

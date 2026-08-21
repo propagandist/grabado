@@ -152,7 +152,7 @@ describe("型解決（段階6-2 / 6-3）", () => {
              * **6-8 で 1 本ずつ現代化するたびにこの配列が縮み、4 本とも移ると空になる**
              * （そのとき差分テストごと消える）。6-8a で mysql が抜けて 3 本。
              */
-            expect(LEGACY_PROFILES).toEqual(["mssql", "oracle", "sqlite"]);
+            expect(LEGACY_PROFILES).toEqual(["oracle", "sqlite"]);
             expect(candidateNames().length).toBeGreaterThan(70);
         });
     });
@@ -163,6 +163,7 @@ describe("型解決（段階6-2 / 6-3）", () => {
             expect(STRICT_PROFILES).toEqual([
                 "h2",
                 "mariadb",
+                "mssql",
                 "mysql",
                 "postgresql",
                 "sql-standard",

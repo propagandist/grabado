@@ -132,24 +132,57 @@ describe("backend の契約（仮想 backend / 段階5-1c）", () => {
         expect(TABLE.cases.filter((one) => !one.virtual).length).toBeGreaterThan(0);
     });
 
+    /*
+     * ★ check() に**通さない**と決めた status。
+     *
+     * - 412（If-Match / If-None-Match の不一致。段階5-4）
+     *   「衝突したので上書きするか？」は**エラー表示ではなく分岐**。フロントが握って
+     *   confirm に流すので、textarea に文言を出してはいけない。プリフライトの 404 を
+     *   check() に通さないのと同じ理屈（js/io.ts の preflightresponse）。
+     *
+     * ここに足すのは「フロントが自分で処理する」status だけ。**表示すべきものを足して
+     * 検査から逃がさないこと** —— それをやると、このテストが守っているものが無くなる。
+     */
+    const HANDLED_BY_FRONTEND = new Set([412]);
+
+    /** 契約表に出てくる異常系の status のうち、check() が知っているべきもの。 */
+    function statusesCheckMustKnow(): number[] {
+        return Array.from(
+            new Set(
+                TABLE.cases
+                    .map((one) => one.expect.status)
+                    .filter((status) => status >= 400)
+                    .filter((status) => !HANDLED_BY_FRONTEND.has(status)),
+            ),
+        ).sort((a, b) => a - b);
+    }
+
     test("表に出てくる異常系の status を js/io.ts の check() が全部知っている", () => {
         /*
          * ★ これが本ファイルを置いた 2 つ目の理由。
          *
          * js/io.ts の check() は「表示すべき応答」を switch で列挙しており、**知らない status は
-         * default: return true に落ちて「成功」に倒れる**。§5 で新設した 400 / 405 を足し忘れると、
-         * ユーザーには何も出ないまま save が失敗する。
+         * default: return true に落ちて「成功」に倒れる**。§5 で新設した 400 / 403 / 405 を
+         * 足し忘れると、ユーザーには何も出ないまま save が失敗する。
          *
          * 200 / 201 は成功側だが、201 は locale の http201 = "Saved" を出す契約なので
          * check() が知っている必要がある（段階4-3b から）。ここでは異常系（>= 400）だけを見る。
          */
-        const errorStatuses = Array.from(
-            new Set(TABLE.cases.map((one) => one.expect.status).filter((status) => status >= 400)),
-        ).sort((a, b) => a - b);
+        const statuses = statusesCheckMustKnow();
 
-        expect(errorStatuses.length).toBeGreaterThan(0);
-        for (const status of errorStatuses) {
+        expect(statuses.length).toBeGreaterThan(0);
+        for (const status of statuses) {
             expect(h.io.check(status), `check() が ${status} を知らない`).toBe(false);
+        }
+    });
+
+    test("フロントが自分で処理する status は check() に通さない", () => {
+        /*
+         * 412 を check() に足してしまうと、衝突のたびに textarea へ文言が出て
+         * confirm の分岐と二重になる。**通さないことも契約**なので固定する。
+         */
+        for (const status of HANDLED_BY_FRONTEND) {
+            expect(h.io.check(status), `check() が ${status} を拾ってしまっている`).toBe(true);
         }
     });
 
@@ -158,12 +191,9 @@ describe("backend の契約（仮想 backend / 段階5-1c）", () => {
          * check() に case を足しても locale のキーが無ければ、textarea には翻訳されない
          * "http400" という文字列がそのまま出る（_() は未知キーをキー名のまま返す）。
          */
-        const errorStatuses = Array.from(
-            new Set(TABLE.cases.map((one) => one.expect.status).filter((status) => status >= 400)),
-        );
         const en = readFileSync(join(REPO_ROOT, "locale", "en.xml"), "utf8");
 
-        for (const status of errorStatuses) {
+        for (const status of statusesCheckMustKnow()) {
             expect(en, `locale/en.xml に http${status} が無い`).toContain(`name="http${status}"`);
         }
     });

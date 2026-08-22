@@ -1,11 +1,11 @@
 package dev.grabado.design
 
 import dev.grabado.config.GrabadoProperties
-import org.springframework.stereotype.Component
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.name
 
@@ -27,6 +27,13 @@ class FileDesignStore(properties: GrabadoProperties) : DesignStore {
 
     /** 正本ディレクトリ（絶対・正規化済み）。 */
     private val root: Path = properties.schemaDir.toAbsolutePath().normalize()
+
+    /**
+     * keyword 単位のロック（段階5-4）。条件付き更新の CAS を成立させるために要る。
+     *
+     * 設計名の数は有限（1 リポジトリぶん）なので、エントリが残り続けても実害は無い。
+     */
+    private val locks = ConcurrentHashMap<String, Any>()
 
     init {
         /*
@@ -59,13 +66,45 @@ class FileDesignStore(properties: GrabadoProperties) : DesignStore {
                 .toList()
         }
 
-    override fun load(name: DesignName): ByteArray? {
+    override fun load(name: DesignName): Stored? {
         val path = resolve(name)
-        return if (path.isRegularFile()) Files.readAllBytes(path) else null
+        if (!path.isRegularFile()) {
+            return null
+        }
+        val bytes = Files.readAllBytes(path)
+        return Stored(bytes, ETags.of(bytes))
     }
 
-    override fun save(name: DesignName, bytes: ByteArray) {
-        val path = resolve(name)
+    override fun save(name: DesignName, bytes: ByteArray, ifMatch: String?, ifNoneMatch: String?): String {
+        /*
+         * ★ 「読む → 比べる → 書く」を keyword 単位のロックで囲む（段階5-4）。
+         *   囲まないと 412 は「たいてい正しい」だけの機能になり、read-before-write に
+         *   残っていた TOCTOU の窓を閉じる目的を果たさない。
+         *
+         *   ロックは同じ JVM の中でしか効かない。**正本ディレクトリを複数プロセスで共有する
+         *   構成は想定していない**（各自ローカルの単一コンテナ。HANDOVER §2.1）。
+         */
+        val lock = locks.computeIfAbsent(name.value) { Any() }
+        synchronized(lock) {
+            val current = load(name)?.etag
+            if (ifMatch != null && !ETags.ifMatchSatisfied(ifMatch, current)) {
+                throw PreconditionFailedException()
+            }
+            if (ifNoneMatch != null && !ETags.ifNoneMatchSatisfied(ifNoneMatch, current)) {
+                throw PreconditionFailedException()
+            }
+            writeAtomically(resolve(name), bytes)
+            return ETags.of(bytes)
+        }
+    }
+
+    /**
+     * 同じディレクトリの一時ファイルへ書いてから置き換える。
+     *
+     * マウント先は **git が見ているディレクトリ**なので、部分書き込みは
+     * 「壊れた設計ファイルがコミットされる」に直結する。
+     */
+    private fun writeAtomically(path: Path, bytes: ByteArray) {
         // 一時ファイルは同じディレクトリに作る。別 fs だと ATOMIC_MOVE ができない。
         // `.` 始まりなので list には出ない。
         val tmp = Files.createTempFile(root, ".grabado-", ".tmp")

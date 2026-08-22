@@ -1,6 +1,7 @@
 package dev.grabado.api
 
 import dev.grabado.design.InvalidDesignNameException
+import dev.grabado.design.PreconditionFailedException
 import dev.grabado.design.ReadOnlyException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -36,4 +37,15 @@ class ApiExceptionHandler {
     @ExceptionHandler(ReadOnlyException::class)
     fun readOnly(): ResponseEntity<Void> =
         ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+
+    /**
+     * 条件付き更新の前提が崩れていた（段階5-4）。
+     *
+     * ★ **412 は `js/io.ts` の `check()` に通さない。** フロントが握って confirm に流す
+     * （プリフライトの 404 を通さないのと同じ理屈）——「衝突したので上書きするか？」は
+     * エラー表示ではなく**分岐**だから。
+     */
+    @ExceptionHandler(PreconditionFailedException::class)
+    fun preconditionFailed(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).build()
 }

@@ -9,6 +9,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -68,12 +69,15 @@ class DesignController(private val store: DesignStore) {
      */
     @GetMapping(params = ["action=load"])
     fun load(@RequestParam(required = false) keyword: String?): ResponseEntity<ByteArray> {
-        val bytes = store.load(DesignName.parse(keyword))
+        val stored = store.load(DesignName.parse(keyword))
             ?: return ResponseEntity.notFound().build()
         return ResponseEntity.ok()
+            // 段階5-4: 内容の SHA-256。フロントはこれを baseline として持ち、次の save に
+            // If-Match で載せる（プリフライトの load が要らなくなる）。
+            .eTag(stored.etag)
             .contentType(MediaType.APPLICATION_OCTET_STREAM)
             .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
-            .body(bytes)
+            .body(stored.bytes)
     }
 
     /**
@@ -85,12 +89,19 @@ class DesignController(private val store: DesignStore) {
     @PostMapping(params = ["action=save"])
     fun save(
         @RequestParam(required = false) keyword: String?,
+        @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) ifMatch: String?,
+        @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) ifNoneMatch: String?,
         request: HttpServletRequest,
     ): ResponseEntity<Void> {
         val name = DesignName.parse(keyword)
         val bytes = request.inputStream.use { it.readAllBytes() }
-        store.save(name, bytes)
-        return ResponseEntity.status(HttpStatus.CREATED).build()
+        /*
+         * 段階5-4: 条件ヘッダがあれば「読む → 比べる → 書く」を store 側のロックで囲んで
+         * 評価する。不一致は 412。**条件ヘッダを送らない既存フロントは今までどおり上書きできる**
+         * （5-4a は backend 先行。428 に締めるのはフロントが送るようになってから）。
+         */
+        val etag = store.save(name, bytes, ifMatch, ifNoneMatch)
+        return ResponseEntity.status(HttpStatus.CREATED).eTag(etag).build()
     }
 
     /**

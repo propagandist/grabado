@@ -103,6 +103,63 @@ class BackendBehaviourTest {
     }
 
     @Test
+    fun `load が ETag を返し、同じ内容なら同じ値になる`() {
+        // 段階5-4。内容の SHA-256 なので、mtime が動いても（git checkout / pull）値は変わらない。
+        post("save", "orders.json", "{\"v\":1}")
+        val first = get("load", "orders.json").headers().firstValue("ETag")
+        post("save", "same.json", "{\"v\":1}")
+        val second = get("load", "same.json").headers().firstValue("ETag")
+
+        assertThat(first).isPresent()
+        assertThat(first.get()).startsWith("\"").endsWith("\"")
+        assertThat(second).hasValue(first.get())
+    }
+
+    @Test
+    fun `内容が変われば ETag も変わる`() {
+        post("save", "orders.json", "{\"v\":1}")
+        val before = get("load", "orders.json").headers().firstValue("ETag").get()
+        post("save", "orders.json", "{\"v\":2}")
+        val after = get("load", "orders.json").headers().firstValue("ETag").get()
+
+        assertThat(after).isNotEqualTo(before)
+    }
+
+    @Test
+    fun `save も新しい ETag を返す（load し直さずに baseline を更新できる）`() {
+        val saved = post("save", "orders.json", "{\"v\":1}")
+        val loaded = get("load", "orders.json")
+
+        assertThat(saved.headers().firstValue("ETag")).hasValue(loaded.headers().firstValue("ETag").get())
+    }
+
+    @Test
+    fun `一致する If-Match なら通り、その後は古い ETag が弾かれる`() {
+        // これが「save を 1 往復にする」の実体。プリフライトの load を投げずに、
+        // 前回観測した etag を条件として載せるだけでよくなる。
+        post("save", "orders.json", "{\"v\":1}")
+        val etag = get("load", "orders.json").headers().firstValue("ETag").get()
+
+        val ok = post("save", "orders.json", "{\"v\":2}", ifMatch = etag)
+        assertThat(ok.statusCode()).isEqualTo(201)
+
+        // 同じ etag をもう一度使うと、内容が変わっているので 412。
+        val stale = post("save", "orders.json", "{\"v\":3}", ifMatch = etag)
+        assertThat(stale.statusCode()).isEqualTo(412)
+        assertThat(String(get("load", "orders.json").body(), StandardCharsets.UTF_8)).isEqualTo("{\"v\":2}")
+    }
+
+    @Test
+    fun `412 のとき内容は 1 バイトも書き換わらない`() {
+        post("save", "orders.json", "{\"v\":1}")
+
+        val rejected = post("save", "orders.json", "{\"v\":999}", ifMatch = "\"deadbeef\"")
+
+        assertThat(rejected.statusCode()).isEqualTo(412)
+        assertThat(String(get("load", "orders.json").body(), StandardCharsets.UTF_8)).isEqualTo("{\"v\":1}")
+    }
+
+    @Test
     fun `セキュリティヘッダが全応答に付く`() {
         val response = get("list", null)
 
@@ -127,12 +184,18 @@ class BackendBehaviourTest {
     private fun get(action: String, keyword: String?, backend: String = "php-mysql") =
         send(HttpRequest.newBuilder(uri(action, keyword, backend)).GET().build())
 
-    private fun post(action: String, keyword: String?, body: String, backend: String = "php-mysql") =
-        send(
-            HttpRequest.newBuilder(uri(action, keyword, backend))
-                .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray(StandardCharsets.UTF_8)))
-                .build(),
-        )
+    private fun post(
+        action: String,
+        keyword: String?,
+        body: String,
+        backend: String = "php-mysql",
+        ifMatch: String? = null,
+    ) = send(
+        HttpRequest.newBuilder(uri(action, keyword, backend))
+            .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray(StandardCharsets.UTF_8)))
+            .apply { if (ifMatch != null) header("If-Match", ifMatch) }
+            .build(),
+    )
 
     private fun uri(action: String, keyword: String?, backend: String): URI {
         val query = buildString {

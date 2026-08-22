@@ -23,6 +23,9 @@
     "  request.body   POST の body",
     "  request.backend パスの <backend名>。省略時は php-mysql（フロントの既定）",
     "  request.trailingSlash パス末尾の / の有無。省略時 true（実測 URL の形）",
+    "  request.ifMatch     If-Match ヘッダ（段階5-4）。値は固定文字列しか書けないので、",
+    "                      『一致する etag を送る』側は BackendBehaviourTest が持つ",
+    "  request.ifNoneMatch If-None-Match ヘッダ（段階5-4）。* だけを使う",
     "  serverMode    'readonly' なら GRABADO_READONLY=true で起動したサーバに流す。省略時は通常",
     "  expect.status  必須",
     "  expect.body    省略時は検査しない。\"\" は空 body を要求する",
@@ -256,6 +259,58 @@
       "request": { "method": "GET", "action": "list", "backend": "..%2F..%2Fetc" },
       "expect": { "status": 400 },
       "virtual": false
+    },
+    {
+      "id": "save-with-stale-if-match-is-rejected",
+      "note": "段階5-4: 観測した版と違えば 412。これで read-before-write に残っていた TOCTOU の窓（load と save の間に他者が書くと勝つ）が閉じる",
+      "seed": { "orders.json": "{\"v\":1}\n" },
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{\"v\":2}\n",
+        "ifMatch": "\"0000000000000000000000000000000000000000000000000000000000000000\""
+      },
+      "expect": { "status": 412, "body": "" },
+      "virtual": false
+    },
+    {
+      "id": "save-with-if-match-star-overwrites",
+      "note": "If-Match: * は RFC どおり『存在すれば無条件で上書き』。意図的に上書きしたい CLI 利用者の逃げ道として残す",
+      "seed": { "orders.json": "{\"v\":1}\n" },
+      "request": { "method": "POST", "action": "save", "keyword": "orders.json", "body": "{\"v\":2}\n", "ifMatch": "*" },
+      "expect": { "status": 201 },
+      "virtual": false
+    },
+    {
+      "id": "save-with-if-match-star-on-absent-is-rejected",
+      "note": "If-Match: * は『存在すれば』なので、無ければ 412（RFC 9110）",
+      "request": { "method": "POST", "action": "save", "keyword": "nope.json", "body": "{}", "ifMatch": "*" },
+      "expect": { "status": 412 },
+      "virtual": false
+    },
+    {
+      "id": "save-with-if-none-match-star-on-absent",
+      "note": "段階5-4: フロントが『新規のつもり』で送る形。不在なら通る",
+      "request": { "method": "POST", "action": "save", "keyword": "fresh.json", "body": "{}", "ifNoneMatch": "*" },
+      "expect": { "status": 201 },
+      "virtual": false
+    },
+    {
+      "id": "save-with-if-none-match-star-on-existing-is-rejected",
+      "note": "『新規のつもり』だったのに実在した＝ 412。フロントはこれを受けて load し直し、confirm に流す（段階5-4b）",
+      "seed": { "orders.json": "{\"v\":1}\n" },
+      "request": { "method": "POST", "action": "save", "keyword": "orders.json", "body": "{\"v\":2}\n", "ifNoneMatch": "*" },
+      "expect": { "status": 412 },
+      "virtual": false
+    },
+    {
+      "id": "save-without-precondition-still-overwrites",
+      "note": "段階5-4a は backend 先行なので、条件ヘッダを送らない既存フロントは今までどおり上書きできる。ここを 428 に締めるのは 5-4b（フロントが送るようになってから）",
+      "seed": { "orders.json": "{\"v\":1}\n" },
+      "request": { "method": "POST", "action": "save", "keyword": "orders.json", "body": "{\"v\":2}\n" },
+      "expect": { "status": 201 },
+      "virtual": true
     },
     {
       "id": "readonly-save-is-forbidden",

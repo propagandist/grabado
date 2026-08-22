@@ -23,20 +23,29 @@ import { buildDdlModel } from "../ddl/shared.ts";
 import type { DesignModel } from "../model.ts";
 import type { TypePalette } from "../palette.ts";
 import { generateJpa } from "./jpa.ts";
+import { generatePrisma } from "./prisma.ts";
 
 /**
  * 出せるターゲット。**UI の select がここから作られる**（js/io.ts）。
  *
- * 6-0 が挙げた 4 本のうち 1 本目。残る Prisma / Drizzle / SQLAlchemy は 6-9e 以降で、
- * **どれも「正規型 -> 言語型」の表 1 つで書ける**のが 6-9c を先にやった意味。
+ * 6-0 が挙げた 4 本のうち 2 本。**SQLAlchemy は保留**（判断は CUSTOMIZATIONS.md の段階6-9e）。
+ * どれも「正規型 -> 言語型」の表 1 つで書けるのが 6-9c を先にやった意味だが、
+ * **Prisma だけは逆参照を形式が要求する**ので、そこだけ 6-9d の判断を決め直している。
  */
-export const ORM_TARGETS = ["jpa"] as const;
+export const ORM_TARGETS = ["jpa", "prisma"] as const;
 
 export type OrmTarget = (typeof ORM_TARGETS)[number];
 
 /** select に出す表示名。locale を通さない —— 製品名なので翻訳しない */
 export const ORM_LABELS: Readonly<Record<OrmTarget, string>> = {
     jpa: "JPA (Kotlin)",
+    prisma: "Prisma",
+};
+
+/** golden の拡張子。**ターゲットの性質なのでここに置く**（tests/ に散らさない） */
+export const ORM_EXTENSIONS: Readonly<Record<OrmTarget, string>> = {
+    jpa: "kt",
+    prisma: "prisma",
 };
 
 export function isOrmTarget(target: string): target is OrmTarget {
@@ -62,5 +71,8 @@ export function generateOrm(
     switch (target) {
         case "jpa":
             return generateJpa(tables).trim();
+        case "prisma":
+            /* Prisma だけ db を見る —— datasource の provider が要る（8 本中 5 本にしかない） */
+            return generatePrisma(tables, palette.db()).trim();
     }
 }

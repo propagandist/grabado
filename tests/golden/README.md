@@ -8,7 +8,7 @@
 
 ```
 ddl/<db>/<fixture>.sql       Designer.toDdl() の出力。8 DB × 7 fixture
-orm/<target>/<db>/<f>.kt     Designer.toOrm() の出力（§6 段階6-9d で追加）
+orm/<target>/<db>/<f>.<ext>  Designer.toOrm() の出力（§6 段階6-9d で追加。jpa=.kt / prisma=.prisma）
 state/<fixture>.json         fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json          Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
@@ -165,7 +165,7 @@ SQL 型名も識別子の引用も通らない）。母集団は 2 つで足り�
 構造       postgresql × 残り 6 本           複合 PK・自己参照 FK・identity・日本語識別子
 ```
 
-合わせて **14 本**。ORM が 4 本（JPA / Prisma / Drizzle / SQLAlchemy）になっても 56 本で、
+ターゲット 1 本につき **14 本**（6-9e で Prisma が入って 28 本）。ORM が 4 本になっても 56 本で、
 DDL の 56 本と同じ桁に収まる。母集団の定義は
 [`../support/fixtures.ts`](../support/fixtures.ts) の `ormGoldenCases`。
 

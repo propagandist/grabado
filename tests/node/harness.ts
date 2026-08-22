@@ -47,6 +47,13 @@ export interface RequestRecord {
     readonly data: string | undefined;
 }
 
+/** 仮想 backend の 1 応答（段階5-1c）。`OZ.Request` のコールバック 3 引数をそのまま持つ。 */
+export interface BackendResponse {
+    readonly data: unknown;
+    readonly status: number;
+    readonly headers: Record<string, string>;
+}
+
 export interface NodeHarness {
     readonly dom: JSDOM;
     readonly window: JSDOM["window"];
@@ -70,6 +77,11 @@ export interface NodeHarness {
     captureState(): string;
     /** 溜まった alert を取り出して空にする（UI 層は失敗を alert で伝える） */
     takeAlerts(): string[];
+    /**
+     * 仮想 backend を 1 往復だけ直接叩く（段階5-1c）。UI を経由しないので、
+     * `tests/contract/backend-cases.json` のケースをそのまま流せる。
+     */
+    callBackend(url: string, options?: OzRequestOptions): BackendResponse;
     /**
      * 仮想 backend の中身を置く / 消す（段階4-6）。`null` で削除 ＝ load が 404 になる。
      * keyword はフロントが組み立てるファイル名（`orders.json` のように `.json` 付き）。
@@ -205,11 +217,18 @@ export async function createHarness(): Promise<NodeHarness> {
     }
 
     /*
-     * 仮想 backend（段階4-6）。php-file の `data/` に相当する。
+     * 仮想 backend（段階4-6 で新設、段階5-1c で Kotlin 実装に合わせた）。
      *
      * 4-6 で保存が read-before-write になり、「サーバ上に何が置いてあるか」を作り分けられないと
-     * 一致 / 不一致が試せない（fs 解決だけだと backend/ は必ず 404 に落ちる）。扱うのは
-     * save / load の 2 つで、それ以外の action は 404 —— fs 解決に落ちていた頃と同じ結果になる。
+     * 一致 / 不一致が試せない（fs 解決だけだと backend/ は必ず 404 に落ちる）ので置いた。
+     *
+     * ★ 段階5-1c から、これは**手書きの推測ではなく契約の第 2 実装**になった。
+     *   `tests/contract/backend-cases.json` の `virtual: true` のケースを
+     *   `tests/node/backend-contract.test.ts` が流し、Kotlin 実装（server/）と**同じ表**で
+     *   検証される。挙動を変えるときは表を先に直すこと。
+     *
+     * ★ ここは Map であってファイルシステムではないので、パス解決・dotfile・拡張子の強制は
+     *   模せない。**模せない範囲は表の中で `virtual: false` として宣言してある。**
      */
     const serverFiles = new Map<string, string>();
     let nextLoadStatus: number | null = null;
@@ -227,27 +246,48 @@ export async function createHarness(): Promise<NodeHarness> {
                 keyword,
                 typeof options?.data === "string" ? options.data : "",
             );
-            /* php-file の save 成功は 201 + 空 body（docs/ARCHITECTURE.md §4.3） */
-            callback(null, 201, {});
+            /* save 成功は 201 + 空 body（docs/ARCHITECTURE.md §4.3 の実測。§7.1 でも維持） */
+            callback("", 201, {});
             return;
         }
         if (action === "load") {
             if (nextLoadStatus !== null) {
                 const status = nextLoadStatus;
                 nextLoadStatus = null;
-                callback(null, status, {});
+                callback("", status, {});
                 return;
             }
             const text = serverFiles.get(keyword);
             if (text === undefined) {
-                callback(null, 404, {});
+                callback("", 404, {});
                 return;
             }
-            /* 保存したバイト列をそのまま返す（実測どおり backend は中身を解釈しない） */
-            callback(text, 200, {});
+            /*
+             * 保存したバイト列をそのまま返す（backend は中身を解釈しない）。
+             * Content-Type は段階5-1b から octet-stream + nosniff —— フロントは
+             * 段階4-3b から中身の先頭 1 文字で判別するので見ないが、契約なので返す。
+             */
+            callback(text, 200, {
+                "Content-Type": "application/octet-stream",
+                "X-Content-Type-Options": "nosniff",
+            });
             return;
         }
-        callback(null, 404, {});
+        if (action === "list") {
+            /* 昇順・末尾にも改行・空なら 0 バイト。dotfile は返さない（段階5-1b） */
+            const names = Array.from(serverFiles.keys())
+                .filter((name) => !name.startsWith("."))
+                .sort();
+            callback(names.map((name) => name + "\n").join(""), 200, {});
+            return;
+        }
+        /*
+         * import / remove / 未知の action / action 指定なし。
+         *
+         * 段階5-1c まで 404 を返していた（php-file の fs 解決に落ちた頃の副産物）が、
+         * **実測契約は 501**（ARCHITECTURE §4.3）。Kotlin 実装もそう返す。
+         */
+        callback("", 501, {});
     }
 
     // OZ.Request を fs 読みへ。同期的にコールバックを呼ぶので
@@ -357,6 +397,27 @@ export async function createHarness(): Promise<NodeHarness> {
         },
         captureState(): string {
             return captureDesignState(designer);
+        },
+        /**
+         * 仮想 backend を 1 往復だけ直接叩く（段階5-1c）。
+         *
+         * `tests/contract/backend-cases.json` を流すための口。UI を経由しないので、
+         * 契約表のケースを「URL を投げて (data, status, headers) を見る」形で試せる。
+         * 仮想 backend は同期なので、コールバックの結果をそのまま返せる。
+         */
+        callBackend(url: string, options?: OzRequestOptions): BackendResponse {
+            let captured: BackendResponse | null = null;
+            api.OZ.Request(
+                url,
+                (data: unknown, code: number, headers?: Record<string, string>) => {
+                    captured = { data: data, status: code, headers: headers ?? {} };
+                },
+                options,
+            );
+            if (!captured) {
+                throw new Error(`仮想 backend が応答しなかった: ${url}`);
+            }
+            return captured;
         },
         setServerFile(keyword: string, text: string | null): void {
             if (text === null) {

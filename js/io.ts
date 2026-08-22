@@ -853,10 +853,26 @@ export class IO {
         OZ.Request(url, this.importresponse, { xml: true, headers: h });
     }
 
+    /**
+     * 「表示すべき応答」なら textarea に文言を出して false を返す。
+     *
+     * ★ **知らない status は `default: return true` に落ちて「成功」に倒れる。**
+     * backend が新しい status を返すようになったら、**同じ PR で**ここと locale を広げること
+     * （分けると、無言で成功扱いになる期間が develop に残る＝ CLAUDE.md 制約1 違反）。
+     * 抜けは `tests/node/backend-contract.test.ts` が契約表と突き合わせて機械的に捕まえる。
+     *
+     * - `201` は save 成功（locale の `http201` は `Saved`）。**唯一の保存完了通知**なので落とさない
+     * - `400` / `405` は段階5-1b の Kotlin 実装から。`keyword` が空・パスを脱出しうる形・
+     *   action に対して HTTP メソッドが違う
+     * - `412`（If-Match 不一致）は **check() に通さない** —— フロントが握って confirm に流す
+     *   （プリフライトの 404 を通さないのと同じ理屈）。入るのは段階5-4
+     */
     check(code: number): boolean {
         switch (code) {
             case 201:
+            case 400:
             case 404:
+            case 405:
             case 500:
             case 501:
             case 503:

@@ -6295,6 +6295,154 @@ golden 114 本（`ddl` 56 / `orm` 28 / `json` 7 / `state` 8 / `convert` 14）は
 
 ---
 
+### 2026-08-22 HANDOVER §5「backend」段階5-1a —— CI を置く
+
+§5 の最初の実装段階。**Kotlin が 1 行も無いうちに、現状の 601 本が PR 上で緑に見える状態を作る。**
+
+これまで GitHub Actions は 1 本も無く、品質ゲートは `.githooks/pre-push`（ブランチ保護のみ。
+テストは走らせない）と手元実行だけだった。つまり「特性化テストが緑であることが移植の前提」
+（CLAUDE.md 制約1）は**人の記憶に依存していた**。§5 は「既存テストが 1 本も動かないこと」を
+各段階の完了条件に据えるので、その判定を先に機械へ移す。
+
+#### 決めたこと 1: 5 系統すべてを 1 ジョブに入れた（5-0 の「週次へ隔離」から変えた）
+
+5-0 では「重い層（`test:dist` / `known-issues`）は週次 `schedule` へ隔離」と書いたが、
+**手元で測ったらどちらも軽かった**ので同じジョブに入れた。
+
+| 検査 | 実測 |
+|---|---|
+| `npm run typecheck` | 数秒 |
+| `npm test`（vitest 407） | 14 秒 |
+| `npm run test:browser`（playwright 189） | 23 秒 |
+| `npm run known-issues` | 1.3 秒 |
+| `npm run test:dist` | 7 秒（＋ `vite build`） |
+
+org 規約は「課金は**ジョブ単位で 1 分未満切り上げ**。**1 分未満のジョブが 3 つ以上並んでいたら
+まとめられないか考える**」。5 つとも 1 分未満なので、まとめるのが最も安い。**ステップは何本
+あっても課金は変わらず、どこで落ちたかは画面で分かる。**
+
+**週次に出すのは「時間で変わる層」**（依存の CVE・ベースイメージの更新）と、**1 分を大きく超える
+検査**（5-7 の実 DB を要する introspection 統合テスト、§2 の Docker ビルド）。どちらもまだ実体が
+無いので、**週次ワークフローは中身ができる段階で作る**（先に空の器を置かない）。
+
+#### 決めたこと 2: `push` では回さない
+
+`main` / `develop` への直接 push は `.githooks/pre-push` が禁じており、`develop` が動くのは PR の
+squash merge だけ。`pull_request` イベントは **PR ブランチと base のマージ結果**に対して走るので、
+「マージしたらどうなるか」は PR の時点で検査済み。push 側を足すと **PR 1 本あたりの消費が倍**になる。
+
+org のテンプレートも「直接 push をしない運用なら `push:` を外してよい（消費は半分になる）」と
+明記している。枠は org 全体で共有（2,000 分/月）で、**枯らすと他リポジトリの本番デプロイまで止まる。**
+
+#### 決めたこと 3: `paths` は実際に確かめて書いた
+
+「入力が変わらなければ出力も変わらない」が規約の判断軸なので、**テストが `tests/` の外を読む面を
+grep で洗い出してから**列挙した。
+
+| 入力 | 読んでいるもの |
+|---|---|
+| `tools/` | `migrate-design.test.ts` が `tools/migrate-design.mjs` を import する |
+| `scripts/` | `npm test` は `scripts/vitest.mjs`（Windows の cwd 問題のラッパ）を呼ぶ |
+| `db/` `locale/` `index.html` | `tests/node/harness.ts` が静的資産として読む |
+| `docs/TYPE-MAPPING.md` | `type-mapping.test.ts` が実装の出力と 1 セルずつ突き合わせる（6-10b） |
+
+**`docs/` をまるごとは入れない。** 文書だけの PR（**段階5-0 がまさにそれ**）で数分使うのは判断軸に
+反する。テストが読む repo ルートのファイルを増やしたら paths に足す —— **この対応関係は
+ワークフロー自身のコメントにも書いた**（ここだけに書くと、次に触る人が気づけない）。
+
+`paths` を 2 回書く必要は無い（`push` が無いため）。**YAML アンカーは使わない** —— org 規約が
+明示的に見送っている。`zizmor` の対応がベータであることに加え、**アンカーが解釈されないと
+workflow が invalid になって静かに起動しない**＝「枠が枯れて起動しない」と区別がつかないため。
+
+#### 決めたこと 4: Playwright のブラウザキャッシュは足さない
+
+規約 §3③「**高速化は最後。しかも実測してから**」。`actions/cache` を足すと action が 1 つ増え、
+SHA ピンの管理対象も増える。まず素の形で回し、
+`gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` の `steps[]` の時刻差で内訳を採ってから
+判断する。org には「遅いと思っていたジョブの時間はほぼテスト本体で、キャッシュ復元は数秒だった」
+という実測（cartera）があり、**効いているものを直そうとしても何も減らない**。
+
+`setup-node` の `cache: npm` は組み込みなので入れた（action は増えない）。
+
+#### そのほか
+
+- action は **SHA ピン ＋ 版コメント**（`actions/checkout` v7.0.1 / `actions/setup-node` v7.0.0）。
+  **テンプレートの SHA は Dependabot が追随しない**（対象は `.github/workflows/` だけ）ので、
+  使う時点で最新を取り直して確認した
+- `permissions: contents: read` を明示 / `concurrency` ＋ `cancel-in-progress` / `timeout-minutes: 15` /
+  `checkout` に `persist-credentials: false`
+- 最後に **`git diff --exit-code`** を置いた。ここで追跡ファイルが動いていたら、テストが副作用を
+  持っているか golden が書き換わっている（**どちらも見逃してはいけない**）
+- **Dependabot の設定はまだ置かない。** SHA ピンは Dependabot の `github-actions` entry とセットで
+  初めて安全になる（凍結したまま放置すると、セキュリティ修正が降りてこない浮動タグより悪い）が、
+  Gradle の entry と一緒に置くほうが 1 ファイルで済む。**5-1b で置く**
+- `playwright.config.ts` は既に `process.env["CI"]` を見て reporter を `list` にし
+  `reuseExistingServer` を切る。CI 側で足すことは何も無かった
+
+#### 検証
+
+ワークフローの追加だけで、コードは 1 行も動いていない。
+
+| | 5-0 | 5-1a |
+|---|---|---|
+| `npm test` | 407 passed | 407 passed |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**この PR 自身が CI の最初の run になる**（`paths` に `.github/workflows/ci-frontend.yml` を
+入れてあるため）。**起動しなければ workflow が invalid** —— 上で YAML アンカーを避けた理由と
+同じ失敗モードなので、PR を出したら Actions タブで run が立つことを目視する。
+→ **run 32569135886 が立ち、全ステップ緑**。
+
+#### CI の実測 —— キャッシュは入れない（確定）
+
+規約 §3③「高速化は最後。**しかも実測してから**」に従って、最初の run の内訳を
+`gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` の `steps[]` から採った。
+
+| ステップ | 秒 |
+|---|---|
+| set up job / checkout / setup-node | 4 |
+| 依存の取得（`npm ci`） | **4** |
+| **Chromium の取得** | **27** |
+| 型検査 | 4 |
+| 高速回帰（vitest 407） | 17 |
+| 特性化テスト（playwright 189） | 15 |
+| 既知の不具合 | 4 |
+| 配布物のスモーク | 5 |
+| 作業ツリーの確認 | 0 |
+| 後片付け | 3 |
+| **合計** | **約 83 秒 → 課金 2 分** |
+
+**結論: Playwright のブラウザキャッシュは入れない。** 最大のステップは Chromium の取得（27 秒）
+だが、**キャッシュで 10 秒に縮めても合計 66 秒で課金は同じ 2 分**。1 分未満切り上げの世界では、
+**120 秒の壁を割らないかぎり時間短縮は 1 分も効かない**。`actions/cache` を足せば action が
+1 つ増え、SHA ピンの管理対象とキャッシュキーの保守（`@playwright/test` の版に追随させる）が
+生えるだけになる。
+
+**次にこの判断を見直すのは合計が 120 秒を超えたとき。** 5-1b の Gradle は別ワークフロー
+（`ci-server.yml`）に出るので、frontend 側がすぐ超えることはない。
+
+`npm ci` が 4 秒で済んでいるのは `setup-node` の `cache: npm` が効いているため
+（こちらは action が増えないので最初から入れた）。**org の cartera でも「遅いと思っていた
+ジョブの時間はほぼテスト本体で、キャッシュ復元は数秒だった」という同じ結論が出ている。**
+
+#### 次段階への入力
+
+- **5-1b で `ci-server.yml` を足す。** paths は `server/**` と自分自身。Gradle は
+  `gradle/actions/setup-gradle` の `validate-wrappers: true` で wrapper を毎回検証する
+  （60KB の不透明なバイナリを分類 B のリポジトリに置く懸念は、これで「検証済みバイナリ」に変わる）。
+  `gradle-wrapper.properties` には `distributionSha256Sum` を書く
+- **★ GitHub の「Automatic dependency submission」を有効にしない**（5-0 の記録）。Gradle を入れる
+  5-1b が、この判断の当事者になる
+- **`.gitattributes` に `gradlew` の改行指定を足す**（`gradlew` は `eol=lf`、`gradlew.bat` は
+  `eol=crlf`、`gradle-wrapper.jar` は `binary`）。既に `.githooks/**` と `scripts/*.sh` に同じ
+  ことをしている。**抜けると Windows で clone した人の `./gradlew` が起動しない**
+- CI の実測（各ステップの秒数）を採ってから、Playwright キャッシュの要否を判断する
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

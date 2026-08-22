@@ -1,0 +1,108 @@
+# grabado フロントエンドの検査。**軽い検査を 1 ジョブにまとめる**型
+# （propagandist/.github の workflow-templates/ci-light）。
+#
+# ★ なぜ 1 ジョブにまとめるのか
+#   課金は **ジョブ単位で 1 分未満切り上げ**。手元実測は typecheck 数秒 / vitest 14 秒 /
+#   playwright 23 秒 / known-issues 1.3 秒 / dist 7 秒 で、**どれも 1 分未満**。
+#   分ければ本数ぶん課金され、まとめれば 1 回で済む。
+#   1 分を大きく超える検査（§5-7 の実 DB を要する introspection 統合テスト、§2 の Docker
+#   ビルド）が入るのは後段なので、**そのときに ci-heavy 型の別ワークフローへ出す**。
+#
+# ★ なぜ push では回さないのか
+#   `main` / `develop` への直接 push は `.githooks/pre-push` が禁じており、`develop` が動くのは
+#   PR の squash merge だけ。`pull_request` イベントは **PR ブランチと base のマージ結果**に
+#   対して走るので、「マージしたらどうなるか」は PR の時点で検査済み。push 側を足すと
+#   PR 1 本あたりの消費が倍になる。**枠は org 全体で共有（2,000 分/月）で、枯らすと
+#   他リポジトリの本番デプロイまで止まる。**
+#
+# ★ paths は「この検査の入力」だけを列挙する
+#   テストが `tests/` の外を読む面は実際に確かめた —— `tools/`（migrate-design.test.ts が
+#   import）、`scripts/`（`npm test` のラッパ）、`db/` `locale/` `index.html`（harness が読む
+#   静的資産）、`docs/TYPE-MAPPING.md`（type-mapping.test.ts が実装と 1 セルずつ突き合わせる）。
+#   **`docs/` をまるごとは入れない** —— 文書だけの PR（段階5-0 のような）で数分使うのは、
+#   「入力が変わらなければ出力も変わらない」に反する。
+#   **テストが読む repo ルートのファイルを増やしたら、ここに足すこと。**
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+name: CI (frontend)
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'js/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'db/**'
+      - 'locale/**'
+      - 'styles/**'
+      - 'images/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - 'index.html'
+      - 'docs/TYPE-MAPPING.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '*.config.ts'
+      - '.github/workflows/ci-frontend.yml'
+
+# 既定に頼らず最小を明示する。checkout してテストを回すだけなら write は要らない。
+permissions:
+  contents: read
+
+# 同じブランチに push が続いたら古い run は捨てる（後勝ちでよい）。
+concurrency:
+  group: ci-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 検査
+    runs-on: ubuntu-latest
+    # ハングした run が既定の 6 時間まわり続けて枠を溶かすのを防ぐ。必ず付ける。
+    timeout-minutes: 15
+
+    steps:
+      # ★ action は SHA でピンする。**末尾コメントの版表記を消さないこと**
+      #   —— Dependabot が SHA と一緒に書き換える対象で、消すとどの版か読めなくなる。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 依存の取得
+        run: npm ci
+
+      # Playwright の 3 系統（characterization / known-issues / dist）が同じ Chromium を使う。
+      # ★ ブラウザのキャッシュはまだ足さない —— 規約 §3③「高速化は最後。しかも実測してから」。
+      #   内訳は `gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` の steps[] の時刻差で採る。
+      - name: Chromium の取得
+        run: npx playwright install --with-deps chromium
+
+      # **軽い検査は 1 ステップにまとめず、1 ジョブの中の複数ステップにする。**
+      # ステップは何本あっても課金は変わらず、どこで落ちたかは画面で分かる。
+      - name: 型検査
+        run: npm run typecheck
+
+      - name: 高速回帰（Node / jsdom）
+        run: npm test
+
+      # golden の唯一の正はこちら（実ブラウザ）。UPDATE_GOLDEN を渡さないので読むだけ。
+      - name: 特性化テスト（実ブラウザ）
+        run: npm run test:browser
+
+      - name: 既知の不具合（「現在こう壊れている」を固定する）
+        run: npm run known-issues
+
+      - name: 配布物のスモーク（vite build -> preview）
+        run: npm run test:dist
+
+      # ここまでで追跡ファイルが動いていたら、テストが副作用を持っているか
+      # golden が書き換わっている（どちらも見逃してはいけない）。
+      - name: 作業ツリーが動いていないこと
+        run: git diff --exit-code

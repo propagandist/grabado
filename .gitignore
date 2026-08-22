@@ -15,10 +15,12 @@ node_modules/
 .vite/
 *.local
 
-# === Java / Gradle（backend・今後追加） ===
+# === Java / Gradle（server/。段階5-1b で実体が入った） ===
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
+# VSCode の Kotlin / Java 拡張が作る Eclipse 系のビルド出力。Gradle は使わない。
+/server/bin/
 
 # === 環境変数・秘密（イメージに焼かず env 注入。CLAUDE.md §5,§7） ===
 .env

@@ -1,0 +1,112 @@
+package dev.grabado.api
+
+import dev.grabado.design.DesignName
+import dev.grabado.design.DesignStore
+import jakarta.servlet.http.HttpServletRequest
+import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RestController
+
+/**
+ * 現行フロントが投げる URL をそのまま受ける層。**契約（status / ヘッダ / body）を持つのは
+ * ここだけ**で、ファイル I/O は [DesignStore] に、名前の検証は [DesignName] に出してある。
+ *
+ * ## URL の形は 1 文字も変えない（段階5-1b）
+ *
+ * `<xhrpath>backend/<backend名>/?action=<action>` は実測どおり（ARCHITECTURE §4.2）。
+ * **`{backend}` の値は読まない。** `CONFIG.DEFAULT_BACKEND` が `["php-mysql"]`（配列バグ）の
+ * ままでも、`?backend=` に何を渡されても同じハンドラに届く。おかげで 5-1b は
+ * **フロントを 1 行も触らずに**「Kotlin が実測契約を満たす」を証明できる。
+ * `backend/file/` への固定とセレクタ撤去は 5-5。
+ *
+ * ★ `{backend}` は **ファイルシステムに絶対に到達させない**。ここで受けて捨てる。
+ *
+ * ## 実装上の 3 つの罠（どれもテストが無いと「緑なのに契約違反」で通る）
+ *
+ * 1. **末尾スラッシュ。** 実測 URL は `backend/php-file/?action=list` とディレクトリ末尾に
+ *    `/` が付く。Spring Boot 3 以降は trailing slash match が既定 off なので、
+ *    スラッシュ有無の 2 パターンを登録する。
+ * 2. **未知 action の 501。** `params = "action=..."` の条件に当たらないリクエストを Spring は
+ *    **404** で返す。条件なしのフォールバック（[fallback]）を置かないと契約違反になる。
+ * 3. **save の body は `inputStream` から直読みする。** `js/oz.ts` は POST のとき
+ *    `Content-Type: application/x-www-form-urlencoded` を立てた**あと**に呼び手の
+ *    `application/json` を足しており、XHR の `setRequestHeader` は同名ヘッダを `, ` で
+ *    連結する。`@RequestBody` は `MediaType.parseMediaType` を通るので、結合値だと
+ *    **415 で全滅**する。直読みは「backend は body を解釈しない」という実測契約の直訳でもある。
+ *
+ * @see docs/ARCHITECTURE.md §4.3（実測）/ §7.1（到達点の差分表）
+ */
+@RestController
+@RequestMapping(path = ["/backend/{backend}/", "/backend/{backend}"])
+class DesignController(private val store: DesignStore) {
+
+    /** 名前を `\n` 区切りで返す。**末尾にも改行**（実測）。空なら 0 バイト。 */
+    @GetMapping(params = ["action=list"])
+    fun list(): ResponseEntity<ByteArray> {
+        val body = store.list().joinToString(separator = "") { "$it\n" }
+        return ResponseEntity.ok()
+            // 実測は `text/html`（PHP の既定で、指定していないだけ）。フロントは textarea に
+            // 流すだけで Content-Type を見ないので、名乗るなら正直なほうを名乗る。
+            .contentType(MediaType.parseMediaType("text/plain;charset=UTF-8"))
+            .body(body.toByteArray(Charsets.UTF_8))
+    }
+
+    /**
+     * 保存されたバイト列をそのまま返す。無ければ 404。
+     *
+     * Content-Type は **`application/octet-stream` ＋ `nosniff` ＋ `attachment`**。実測は
+     * `text/xml` 固定だが、フロントは段階4-3b から `xml: true` を外して**中身の先頭 1 文字で
+     * 判別**するので Content-Type を見ない。**つまり正直さのコストがゼロ**。一方ここは
+     * 分類 B のリポジトリで**同一オリジンから任意のユーザー内容を返す唯一の経路**なので、
+     * ブラウザで直接開いても描画されない形にしておく。
+     */
+    @GetMapping(params = ["action=load"])
+    fun load(@RequestParam(required = false) keyword: String?): ResponseEntity<ByteArray> {
+        val bytes = store.load(DesignName.parse(keyword))
+            ?: return ResponseEntity.notFound().build()
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_OCTET_STREAM)
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment")
+            .body(bytes)
+    }
+
+    /**
+     * body をそのまま書き、**201 Created** と空 body を返す。
+     *
+     * 201 を維持するのは、`locale` の `http201` が `Saved` で **21 言語ぶん訳されている**から。
+     * 200 に倒すと `js/io.ts` の `check()` が黙り、**アプリ唯一の保存完了通知が消える**。
+     */
+    @PostMapping(params = ["action=save"])
+    fun save(
+        @RequestParam(required = false) keyword: String?,
+        request: HttpServletRequest,
+    ): ResponseEntity<Void> {
+        val name = DesignName.parse(keyword)
+        val bytes = request.inputStream.use { it.readAllBytes() }
+        store.save(name, bytes)
+        return ResponseEntity.status(HttpStatus.CREATED).build()
+    }
+
+    /**
+     * `params` 条件に当たらなかったリクエスト。
+     *
+     * - 既知の action に**違う HTTP メソッド**で来た → **405**（PHP は method を見ていなかった
+     *   ので、これは強化＝意図した挙動変更）
+     * - `import`・未知の action・action 指定なし → **501**（実測どおり。`php-file` は
+     *   `import` を持たないので今も 501。中身が入るのは 5-7）
+     *
+     * `remove` もここに落ちて 501。**作らない**と決めてある（実在せず、フロントに削除 UI も無い）。
+     */
+    @RequestMapping
+    fun fallback(@RequestParam(required = false) action: String?): ResponseEntity<Void> =
+        when (action) {
+            "list", "load", "save" -> ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build()
+            else -> ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build()
+        }
+}

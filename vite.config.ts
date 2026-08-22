@@ -11,6 +11,8 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 export const DEV_PORT = 4173;
 /** build 成果物の検証用。dev と衝突させないため別ポート */
 export const PREVIEW_PORT = 4174;
+/** Kotlin backend（server/）の既定ポート。`./gradlew bootRun` と揃える（段階5-1b） */
+export const SERVER_PORT = 8080;
 
 export default defineConfig({
     // db/ locale/ は OZ.Request が相対パスで fetch し、styles/ は index.html の <link> が読む。
@@ -18,7 +20,19 @@ export default defineConfig({
     publicDir: false,
     // host は 127.0.0.1 で固定する。既定の "localhost" は Node が ::1 を優先して IPv6 だけで
     // listen するため、Playwright が待つ http://127.0.0.1:<port> に応答しない（実測）。
-    server: { host: "127.0.0.1", port: DEV_PORT, strictPort: true },
+    server: {
+        host: "127.0.0.1",
+        port: DEV_PORT,
+        strictPort: true,
+        // 段階5-1b: `npm run dev` と `./gradlew bootRun`（server/）の 2 プロセスで実物を触れる
+        // ようにする。**同一オリジンのまま**なので、tests/browser/harness.ts の
+        // 「オリジン外へのリクエストが 1 本でも出たら失敗」検査には触れない。
+        //
+        // backend を起こしていなければ ECONNREFUSED になるだけで、これは
+        // 段階5-1b 以前（PHP が実行されず 404 になっていた）と同じ体験。既存テストは
+        // /backend を叩かないので影響もゼロ。
+        proxy: { "/backend": `http://127.0.0.1:${SERVER_PORT}` },
+    },
     preview: { host: "127.0.0.1", port: PREVIEW_PORT, strictPort: true },
     build: {
         outDir: "dist",

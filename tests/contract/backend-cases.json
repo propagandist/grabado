@@ -1,0 +1,220 @@
+{
+  "contractVersion": 1,
+  "_comment": [
+    "backend の HTTP 契約を、**言語に依存しない 1 つの表**にしたもの（段階5-1b）。",
+    "散文の正は docs/ARCHITECTURE.md の §4（実測・旧 PHP）と §7（Kotlin の到達点）。",
+    "",
+    "読み手は 2 つ:",
+    "  1. Kotlin  — server/src/test/kotlin/dev/grabado/api/BackendContractTest.kt が",
+    "               @ParameterizedTest で全ケースを MockMvc に流す",
+    "  2. TypeScript — tests/node/ の仮想 backend（tests/node/harness.ts）に virtual:true の",
+    "               ケースを流す。これで仮想 backend が『サーバについての手書きの推測』から",
+    "               『同じ表で検証された第 2 実装』になる（配線は段階5-1c）",
+    "",
+    "virtual:false は仮想 backend では再現できないケース（Map であってファイルシステムでは",
+    "ないので、パス解決や dotfile の扱いを模せない）。**模せる範囲を表の中で宣言する**ことで、",
+    "harness がどこまでサーバなのかが文書ではなくデータになる。",
+    "",
+    "フィールド:",
+    "  seed          事前に正本ディレクトリへ置くファイル（名前 -> 内容）。省略は空",
+    "  request.method GET / POST",
+    "  request.action ?action= の値。null なら action を付けない",
+    "  request.keyword ?keyword= の値。null なら付けない（省略時の 400 を試すため）",
+    "  request.body   POST の body",
+    "  request.backend パスの <backend名>。省略時は php-mysql（フロントの既定）",
+    "  request.trailingSlash パス末尾の / の有無。省略時 true（実測 URL の形）",
+    "  expect.status  必須",
+    "  expect.body    省略時は検査しない。\"\" は空 body を要求する",
+    "  expect.headers 省略時は検査しない"
+  ],
+  "cases": [
+    {
+      "id": "list-empty",
+      "note": "空の正本ディレクトリ。PHP の glob は 0 件で何も echo しないので 0 バイト（改行 1 個ではない）",
+      "request": { "method": "GET", "action": "list" },
+      "expect": { "status": 200, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "list-two-ascending",
+      "note": "名前を \\n 区切り、**末尾にも改行**（実測）。並びは昇順で固定する（PHP は fs 順＝未規定だった）",
+      "seed": { "b.json": "{}", "a.json": "{}" },
+      "request": { "method": "GET", "action": "list" },
+      "expect": { "status": 200, "body": "a.json\nb.json\n" },
+      "virtual": true
+    },
+    {
+      "id": "list-skips-dotfiles",
+      "note": "PHP の glob も dotfile を返さない。save の一時ファイル（.grabado-*.tmp）が見える窓も同時に塞がる",
+      "seed": { "visible.json": "{}", ".hidden.json": "{}" },
+      "request": { "method": "GET", "action": "list" },
+      "expect": { "status": 200, "body": "visible.json\n" },
+      "virtual": false
+    },
+    {
+      "id": "list-keeps-non-json",
+      "note": "段階5-1b は実測契約そのまま。拡張子の強制（*.json だけを返す）は 5-2",
+      "seed": { "legacy": "<sql/>", "a.json": "{}" },
+      "request": { "method": "GET", "action": "list" },
+      "expect": { "status": 200, "body": "a.json\nlegacy\n" },
+      "virtual": false
+    },
+    {
+      "id": "save-created",
+      "note": "201 Created・body 空。locale の http201 が Saved で 21 言語訳済みなので 200 に倒さない",
+      "request": { "method": "POST", "action": "save", "keyword": "orders.json", "body": "{\"formatVersion\":2}\n" },
+      "expect": { "status": 201, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "save-overwrites",
+      "note": "既存があっても 201。upsert であることは実測どおり",
+      "seed": { "orders.json": "{\"old\":true}\n" },
+      "request": { "method": "POST", "action": "save", "keyword": "orders.json", "body": "{\"new\":true}\n" },
+      "expect": { "status": 201, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "save-missing-keyword",
+      "note": "php-file は 200 + PHP の Fatal error 本文を返していた。移植先では 400（ARCHITECTURE §4.3 の申し送り）",
+      "request": { "method": "POST", "action": "save", "keyword": null, "body": "{}" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "load-roundtrip",
+      "note": "保存したバイト列と 1 バイト同一。backend は内容を一切解釈しない",
+      "seed": { "orders.json": "{\"formatVersion\":2,\"db\":\"postgresql\"}\n" },
+      "request": { "method": "GET", "action": "load", "keyword": "orders.json" },
+      "expect": {
+        "status": 200,
+        "body": "{\"formatVersion\":2,\"db\":\"postgresql\"}\n",
+        "headers": { "Content-Type": "application/octet-stream", "X-Content-Type-Options": "nosniff" }
+      },
+      "virtual": true
+    },
+    {
+      "id": "load-legacy-xml",
+      "note": "段階4-3b 以前に保存された XML も読める（フロントは中身の先頭 1 文字で判別する）",
+      "seed": { "old.json": "<?xml version=\"1.0\"?><sql db=\"mysql\"/>" },
+      "request": { "method": "GET", "action": "load", "keyword": "old.json" },
+      "expect": { "status": 200, "body": "<?xml version=\"1.0\"?><sql db=\"mysql\"/>" },
+      "virtual": true
+    },
+    {
+      "id": "load-missing",
+      "note": "404。プリフライト load（段階4-6）の正常系なので、フロントは check() に通さない",
+      "request": { "method": "GET", "action": "load", "keyword": "nope.json" },
+      "expect": { "status": 404, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "load-missing-keyword",
+      "request": { "method": "GET", "action": "load", "keyword": null },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "load-japanese-keyword",
+      "note": "URL エンコードで往復し、ファイル名も UTF-8 のまま（実測）。Unicode 正規化はしない",
+      "seed": { "受注.json": "{\"ja\":true}\n" },
+      "request": { "method": "GET", "action": "load", "keyword": "受注.json" },
+      "expect": { "status": 200, "body": "{\"ja\":true}\n" },
+      "virtual": true
+    },
+    {
+      "id": "load-uppercase-extension",
+      "note": "jsonKeyword() は .JSON を二重付与しない（tests/node/io-ui.test.ts が契約として固定）。大文字も届く",
+      "seed": { "Orders.JSON": "{}" },
+      "request": { "method": "GET", "action": "load", "keyword": "Orders.JSON" },
+      "expect": { "status": 200, "body": "{}" },
+      "virtual": true
+    },
+    {
+      "id": "load-traversal",
+      "note": "php-file は basename() で黙って書き換えていた。移植先は 400 で拒む（Baseline.name とファイル名がずれないため）",
+      "request": { "method": "GET", "action": "load", "keyword": "../../etc/passwd" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "save-traversal",
+      "note": "書き込み側も同じ。正本ディレクトリの外にファイルを作らせない",
+      "request": { "method": "POST", "action": "save", "keyword": "../escaped.json", "body": "{}" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "import-not-implemented",
+      "note": "php-file は import を持たない（実測 501）。中身が入るのは段階5-7",
+      "request": { "method": "GET", "action": "import" },
+      "expect": { "status": 501, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "remove-not-implemented",
+      "note": "remove は実在しない（フロントに削除 UI も無い）。**作らない**と決めてある",
+      "request": { "method": "GET", "action": "remove" },
+      "expect": { "status": 501, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "unknown-action",
+      "note": "未知の action は一律 501。仮想 backend は 404 を返していた（php-file の fs 解決の副産物）ので、5-1c で直す",
+      "request": { "method": "GET", "action": "frobnicate" },
+      "expect": { "status": 501, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "no-action",
+      "request": { "method": "GET", "action": null },
+      "expect": { "status": 501, "body": "" },
+      "virtual": true
+    },
+    {
+      "id": "method-mismatch-save-via-get",
+      "note": "PHP は method を見ていなかったので、これは強化（意図した挙動変更）",
+      "request": { "method": "GET", "action": "save", "keyword": "orders.json" },
+      "expect": { "status": 405 },
+      "virtual": false
+    },
+    {
+      "id": "method-mismatch-list-via-post",
+      "request": { "method": "POST", "action": "list", "body": "" },
+      "expect": { "status": 405 },
+      "virtual": false
+    },
+    {
+      "id": "no-trailing-slash",
+      "note": "実測 URL は末尾に / が付く。Spring Boot 3 以降は trailing slash match が既定 off なので両方を登録した",
+      "seed": { "a.json": "{}" },
+      "request": { "method": "GET", "action": "list", "trailingSlash": false },
+      "expect": { "status": 200, "body": "a.json\n" },
+      "virtual": false
+    },
+    {
+      "id": "backend-segment-is-ignored",
+      "note": "パスの <backend名> は受けて捨てる。**ファイルシステムには絶対に到達させない**。撤去は 5-5",
+      "seed": { "a.json": "{}" },
+      "request": { "method": "GET", "action": "list", "backend": "php-file" },
+      "expect": { "status": 200, "body": "a.json\n" },
+      "virtual": true
+    },
+    {
+      "id": "backend-segment-encoded-slash-is-rejected",
+      "note": "実測: Tomcat はパスに %2F を含むリクエストを既定で 400 で拒む。つまり <backend名> にエンコードされたスラッシュを入れる経路は、アプリに届く前にサーブレットコンテナの段階で閉じている（当初 200 を期待して書いたが、実測が 400 だったので実測に合わせた）",
+      "seed": { "a.json": "{}" },
+      "request": { "method": "GET", "action": "list", "backend": "..%2F..%2Fetc" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "backend-segment-dots-are-ignored",
+      "note": "エンコードしない .. を含む名前は普通のパスセグメントとして届く。<backend名> は読まないので正本ディレクトリは動かない",
+      "seed": { "a.json": "{}" },
+      "request": { "method": "GET", "action": "list", "backend": "dots..here" },
+      "expect": { "status": 200, "body": "a.json\n" },
+      "virtual": false
+    }
+  ]
+}

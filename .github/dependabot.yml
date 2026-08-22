@@ -1,0 +1,43 @@
+# SHA ピンは Dependabot とセットで初めて安全になる。**凍結したまま放置すると、
+# セキュリティ修正が降りてこないぶん浮動タグより悪い。**
+#
+# ★ 更新 PR も CI を消費する（枠は org 全体で 2,000 分/月の共有）。だから
+#   - 頻度は weekly（daily にしない）
+#   - open-pull-requests-limit を絞る
+#   - grouped update で 1 PR にまとめる（PR 1 本 = CI 1 回）
+#
+# ★ Gradle の依存を上げた PR は `gradle.lockfile` の更新が要る。Dependabot は
+#   ロックファイルを更新できないので、**その PR は ci-server.yml の
+#   「追跡ファイルが動いていないこと」で落ちる**。落ちたら手元で
+#   `./gradlew dependencies --write-locks` を回して push すること
+#   （落ちること自体が「ロックを更新し忘れていない」証拠になる）。
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: gradle
+    directory: /server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      server:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      frontend:
+        patterns: ['*']

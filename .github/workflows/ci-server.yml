@@ -1,0 +1,71 @@
+# grabado backend（server/）の検査。**paths で絞って**回す型
+# （propagandist/.github の workflow-templates/ci-heavy の考え方）。
+#
+# ★ なぜ frontend と別ワークフローなのか
+#   `paths` は **`on:` にしか書けず、ジョブ単位では絞れない**。ジョブ内の `if:` で飛ばしても
+#   **起動した時点で 1 分は課金される**（床が残る）。**ワークフローごと起動しなければ 0 分**
+#   ——だから分ける。Kotlin を 1 行も触らない PR で Gradle を回さないのが目的。
+#
+# ★ GitHub の「Automatic dependency submission」を**有効にしない**
+#   Settings → Advanced Security → Dependency graph の自動提出機能は、**Gradle プロジェクトで
+#   全ブランチの全 push に走る**。org の実測（cartera）では 9.5 日で 123 回・**月換算 1,100 分＝
+#   org 全体の枠 2,000 分の半分以上**を単独で消費していた。依存グラフが使われるのは
+#   default branch だけなのに、である。
+#   必要になったら `gradle/actions/dependency-submission` を **default branch への push かつ
+#   Gradle のファイルが変わったときだけ**動かす自前ワークフローに置き換えること。
+#
+# ★ wrapper は毎回検証する
+#   `validate-wrappers: true` が `gradle-wrapper.jar` を Gradle の既知リリースのハッシュと
+#   突き合わせる。60KB の不透明なバイナリを分類 B のリポジトリに置く懸念は、これで
+#   「検証済みバイナリ」に変わる。`gradle-wrapper.properties` の `distributionSha256Sum` と
+#   合わせて 2 段。
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+name: CI (server)
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      - 'server/**'
+      - 'tests/contract/**'
+      - '.github/workflows/ci-server.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-server-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 検査
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          # gradle-wrapper.jar が Gradle の既知リリースと一致することを毎回確かめる。
+          validate-wrappers: true
+
+      # `build` は compile ＋ test ＋ bootJar まで通す。依存ロック（gradle.lockfile）が
+      # 効いているので、ロックに無い依存が紛れ込めばここで落ちる。
+      - name: ビルドとテスト
+        run: ./gradlew build --no-daemon
+        working-directory: server
+
+      # ロックファイルが実際の依存グラフと一致していること。--write-locks を
+      # 忘れたまま依存を足した PR をここで捕まえる。
+      - name: 追跡ファイルが動いていないこと
+        run: git diff --exit-code

@@ -19,3 +19,18 @@ db/**     text eol=lf
 
 # locale/ko.xml は今も CRLF。こちらは実体に合わせて変換しないままにする。
 locale/** -text
+
+# Gradle wrapper（段階5-1b）。gradlew は sh、gradlew.bat は cmd が読むので、
+# それぞれ LF / CRLF で固定する。**ここが抜けると Windows で clone した人の
+# ./gradlew が `bad interpreter` で起動しない**（.githooks/** と同じ問題）。
+# jar はテキスト変換の対象外。
+server/gradlew                       text eol=lf
+server/gradlew.bat                   text eol=crlf
+server/gradle/wrapper/*.jar          binary
+server/**/*.kt                       text eol=lf
+server/**/*.kts                      text eol=lf
+server/**/*.yaml                     text eol=lf
+server/gradle/wrapper/*.properties   text eol=lf
+
+# 契約表（段階5-1b）。Kotlin と TS の両方が同じバイト列を読む。
+tests/contract/** text eol=lf

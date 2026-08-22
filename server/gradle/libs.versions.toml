@@ -1,0 +1,25 @@
+# 版はここ 1 か所。Dependabot の gradle ecosystem がこのファイルを読む。
+#
+# ★ ライブラリの version を書かないのは意図的。spring-boot-dependencies の BOM
+#   （下の spring-boot-bom）が解決するので、starter の版は Boot の版に必ず追随する。
+#   個別に書くと BOM とずれた組み合わせを作れてしまう。
+
+[versions]
+kotlin = "2.4.10"
+springBoot = "4.1.1"
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+# all-open。@Configuration / @SpringBootApplication は CGLIB がサブクラス化するので、
+# Kotlin の既定（final）のままだと動かない。
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+
+[libraries]
+# Spring の @ConfigurationProperties は constructor binding のためにパラメータ名と
+# 既定値を kotlin-reflect 越しに読む（無いと ClassNotFoundException:
+# kotlin.reflect.jvm.ReflectJvmMapping で Bean 生成が落ちる）。Kotlin + Spring の必須依存。
+kotlin-reflect = { module = "org.jetbrains.kotlin:kotlin-reflect", version.ref = "kotlin" }
+spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }

@@ -33,6 +33,8 @@ interface ContractCase {
     readonly id: string;
     readonly note?: string;
     readonly seed?: Record<string, string>;
+    /** サーバの起動条件（段階5-3 の `readonly` など）。仮想 backend は模さない */
+    readonly serverMode?: string;
     readonly request: ContractRequest;
     readonly expect: {
         readonly status: number;
@@ -81,7 +83,12 @@ describe("backend の契約（仮想 backend / 段階5-1c）", () => {
         h.takeRequests();
     });
 
-    const virtualCases = TABLE.cases.filter((one) => one.virtual);
+    /*
+     * 仮想 backend に流せるのは「模せる」かつ「通常起動」のケースだけ。
+     * `serverMode` を持つもの（段階5-3 の READONLY など）はサーバの起動条件を要求するので、
+     * Kotlin 側の専用テスト（ReadOnlyContractTest）が持つ。
+     */
+    const virtualCases = TABLE.cases.filter((one) => one.virtual && one.serverMode === undefined);
 
     for (const one of virtualCases) {
         test(`${one.id}`, () => {

@@ -6836,6 +6836,89 @@ Kotlin の内訳: 契約表 31 ケース ＋ 表の健全性 1 / 振る舞い 9 
 
 ---
 
+### 2026-08-22 HANDOVER §5「backend」段階5-3 —— READONLY で副作用を止める
+
+**公開デモ（grabado.dev）が成立する条件が入った。** `GRABADO_READONLY=true` で保存が 403 になる。
+
+**落ちるのは保存だけ**（introspection は 5-7 で実装が入ったときに同じ扱いになる。AI は §11）。
+`list` / `load` は生きているので、**READONLY でも「読んで・描いて・DDL を出す」体験は完全に
+提供できる** —— 編集ストアはブラウザ内だから。2026-08-15 に「公開デモは READONLY 一択」と
+決めた根拠がこれで実装として立った。
+
+#### 決めたこと 1: 実現は **Bean の差し替え**（フィルタでも各ハンドラの `if` でもない）
+
+`grabado.readonly` が真なら `DesignStore` を `ReadOnlyDesignStore(delegate)` にする。
+
+**禁止を「禁止したいもの」の直上に置くため。** 副作用を持つのは `DesignStore.save` だけなので、
+ここで塞げば**将来 `?action=rename` のような経路が増えても自動的に守られる**。フィルタ方式や
+各ハンドラの `if` は「守るべき経路の一覧」を人が維持することになり、CLAUDE.md 制約6 を
+人力に依存させる。
+
+副産物として **HTTP を 1 バイトも通さずにテストできる**。
+
+これに伴い `FileDesignStore` の `@Component` を外し、`StoreConfiguration` が組み立てるようにした。
+**READONLY のときは正本ディレクトリの書き込み可能性を要求しない**（読み取り専用マウントでも
+起動できるべき。5-1b のコメントで予告していたとおり）。
+
+#### 決めたこと 2: status は **403**
+
+| 案 | 却下の理由 |
+|---|---|
+| 501 Not Implemented | `check()` を触らずに済むが、**「READONLY だから save できない」と「サーバが壊れている」が同じ画面になる**（どちらも `http501` の文言） |
+| 503 Service Unavailable | 「一時的に不能」の意味。READONLY は恒久的な構成 |
+
+意味を曲げて locale の 1 キーをケチる取引は、公開 API として割に合わない。403（このデプロイでは
+禁止）が正しい。
+
+#### 決めたこと 3: 契約表は 1 つのまま、**流す側を 2 つに割った**
+
+READONLY は**サーバの起動条件**なので同じインスタンスでは試せない。表に `serverMode` を足し、
+`BackendContractTest` が通常起動のケースを、新設の `ReadOnlyContractTest` が
+`serverMode: "readonly"` のケースを流す。**契約が 2 か所に割れることは避けた。**
+
+TS 側（仮想 backend）は `serverMode` を持つケースを流さない —— 仮想 backend に READONLY の
+概念を持ち込むと、模していないものを模しているように見せることになる。
+
+#### 5-1c の仕掛けが 2 度目に効いた
+
+契約表に 403 を足した時点で、`backend-contract.test.ts` が
+**「`check()` が 403 を知らない」「`locale/en.xml` に `http403` が無い」で赤くなった**。
+5-1c で「status を増やす PR では `check()` と locale を同じ PR で広げること」という申し送りを
+散文から機械に移しておいたのが、そのまま働いた形。
+
+`js/io.ts` の `check()` に `case 403` を、`locale/*.xml` 21 本に `http403` = `Forbidden` を足した
+（差分は **+21 / -0**。既存行は 1 バイトも動いていない）。
+
+#### 検証
+
+| | 5-2 | 5-3 |
+|---|---|---|
+| `npm test` | 426 passed | 426 passed |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 84 passed | **90 passed** |
+
+`npm test` が増えていないのは、READONLY のケースが `virtual: false` で TS 側を流れないため
+（網羅テストは既存の 2 本が status の集合を見ているだけなので本数は動かない）。golden 114 本は無差分。
+
+Kotlin の内訳: 契約表 31 ＋ 健全性 1 / **READONLY 6**（表の 4 ケース ＋ 実在確認 ＋
+「拒んでもファイルが 1 つも作られない」）/ 振る舞い 9 / `DesignName` 33 / `FileDesignStore` 10。
+
+#### 次段階への入力
+
+- **5-4: ETag ＋ If-Match で save を 1 往復にする。** backend 先行（ETag を返し `If-Match` を
+  尊重する。既存テストを 1 本も壊さない）→ フロント追随（`If-Match` を送り、プリフライトの
+  `load` を撤去。`Baseline` が `text` を捨てて `etag` を持つ）の 2 段
+- **★ 412 だけは `check()` に通さない**と決めてある（フロントが握って confirm に流す。
+  プリフライトの 404 を通さないのと同じ理屈）。契約表に 412 のケースを足すと
+  `backend-contract.test.ts` の網羅テストが「`check()` が 412 を知らない」で赤くなるので、
+  **そのテストの対象から 412 を外し、「なぜ 412 だけ別扱いか」をテストのコメントに書くこと**
+- `js/config.ts` の `AVAILABLE_BACKENDS` は PHP の名前のまま（撤去は 5-5）
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

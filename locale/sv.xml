@@ -86,6 +86,7 @@
     <string name="httpresponse">Serversvar</string>
     <string name="http201">Sparad</string>
     <string name="http400">Bad Request</string>
+    <string name="http403">Forbidden</string>
     <string name="http404">Ej funnen</string>
     <string name="http405">Method Not Allowed</string>
     <string name="http500">Intert serverfel</string>

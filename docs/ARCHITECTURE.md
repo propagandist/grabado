@@ -612,7 +612,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | `remove` | 501（実装が無い） | **作らない**（501 のまま） | — |
 | HTTP メソッド | 見ていない | **固定**（list / load / import は GET、save は POST）。ミスマッチは 405 | 5-1b |
 | 不正な `keyword` | `basename()` で黙って書き換え | **400 で拒む**（トラバーサル・制御文字・Windows 予約名・255 バイト超）。書き換えると `js/io/conflict.ts` の `Baseline.name` が別ファイルを見張る | 5-2 |
-| 副作用の停止 | 無し | `READONLY` で save / import を **403**（`list` / `load` は残す） | 5-3 |
+| 副作用の停止 | 無し | `READONLY` で save を **403**（`list` / `load` は残す）。実現は `DesignStore` の Bean 差し替え —— **禁止を「禁止したいもの」の直上に置く**ので、将来 action が増えても自動的に守られる。introspection が 403 になるのは 5-7（いまは実装が無く 501） | **5-3（実装済み）** |
 | save の往復数 | 2（プリフライト `load` → `save`） | **1**（`If-Match`。衝突したときだけ 2） | 5-4 |
 | 能力の問い合わせ | 無し | `?action=capabilities` → `{"readonly":…,"introspection":…,"ai":…}`。**引けなければフロントは「全部できる」に倒す** | 5-5 |
 
@@ -630,14 +630,17 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | env | 既定 | 用途 |
 |---|---|---|
 | `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ） |
-| `GRABADO_READONLY`（`READONLY` も読む） | `false` | save / introspection / AI を止める。公開デモは `true` 一択。**入るのは 5-3** |
+| `GRABADO_READONLY`（`READONLY` も読む） | `false` | save を **403** にする（段階5-3 で実装）。introspection は 5-7、AI は §11 で同じ扱いになる。**公開デモは `true` 一択** —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。READONLY のときは正本ディレクトリの**書き込み可能性を要求しない**（読み取り専用マウントでも起動する） |
 | introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする）。**入るのは 5-7** |
 
-### 7.4 走らせ方（段階5-1b 時点）
+### 7.4 走らせ方
 
 ```bash
-cd server && ./gradlew test          # 契約テスト＋振る舞い＋純粋な核（64 本）
+cd server && ./gradlew test          # 契約テスト＋振る舞い＋純粋な核（90 本）
 cd server && ./gradlew bootRun       # 8080 で起動（要 GRABADO_SCHEMA_DIR、既定は /data/schema）
+
+# 公開デモと同じ条件（保存が 403 になる）
+cd server && GRABADO_READONLY=true ./gradlew bootRun
 ```
 
 フロントと繋いで実物を触るときは 2 プロセス:

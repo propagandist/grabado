@@ -1,6 +1,7 @@
 package dev.grabado.api
 
 import dev.grabado.design.InvalidDesignNameException
+import dev.grabado.design.ReadOnlyException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -21,8 +22,18 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 @RestControllerAdvice
 class ApiExceptionHandler {
 
-    /** `keyword` が空・パス区切りを含む・`..` で始まる。body は返さない（実測に合わせる）。 */
+    /** `keyword` が受け取れない形（[dev.grabado.design.NameRejection]）。body は返さない。 */
     @ExceptionHandler(InvalidDesignNameException::class)
     fun invalidName(e: InvalidDesignNameException): ResponseEntity<Void> =
         ResponseEntity.status(HttpStatus.BAD_REQUEST).build()
+
+    /**
+     * `grabado.readonly` が真のデプロイで副作用を求められた（段階5-3）。
+     *
+     * **403**（このデプロイでは禁止）であって 501（実装が無い）でも 503（一時的に不能）でもない。
+     * 詳細は [ReadOnlyException] の KDoc。
+     */
+    @ExceptionHandler(ReadOnlyException::class)
+    fun readOnly(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.FORBIDDEN).build()
 }

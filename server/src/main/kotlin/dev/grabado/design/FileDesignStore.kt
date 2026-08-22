@@ -23,7 +23,6 @@ import kotlin.io.path.name
  * symlink・Windows の大小無視 FS）は**実 FS にしか無い**ので、double を相手にした
  * テストは空虚になる。テストは `@TempDir` ＋ この実装で書く。
  */
-@Component
 class FileDesignStore(properties: GrabadoProperties) : DesignStore {
 
     /** 正本ディレクトリ（絶対・正規化済み）。 */
@@ -40,8 +39,11 @@ class FileDesignStore(properties: GrabadoProperties) : DesignStore {
         check(Files.exists(root)) { "正本ディレクトリが無い: $root（grabado.schema-dir / GRABADO_SCHEMA_DIR）" }
         check(Files.isDirectory(root)) { "正本ディレクトリがディレクトリでない: $root" }
         check(Files.isReadable(root)) { "正本ディレクトリを読めない: $root" }
-        // 段階5-3 で READONLY が入ったら、書き込み可能性の要求はそちらの分岐に移す。
-        check(Files.isWritable(root)) { "正本ディレクトリに書けない: $root" }
+        // 書き込み可能性を要求するのは、保存する気がある場合だけ（段階5-3）。
+        // READONLY のビューアは読み取り専用マウントでも起動できるべき。
+        if (!properties.readonly) {
+            check(Files.isWritable(root)) { "正本ディレクトリに書けない: $root" }
+        }
     }
 
     override fun list(): List<String> =

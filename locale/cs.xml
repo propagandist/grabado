@@ -91,6 +91,7 @@
     <string name="httpresponse">Odpověď od serveru</string>
     <string name="http201">Uloženo</string>
     <string name="http400">Bad Request</string>
+    <string name="http403">Forbidden</string>
     <string name="http404">Neexistuje</string>
     <string name="http405">Method Not Allowed</string>
     <string name="http500">Vnitřní chyba serveru</string>

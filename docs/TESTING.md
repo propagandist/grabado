@@ -194,6 +194,21 @@ ORM が型パレットの契約（`strict` / `<template>` / `newrowtype` / 全�
 ORM は下敷きの db プロファイルの上に乗る**別の軸**で、
 **同じ設計から DDL と ORM の両方が出せる**（それを見るテストが `tests/browser/orm.spec.ts` に 1 本ある）。
 
+### プロファイル変換 golden — `tests/golden/convert/<from>-<to>/<fixture>.sql`（§6 段階6-10a で新設）
+
+**14 本。** postgresql の設計 × 他 7 プロファイル向けの出力 × 2 fixture で、
+8 × 8 × 7 = 448 本にはしていない —— 変換は「設計側の型 → 正規型（`kind`）→ 出力側の型」の
+1 段なので、**出発点を 1 つに固定すれば写像の全体は types-matrix が覆う**（postgresql の
+全 24 型が 1 列ずつ）。もう 1 本の house-defaults は「**house 既定が各 DB で何を失うか**」を
+見るためのもので、生成物の先頭コメントにそれがそのまま出る。
+
+母集団の定義は [`../tests/support/fixtures.ts`](../tests/support/fixtures.ts) の
+`convertGoldenCases`。採るのは [`../tests/browser/convert.spec.ts`](../tests/browser/convert.spec.ts)。
+
+**既存の DDL golden 56 本が 1 バイトも動かないこと**が本段階の完了判定で、根拠は
+[`../js/io/convert.ts`](../js/io/convert.ts) の `convertDesign` が**同じ db を恒等で返す**こと
+（寄せ先の選び方を素直に通すと「同じ kind の先頭型」に寄って別の型になりうる）。
+
 ### 状態スナップショット golden — `tests/golden/state/<fixture>.json`
 
 **§4 段階4-1b で追加。読み込み方向（`fromXML`）の安全網。** 上の 2 つは `toXML()` の**結果**しか
@@ -275,6 +290,8 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 | [`../tests/node/identifier.test.ts`](../tests/node/identifier.test.ts) | [`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts) の識別子検査を直に叩く（ハーネス不要。段階6-9b）。**どの名前が・どのプロファイルで・なぜ使えないか**の 3 つ組。8 本の上限と単位の表（実測と一次資料の別つき）・**囲めば通るものは 1 件も警告しない**こと・known-issue #15 が直っていないこと |
 | [`../tests/browser/identifier.spec.ts`](../tests/browser/identifier.spec.ts) | 実ブラウザ側（段階6-9b）。**警告が画面に届いているか** —— 波線（`class="invalid"`）と理由の tooltip、テーブル名ではコメントと重ねること、**警告が出ても名前はモデルに入る**（止めない）こと |
 | [`../tests/node/orm.test.ts`](../tests/node/orm.test.ts) | ORM 出力（段階6-9d / 6-9e）。golden 14 本を読むほか、**golden から読み取れない規則**を近くで押さえる —— テーブル名 → クラス名（**単数化は英語の規則だけ。倒せない語はそのまま**）・Kotlin 識別子の 3 段（そのまま / バッククォート / `_` 置換）・8 プロファイルの全型が型注釈を持つこと・**JPA は逆参照を出さない**こと・**Prisma は出す**こと（形式が要求するため。自己参照の名前付き relation と、ASCII だけの識別子の一意化を含む） |
+| [`../tests/node/convert.test.ts`](../tests/node/convert.test.ts) | プロファイル変換（段階6-10a）。**golden から読めない規則**を押さえる —— 同じ db なら恒等（既存 golden が動かない根拠）・逆向きの劣化（`timestamp -> date`）を 1 つも持たないこと・Oracle の `DATE` の罠（名前が同じでも値の域が違えば寄せない）・8 プロファイルへの全型変換で着地点がすべて説明できること |
+| [`../tests/browser/convert.spec.ts`](../tests/browser/convert.spec.ts) | プロファイル変換 golden の権威（段階6-10a）。14 本 ＋ 決定論 ＋ **設計が 1 バイトも変わらないこと**（出力時変換のみというスコープの実体）＋ 引数なしの `toDdl()` が従来と同一であること |
 | [`../tests/browser/orm.spec.ts`](../tests/browser/orm.spec.ts) | ORM golden の権威（段階6-9d）。14 本 ＋ 決定論 ＋ 知らないターゲットが例外になること ＋ **同じ設計から DDL と ORM の両方が出る**こと（「ORM を db プロファイルにしない」判断の実体） |
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は

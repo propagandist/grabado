@@ -5669,6 +5669,162 @@ Prisma の識別子は `[A-Za-z][A-Za-z0-9_]*` で、**Kotlin のバッククォ
 - **Prisma を実物に流す検証は積み残し。** `prisma validate` は devDependency が増えるので、
   やるなら使い捨てのコンテナで（6-8 系の DB 検証と同じ扱い）
 
+### 2026-08-22 HANDOVER §6「機能」段階6-10a —— プロファイル変換層（出力時変換）
+
+**`db` の 1 文字列が決めていた 4 つ**（型パレット／DDL 生成器／設計 JSON の型キーの名前空間／
+識別子規則）**のうち、前 2 つを設計側と出力側に割った。** これで「PostgreSQL で設計して
+MySQL 向けの DDL を出す」が通る。6-8d が次段階への入力として送った項目で、
+8 本そろったことで実際の欠落になっていたもの。
+
+#### 決めたこと 1: **Drizzle（6-9f）を保留し、6-10 を先に置いた**（ユーザー判断）
+
+6-9e は「優先度は Prisma > Drizzle > SQLAlchemy」と書いていたが、**次にやるのは Drizzle か**を
+改めて問い直した結果、順番を入れ替えた。理由は 3 つ:
+
+| 論点 | 中身 |
+|---|---|
+| **8 本中 3〜4 本しか出せない** | Drizzle は dialect ごとに table 関数が違う（`pgTable` / `mysqlTable` / `sqliteTable`、`mssqlTable` は 1.0.0-beta.2 以降）。h2 / oracle / sql-standard には対応が無く「pg-core の形で出してコメントで断る」妥協になる。**JPA は 8 本すべてで、Prisma も 5 本で意味のある出力が出る**のに対して一番弱い |
+| **API のバージョン依存が強い** | 0.31 → 0.36 で第 3 引数が配列に変わり、いまも 1.0 beta が進行中。golden がライブラリの版に縛られ、公開後のメンテ負債になる（SQL の規格に縛られる DDL より変化が速い） |
+| **限界効用が 6-10 より低い** | ORM は JPA（自社 = Kotlin/Spring Boot）＋ Prisma（TS 圏のブランディング）で 2 軸を押さえ済み。対して 6-10 は**現存の欠陥**を直す |
+
+**やらないと決めたのではなく後回し**（SQLAlchemy と同じ扱い）。優先度は
+**Drizzle > SQLAlchemy** のまま。
+
+#### 決めたこと 2: **スコープは出力時変換のみ**（ユーザー判断）
+
+6-10 の定義文（6-9a の段階表）は「設計の db と出力の db を別にする」で、過去の記録は
+**2 つの別々の使い方**を指していた —— 6-9c / `docs/FORMAT.md` の「PG で設計して MySQL 用 DDL も
+出す」（出力時）と、6-8d の「PG の設計を sqlite で**開く**」（読み込み時）。**前者だけをやる。**
+
+読み込み時変換をやらないことで、次がすべて守られる:
+
+- [`js/io/json-parser.ts`](js/io/json-parser.ts) の db 照合はそのまま（4-2b の「型キーの安全性が
+  `db` 照合に依存」が生き続ける）。**設計 JSON の形式も `formatVersion` も 1 バイトも動かない**
+- 4-3b が却下した「パレットを取り直して開き直す」に触れない
+- 6-8d が却下した「`aka` を膨らませて黙って開けるようにする」にも触れない
+
+6-7 の「将来: プロファイル変換」が「変換を作るなら『拒む』の**例外**として設計する必要が
+ある」と書いていた宿題は、
+**穴を開けずに済んだ**ぶん先送りになる（読み込み時変換をやる段があれば、そこで必要になる）。
+
+#### 決めたこと 3: 寄せ先の決め方は **4 段で、上ほど正確**
+
+[`js/io/convert.ts`](js/io/convert.ts) の `resolveType`:
+
+1. **同じ `id`** —— 6-7 が「同じ意味の型には全プロファイルで同じ id を振る」と決めているので
+   最も確か（PG の 24 型のうち h2 で 18 本、mysql で 15 本が当たる）。ただし
+   **同じ id でも値の域は違いうる**（PG の `integer` は int32、sqlite の `INTEGER` は int64）ので、
+   `kind` が違えば黙らせずに記録する
+2. **同じ `kind`** —— 候補が複数ならサイズを取るかどうかで絞り、なおも複数なら**パレット順で先勝ち**
+3. **劣化して受けられる `kind`**（`KIND_FALLBACKS`）
+4. **落とし先**に置いて `unmappable`
+
+**sql 名での照合（`indexOfTypeName`）は `kind` を持たないパレット（旧 XML 同梱の
+`<datatypes>`）にしか使わない。** 名前で寄せると **Oracle の `DATE` が PG の `DATE` を
+受けてしまう** —— 前者は時刻を含むので kind は timestamp で、6-9c の「名前ではなく値の域で
+決める」はこの罠のこと。テストで固定してある。
+
+**`other` どうしは寄せない**（id 一致のときを除く）。`other` は「正規型に写せない」という
+主張であって値の域ではない（6-9c）ので、PG の `INET` を mysql の別の `other` 型に寄せると
+**写せないものを別の写せないものに置き換えただけ**になり、しかも losses に出ない。
+
+#### 決めたこと 4: `KIND_FALLBACKS` は **落とす向きだけ**を持つ
+
+`int32 -> int64`（値が保たれる）や `timestamp_tz -> timestamp`（tz が落ちる）は入れ、
+**逆向き（`timestamp -> date` / `float64 -> float32` / `decimal -> float64`）は 1 つも入れない。**
+変換層が最も避けるべきなのは「開いたら別の意味になっていた」で、それは 6-8d が `aka` を
+膨らませる案を却下した理由そのもの。逆向きが入っていないことは
+[`tests/node/convert.test.ts`](tests/node/convert.test.ts) が 13 対で固定する。
+
+**表が要るのは、無いと実用にならないから。** sqlite は型が 5 本しかなく、PG が使う kind のうち
+14 種類を持たない。表が無いと sqlite 向けの出力はほぼ全列が既定型落ち＋警告になるが、実際には
+uuid も date も TEXT に置くのが sqlite の慣行で、**それは劣化ではなくその DB のやり方**。
+**(db, 型 id) の表ではない** —— 21 語の kind の中だけで閉じており、プロファイルが 1 本増えても
+1 行も増えない（6-9c が避けた形に当たらない）。
+
+#### 決めたこと 5: **落とし先に `newrowtype` をそのまま使わない**
+
+8 本中 6 本の既定型はサイズを要求する型（`varchar` / `nvarchar` / `varchar2`）で、あれは
+「UI で Add row したときの既定」＝ 人がその場でサイズを入れる前提の値。**補えない変換の
+落とし先には向かない** —— そのまま使うと `c_cidr VARCHAR NULL` という、MySQL が長さ必須で拒む
+DDL が出た（**生成した DDL を MySQL 8.4 に流して見つけた**）。サイズを取らない文字列型が
+あればそちらへ逃がす（`fallbackIndex`）。
+
+#### 決めたこと 6: **`uuid` の逃げ道だけがサイズを持つ**
+
+`uuid -> string` は `size: "36"`（正準形の文字数。mysql の `CHAR(36)` / oracle の `VARCHAR2(36)`）、
+`uuid -> binary` は `"16"`（生のバイト数。oracle の `RAW(16)`）。
+
+**補わないと PRIMARY KEY が作れない。** サイズを取らない `LONGTEXT` に寄った版を MySQL 8.4 に
+流したところ `BLOB/TEXT column 'id' used in key specification without a key length` で
+**CREATE TABLE ごと拒まれた** —— house 既定の PK が uuid なので、補わないと変換した DDL が
+まず流せない。値の幅が決まっている kind は uuid だけなので、表は 1 行で済む。
+
+#### 決めたこと 7: 損失は**生成物のコメント**で出す。ダイアログは作らない
+
+ORM 出力（6-9d / 6-9e）が「写せない型は既定型に落として理由を行コメントで残す」とやっている
+のと同じ立場で、同じ層に 2 つの流儀を持たない。SQL を見るのは頻繁な操作なので毎回ダイアログが
+挟まると邪魔になり、生成物だけで完結するほうが**ファイルを人に渡しても情報が付いて回る**。
+UI を増やさないので locale 21 ファイルにも触れていない。
+
+**一覧は先頭にまとめ、列ごとの行コメントは出さない。** 行コメントにすると 8 本の生成器すべてに
+差し込み口が要り、「既存 golden が 1 バイトも動かない」という完了判定を自分で危うくする。
+
+**正規型を併記する**のは生成物を読んで決めた —— `INTEGER -> INTEGER` や `DATE -> DATE` は
+sql 名だけ見ると何が起きたのか分からない。いまは `INTEGER (int32) -> INTEGER (int64)` /
+`DATE (date) -> DATE (timestamp)` と出る。
+
+#### 決めたこと 8: **既定値（DEFAULT）は 1 文字も触らない**
+
+`uuidv7()` や `'{}'::jsonb` が寄せ先で通るかは型の写像とは別の問題で、関数名の対応表を持つのは
+**(db, 関数) の表**を作ること（6-9c が避けた形）。そのまま出して DB に拒ませ、
+**先頭のコメントで「既定値は変換していない」と言う**側に倒した。黙って別の関数に変えるより
+気づける。ただし実害は確認済み（下の検証）。
+
+#### 検証
+
+| | 6-9e | 6-10a |
+|---|---|---|
+| `npm test` | 367 passed | **398 passed**（`convert.test.ts` が 31 本） |
+| `npm run test:browser` | 165 passed | **183 passed**（golden 14 本 ＋ 性質 4 本） |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**既存の golden（`ddl` 56 / `orm` 28 / `json` 7 / `state` 8）は 1 バイトも動いていない。**
+増えたのは `tests/golden/convert/` の 14 本だけ。根拠は `convertDesign` が同じ db を恒等で
+返すこと（`from === to` かインスタンスが別でも db 名が同じなら早期リターン）。
+
+**実物に流した**（6-8 系と同じ扱い。恒久テストにはせず、依存も増やしていない）:
+
+| 対象 | 結果 |
+|---|---|
+| sqlite / types-matrix | **通る**（`node:sqlite`。全 24 型の写像が STRICT sqlite で成立） |
+| sqlite / house-defaults | `'{}'::jsonb` で落ちる ＝ **決めたこと 8 の実害**（型ではなく既定値） |
+| mysql / house-defaults | 既定値を手で直すと `users` が作れ、**uuid が 36 文字・`jsonb` が JSON（`JSON_TYPE` = OBJECT）・boolean・timestamp すべて期待どおり**に入る |
+| mysql / types-matrix | 流せない。ただし**変換のせいではない** —— `AUTO_INCREMENT` の列がキーを持たないためで、**既存の `tests/golden/ddl/mysql/types-matrix.sql` も同じ理由で流せない**（fixture が全型を 1 列ずつ並べただけでキーを持たない性質） |
+
+#### 次段階への入力 —— 6-10b
+
+- **UI がまだ無い。** 出力先 db の select（[`js/io.ts`](js/io.ts) の `ormtarget` が型紙）と
+  locale 1 キー、`Designer.toOrm(target, targetDb?)` への波及、`docs/TYPE-MAPPING.md`
+  （kind × 8 プロファイルの表。6-7 が「この表そのものが公開プロダクトの価値情報」と書いて
+  未処理のままの宿題）が 6-10b
+- **MySQL は TEXT 系をキーにできない。** house 既定は `text` 優先なので、`email` を UNIQUE に、
+  `tag` を複合 PK に使っている house-defaults は**変換した DDL がそこで落ちる**（実測）。
+  直すには「キーに含まれる列はサイズ付きの文字列型に寄せる」が要るが、**補うサイズが恣意的**に
+  なる（255 に根拠が無い）。パレットに「キーに使える型か」を持たせる案も含めて要判断
+- **mssql はサイズを取らない文字列型を 1 本も持たない。** PG の `TEXT` を持っていくと
+  `nvarchar` とだけ書かれ、SQL Server はこれを `nvarchar(1)` と解釈する。いまは
+  `size-required`（「寄せ先はサイズを要求する。流す前に長さを足すこと」）で警告するに留めた ——
+  `nvarchar(max)` 相当をパレットに足すのが本筋だが、mssql の types-matrix fixture と
+  DDL golden が動くので 6-8b の完了判定に手を入れることになる
+- **既定値の変換は手つかず**（決めたこと 8）。house 既定（`uuidv7()` / `now()` / `'{}'::jsonb`）は
+  grabado 自身が薦める値なので、変換すると必ず踏む。キャスト（`::jsonb`）を落とすだけでも
+  効くが、「def は触らない」を崩すことになるので判断が要る
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

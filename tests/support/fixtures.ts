@@ -90,6 +90,42 @@ export function ormGoldenCases(dbProfiles: readonly string[]): ReadonlyArray<{
     return cases;
 }
 
+/**
+ * プロファイル変換 DDL の golden の母集団（段階6-10a）。
+ *
+ * **postgresql の設計 × 他 7 プロファイル向けの出力 × 2 fixture = 14 本。**
+ * 8 × 8 × 7 = 448 本にはしない —— 変換は「設計側の型 -> 正規型（kind）-> 出力側の型」の
+ * 1 段で、**出発点を 1 つに固定すれば写像の全体は types-matrix で覆える**
+ * （postgresql の全 24 型が 1 列ずつ入っている）。ORM golden が 8 × types-matrix ＋
+ * postgresql × 残り 6 本で 14 本に収まっているのと同じ切り方。
+ *
+ * house-defaults を入れてあるのは「**house 既定が各 DB で何を失うか**」を見るため ——
+ * 6-7 が「この表そのものが公開プロダクトの価値情報」と書いた中身が、生成物の先頭の
+ * コメントとしてそのまま出る。
+ */
+export const CONVERT_SOURCE = "postgresql";
+
+export const CONVERT_FIXTURES: readonly string[] = Object.freeze([
+    "house-defaults",
+    "types-matrix",
+]);
+
+export function convertGoldenCases(dbProfiles: readonly string[]): ReadonlyArray<{
+    readonly to: string;
+    readonly fixture: string;
+}> {
+    const cases: Array<{ to: string; fixture: string }> = [];
+    for (const db of dbProfiles) {
+        if (db === CONVERT_SOURCE) {
+            continue;
+        }
+        for (const fixture of CONVERT_FIXTURES) {
+            cases.push({ to: db, fixture: fixture });
+        }
+    }
+    return cases;
+}
+
 /** そのプロファイルの fixture が置かれたディレクトリ（段階6-6a で DB 別になった） */
 export function fixtureDir(db: string): string {
     return join(FIXTURE_DIR, db);
@@ -100,9 +136,23 @@ export function fixtureDir(db: string): string {
  *
  * **db を省略できないのは意図的**（段階6-6a）。既定値を持たせると「どのプロファイル向けの
  * 入力を、どのパレットで読んでいるか」が呼び出し側から消える。**その 2 つがずれていること
- * 自体が主張になっているテストがある** —— known-issues #4 / #10 と
- * golden/state/mysql-house-defaults.json は「postgresql の fixture を mysql / oracle の
- * パレットで読む」ことを見ているので、db を書かせる形でないと 6-6b で黙って壊れる。
+ * 自体が主張になっているテストがある**ので、db を書かせる形でないと黙って壊れる。
+ *
+ * **証拠は段階6-8d で総入れ替えになった**（本コメントは 6-10a で書き直したもの）。6-6a の時点で
+ * 挙げていた known-issues #4 / #10 は「未現代化のパレットで読むと先頭型に落ちる」という不具合の
+ * 再現で、8 本すべてが strict になった 6-8d でテストごと消えている。同じ理由で寄せ先を失った
+ * `golden/state/mysql-house-defaults.json` は mysql → oracle → sqlite → **h2** と 3 回動いた。
+ * いま「ずれ」を主張にしているのは次の 4 種:
+ *
+ *   1. **強い側** —— PG の house-defaults を h2 パレットで読むと**潰れずに移る**
+ *      （tests/browser/state.spec.ts / tests/node/state.test.ts → golden/state/h2-house-defaults.json）。
+ *      house 既定の 8 型が全部 h2 の aka に載っている唯一の非 PG プロファイルなので成り立つ。
+ *      **段階6-10 のプロファイル変換はここを一般化したもの**
+ *   2. **拒む側** —— 設計 JSON の db が実行中のパレットと違えば例外
+ *      （tests/node/json.test.ts / tests/browser/json.spec.ts、alert の文言は io-ui の 2 本）
+ *   3. **差し替えに追随する側** —— setRoot 後の fk 解決と FK 自動生成が新パレットに従う
+ *      （tests/node/type-resolution.test.ts / tests/browser/types.spec.ts）
+ *   4. **known-issue #15** —— PG の quotes-i18n を oracle パレットで読んで DDL を採る
  */
 export function readFixture(db: string, name: string): string {
     return readFileSync(join(fixtureDir(db), `${name}.xml`), "utf8");

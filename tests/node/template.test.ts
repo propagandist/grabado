@@ -19,8 +19,9 @@ import { DB_PROFILES, REPO_ROOT } from "../support/fixtures.ts";
  * tests/node/type-resolution.test.ts と同じ立場で直に叩ける。DOM だけ jsdom から借りる。
  *
  * ここが押さえるのは 3 つ:
- *   1. postgresql が §6.2 の 3 列を返すこと（house 既定そのもの）
- *   2. 未現代化の 4 本では空 = 呼び手が従来経路に落ちること（6-8 まで有効な安全網）
+ *   1. 各プロファイルが house 既定を最も近く表す 3 列を返すこと（何を失うかがここに出る）
+ *   2. <template> を持たないパレットでは空 = 呼び手が従来経路に落ちること
+ *      （**段階6-8d で 8 本すべてが持つようになった**ので、これは旧 XML 同梱パレット向け）
  *   3. applyTemplate が Table に対して呼ぶ順序（PK を先に作り、key の行が対応すること）
  *
  * 型 id が実在することは tests/node/palette-id.test.ts が全プロファイルで見る。
@@ -44,8 +45,13 @@ function paletteFromXml(xml: string): TypePalette {
     return palette;
 }
 
-const STRICT_PROFILES = DB_PROFILES.filter((db) => paletteOf(db).isStrict());
-const LEGACY_PROFILES = DB_PROFILES.filter((db) => !paletteOf(db).isStrict());
+/** <template> を持たないパレット（旧 XML 同梱の形）。段階6-8d 以降、実プロファイルには無い */
+function templatelessPalette(): TypePalette {
+    return paletteFromXml(
+        '<datatypes db="x"><group label="g">' +
+            '<type id="a" label="A" sql="AAA" quote="" /></group></datatypes>'
+    );
+}
 
 /** 呼ばれた順に記録するだけの Table。実体を使わないのは描画 DOM を要求するため */
 interface Recorded {
@@ -77,22 +83,24 @@ function recordingTable(): Recorded {
 }
 
 describe("初期テーブルテンプレート（段階6-4）", () => {
-    test("検査対象のプロファイルがある（空振りしていないこと）", () => {
+    test("8 プロファイルすべてが <template> と newrowtype を持つ", () => {
         /*
-         * 新設 3 本（6-7a sql-standard / 6-7b h2 / 6-7c mariadb）はすべて strict。
-         * **6-8 で 1 本ずつ既存プロファイルが移り、4 本とも移ると LEGACY が空になる**
-         * （そのとき下の「テンプレートを持たない」テストごと消える）。6-8a で mysql が移った。
+         * **段階6-8d で反転した主張。** 6-8c まではここが「未現代化の N 本は持たない」を
+         * 数える形で、現代化のたびに N が減っていた（6-4 で postgresql、6-7a〜6-7c で新設
+         * 3 本、6-8a〜6-8d で既存 4 本）。sqlite が最後の 1 本。
+         *
+         * 空振り防止（検査対象が 1 本もないのに緑になる）の役目はそのまま引き継いでいる。
          */
-        expect(STRICT_PROFILES).toEqual([
-            "h2",
-            "mariadb",
-            "mssql",
-            "mysql",
-            "oracle",
-            "postgresql",
-            "sql-standard",
-        ]);
-        expect(LEGACY_PROFILES.length).toBe(1);
+        const missing = DB_PROFILES.filter((db) => {
+            const palette = paletteOf(db);
+            return (
+                readTemplate(palette).length === 0 ||
+                !palette.element().getAttribute("newrowtype")
+            );
+        });
+
+        expect(missing).toEqual([]);
+        expect(DB_PROFILES.length).toBe(8);
     });
 
     test("postgresql は §6.2 の 3 列を返す", () => {
@@ -156,14 +164,45 @@ describe("初期テーブルテンプレート（段階6-4）", () => {
         }
     });
 
-    for (const db of LEGACY_PROFILES) {
-        test(`${db} はテンプレートを持たない（従来経路に落ちる）`, () => {
-            expect(readTemplate(paletteOf(db))).toEqual([]);
-            expect(applyTemplate(recordingTable().table, paletteOf(db))).toBe(
-                false
-            );
+    /*
+     * sqlite（段階6-8d）。**STRICT テーブルには 5 型しか無く、uuid 生成関数も日時型も無い**ので、
+     * house 既定の PK は TEXT で既定値を持たない（sql-standard に続く 2 本目）。監査列も TEXT。
+     * 「テンプレートは各プロファイルが house 既定を最も近く表す形で持つ」の、いちばん厳しい側。
+     */
+    test("sqlite の PK は TEXT で既定値を持たない（生成関数が無い）", () => {
+        const palette = paletteOf("sqlite");
+        const rows = readTemplate(palette);
+
+        expect(rows.map((r) => r.name)).toEqual(["id", "created_at", "updated_at"]);
+        expect(rows[0]).toEqual({
+            name: "id",
+            data: {
+                type: palette.indexOfId("text"),
+                size: "",
+                def: "",
+                nll: false,
+                ai: false,
+            },
+            primary: true,
         });
-    }
+        /* 監査列も TEXT。STRICT に日時型がそもそも無い */
+        for (const row of rows.slice(1)) {
+            expect(row.data.type).toBe(palette.indexOfId("text"));
+            expect(row.data.def).toBe("CURRENT_TIMESTAMP");
+            expect(row.primary).toBe(false);
+        }
+    });
+
+    test("<template> を持たないパレットは空を返し、呼び手が従来経路に落ちる", () => {
+        /*
+         * **段階6-8d で寄せ先が実プロファイルから人工パレットに移った。** 8 本すべてが
+         * <template> を持つようになったが、**旧 XML 同梱の <datatypes> を読む経路
+         * （Designer.fromXML）は実アプリに生きている**ので、その形を無防備にしない。
+         * js/tablemanager.ts はここが false のときだけ従来の「id 1 列 ＋ autoincrement」を作る。
+         */
+        expect(readTemplate(templatelessPalette())).toEqual([]);
+        expect(applyTemplate(recordingTable().table, templatelessPalette())).toBe(false);
+    });
 
     test("applyTemplate は PRIMARY を先に作り、key の行だけを入れる", () => {
         const rec = recordingTable();
@@ -209,11 +248,16 @@ describe("初期テーブルテンプレート（段階6-4）", () => {
             expect(newRowType(palette)).not.toBe(0);
         });
 
-        for (const db of LEGACY_PROFILES) {
-            test(`${db} は属性を持たず添字 0（従来どおり）`, () => {
-                expect(newRowType(paletteOf(db))).toBe(0);
-            });
-        }
+        test("sqlite は text を指す（添字 0 は integer）", () => {
+            const palette = paletteOf("sqlite");
+            expect(newRowType(palette)).toBe(palette.indexOfId("text"));
+            expect(newRowType(palette)).not.toBe(0);
+        });
+
+        test("属性を持たないパレットは添字 0（旧パレット互換）", () => {
+            /* 段階6-8d で寄せ先が実プロファイルから人工パレットに移った（上の <template> と同じ） */
+            expect(newRowType(templatelessPalette())).toBe(0);
+        });
 
         test("実在しない id を指していれば例外", () => {
             const palette = paletteFromXml(

@@ -8,8 +8,10 @@
   uuid 型が無く、先頭の型（INTEGER）へ黙って落ちていた（known-issue #4 の実害）。
   golden がその変化を捉えている（tests/golden/ddl/postgresql/house-defaults.sql）。
 
-  未現代化のプロファイル（mysql / mssql / oracle / sqlite）では今も落ちるので、
-  この fixture は #4 の再現にも使われている（tests/known-issues/known-issues.spec.ts）。
+  **段階6-8d で 8 プロファイルすべてが strict になり、#4 は現象ごと消えた**（それまで
+  この fixture は未現代化プロファイルで読ませる #4 の再現にも使われていた）。いまの寄せ先は
+  tests/browser/state.spec.ts と serialize.spec.ts で、**h2 のパレットで読ませて
+  「strict どうしなら型が潰れずに移る」**ことを見ている。
   監査列の TIMESTAMP WITH TIME ZONE は PG の新パレットでは sql が TIMESTAMPTZ に
   変わったが、aka で標準名を受けるのでこの fixture は 1 行も動かない。
 -->

@@ -5914,6 +5914,387 @@ en / ja だけ固有で、残る 19 は英語のまま（6-9b の識別子警告
 
 ---
 
+### 2026-08-22 HANDOVER §5「backend」段階5-0 —— 契約を確定し、§5 を分割する
+
+§6 は 6-10b で閉じ、HANDOVER §9 の順序では次が §5。着手の前提（特性化テストが緑）は満たしている。
+
+**本段階は文書だけで、実装は 0 行**（6-0 が §6 の分割表を作ったのと同じ位置づけ）。§5 には
+決めないと後段の PR の形が変わる未決事項が 12 件あり、そのどれもが「あとで思い出す」では
+済まない。**記録されていない決定は次のセッションでは存在しないのと同じ**（2026-08-15 に目的と
+対応 DB の 2 つを実際に失った）ので、決定を先に確定して台帳に置く。
+
+**契約の正は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §4**（§0 実測でそう宣言した）。
+本段階で §4 の見出しを「実測・旧 PHP」に改題し、**§7「Kotlin backend の契約（到達点）」の枠を
+予約**した。中身は 5-1b 以降が埋める。
+
+#### 決めたこと 1: Kotlin は **`server/` を新設**して置き、PHP は **5-2 で `backend/` ごと消す**
+
+`backend/` を再利用する案（HANDOVER §2.2 の Dockerfile が `COPY backend/ ./` なのでそちらが
+文書とは一致する）を採らなかった理由は 3 つ。
+
+- **`backend/` は URL 空間でもある。** `backend/php-file/?action=` は実際に PHP をディレクトリとして
+  解決していた。同じ名前に「ソースの置き場」と「URL パス」の二役をさせ続けると、dev server が
+  `backend/src/main/kotlin/*.kt` を配る経路を別途塞ぐ必要が出る
+- **PHP 撤去が「ディレクトリごと `git rm`」という最も単純な操作になる。** 再利用すると「PHP だけ消す」
+  細かい削除になり、追加と削除が同じ diff に混ざって読めない
+- **最終形が `frontend/`（§2 で `js/` を集約）と `server/` で対称になる。** `backend/` は upstream の
+  語彙で、grabado の到達点の語彙ではない
+
+Dockerfile のパス修正は §2 の仕事。**`server/` を独立した Gradle root にする**（リポジトリルートに
+置くと IDE がリポジトリ全体を Gradle プロジェクトとして開き `node_modules/` を舐める）。
+
+**PHP を消すのは 5-2** —— 5-1b で Kotlin が実測契約を満たしたことを証明した直後。最初の PR で
+消す案（半移行の期間がゼロになる）と、§5 の最後まで残す案の中間を採った。
+
+- **最初に消さない理由**: 動く backend が 0 本の commit を develop に置くことになる
+- **最後まで残さない理由**: introspection を JSON 化したあとも PHP が残ると、`AVAILABLE_BACKENDS` に
+  「XML を返す PHP」と「JSON を返す Kotlin」が並ぶ＝二重管理の最悪形。6-1 が作った
+  `backend/php-cubrid/index.php:37` の dangling のような腐りが増える一方になる
+- **5-7 の introspection 実装で PHP を参照する必要は無い**。実測は完了して出力は
+  `docs/samples/introspection-postgresql.xml` にバイト列で固定済み、2 つの不具合は「再現しない」と
+  決定済み＝**逐語移植ではない**。PHP のクエリは反面教師としてしか価値が無い。それでも読みたく
+  なったら `git show <sha>:backend/php-postgresql/index.php` で読めるので、**ARCHITECTURE に
+  「旧実装は commit `<sha>` の `backend/` にある」と 1 行残す**。凍結コピーを `docs/` に置くのは
+  それ自体が二重管理なのでやらない
+
+#### 決めたこと 2: 5-1b は **URL を 1 文字も変えない** —— `{backend}` は受けて捨てる
+
+`@RequestMapping("/backend/{backend}/")` で受け、**`{backend}` の値を一切見ない**。
+`CONFIG.DEFAULT_BACKEND` が `["php-mysql"]`（配列バグ）のままでも、`?backend=` に何を渡されても
+同じハンドラに届く。
+
+こうすると **5-1b の完了条件を「既存 601 本と golden 114 本が 1 本も動かずに緑」に置ける**。これが
+移植で唯一機能する安全網で、URL を同時に動かすと `tests/node/io-ui.test.ts` の URL リテラルが
+同じ PR で書き換わり、**「Kotlin が契約を満たしたから緑」なのか「期待値を合わせたから緑」なのかが
+区別できなくなる**。CLAUDE.md「backend の契約は実測に一致させる（フロント無改修のため）」とも
+正面から一致する。
+
+**この値が絶対にファイルシステムに到達しないこと**をコードのコメントとテストで明示する。
+
+`backend/file/` への固定と backend セレクタ UI の撤去は **5-5**。撤去する理由は、選択肢が実質 1 つの
+`<select>` は情報量ゼロで、公開 OSS では「何を選ぶのか」という誤解を生むだけだから（CLAUDE.md
+制約6「backend は Spring Boot 一本」からの素直な帰結）。撤去すると `AVAILABLE_BACKENDS` /
+`DEFAULT_BACKEND` / `?backend=` / `backendlabel`（21 言語）/ `<select>` が一緒に落ちる ——
+**`DEFAULT_BACKEND` が配列というバグは「是正」ではなく「消滅」で決着する**（是正コストが 0 になる）。
+
+「将来 S3 backend を足したくなる」への答え: それは env（`GRABADO_STORE=file|s3`）でサーバ側が
+決める話。**どの store が生きているかはサーバしか知らない**ので、ブラウザに選ばせるのは筋が悪い。
+
+REST 化（`/api/schemas/{name}`）は **§5 ではやらない**。`/api/` は §11 の AI proxy が始める。
+
+#### 決めたこと 3: introspection は **設計 JSON を返さない**
+
+設計 JSON v2（`docs/FORMAT.md`）をそのまま返す案を採らず、**中立な introspection JSON**
+（`introspectionVersion: 1`）を新しい形式として宣言する。
+
+```json
+{
+  "introspectionVersion": 1,
+  "source": "shop", "dialect": "postgresql", "schema": "public",
+  "tables": [{
+    "name": "articles", "comment": "記事",
+    "columns": [{
+      "name": "price", "sqlType": "numeric", "udtName": "numeric",
+      "numericPrecision": 12, "numericScale": 2,
+      "characterMaximumLength": null, "arrayElementType": null,
+      "nullable": true, "default": null, "comment": "…",
+      "references": []
+    }],
+    "keys": [{ "type": "PRIMARY", "name": "articles_pkey", "columns": ["id"] }]
+  }]
+}
+```
+
+根拠 4 つ。
+
+1. **`x` / `y` は backend の持ち物ではない。** 座標は描画の都合で `information_schema` に無い。現行の
+   XML 経路も持たず、`importresponse` が `alignTables()` を呼んで**ブラウザ実測の `offsetWidth`** で
+   並べている。設計 JSON を返すと `js/io/json-parser.ts` の「`x`/`y` は必須（undefined で throw）」に
+   引きずられて backend が 0 を詰め、フロントが直後に上書きする無意味な往復になる。
+   **「introspection の出力は設計ファイルではない」ことを形式で表す**
+2. **型 id への解決はフロントが持つ。** `columns[].type` は型パレットの安定 id で、パレット
+   （`db/<db>/datatypes.xml`）は**フロントの静的資産**。backend が id を返すにはパレット XML を
+   読む必要があり、それは**現行 PHP がやっていたこと**（全文連結）＝ backend と frontend が
+   パレットを二重に持つ構造そのもの
+3. **`kind`（正規型）も backend は付けない。** `kind` も同じ `datatypes.xml` の属性なので、PG の
+   `data_type` → `kind` の表を Kotlin に持つと `db/postgresql/datatypes.xml` の写しになる。
+   代わりに **backend は生の型情報を最大限返す**（`sqlType` / `udtName` / `numericPrecision` /
+   `numericScale` / `characterMaximumLength` / `arrayElementType`）。`db/postgresql/datatypes.xml`
+   の冒頭が「`aka` に入れる基準の 2 番目は **introspection の実出力**（`TIMESTAMP WITH TIME ZONE`）」と
+   明記しているとおり、**パレットは introspection の型名を受けるように設計済み**で、
+   `TypePalette.indexOfTypeName()` と `tests/node/type-resolution.test.ts`（8 プロファイル全候補名の
+   全数掃き）がそれを守っている。そこに寄せる
+4. **ルートの `db` が設計 JSON の致命傷。** v2 の `db` は「実行中パレットと違えば throw」（4-2b）。
+   PG を import したいのに実行中が `mysql` なら何も入らない。中立形式なら `dialect` は情報として
+   残り、**寄せは 6-10 の変換層が担う**
+
+**あわせて: import はパレットを差し替えない。** 現行 XML は `<datatypes>` を連結するので
+`Designer.fromXML()` が `palette.setRoot()` の経路に入り、**MySQL で作業中に import すると実行中
+パレットが PG に化ける**（cookie の `db` は変わらないのでリロードで戻る＝半端な状態）。これは
+再現しない。実行中パレットに写し、落ちた型は 6-10b と同じ見せ方で textarea に出す。
+
+**フロントの `serverimport` 側は分離できない**（レスポンス形式を変えた瞬間に `importresponse` /
+`fromXML` が壊れる＝半移行の放置）。ただし PR は 2 つに割る —— **5-6 で変換層（TS 純関数）だけを
+足してテストで固め、5-7 で Kotlin 実装と配線と XML 経路撤去**。4-2（形式側を先に足して安全網 →
+4-3 で UI）と同じ形。
+
+**5-6 の fixture には必ず配列型（`text[]`）と enum（`USER-DEFINED`）を入れる。** どちらもパレットに
+存在せず、`indexOfTypeName` が -1 を返す。落とし先が無いと import ごと throw で全滅する。
+
+#### 決めたこと 4: introspection の接続先は **env の名前付き表からしか選べない**
+
+```yaml
+grabado:
+  introspect:
+    sources:
+      shop: { url: "${SHOP_JDBC_URL:}", user: "${SHOP_DB_USER:}", password: "${SHOP_DB_PASSWORD:}", schema: public }
+```
+
+`?action=import&database=<name>` の `<name>` を**接続の名前**として読み替える。現行 PHP は
+`database` を**使っていない**（`Define()` でハードコードし、パラメータはコメントアウト済み）ので、
+新しい意味を与える余地がそのまま空いている。`serverimport` の prompt はそのままでよく、
+**フロント無改修で allowlist 方式になる**。
+
+**リクエストで JDBC URL を受ける案は採らない** —— それは完全な SSRF プリミティブ。名前付き表なら
+クライアントが指定できるのは表のキーだけで、ホスト名は 1 バイトも渡らない。**SSRF が「対策」では
+なく「不可能」になる**。公開デモを READONLY 一択にした理由（2026-08-15）は「introspection が任意
+ホストへ接続を試みる」ことだったので、これで READONLY は二重の安全になる。
+
+org の `security-baseline.md` には SSRF の項目が無い（規約の穴）ので、**「外部入力をコネクション
+文字列にしない」を grabado 側の決定として台帳に置く**。思想は同 §3.1「識別子は列挙した定数からしか
+選ばない」・§3.11「公開するパスは列挙する」と同じ。
+
+- 未知の名前 / ソース 0 件 → **404**
+- 接続失敗 → **503 を維持**。意味論では 502 が正しいが、`check()` に文言があるのは 501 / 503 だけで、
+  **502 は素通しして無反応になる**。PHP 実測とも一致する 503 を採る
+- 資格情報はログにもエラー応答にも出さない（org §4.1 / §4.5 / §5.2）
+- コネクションプールは持たない（1 リクエスト 1 接続、`isReadOnly` / `loginTimeout` / `socketTimeout`）。
+  **`spring-boot-starter-jdbc` を入れない＝ HikariCP が classpath に無い＝ `spring.datasource.*` の
+  auto-configuration が存在しない**ので、DB レス既定（制約5）が構造的に保証される
+
+**対応 DB は段階的に広げる**（ユーザー判断）: 5-7 で `postgresql`、5-8 で `mysql` / `mariadb` / `h2`。
+`mssql` / `oracle` は **JDBC ドライバのライセンスと再配布可否を確認してから**判断、`sqlite` は
+サーバ接続の概念が無いので対象外。CLAUDE.md「対応 DB を絞る判断はしない」は**出力品質**に掛かる
+規約で、introspection の本数は「同梱ドライバ＝イメージサイズ ＋ CVE 面積 ＋ 到達先」の運用側の
+話として切り分けた。**1 本足すごとに根拠を残す。**
+
+#### 決めたこと 5: READONLY は **403**。実現は **Bean の差し替え**
+
+`501` に寄せれば `check()` を触らずに済む（既存文言を流用できる）が、**「READONLY だから save
+できない」と「サーバが壊れている」が同じ画面になる**。意味を曲げて locale 1 キーをケチる取引は
+公開 API として割に合わない。403 を採り、`locale` に `http403` を足して `check()` に `case 403` を
+足す。訳は en / ja だけ固有で残る 19 は英語のまま（6-9b / 6-10b と同じ扱い）。
+
+実現方法は **Bean の差し替え** —— `grabado.readonly=true` のとき `DesignStore` を
+`ReadOnlyDesignStore(delegate)` にし、`IntrospectionService` は `@ConditionalOnProperty` で
+**そもそも登録しない**。フィルタや各ハンドラの `if` にしない理由は、**禁止を「禁止したいもの」の
+直上に置く**ため。副作用を持つのは `DesignStore` だけ、外部到達性を持つのは `IntrospectionService`
+だけなので、ここで塞げば将来 action が増えても自動的に守られる。フィルタ方式は「守るべき経路の
+一覧」を人が維持することになり、制約6 を人力に依存させる。副産物として **HTTP なしでテストが書ける**。
+
+**落ちるのは保存・introspection・AI の 3 つだけ**で、`list` / `load` は残す（読み取りビューア）。
+編集ストアはブラウザ内なので、READONLY でも「描いて DDL を出す」体験は完全に提供できる。
+
+UI でボタンを隠すには**サーバの能力をフロントが知る必要がある** → 5-5 で `?action=capabilities`
+（`{"readonly":true,"introspection":false,"ai":false}`）を足す。**引けなければ「全部できる」に倒す**
+（`npm run dev` 単体＝ backend 無しのときに現行と同じ挙動になる）。
+
+#### 決めたこと 6: ETag は **内容の SHA-256**。mtime は使えない
+
+`load` の応答に strong ETag（SHA-256）を付け、`save` は `If-Match` を見て不一致なら **412**。
+
+**mtime ベースの弱 ETag を採らない理由が、この製品の正本モデルから出てくる** —— 正本は git 管理の
+ファイル（制約2）で、`git checkout` / `git pull` は**内容が同じでも mtime を書き換える**。つまり
+**ブランチを切り替えるたびに全ファイルが偽の 412 を出す**。「内容が同じなら同じ ETag」が git 正本と
+噛み合う唯一の形。
+
+**移行は 2 段**にする。
+
+- **5-4 の前半（backend）**: ETag を返し `If-Match` を尊重する。`If-Match` が無ければ従来どおり
+  上書き。**既存 601 本を 1 本も壊さない**
+- **5-4 の後半（フロント）**: `If-Match` / `If-None-Match: *` を送り、**プリフライトの `load` を撤去**。
+  ここで「未指定 ＋ 既存あり」を **428** に締める。`js/io/conflict.ts` の `verdictForSave()` は
+  「事前判定」から「412 を受けたあとの分岐」に役割が変わり、`Baseline` は `text` を捨てて `etag` を
+  持つようになる。**TOCTOU の窓が閉じる**
+
+`If-Match: *` は「存在すれば無条件上書き」として RFC どおり受ける（CLI 利用者の逃げ道）。
+**412 は `check()` に通さない**（フロントが握って confirm に流す。プリフライトの 404 を通さないのと
+同じ理屈）。`If-Match` の照合は keyword 単位のロックで「読む→比べる→書く」を囲む —— 囲まないと
+412 は「たいてい正しい」だけの機能になり、§4.3 が「TOCTOU の窓を閉じる」と書いた目的を果たさない。
+
+**書き込みは同一ディレクトリの一時ファイル → `ATOMIC_MOVE`。** マウント先は git が見ている
+ディレクトリなので、部分書き込みは「壊れた設計ファイルがコミットされる」に直結する。
+
+#### 決めたこと 7: `load` は **`application/octet-stream`** を名乗る
+
+`text/xml` 固定（現行）でも「先頭 1 文字で json / xml を判別」でもなく、
+**`application/octet-stream` ＋ `X-Content-Type-Options: nosniff` ＋ `Content-Disposition: attachment`**。
+
+フロントは 4-3b で `xml: true` を外して**中身の先頭 1 文字で判別**するようになったので、
+Content-Type を一切見ない。**つまり正直さのコストがゼロ**。一方これは、分類 B のリポジトリで
+**同一オリジンから任意のユーザー内容を返す唯一の経路**なので、ブラウザで直接
+`?action=load&keyword=evil.json` を開いても描画されない形にしておく。
+
+`304` は返さない（`If-None-Match` を実装しない）。`check()` が 304 を知らないので `default` に落ち、
+空 body が `loadDesignText("")` に渡って「empty」の alert が出る。**実装しないことを明示的に決める。**
+
+#### そのほかの決定
+
+| 項目 | 決定 | 根拠 |
+|---|---|---|
+| `save` の成功 status | **201 を維持** | `locale` の `http201` は `Saved` で 21 言語訳済み。200 にすると `check()` が黙り、**アプリ唯一の保存完了通知が消える**。`saveresponse` は既に 200/201 の両対応（4-6 で移植を見越して入れた）なので将来倒す自由は残る |
+| `list` の形式 | `\n` 区切りを維持し、**並びを昇順に固定**（`String.compareTo`。`Collator` はロケール依存なので使わない） | `listresponse` は textarea に直流しするので改行区切りが「人が読む一覧」として正しい。PHP の `glob()` は fs 順＝未規定だった。決定論は制約3 の価値観。空一覧は 0 バイト（`\n` 1 個を返さない） |
+| `remove` | **作らない** | 実在せず（未知 action として 501）、フロントに削除 UI も無い。必要になったら新規機能として設計する |
+| HTTP メソッド | **固定する**（list/load/import は GET、save は POST）。ミスマッチは 405 | PHP は method を見ていなかったので**これは強化＝挙動変更**。フロントは正しい method しか投げない |
+| `keyword` の検証 | 空/未指定・`.json` 以外（**大小無視**）・トラバーサル・制御文字・Windows 予約名・255 バイト超を **400**。**`basename()` 相当の黙った書き換えは採らない** | 書き換えるとユーザーが指定した名前と実際のファイル名がずれ、`js/io/conflict.ts` の `Baseline.name` が**別ファイルを見張る**ことになる。`.JSON`（大文字）は `tests/node/io-ui.test.ts` が契約として固定しているので大小無視が必須 |
+| Unicode 正規化 | **しない**（入ってきた UTF-8 のまま作り、`list` もそのまま返す） | 正本は git 管理のファイル。NFC↔NFD を勝手に動かすと**git の差分に出ない形でファイルが二重化する** |
+| `save` の body の読み方 | **`HttpServletRequest.inputStream` を直読み**（`@RequestBody` を使わない） | 「backend は body を解釈しない」という実測契約の直訳。加えて後述の Content-Type 結合疑い（`@RequestBody` だと 415 で全滅する） |
+| env 名 | `application.yaml` で橋渡し。`grabado.readonly: ${GRABADO_READONLY:${READONLY:false}}` / `grabado.schema-dir: ${GRABADO_SCHEMA_DIR:${SCHEMA_DIR:/data/schema}}` | HANDOVER §2.4 の外向きの名前を保ったまま型付き `@ConfigurationProperties` が使える（テストがコンストラクタで値を作れる＝ Spring を起動せずに store をテストできる） |
+| 起動時検証 | 正本ディレクトリが存在しない / ディレクトリでない / 読めない（`readonly=false` なら書けない）なら**起動失敗** | mount 忘れでコンテナ内 fs に書き、コンテナ破棄で設計を失う事故を塞ぐ。「起動はするが save のたびに 500」は最悪の失敗モード |
+| CSRF | **除外設定は不要** | 現行に CSRF トークンの仕組みが無い（§4.2 で実測）。`setXhrHeaders()` は `src/main.ts` にコメントアウトされた拡張ポイントがあるだけ |
+| 認証 | **入れない**（`spring-boot-starter-security` を足さない） | 単一ユーザーのローカルコンテナ。入れると全経路が 401 になり `permitAll` の列挙が判断対象として増える（org §3.11）。要るのはセキュリティヘッダ 3 本だけで、`OncePerRequestFilter` 20 行で足りる |
+| CSP | **今回は入れない**（棚卸ししてから入れると書き残す） | `index.html` にインラインスクリプトがあり、Vite ビルド後の inline 資産を棚卸ししないと `unsafe-inline` 付きの見せかけの CSP になる |
+| `js/` の `frontend/` 集約 | **§2 のまま。順序を変えない** | vite root・`tests/support/fixtures.ts` のパス定数・`playwright.config.ts`・`.gitattributes` の glob を一斉に動かす作業。§5 の完了条件が「既存テストが 1 本も動かず緑」に賭けている以上、同じ PR に 2 種類の大移動を混ぜない。`server/` 新設なら §2 がいつ来ても §5 は影響を受けない |
+| HANDOVER の改訂 | **§0 / §5 の action 名の誤り（`connect` / `remove`）だけ訂正**。§2.3 Railway 等の方針は触らない | 誤りの訂正と方針の改訂は別物。前者は読んだ人が実装を間違えるので直す。後者は当時の判断の記録でもあり、消すと「なぜ変えたか」が失われる。**HANDOVER = 入口 / CUSTOMIZATIONS = 正**という現行の役割分担（CLAUDE.md が宣言済み）は壊さない |
+
+#### CI —— org の規約を読んで決めた
+
+`propagandist/.github` の `docs/ci-strategy.md` を取得して判断した。**追加する。**
+
+- **ワークフローを 2 本に分ける** —— `ci-frontend.yml` / `ci-server.yml`。`paths` は `on:` にしか
+  書けず、ジョブ単位では絞れない。判定ジョブ（`dorny/paths-filter` 等）を置く方式は**その判定ジョブ
+  自体が 1 分 × 全 run** かかるので、ワークフロー分割のほうが安い
+- `concurrency` ＋ `cancel-in-progress` / `permissions: contents: read` を明示 / 全ジョブに
+  `timeout-minutes`（既定 6 時間のハングが枠を一晩で溶かす）/ action は SHA ピン **＋ 末尾の版
+  コメントを消さない**（Dependabot が SHA と一緒に書き換える対象）
+- `push` は `develop` / `main` に限る。`pull_request` は**マージ結果の SHA に対して走る**ので、
+  push 側で同じ検査を回す価値は「PR の CI 実行後に base が進んだ場合」に限られる
+- 重い層（`test:dist` / `known-issues` / 実 DB 統合テスト / Docker ビルド）は**週次 `schedule`** へ隔離。
+  CLAUDE.md が言う「手元／既存ジョブ／週次の 3 層」の週次層にちょうど収まる
+- **`npm run test:browser` は CI に入れる。** `docs/TESTING.md` が「暗黙グローバルは `npm test` では
+  捕まらない。`test:browser` だけが赤くする」と明記しており、かつブラウザ側が **golden の唯一の
+  権威**。ここを外した CI は、この製品の安全網の定義を外した CI になる
+- Windows runner は使わない（2 倍課金）。Windows 固有のリスクは `scripts/vitest.mjs` ＋
+  `tests/node/workarounds.test.ts` が既に張っている。**明示的に採らない選択として記録する**
+
+**★ GitHub の「Automatic dependency submission」を有効にしない。** Settings → Advanced Security →
+Dependency graph の自動提出機能は、**Gradle プロジェクトで全ブランチの全 push に走る**。cartera では
+有効化後 9.5 日で 123 回（うち 73 回が feature ブランチ）走り、**月換算 1,100 分＝ org 全体の枠
+2,000 分の半分以上を単独で消費していた**。依存グラフが使われるのは default branch だけなのに、である。
+必要になったら `gradle/actions/dependency-submission` を **default branch への push かつ Gradle の
+ファイルが変わったときだけ**動かす自前ワークフローに置き換える。**5-1b の PR にこの判断を明記する** ——
+Kotlin を入れた誰かが善意で有効化する経路を、先に塞いでおく。
+
+**★ `dependencyLocking` は 5-1b の最初の commit から有効にし、`gradle.lockfile` を commit する。**
+org の `security-baseline.md` §3.12 / §5.1 が、分類 B に対して「**解決済みの依存グラフをどこにも
+持たない**」を崩れる変更として名指ししている。Gradle は locking が既定 off で、`gradle.lockfile` が
+無いと `trivy fs` が未走査を返す。**CI を足すかどうかと無関係に必要**（手元で見るため）で、後から
+入れると初回生成が巨大 diff になり、要件を満たしていない期間が develop に残る。
+
+**§5 完了時点で分類の見直しを org に上げる。** grabado は `security-baseline.md` で**分類 B**
+（ブラウザで完結・ビルドして配る）と名指しされているが、§5 で「サーバ ＋ 外部 DB への接続」が入ると
+分類 A の要素に触れる（認証は無い）。少なくとも §3.1（introspection がカタログ名を組み立てる）/
+§3.3（`keyword` のパス）/ §3.11（READONLY）が効くようになる。同 §6 の更新契機「新しいリポジトリが
+分類 A/B/C/L に入った」に該当するので、5-9 の申し送りに入れる。
+
+#### §5 の段階分割
+
+**フロント 0 行の帯**（5-1 / 5-2 / 5-6 / 5-8）を最大化し、フロント同時変更を後ろに寄せた。
+
+| 段階 | タイトル | スコープ | フロント |
+|---|---|---|---|
+| **5-0** | 契約を確定し §5 を分割する | 本エントリ。**実装 0 行** | 0 行 |
+| **5-1a** | CI を置く | `ci-frontend.yml` のみ。**Kotlin が 1 行も無いうちに現状 601 本の緑を PR 上で見えるようにする** | 0 行 |
+| **5-1b** | Gradle/Spring Boot の骨格と、実測契約そのままの list/load/save | `server/` 新設・4 action（`import` は 501）・契約表・vite dev proxy・dependency locking・`ci-server.yml`。**入れない: `.json` 強制 / READONLY / ETag / URL 変更** | 0 行 |
+| **5-2** | PHP を撤去し、正本ディレクトリの規則を入れる | `backend/` ごと削除 ＋ submodule ＋ `.gitmodules`。`.json` 強制・`keyword` 検証・load の Content-Type・list 昇順・起動時 fail-fast | 0 行 |
+| **5-3** | READONLY で副作用を止める | `grabado.readonly`・save が 403・`locale` に `http403`・`check()` に `case 403` | 微 |
+| **5-4** | ETag ＋ If-Match で save を 1 往復にする | ETag・412 / 428・`Baseline` を `text` → `etag`・プリフライト撤去・仮想 backend に ETag | 中 |
+| **5-5** | backend セレクタを撤去し URL を確定、capabilities | `AVAILABLE_BACKENDS` 等の撤去・`backend/file/` に固定・`?action=capabilities` でボタン非表示 | 中（削除中心） |
+| **5-6** | introspection の変換層を先に足す（純関数） | `js/io/introspect-parser.ts` ＋ fixture ＋ テスト。**UI 未配線・backend 無し** | 追加のみ |
+| **5-7** | Kotlin introspection（PostgreSQL）と `serverimport` の JSON 化 | JDBC・allowlist・PG18 の 2 不具合を再現しない・型情報を落とさない・XML 経路撤去 | 中 |
+| **5-8** | introspection を MySQL / MariaDB / H2 へ広げる | 方言ごとのカタログ差 | 0 行 |
+| **5-9** | 実 HTTP の E2E と §5 のクローズ | `playwright.server.config.ts` ＋ E2E・文書整理・分類見直しの org 申し送り | 文書中心 |
+
+**各段階の完了条件は「既存 601 本と golden 114 本が 1 本も動かずに緑」＋「Kotlin テストが緑」**
+（フロントを触る段階は増減の内訳を PR に出す）。§7 特性化テストの思想（挙動不変を保証してから内部を
+作り替える）を backend にも当てた形。
+
+**順序の根拠を 3 つ。**
+
+- **`.json` 強制（5-2）が READONLY（5-3）より先**なのは、`.json` 強制が**フロントの
+  `jsonKeyword()` があるので到達しない**＝フロント 0 行で入るから。フロント 0 行の帯を後ろに
+  寄せると後戻りの総量が増える
+- **ETag（5-4）がセレクタ撤去（5-5）より先**なのは、ETag が**振る舞い**（往復数・conflict の判定）を、
+  セレクタ撤去が**識別子**（URL・config・DOM）を変えるから。両方が `js/io.ts` と
+  `tests/node/io-ui.test.ts` を触るので、同時にやると「URL が変わったから落ちた」のか「往復が
+  変わったから落ちた」のかを切り分けられない
+- **変換層（5-6）が Kotlin 実装（5-7）より先**なのは 4-2 → 4-3 と同じ形。純関数とテストを先に
+  置けば、5-7 は配線だけになる
+
+#### 検証
+
+実装 0 行なので、検証は「1 バイトも動いていないこと」の確認。
+
+| | 6-10b | 5-0 |
+|---|---|---|
+| `npm test` | 407 passed | 407 passed |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+golden 114 本（`ddl` 56 / `orm` 28 / `json` 7 / `state` 8 / `convert` 14）は無差分。
+`js/` `src/` `tests/` `db/` `locale/` `index.html` の diff は空。
+
+#### 次段階への入力
+
+**5-1b で、テストが無いと「緑なのに契約違反」で通る罠が 2 つある。** 先にテストを書くこと。
+
+1. **末尾スラッシュ。** 実測 URL は `backend/php-file/?action=list` で**ディレクトリ末尾に `/` が付く**。
+   Spring Boot 3 は trailing slash match が既定 off なので、`["/backend/{backend}/", "/backend/{backend}"]`
+   の 2 つを登録する
+2. **未知 action の 501。** `params = "action=..."` の条件に当たらないリクエストを Spring は **404** で
+   返す。条件なしのフォールバック `@RequestMapping` を最後に置かないと、契約違反のまま緑になる
+
+**実装上の申し送りが 2 つ。**
+
+3. **`save` の body は `HttpServletRequest.inputStream` から直読みする。** `js/oz.ts` は POST のとき
+   `Content-Type: application/x-www-form-urlencoded` を立てた**あと**に呼び手の
+   `Content-type: application/json` を足す。XHR の `setRequestHeader` は同名ヘッダを `, ` で連結するため、
+   **wire 上の値が `application/x-www-form-urlencoded, application/json` になっている疑いがある**。
+   PHP は `php://input` を直読みするので §0 実測では絶対に露見しない。`@RequestBody` は
+   `MediaType.parseMediaType` を通るので、結合していれば **415 で全滅**する。
+   **これは実測項目**（`npm run dev` ＋ 受け口を立てて生ヘッダを読む）—— 結合していれば
+   `js/oz.ts` の form ヘッダを撤去できる（form でボディを送る呼び手は現在 1 つも無い）。
+   **結合の有無にかかわらず直読みが正しい**ので、設計は分岐しない
+4. **`js/io.ts` の `check()` は 201 / 404 / 500 / 501 / 503 しか知らない。** §5 で新設する
+   **400 / 403 / 412 / 413 はすべて `default: return true` に落ちて「成功」に倒れる**。
+   status を増やす PR では `check()` と `locale` を**同じ PR で**広げること（分けると無言で成功扱いの
+   期間ができる＝制約1 違反）。5-1b は新しい status を返さない（`keyword` 省略の 400 は 5-2）ので、
+   最初に効くのは 5-2
+
+**そのほか。**
+
+- `tests/node/harness.ts` の仮想 backend は **未知 action を 404 で返す**（php-file の fs 解決に
+  落ちた頃の副産物で、実契約の 501 と違う）。5-1b で 501 に直す
+- 契約を 2 言語で二重に書かないため、**機械可読な契約表**（`tests/contract/backend-cases.json`）を
+  5-1b で導入する。Kotlin の `@ParameterizedTest` と、TS 側の仮想 backend の**両方が同じ表を読む** ——
+  これで仮想 backend が「サーバについての手書きの推測」から「**同じ表で検証された第 2 実装**」になる。
+  加えて「表に出てくる全 status が `check()` に載っていること」を TS 側で機械的に確認し、上の 4 を
+  再発不能にする。`tests/node/type-mapping.test.ts` が `docs/TYPE-MAPPING.md` を実装と 1 セルずつ
+  突き合わせているのと同じイディオム
+- **golden は introspection にだけ持ち込む**（`tests/golden/introspect/`）。save/load/list は
+  「5 つの status ＋ `\n` 連結」で、golden にすると差分が読めないノイズになる。
+  `tests/golden/README.md` を「**各 golden ディレクトリは producer をちょうど 1 つ宣言する**」形に
+  一般化し、`introspect/` の producer は実 PG18 の統合テストにする（「Node 側からは絶対に更新しない」は
+  その特殊形として保たれる）
+- **introspection のフィクスチャを手で書き始めない。** 実 PG18 から採る（`docs/ARCHITECTURE.md` §4.1 に
+  `docker run … postgres:18` のレシピがある）。手で書くと §4.6 と同じ罠に自分で落ちる ——
+  「PG18 はこう返すはずだ」という信念を符号化したフィクスチャは、信念が間違っていても緑になる
+- **6-9f（Drizzle）と §6.4 の仕上げは §6 に残ったまま。** §5 が閉じたあと、§11 / §2 との順序で判断する
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

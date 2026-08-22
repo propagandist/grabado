@@ -12,7 +12,8 @@
 本書のパス・backend の action 名・レスポンス形式は現行 `wwwsqldesigner` の典型構成に基づく**未検証の目安**。着手時に必ず以下を行う。
 
 1. `ondras/wwwsqldesigner` を fork → clone。
-2. `php -S localhost:8000` で現行 backend を起動し、DevTools で **save / load / list / remove / connect(introspection)** の実通信をキャプチャ（action 名・パラメータ・body・Content-Type・本文、特に introspection の構造）。
+2. `php -S localhost:8000` で現行 backend を起動し、DevTools で **save / load / list / import(introspection)** の実通信をキャプチャ（action 名・パラメータ・body・Content-Type・本文、特に introspection の構造）。
+   → **実施済み。実在する action は `list` / `save` / `load` / `import` の 4 つだけで、未知の action は一律 501。`remove` は実在せず（フロントに削除 UI も無い）、introspection の action 名は `connect` ではなく `import` だった**（本書の初版はここを誤っていた）。**契約の正は [`ARCHITECTURE.md`](ARCHITECTURE.md) §4**（Kotlin 実装の到達点は同 §7）。
 3. **特性化テスト（§7）を先に組む**。現行が吐く DDL・シリアライズ結果をスナップショット固定してから移植に入る。
 4. 実測を `ARCHITECTURE.md` に、本書との差分を `CUSTOMIZATIONS.md` 冒頭に記録。
 
@@ -111,7 +112,7 @@ ENTRYPOINT ["java","-jar","app.jar"]
 - **DB レス既定**。永続 PG は持たない（編集中状態はフロント側）。
 - レスポンス形式は §0 実測に合わせ、フロント通信を最小変更に保つ。CSRF 除外等も実測で確認。
 
-### 5.2 introspection（connect）
+### 5.2 introspection（`import`）
 - 既存 DB を読んでスキーマ化する機能は据え置き。`information_schema` を読む Kotlin 実装で **JSON を返す**（現行 XML から置換）。外部 DB への到達性が要る唯一の経路。
 - `READONLY=true`（Railway ビューア）では無効化。
 

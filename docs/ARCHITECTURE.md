@@ -73,7 +73,13 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 - [x] ブラウザ UI からの end-to-end 操作確認（§3 段階1 で実施。テーブル追加・カラム追加・SQL 出力・
       スタイル切替・ロケール切替・cookie 保存が Vite バンドル後も動くことを確認）
 
-## 4. backend 契約（実測）
+## 4. backend 契約（実測・旧 PHP。段階5-2 で撤去）
+
+**この章は upstream の PHP backend を実際に起動して測った記録**で、`backend/` は段階5-2 で
+リポジトリから消える（撤去後も `git show <sha>:backend/php-postgresql/index.php` で読める）。
+
+**Kotlin 実装が満たすべき契約は §7。** 移植は §4 の実測に一致させるところから始め（段階5-1b は
+URL も status も 1 文字も変えない）、そこから段階ごとに変えていく。**変更点は §7 の表に集約する。**
 
 ### 4.1 実測環境
 
@@ -561,3 +567,43 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
   **段階6-5a で parity 例外ごと消えた**（`tests/node/parity-exceptions.ts` を撤去）。
   DDL 生成が TS になり、ブラウザと Node で同じコードが動くのでエンジン差が無い。
   **oracle の 7 件が Node 回帰に復帰**し、`npm test` の skipped は 0 になった。
+
+## 7. Kotlin backend の契約（到達点）
+
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階5-0 にある。** ここはその結果
+としての契約表で、**実装が追いつくまでは「予定」**。各段階が実装した時点で、その行を実測どおりの
+記述に置き換える。
+
+### 7.1 §4（旧 PHP）からの差分
+
+| 項目 | 旧 PHP（§4） | Kotlin | 入る段階 |
+|---|---|---|---|
+| URL | `backend/<name>/?action=` | 同じ。**`<name>` は受けて捨てる**（ファイルシステムに到達させない）→ 5-5 で `backend/file/` に固定 | 5-1b / 5-5 |
+| `list` | `data/*` 全件・fs 順 | **`*.json` のみ・昇順固定**・空なら 0 バイト。`\n` 区切りは維持 | 5-2 |
+| `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**、`If-Match` 不一致は **412** | 5-2 / 5-4 |
+| `load` | 200 / 404・`text/xml` | 200 / 404 は維持。**`application/octet-stream` ＋ `nosniff` ＋ `attachment`**、**ETag（内容の SHA-256）** | 5-2 / 5-4 |
+| `import` | XML（`db/<db>/datatypes.xml` 全文を連結） | **中立な introspection JSON**（§7.2）。パレットは連結せず、実行中パレットも差し替えない | 5-7 |
+| 未知 action / 指定なし | 501 | 501 を維持 | 5-1b |
+| `remove` | 501（実装が無い） | **作らない**（501 のまま） | — |
+| HTTP メソッド | 見ていない | **固定**（list / load / import は GET、save は POST）。ミスマッチは 405 | 5-1b |
+| 不正な `keyword` | `basename()` で黙って書き換え | **400 で拒む**（トラバーサル・制御文字・Windows 予約名・255 バイト超）。書き換えると `js/io/conflict.ts` の `Baseline.name` が別ファイルを見張る | 5-2 |
+| 副作用の停止 | 無し | `READONLY` で save / import を **403**（`list` / `load` は残す） | 5-3 |
+| save の往復数 | 2（プリフライト `load` → `save`） | **1**（`If-Match`。衝突したときだけ 2） | 5-4 |
+| 能力の問い合わせ | 無し | `?action=capabilities` → `{"readonly":…,"introspection":…,"ai":…}`。**引けなければフロントは「全部できる」に倒す** | 5-5 |
+
+**`js/io.ts` の `check()` は 201 / 404 / 500 / 501 / 503 しか知らない。** 上の表で新しく増える
+**400 / 403 / 412 は、フロント側を同じ PR で広げないと無言で「成功」に倒れる**（`default: return true`）。
+
+### 7.2 introspection JSON
+
+段階5-7 で確定する。スキーマ案と「設計 JSON v2 を返さない」理由は CUSTOMIZATIONS の段階5-0
+「決めたこと 3」。要点は **backend は生の SQL 型情報を返し、型 id / `kind` への解決はフロントの
+`TypePalette` が持つ**こと（`x` / `y` は `importresponse` の `alignTables()` が埋める）。
+
+### 7.3 設定（env）
+
+| env | 既定 | 用途 |
+|---|---|---|
+| `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ） |
+| `GRABADO_READONLY`（`READONLY` も読む） | `false` | save / introspection / AI を止める。公開デモは `true` 一択 |
+| introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする） |

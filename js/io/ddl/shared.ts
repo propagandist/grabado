@@ -97,7 +97,9 @@ function buildRow(row: RowModel, palette: TypePalette): DdlRow {
      * （js/io/xml-parser.ts）は寄せ先が length="0" なら size を捨てるが、**UI で打った size は
      * そこを通らない** —— sqlite は全型が length="0" なので、閉じないと TEXT(255) という
      * STRICT SQLite が必ず拒む DDL が出る。既存 golden 56 本への影響は 0（サイズ付きで
-     * length="0" に解決する列が 1 つも無いため）。UI の size 欄そのものを閉じるのは 6-9。
+     * length="0" に解決する列が 1 つも無いため）。**UI の size 欄は 6-9a で閉じた**
+     * （js/row.ts の syncSizeField と update の正規化）ので、読み込み・DDL・UI の
+     * 3 経路が同じ TypePalette.hasSize を共有している。
      */
     if (row.size.length && palette.hasSize(row.type)) {
         datatype += "(" + row.size + ")";

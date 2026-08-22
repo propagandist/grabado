@@ -20,8 +20,9 @@
   timetz / timestamptz は秒精度を取れるので 0 -> 1。読むのは
   js/io/xml-parser.ts で、CHAR(10) -> TEXT のように寄せ先がサイズを取らない型の
   ときに size を捨てる（残すと TEXT(10) という壊れた DDL が出る）。
-  **UI の size 欄を型ごとに閉じるかどうかは 6-4 でも決めていない** —— テンプレートとは
-  別件で、全プロファイルが strict になる 6-8 までは片側だけ閉じる形になるため。
+  **UI の size 欄は 6-9a で型ごとに閉じた**（6-4 では「テンプレートとは別件」として送り、
+  6-8d が DDL 側を塞いだ）。読み込み（js/io/xml-parser.ts）・DDL 生成（js/io/ddl/shared.ts）・
+  UI（js/row.ts）の 3 経路が同じ TypePalette.hasSize を共有する。
 
   strict="1" は「現代化済み」の印。照合は sql / aka の完全一致だけになり、
   一致しない型は黙って先頭型に落ちず例外になる（known-issue #4 の解消）。

@@ -20,6 +20,8 @@
  */
 
 import { buildDdlModel } from "../ddl/shared.ts";
+import type { TypeLoss } from "../convert.ts";
+import { convertDesign } from "../convert.ts";
 import type { DesignModel } from "../model.ts";
 import type { TypePalette } from "../palette.ts";
 import { generateJpa } from "./jpa.ts";
@@ -62,17 +64,60 @@ export function generateOrm(
     model: DesignModel,
     palette: TypePalette,
     target: string,
+    outputPalette?: TypePalette,
 ): string {
     if (!isOrmTarget(target)) {
         throw new Error(`対応していない ORM ターゲット: ${target}`);
     }
-    const tables = buildDdlModel(model, palette);
+    /*
+     * **下敷きのプロファイルも選べる**（段階6-10b）。ORM は「出力の別の軸」なので、
+     * db の軸と掛け合わせられるのが素直な形 —— 「PG で設計して MySQL 向けの Prisma を出す」
+     * は provider が変わるので実際に別の出力になる。省略時は 6-10a 以前と 1 バイトも変わらない。
+     */
+    const output = outputPalette ?? palette;
+    const converted = convertDesign(model, palette, output);
+    const tables = buildDdlModel(converted.model, output);
     /* trim するのは DDL 側（js/io/ddl/generate.ts）と同じ —— golden も同じ形になる */
-    switch (target) {
-        case "jpa":
-            return generateJpa(tables).trim();
-        case "prisma":
-            /* Prisma だけ db を見る —— datasource の provider が要る（8 本中 5 本にしかない） */
-            return generatePrisma(tables, palette.db()).trim();
+    const body =
+        target === "jpa"
+            ? generateJpa(tables).trim()
+            : /* Prisma だけ db を見る —— datasource の provider が要る（8 本中 5 本にしかない） */
+              generatePrisma(tables, output.db()).trim();
+
+    if (body === "") {
+        return body;
     }
+    return conversionNotice(palette, output, converted.losses) + body;
+}
+
+/**
+ * 変換したときだけ先頭に付ける説明（段階6-10b）。**同じ db なら 1 バイトも足さない**ので、
+ * 既存の ORM golden 28 本は無差分のまま。
+ *
+ * DDL 側（js/io/ddl/generate.ts）と別実装にしてあるのは**コメント記法が違う**から ——
+ * あちらは `--`、こちらは JPA も Prisma も `//`。1 本に括るとどちらでもない形になる
+ * （6-9e が「言語ごとの識別子の規則は各生成器が持つ」と決めたのと同じ立場）。
+ */
+function conversionNotice(
+    from: TypePalette,
+    to: TypePalette,
+    losses: readonly TypeLoss[],
+): string {
+    const fromDb = from.db();
+    const toDb = to.db();
+    if (fromDb === null || fromDb === toDb) {
+        return "";
+    }
+
+    const out = [`// grabado: ${fromDb} の設計を ${toDb} の型で写して出力した。`];
+    if (losses.length === 0) {
+        out.push("// 型はすべてそのまま写っている（意味が動いた列は無い）。");
+    } else {
+        const columns = new Set(losses.map((l) => l.table + "." + l.column));
+        out.push(`// **${columns.size} 列で型が動いている**（詳細は同じ設計の DDL 出力に出る）:`);
+        for (const key of columns) {
+            out.push("//   " + key.split("\r").join(" ").split("\n").join(" "));
+        }
+    }
+    return out.join("\n") + "\n\n";
 }

@@ -228,6 +228,9 @@ other
 | **生成（identity）は含めない** | `bigint_identity` は `int64`。生成は列の性質（`RowData.ai`）で、型の値の域ではない |
 | **`other` は逃げ道ではなく主張** | 「正規型に写せない」の明示。PG の `inet` / mssql の `hierarchyid` / sqlite の `ANY` |
 
+**その kind が各 DB で実際に何になるか**は [`TYPE-MAPPING.md`](TYPE-MAPPING.md)（§6 段階6-10b で新設。
+house 既定 8 型 × 8 プロファイルの表で、実装との一致をテストが検算する）。
+
 `kind` は**永続化には現れない** —— 設計 JSON が持つ型キーは `id` のままで、`kind` は
 パレット側の属性。読み手は [`../js/io/palette.ts`](../js/io/palette.ts) の `kindAt` で、
 **語彙の閉じ方を押さえているのは [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts) だけ**

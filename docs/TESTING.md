@@ -290,8 +290,9 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 | [`../tests/node/identifier.test.ts`](../tests/node/identifier.test.ts) | [`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts) の識別子検査を直に叩く（ハーネス不要。段階6-9b）。**どの名前が・どのプロファイルで・なぜ使えないか**の 3 つ組。8 本の上限と単位の表（実測と一次資料の別つき）・**囲めば通るものは 1 件も警告しない**こと・known-issue #15 が直っていないこと |
 | [`../tests/browser/identifier.spec.ts`](../tests/browser/identifier.spec.ts) | 実ブラウザ側（段階6-9b）。**警告が画面に届いているか** —— 波線（`class="invalid"`）と理由の tooltip、テーブル名ではコメントと重ねること、**警告が出ても名前はモデルに入る**（止めない）こと |
 | [`../tests/node/orm.test.ts`](../tests/node/orm.test.ts) | ORM 出力（段階6-9d / 6-9e）。golden 14 本を読むほか、**golden から読み取れない規則**を近くで押さえる —— テーブル名 → クラス名（**単数化は英語の規則だけ。倒せない語はそのまま**）・Kotlin 識別子の 3 段（そのまま / バッククォート / `_` 置換）・8 プロファイルの全型が型注釈を持つこと・**JPA は逆参照を出さない**こと・**Prisma は出す**こと（形式が要求するため。自己参照の名前付き relation と、ASCII だけの識別子の一意化を含む） |
+| [`../tests/node/type-mapping.test.ts`](../tests/node/type-mapping.test.ts) | [`TYPE-MAPPING.md`](TYPE-MAPPING.md) の表を実装の出力と 1 セルずつ突き合わせる（段階6-10b）。**手で書いた表は必ず腐る**ので、パレットを触れば docs が赤くなる形にしてある |
 | [`../tests/node/convert.test.ts`](../tests/node/convert.test.ts) | プロファイル変換（段階6-10a）。**golden から読めない規則**を押さえる —— 同じ db なら恒等（既存 golden が動かない根拠）・逆向きの劣化（`timestamp -> date`）を 1 つも持たないこと・Oracle の `DATE` の罠（名前が同じでも値の域が違えば寄せない）・8 プロファイルへの全型変換で着地点がすべて説明できること |
-| [`../tests/browser/convert.spec.ts`](../tests/browser/convert.spec.ts) | プロファイル変換 golden の権威（段階6-10a）。14 本 ＋ 決定論 ＋ **設計が 1 バイトも変わらないこと**（出力時変換のみというスコープの実体）＋ 引数なしの `toDdl()` が従来と同一であること |
+| [`../tests/browser/convert.spec.ts`](../tests/browser/convert.spec.ts) | プロファイル変換 golden の権威（段階6-10a）。14 本 ＋ 決定論 ＋ **設計が 1 バイトも変わらないこと**（出力時変換のみというスコープの実体）＋ 引数なしの `toDdl()` が従来と同一であること。**段階6-10b で UI 経路が加わった** —— 出力先 select の中身・SQL ボタンのラベル（`(postgresql -> mysql)`）・ORM が同じ select に従うこと（golden はここを 1 ビットも押さえない） |
 | [`../tests/browser/orm.spec.ts`](../tests/browser/orm.spec.ts) | ORM golden の権威（段階6-9d）。14 本 ＋ 決定論 ＋ 知らないターゲットが例外になること ＋ **同じ設計から DDL と ORM の両方が出る**こと（「ORM を db プロファイルにしない」判断の実体） |
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は

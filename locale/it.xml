@@ -102,6 +102,9 @@
     <string name="identifiertoolong">Identifier is too long</string>
     <string name="identifierforbidden">Character not allowed in identifiers</string>
     <string name="identifiertruncated">silently truncated</string>
+    <!-- profile conversion (grabado) -->
+    <string name="outputdblabel">Output for</string>
+    <string name="outputdbsame">same as design</string>
 
     <!-- orm output (grabado) -->
     <string name="clientorm">ORM output</string>

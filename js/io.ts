@@ -81,6 +81,12 @@ export interface IoDom {
     /** ORM 出力（段階6-9d）。**出力の 2 本目の軸** */
     clientorm: HTMLInputElement;
     ormtarget: HTMLSelectElement;
+    /**
+     * 出力先の db プロファイル（段階6-10b）。**空文字が「設計と同じ」**。
+     * DDL と ORM の**両方に効く** —— どちらも「下敷きのプロファイル」を選ぶ話で、
+     * select を 2 つ置くと同じ設定が 2 か所に分かれる。
+     */
+    outputdb: HTMLSelectElement;
     quicksave: HTMLInputElement;
     serversave: HTMLInputElement;
     serverload: HTMLInputElement;
@@ -152,7 +158,7 @@ export class IO {
 
         this.dom.quicksave.value += " (F2)";
 
-        var ids = ["client", "server", "output", "backendlabel"];
+        var ids = ["client", "server", "output", "backendlabel", "outputdblabel"];
         for (var i = 0; i < ids.length; i++) {
             var id = ids[i]!;
             /* grabado: 上のループの elm と型が違う（こちらはラベル要素）ため改名した。
@@ -164,6 +170,7 @@ export class IO {
         this.dom.ta = OZ.$<HTMLTextAreaElement>("textarea");
         this.dom.backend = OZ.$<HTMLSelectElement>("backend");
         this.dom.ormtarget = OZ.$<HTMLSelectElement>("ormtarget");
+        this.dom.outputdb = OZ.$<HTMLSelectElement>("outputdb");
 
         this.dom.container.parentNode!.removeChild(this.dom.container);
         this.dom.container.style.visibility = "";
@@ -193,6 +200,7 @@ export class IO {
         OZ.Event.add(this.dom.clientload, "click", this.clientload.bind(this));
         OZ.Event.add(this.dom.clientsql, "click", this.clientsql.bind(this));
         OZ.Event.add(this.dom.clientorm, "click", this.clientorm.bind(this));
+        OZ.Event.add(this.dom.outputdb, "change", this.outputdbchange.bind(this));
         OZ.Event.add(this.dom.quicksave, "click", this.quicksave.bind(this));
         OZ.Event.add(this.dom.serversave, "click", this.serversave.bind(this));
         OZ.Event.add(this.dom.serverload, "click", this.serverload.bind(this));
@@ -218,6 +226,29 @@ export class IO {
             opt.value = target;
             opt.innerHTML = ORM_LABELS[target];
             this.dom.ormtarget.appendChild(opt);
+        }
+
+        /*
+         * grabado: 段階6-10b。出力先の db プロファイル。**先頭が「設計と同じ」で値は空文字**で、
+         * これが既定 —— 選ばないかぎり 6-10a 以前とバイト単位で同じ DDL が出る。
+         *
+         * db 名は locale を通さない（backend の select と同じ立場。プロファイル名は訳さない）。
+         * 「設計と同じ」だけは文なので通す。
+         */
+        OZ.DOM.clear(this.dom.outputdb);
+        var same = OZ.DOM.elm("option");
+        same.value = "";
+        same.innerHTML = _("outputdbsame") + " (" + this.owner.palette.db() + ")";
+        this.dom.outputdb.appendChild(same);
+        for (var d = 0; d < CONFIG.AVAILABLE_DBS.length; d++) {
+            var dbName = CONFIG.AVAILABLE_DBS[d]!;
+            if (dbName === this.owner.palette.db()) {
+                continue;
+            }
+            var dbOpt = OZ.DOM.elm("option");
+            dbOpt.value = dbName;
+            dbOpt.innerHTML = dbName;
+            this.dom.outputdb.appendChild(dbOpt);
         }
 
         OZ.DOM.clear(this.dom.backend);
@@ -255,9 +286,37 @@ export class IO {
         /* open io dialog */
         this.build();
         this.dom.ta.value = "";
-        this.dom.clientsql.value =
-            _("clientsql") + " (" + this.owner.palette.db() + ")";
+        this.syncOutputLabel();
         this.owner.window.open(_("saveload"), this.dom.container);
+    }
+
+    /**
+     * SQL ボタンのラベルに**どのプロファイル向けに出るか**を出す（段階6-10b）。
+     *
+     * 6-9d までは `SQL (postgresql)` で、パレットが 1 つしか無いのだから db 名 1 つで
+     * 足りていた。出力先を選べるようになると**設計側と出力側のどちらの話か**が曖昧に
+     * なるので、選んでいるときだけ `SQL (postgresql -> mysql)` の形にする。
+     */
+    syncOutputLabel(): void {
+        var target = this.dom.outputdb.value;
+        var design = String(this.owner.palette.db());
+        this.dom.clientsql.value =
+            _("clientsql") + " (" + (target ? design + " -> " + target : design) + ")";
+    }
+
+    /**
+     * 出力先が変わったとき（段階6-10b）。
+     *
+     * **ここでパレットを先読みしておく。** 取得だけが非同期なので、ボタンを押した時点で
+     * 読み込み済みなら生成は同期で通る（clientsql も loadPalette 経由なので、先読みが
+     * 間に合わなくても結果は同じ。押した瞬間の待ちが無くなるだけ）。
+     */
+    outputdbchange(): void {
+        this.syncOutputLabel();
+        var target = this.dom.outputdb.value;
+        if (target) {
+            this.owner.loadPalette(target, function () {});
+        }
     }
 
     fromXMLText(xml: string): void {
@@ -577,14 +636,38 @@ export class IO {
      * 無い型の添字」で、XSLT 経路の 404 / No XSLT processor available より理由が細かい。
      */
     clientsql(): void {
-        var sql = "";
-        try {
-            sql = this.owner.toDdl();
-        } catch (e) {
-            alert(_("xmlerror") + ": " + (e as Error).message);
+        this.withOutputPalette((target) => {
+            var sql = "";
+            try {
+                sql = this.owner.toDdl(target);
+            } catch (e) {
+                alert(_("xmlerror") + ": " + (e as Error).message);
+                return;
+            }
+            this.dom.ta.value = sql;
+        });
+    }
+
+    /**
+     * 出力先のパレットを用意してから body を呼ぶ（段階6-10b）。
+     *
+     * **「設計と同じ」なら 1 バイトも寄り道しない**（target が undefined のまま同期で通る）。
+     * 出力先を選んでいるときだけ loadPalette を挟むが、**読み込み済みなら loadPalette も
+     * 同期で callback を呼ぶ**ので、2 回目以降の押下も待たない。
+     */
+    withOutputPalette(body: (target?: string) => void): void {
+        var target = this.dom.outputdb.value;
+        if (!target) {
+            body(undefined);
             return;
         }
-        this.dom.ta.value = sql;
+        this.owner.loadPalette(target, (ok) => {
+            if (!ok) {
+                alert(_("xmlerror") + ": " + target);
+                return;
+            }
+            body(target);
+        });
     }
 
     /**
@@ -595,14 +678,16 @@ export class IO {
      * プロファイルの上に乗り、同じ設計から DDL と ORM の両方を出せる。
      */
     clientorm(): void {
-        var out = "";
-        try {
-            out = this.owner.toOrm(this.dom.ormtarget.value);
-        } catch (e) {
-            alert(_("xmlerror") + ": " + (e as Error).message);
-            return;
-        }
-        this.dom.ta.value = out;
+        this.withOutputPalette((target) => {
+            var out = "";
+            try {
+                out = this.owner.toOrm(this.dom.ormtarget.value, target);
+            } catch (e) {
+                alert(_("xmlerror") + ": " + (e as Error).message);
+                return;
+            }
+            this.dom.ta.value = out;
+        });
     }
 
     /**

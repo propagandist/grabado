@@ -7,7 +7,14 @@ import {
 } from "../support/fixtures.ts";
 import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";
-import { generateDdl, loadFixture, openDesigner, useDatatypes } from "./harness.ts";
+import {
+    clickIo,
+    generateDdl,
+    ioTextarea,
+    loadFixture,
+    openDesigner,
+    useDatatypes,
+} from "./harness.ts";
 
 /**
  * プロファイル変換 DDL の golden（HANDOVER §6 段階6-10a）。**採れるのはここだけ**
@@ -124,5 +131,116 @@ test.describe("プロファイル変換 golden", () => {
             }
         });
         expect(message).toContain("出力先の型パレットが読み込まれていない");
+    });
+});
+
+/**
+ * UI から出力先を選ぶ経路（段階6-10b）。**golden はここを 1 ビットも押さえない** ——
+ * golden は Designer のファサード（toDdl）経由で採るので js/io.ts を通らない。
+ * io-ui.spec.ts と同じ立場で、ここは「select とボタンの配線」だけを見る。
+ */
+test.describe("出力先 db の UI", () => {
+    /** io ダイアログを開いて select を組み立てさせる（build() は click() の中で走る） */
+    async function openIo(page: Page): Promise<void> {
+        await page.evaluate(() => window.d!.io.click());
+    }
+
+    /** 出力先を選ぶ（change を発火させてラベル更新と先読みを走らせる） */
+    async function selectOutput(page: Page, db: string): Promise<void> {
+        await page.evaluate((value) => {
+            const select = window.d!.io.dom.outputdb;
+            select.value = value;
+            select.dispatchEvent(new Event("change"));
+        }, db);
+    }
+
+    /** ボタンを押して textarea に出るまで待つ（出力先を選ぶと初回だけ非同期になる） */
+    async function clickAndRead(page: Page, id: string): Promise<string> {
+        await page.evaluate(() => {
+            window.d!.io.dom.ta.value = "";
+        });
+        await clickIo(page, id);
+        await page.waitForFunction(() => window.d!.io.dom.ta.value !== "");
+        return ioTextarea(page);
+    }
+
+    test.beforeEach(async () => {
+        await useDatatypes(page, CONVERT_SOURCE);
+        await loadFixture(page, readFixture(CONVERT_SOURCE, "house-defaults"));
+        await openIo(page);
+        await selectOutput(page, "");
+    });
+
+    test("select は「設計と同じ」＋ 残り 7 本（設計の db は重複して出さない）", async () => {
+        const options = await page.evaluate(() =>
+            [...window.d!.io.dom.outputdb.options].map((o) => ({
+                value: o.value,
+                label: o.innerHTML,
+            })),
+        );
+
+        expect(options[0]!.value).toBe("");
+        expect(options[0]!.label).toContain("postgresql");
+        /* 並びは CONFIG.AVAILABLE_DBS のまま（backend の select と同じ立場で並べ替えない） */
+        expect(options.map((o) => o.value).slice(1)).toEqual([
+            "mysql",
+            "sqlite",
+            "mssql",
+            "oracle",
+            "sql-standard",
+            "h2",
+            "mariadb",
+        ]);
+    });
+
+    test("既定は「設計と同じ」で、6-10a 以前と同じ DDL が出る", async () => {
+        const viaUi = await clickAndRead(page, "clientsql");
+        const direct = await generateDdl(page, CONVERT_SOURCE);
+        expect(viaUi).toBe(direct);
+        expect(viaUi).not.toContain("grabado:");
+    });
+
+    test("出力先を選ぶと SQL ボタンのラベルが `設計 -> 出力先` になる", async () => {
+        const before = await page.evaluate(() => window.d!.io.dom.clientsql.value);
+        expect(before).toContain("(postgresql)");
+
+        await selectOutput(page, "mysql");
+        const after = await page.evaluate(() => window.d!.io.dom.clientsql.value);
+        expect(after).toContain("(postgresql -> mysql)");
+    });
+
+    test("出力先を選んで SQL を押すと、変換された DDL が出る", async () => {
+        await selectOutput(page, "mysql");
+        const sql = await clickAndRead(page, "clientsql");
+
+        expect(sql).toContain("grabado: postgresql の設計を mysql 向けに変換して出力した。");
+        /* house 既定の uuid PK は mysql に uuid 型が無いので CHAR(36) に寄る */
+        expect(sql).toContain("id CHAR(36)");
+        expect(sql).toContain("UUID (uuid) -> CHAR (string)");
+    });
+
+    test("**ORM も同じ select に従う**（下敷きのプロファイルが変わる）", async () => {
+        await page.evaluate(() => {
+            window.d!.io.dom.ormtarget.value = "prisma";
+        });
+
+        await selectOutput(page, "");
+        const asDesigned = await clickAndRead(page, "clientorm");
+        expect(asDesigned).toContain('provider = "postgresql"');
+        expect(asDesigned).not.toContain("grabado: postgresql の設計を");
+
+        await selectOutput(page, "mysql");
+        const asMysql = await clickAndRead(page, "clientorm");
+        expect(asMysql).toContain('provider = "mysql"');
+        expect(asMysql).toContain("grabado: postgresql の設計を mysql の型で写して出力した。");
+    });
+
+    test("出力先を「設計と同じ」に戻すと変換前の DDL に戻る", async () => {
+        const first = await clickAndRead(page, "clientsql");
+        await selectOutput(page, "sqlite");
+        await clickAndRead(page, "clientsql");
+        await selectOutput(page, "");
+        const back = await clickAndRead(page, "clientsql");
+        expect(back).toBe(first);
     });
 });

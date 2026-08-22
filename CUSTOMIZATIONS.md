@@ -5825,6 +5825,95 @@ sql 名だけ見ると何が起きたのか分からない。いまは `INTEGER 
 
 ---
 
+### 2026-08-22 HANDOVER §6「機能」段階6-10b —— 出力先を UI から選べるようにし、型マッピング表を出す
+
+6-10a が入れた変換層には**画面から使う道が無かった**（`toDdl(targetDb)` を呼べるだけ）。
+本段階で select を 1 つ足し、**ORM 出力にも同じ軸を通し**、6-7 が「公開プロダクトの価値情報」と
+書きながら置き場所の無かった型マッピング表を `docs/` に出した。
+
+#### 決めたこと 1: select は **1 つだけ**置き、DDL と ORM の両方に効かせる
+
+「出力先の db」は DDL にも ORM にも同じ意味で効く（どちらも**下敷きのプロファイル**を選ぶ話）。
+select を 2 つ置くと同じ設定が 2 か所に分かれ、片方だけ変えた状態が作れてしまう。
+ORM の select（ターゲット）とは軸が違うので、そちらはそのまま残っている ——
+**「どの言語で出すか」と「どの DB を下敷きにするか」の 2 軸**になった。
+
+**先頭の option は「設計と同じ」で値は空文字**。これが既定なので、選ばないかぎり 6-10a 以前と
+バイト単位で同じ出力になる。設計の db は選択肢に重複して出さない（`AVAILABLE_DBS` から除く）。
+
+#### 決めたこと 2: **生成は同期のまま。パレットの取得だけを 2 段にした**
+
+出力先のパレットは XHR で取るので非同期だが、`toDdl()` を非同期にすると
+tests/browser の golden 採取も known-issue #15 も呼び形が変わる。そこで
+`loadPalette(db, cb)` と `toDdl(targetDb)` を分け、**UI 側が押す前に読み込んでおく**形にした:
+
+- select の `change` で先読みする（押した瞬間の待ちを無くす）
+- ボタンの経路も `withOutputPalette()` を通す（先読みが間に合わなくても正しく動く）
+- **読み込み済みなら `loadPalette` は同期で callback を呼ぶ**ので、2 回目以降は待たない
+- 「設計と同じ」のときは `loadPalette` を通らない —— 6-10a 以前と 1 バイトも変わらない経路
+
+#### 決めたこと 3: SQL ボタンのラベルは**選んでいるときだけ** `設計 -> 出力先` にする
+
+6-9d までは `SQL (postgresql)` で、パレットが 1 つしか無いのだから db 名 1 つで足りていた。
+出力先を選べるようになると**どちらの話か**が曖昧になるので、選択時だけ
+`SQL (postgresql -> mysql)` に変える。選んでいなければ従来どおり。
+
+#### 決めたこと 4: ORM 側の変換コメントは **DDL と別実装**にした
+
+どちらも「変換した」と言うだけだが、**コメント記法が違う**（DDL は `--`、JPA / Prisma は `//`）。
+1 本に括ると「どちらでもない形」になるので分けてある —— 6-9e が「言語ごとの識別子の規則は
+各生成器が持つ」と決めたのと同じ立場。ORM 側は列の一覧だけを出し、**理由の内訳は DDL 出力に
+出る**と案内する（同じ設計から両方出せるので、詳しく知りたければそちらを見ればよい）。
+
+#### 決めたこと 5: **型マッピング表は手で書かない**
+
+[`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) は house 既定 8 型 × 7 プロファイルの表を持つが、
+[`tests/node/type-mapping.test.ts`](tests/node/type-mapping.test.ts) が **docs の表を読んで
+`convertDesign` の実際の出力と 1 セルずつ比べる**。パレットを触れば docs が赤くなり、
+docs を直せば実装との食い違いが赤くなる。
+
+**手で書いた表が腐る**ことは実証済み —— `tests/support/fixtures.ts` の `readFixture` の
+コメントは、根拠として挙げていた 3 件のうち 2 件が消えたまま 6-10a まで残っていた
+（同段階で書き直した）。
+
+表から見えたこと（利用者向けの要点として docs にも書いた）:
+
+| | |
+|---|---|
+| `UUID` | h2 / mariadb は `UUID`、mssql は `uniqueidentifier`、**mysql / oracle は `CHAR(36)`**、sqlite は `TEXT` |
+| `TIMESTAMPTZ` | **mysql / mariadb にタイムゾーン付きの時刻型は無い**（`TIMESTAMP` に丸まる）。house 標準が `timestamptz` 固定なので必ず踏む |
+| `TEXT` | mssql だけ `nvarchar`（サイズ無し ＝ 要手直し）。他は `LONGTEXT` / `CLOB` / `CHARACTER LARGE OBJECT` |
+| `JSONB` | mssql 以外の 6 本は `JSON` を持つ |
+
+#### 検証
+
+| | 6-10a | 6-10b |
+|---|---|---|
+| `npm test` | 398 passed | **407 passed**（`type-mapping.test.ts` が 9 本） |
+| `npm run test:browser` | 183 passed | **189 passed**（UI 経路 6 本） |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**golden は 1 本も動いていない**（`ddl` 56 / `orm` 28 / `json` 7 / `state` 8 / `convert` 14）。
+ORM に変換経路を通したが、`outputPalette` を渡さないかぎり `convertDesign` が恒等なので
+既存の 28 本は無差分のまま。
+
+locale は 21 ファイルすべてに 2 キー（`outputdblabel` / `outputdbsame`）を足した。訳は
+en / ja だけ固有で、残る 19 は英語のまま（6-9b の識別子警告と同じ扱い）。
+
+#### 次段階への入力
+
+- **§6 で残っているのは 6-9f（Drizzle）と §6.4 の仕上げ**（日本語ロケール微調整・初期ズーム /
+  スナップ・ロゴ差し替え）。6-10 は本段階で閉じた
+- 6-10a が積んだ 3 つ（**MySQL は TEXT 系をキーにできない** / **mssql にサイズ無し文字列型が無い** /
+  **既定値の変換**）はそのまま残っている。どれも「補うサイズに根拠が要る」か「パレットに手を入れると
+  6-8 系の完了判定が動く」ので、着手前に方針を決めること
+- **`docs/TYPE-MAPPING.md` は公開ドキュメントの 1 本目**になった。README から辿れるようにするのは
+  公開準備（未着手の Phase 1 の宿題）の側の仕事
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

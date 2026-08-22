@@ -112,6 +112,9 @@
     <string name="identifiertoolong">識別子が長すぎます</string>
     <string name="identifierforbidden">識別子に使えない文字があります</string>
     <string name="identifiertruncated">黙って切られます</string>
+    <!-- profile conversion (grabado) -->
+    <string name="outputdblabel">出力先</string>
+    <string name="outputdbsame">設計と同じ</string>
 
     <!-- orm output (grabado) -->
     <string name="clientorm">ORM 出力</string>

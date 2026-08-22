@@ -4898,6 +4898,266 @@ org のセキュリティ基準（分類 B）は着手前に一読済み。**依
   house 既定をどう表すかは 6-6b の判断（uuid も timestamptz も TEXT）を引き継ぐ
 
 
+---
+
+### 2026-08-22 HANDOVER §6「機能」段階6-8d —— `sqlite` を現代化する
+
+**§6 のパレット現代化がここで終わった。** 対応 DB 8 本すべてが `strict="1"` になり、
+**未現代化プロファイルが 0 本**になった。6-3 が「全プロファイルの現代化が終わった時点で
+消える」と予告した分岐（`indexOfTypeNameLegacy` / `isStrict()` / 先頭型フォールバック）が
+**コードごと落ち**、known-issue **#4 / #10 / #13 が同時に出た**（収録は 2 本に）。
+
+#### 決めたこと 1: **STRICT テーブルを出す**（ユーザー承認）
+
+`CREATE TABLE ... ) STRICT;` を出す。SQLite 最大の落とし穴（どの列にもどの型の値でも入る）が
+DB 側で止まるかわりに、**型名が 6 語に固定され、サイズを 1 つも書けなくなる**。
+SQLite 3.37+（2021-11）が要る ——Android 12 以前の同梱 SQLite では動かない。
+
+実測（`node:sqlite` / SQLite 3.51.2。以下すべて同じ）:
+
+```
+  STRICT が受ける   INT / INTEGER / REAL / TEXT / BLOB / ANY —— **この 6 語だけ**
+  STRICT が拒む     NUMERIC / VARCHAR / BOOLEAN / DATE / DATETIME / DECIMAL / DOUBLE /
+                    BIGINT / JSON / UUID …（unknown datatype for <t>.<c>）
+  **括弧も拒む**     TEXT(255) / INT(11) / BLOB(16) すべて unknown datatype
+                    -> **全型 length="0"**。8 本で size を 1 つも取らないのはここだけ
+```
+
+非 STRICT のまま現代化する案（互換性最優先）と、他 DB と同じ実用型名を出す案
+（`VARCHAR` / `BOOLEAN` / `DATETIME`）は採らなかった。後者は **`BOOLEAN` も `JSON` も
+NUMERIC 親和性に落ちる**ので、名前と挙動が食い違う設計を作ることになる。
+
+#### 決めたこと 2: 型は 5 本。**`aka` は SQLite 自身の affinity 規則の展開**にした
+
+`INT` は `INTEGER` と同義（`INT PRIMARY KEY AUTOINCREMENT` は拒まれる）なので `aka` に落とし、
+型は `integer` / `real` / `text` / `blob` / `any` の 5 本。**本数が 5 → 5 で変わらない**ので
+`Row.getColor` の添字事故を新たに増やしていない。
+
+| id | sql | aka（SQLite の affinity 決定規則） |
+|---|---|---|
+| `integer` | `INTEGER` | 規則1（`INT` を含む）: `INT` `INT2` `INT8` `TINYINT` `SMALLINT` `MEDIUMINT` `BIGINT` `UNSIGNED BIG INT` |
+| `text` | `TEXT` | 規則2（`CHAR`/`CLOB`/`TEXT`）: `CHAR` `CHARACTER` `VARCHAR` `VARYING CHARACTER` `NCHAR` `NATIVE CHARACTER` `NVARCHAR` `CLOB` |
+| `blob` | `BLOB` | **持たない**（規則3 は `BLOB` 自身と「型名なし」だけ。`BYTEA` も `BINARY` も SQLite の綴りではない） |
+| `real` | `REAL` | 規則4（`REAL`/`FLOA`/`DOUB`）: `FLOAT` `DOUBLE` `DOUBLE PRECISION` |
+| `any` | `ANY` | 規則5（その他＝NUMERIC 親和性）: `NUMERIC` `DECIMAL` `BOOLEAN` `DATE` `DATETIME` ＋ 旧 sql の `NONE` |
+
+**規則が一次資料なので、`aka` の中身が機械的に決まる。** 6-8c が oracle で `re` を捨てて
+列挙に移したのと同じ形。規則5 は「それ以外」で原理的に無限なので、**SQLite 公式の例示表に
+載る 5 つ**だけを列挙した。
+
+**PG 固有の綴り（`UUID` / `JSONB` / `TIMESTAMPTZ` / `INET` / `XML`）は入れない。**
+入れると PG の設計が sqlite で**黙って開けてしまい、失われる情報が可視化されない**。
+読めずに例外になるのが正しい。プロファイル間の変換が要るならそれは 6-9 の変換層の仕事。
+
+id は `text` / `integer` / `real` を再利用（意味が 1 ミリも変わらない）、`numeric` / `none` を
+撤去して `blob` / `any` を新設。移行表（`tools/migrate-design.mjs`）は
+`numeric` → `any` / `none` → `any` ＋ **`text` → `text` の自己写像で `dropSize`**
+（旧パレットの text は `length="1"` で size を持てた）。
+
+#### 決めたこと 3: 制約はすべて `CREATE TABLE` の中（**#13 の直し方はこれしか無い**）
+
+```
+$ ALTER TABLE t ADD CONSTRAINT ...   -> near "CONSTRAINT": syntax error
+$ CREATE TABLE t(..., CONSTRAINT pk PRIMARY KEY (a, b), CONSTRAINT fk FOREIGN KEY ...)  -> OK
+$ CREATE TABLE t(..., CONSTRAINT pk PRIMARY KEY (id AUTOINCREMENT))                     -> OK
+```
+
+`ALTER TABLE ADD CONSTRAINT` が無い**唯一のプロファイル**なので、`ansi.ts` には載らない。
+`mysql-style.ts` にも載らない（識別子が `"`、`AUTO_INCREMENT` ではない）。**独立実装のまま**に
+したのは、`mssql` / `oracle` と共通なのが「キーを表定義に置く」1 点だけで、8 本目に 3 つ目の
+骨格を作ると中身が boolean の束になるため（6-7b が `ansi.ts` を作った根拠に当たらない）。
+
+表内 `PRIMARY KEY (id AUTOINCREMENT)` が合法だったので、**単一 PK も複合 PK も 1 本のコードで
+書けた** —— これで known-issue #13（複合 PK が UNIQUE に落ち PRIMARY KEY が消える）が消えた。
+
+**FK も表定義の中に置く。** 前方参照は許される（`foreign_keys=ON` でも、まだ存在しない表への
+FK を宣言する `CREATE TABLE` は成功し、違反が出るのは INSERT 時。実測）ので、他 7 本のように
+2 周目へ回す必要が無い。
+
+SQLite は **PRIMARY / UNIQUE の制約名を保持しない**（自動索引が `sqlite_autoindex_<t>_<n>` に
+なり、別テーブルで同名を再利用しても通る。実測）が、それでも `CONSTRAINT <名>` は出す ——
+`key/@name` は **UI で編集できるモデルの値**（#6 の是正で優先すると決めた値）で、出さないと
+生成物から消える。生成 DDL は人が読んでから実行する成果物なので、DB に残らなくても書く。
+
+#### 決めたこと 4: `PRAGMA foreign_keys = ON;` を出す（ユーザー承認）
+
+SQLite の `foreign_keys` は**接続ごとの設定で既定 OFF**。書かないと生成 DDL の FK が
+「作られるが 1 度も検査されない」状態になり、**出力が嘘になる**。対照実験:
+
+```
+$ // 既定 OFF の接続に house-defaults.sql を流す
+  流す前 PRAGMA foreign_keys = 0 -> 流した後 1 -> FK 違反の INSERT が FOREIGN KEY constraint failed
+$ // PRAGMA の 1 行だけ削って同じことをする
+  -> **FK 違反がそのまま入る**（1 行）
+```
+
+FK を 1 本も持たない設計には出さない（意味を持たない 1 行を全ファイルの先頭に置かないため）。
+
+#### 決めたこと 5: `AUTOINCREMENT` は合法形のときだけ出し、それ以外は理由を残す
+
+実測した 6 パターンのうち通るのは**単一列の `INTEGER PRIMARY KEY`** だけ:
+
+```
+  INTEGER PRIMARY KEY AUTOINCREMENT     OK
+  INT     PRIMARY KEY AUTOINCREMENT     AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY
+  TEXT    PRIMARY KEY AUTOINCREMENT     同上
+  PRIMARY KEY (id AUTOINCREMENT, y)     near ",": syntax error
+  x INTEGER AUTOINCREMENT（PK でない列）  near "AUTOINCREMENT": syntax error
+```
+
+合法形でないときは**黙って落とさず、理由を行コメントで残す**（6-8c が `??INDEX??` について
+「黙って落とすよりは目に見える形で」と書いたのと同じ立場を、実行できる形でやる）。
+
+**SQLite 公式は AUTOINCREMENT を非推奨としている**が、これは**ユーザーが明示的にチェックを
+入れたときだけの経路**なので出す —— §6.2 のテンプレートは ai を立てないので house 既定の
+新規テーブルには 1 つも出ず、公式の勧め（既定では使うな）は既定側で守られている。
+
+#### 決めたこと 6: 予約語 59 語。**母集団の完全性を主張できる唯一のプロファイル**
+
+SQLite には `pg_get_keywords()` に当たるものが無い（`sqlite_keyword_count()` /
+`sqlite_keyword_name()` は C API 専用で SQL からは `no such function`。`pragma_function_list`
+にも 0 件）。他の 4 本と同じ総当たりだが、**母集団を実物から採れた**:
+
+```
+$ // node の実行ファイルに静的リンクされた SQLite の zKWText[]（mkkeywordhash.c が生成する
+$ //   キーワード連結文字列）を binary から /[A-Z_]{120,}/ で拾う      -> 666 文字
+$ // その全部分文字列（長さ 2〜20）∪ 他 7 本の予約語 ∪ SQL:2016        -> 12,297 語
+$ // 各語を 3 位置で試す: 列名 / 表名 / 索引名
+
+  採取日 2026-08-22 / SQLite 3.51.2（node v24.14.0 組み込みの node:sqlite）
+  列名 58 語 ∪ 表名 59 語 ∪ 索引名 59 語 -> **59 語**（8 本で最少）
+```
+
+zKWText は SQLite のパーサが持つキーワード表そのものなので、その全部分文字列を試している
+以上どの語も漏れない。h2 / mariadb / mssql は「母集団の作り方が採取の限界」だった。
+
+**基準を「列名に使えるか」から「表名・列名・索引名のどれかに使えないか」へ広げた** ——
+`quoteIdentifier()` は 3 位置すべてに同じ規則で当たるため。差は **`if` の 1 語**だけ
+（列名にはできるが `CREATE TABLE if(...)` / `CREATE INDEX if ON ...` が構文エラー）。
+逆向き（列名では拒まれるが表名では通る）は 0 語。囲む方向にしか動かないので他 7 本に無関係。
+
+識別子は `"` 囲み・`""` エスケープ・`bare` は `BARE_LOWER`（SQLite は裸の識別子を大小畳まない）。
+**Oracle と違って識別子の中の `"` を受ける**ので、known-issue #15 に当たる制約はここには無い。
+
+#### 決めたこと 7: **`indexOfTypeNameLegacy` / `isStrict()` / 先頭型フォールバックを撤去した**
+
+6-3 が予告した「その時点」。消したのは 3 か所:
+
+| 場所 | 消したもの |
+|---|---|
+| `js/io/palette.ts` | `indexOfTypeNameLegacy()` ／ `indexOfTypeName()` の分岐（strict 版に畳んだ）／ `isStrict()` |
+| `js/io/xml-parser.ts` | 未知型の先頭型フォールバック（**#4 の本体**）／ size を捨てる分岐の strict ガード |
+| `js/io/ddl/shared.ts` | `quoteDefault()` の strict 分岐と未現代化の `CURRENT_TIMESTAMP` 特例（**#11 の最後の 1 本**） |
+
+**`strict="1"` 属性そのものは 8 本に残した。** 読み手が js/ から 0 になるが、消すと
+「このファイルは `sql` / `aka` の完全一致だけで解決でき、`re` を持たず、`length` を守る」という
+**ファイルの契約を宣言する唯一の面**が無くなる。代わりに
+`tests/node/palette-id.test.ts` に「8 本すべてが持つ」検査を足して test-enforced にした ——
+6-9 で新しいプロファイルを足すとき、コードはもう何も止めてくれない。
+
+**記録すべき挙動変化**: 旧 XML（同梱パレットあり）に、そのパレットに無い型名が手書きされて
+いた場合、**import が例外で止まる**（従来は黙って先頭型）。`fromXML` の同梱パレット経路は
+`clearTables()` が先なので**その場合は編集中の設計が消える**。既存の契約どおりで本段階では
+変えていないが、黙って別の型で開くより落ちて気づく側に倒すという 6-3 の判断の帰結。
+
+#### 決めたこと 8: `size` が STRICT を壊す穴を閉じた（PG パレットが 6-8 に送っていた項目）
+
+`db/postgresql/datatypes.xml` の頭が「UI の size 欄を型ごとに閉じるかは、全プロファイルが
+strict になる 6-8 まで片側だけ閉じる形になる」と送っていた、その時点。読み込み側は寄せ先が
+`length="0"` なら size を捨てるが、**UI で打った size はそこを通らない** —— sqlite は全型が
+`length="0"` なので、閉じないと `TEXT(255)` という STRICT が必ず拒む DDL が出る。
+`js/io/ddl/shared.ts` の `buildRow()` に 1 行のガードを入れた。**既存 golden 56 本への影響は 0**
+（サイズ付きで `length="0"` に解決する列が 1 つも無い）。UI の size 欄そのものは 6-9。
+
+#### 決めたこと 9: **寄せ先が尽きたテストの作り直し方**
+
+6-8a 以降「未現代化プロファイル」を寄せ先にしてきたテスト群が、動かす先を失った。
+**消してよいもの（比較相手がコードから消えた）と、消すと守りが薄くなるものを分けた。**
+
+| 処遇 | 対象 | 理由 |
+|---|---|---|
+| 削除 | `LEGACY_PROFILES` / `legacyIndexOfTypeName` / 差分テスト 2 本 / `isStrict` の describe | 「6-2 の旧規則」を足場にしたもの。**空配列のループは黙って 0 件パスする**ので定数ごと消す |
+| **機構を引き継ぐ** | 差分テストの `candidateNames()` 全数掃き | 「**8 プロファイル × 全候補名で、解決先は必ずその名前を `sql` か `aka` に持つ型**」に裏返した。#10 も #4 も再発すればこの形を破る |
+| **人工パレットへ**（必ず作り直す） | 「`re` はどのパレットでも読まれない」「strict 属性を持たないパレットでも未知型は例外 / `length="0"` なら size を捨てる」「`<template>` / `newrowtype` を持たないパレット」 | 撤去したコードの再発を止める**唯一の**テストで、しかも**旧 XML 同梱パレットという実経路がある** |
+| 反転 | template「8 本すべてが `<template>` と `newrowtype` を持つ」／ ddl の `LITERALS` を 8 本横断 | 空振り防止の役目をそのまま引き継ぐ |
+| 寄せ先変更 | state golden ／ `serialize.spec` の「型解決はパレット依存」 | **`h2` へ**（下） |
+
+**state golden の寄せ先は `h2` に落ち着いた。** house 既定の 8 型（`UUID` / `TEXT` /
+`INTEGER` / `JSONB` / `TIMESTAMP WITH TIME ZONE` / `DECIMAL(12,2)` / `DATE` / `BOOLEAN`）が
+**全部 `aka` で解決する唯一の非 PG プロファイル**で、主張が「別パレットで読むと潰れる」から
+**「strict どうしなら潰れずに移る」**に変わる。次に動かす先が要らない形で、6-9 の
+プロファイル変換への足がかりにもなる。
+
+あわせて**添字事故を構造で止めた** —— 6-8a / 6-8b で 2 度踏んだ「型の少ないパレットへ移ると
+後始末が範囲外の型添字を引く」の原因は、**両ハーネスの `useDatatypes()` が tables を残したまま
+`setRoot()` していた**こと。実アプリ側（`Designer.fromXML`）は「clearTables → 差し替え」の順を
+守っており、**その順序制約がハーネスに写っていなかっただけ**。各テストが書いていた儀式を
+呼ばれる側 1 か所に畳んだ（壊れたパレットをわざと入れる `io-ui` の 2 本だけは、後始末を
+`setRoot(元の要素)` に変えてある —— 型 0 個のパレットでは `clearTables()` を通せない）。
+
+#### 検証
+
+**動いた golden は 6 本 ＋ state の 1 本（名前ごと移動）。**
+
+| ファイル | 変化 |
+|---|---|
+| `ddl/sqlite/house-defaults.sql` | `) STRICT;`、`PRAGMA foreign_keys = ON;`、**複合 PK が `PRIMARY KEY (…)` に（#13）**、識別子が `"`、**コメント 7 行が新たに出る**、`price` が TEXT |
+| `ddl/sqlite/types-matrix.sql` | 5 → 5 列（`TEXT(255)`/`NUMERIC`/`INTEGER`/`REAL`/`NONE` → `INTEGER`/`REAL`/`TEXT`/`BLOB`/`ANY`。**括弧が落ちた**） |
+| `ddl/sqlite/relations.sql` | `employee_projects` に PRIMARY KEY が復活、`PRAGMA`、FK が制約名付きに |
+| 他 3 本（`autoincrement` / `minimal` / `quotes-i18n`） | `STRICT` と引用規則（`quotes-i18n` はコメント 4 行も） |
+| `ddl/sqlite/empty.sql` | **0 バイトのまま不変** |
+| `state/sqlite-house-defaults.json` | **削除**し `h2-house-defaults.json` として採り直し |
+
+**他 7 プロファイルの golden 49 本と `tests/golden/json/` は 1 バイトも動いていない**
+（`git diff --raw -- tests/golden/` が 8 行しか出ない。blob SHA の対を出すので、
+**現れないこと自体がバイト一致の証明**になる）。
+
+| | 6-8c | 6-8d |
+|---|---|---|
+| `npm test` | 301 passed | **305 passed** |
+| `npm run test:browser` | 130 passed | **129 passed** |
+| `npm run known-issues` | 4 passed | **2 passed** |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+増減の内訳（1 件残らず説明できる）:
+
+```
+  npm test        +4 = type-resolution -3（差分 2 / isStrict 2 / STRICT 列挙 1 を削除、全数掃き 2 を追加）
+                       template +2（LEGACY ループ 2 を削除、sqlite 2 ＋ 人工 2 を追加）
+                       ddl +4（未現代化 1 を削除、8 本横断 1 と sqlite の describe 4 を追加）
+                       palette-id +1（8 本すべてが strict="1"）
+  test:browser    -1 = types.spec の「未現代化では先頭型に落ちる」（反転版は Node の人工パレットへ）
+  known-issues    -2 = #4 と #13 が出た（残るのは #9 と #15）
+```
+
+**生成した DDL 6 本を SQLite 3.51.2 で実際に実行して確かめた** —— 全部通り、STRICT の型
+チェック・UNIQUE・FK・複合 PK の NULL と重複が正しく効くことも INSERT で確認した。
+6-7b（h2）/ 6-7c（mariadb）/ 6-8a（mysql）/ 6-8b（mssql）/ 6-8c（oracle）に続く**実物検証の
+6 本目**で、**8 本中 6 本が「実物で動く」ところまで確かめられた**（残るのは `postgresql` と
+規格である `sql-standard`）。恒久テストにはしない（`node:sqlite` は experimental API）。
+**依存は 1 本も増やしていない**（Node 24 の組み込み）。org のセキュリティ基準（分類 B）は
+着手前に一読済み。CI のワークフローは増やしていない。
+
+#### §6 の残り
+
+| 段階 | 内容 | 状態 |
+|---|---|---|
+| 6-0 〜 6-8d | 目的の記録・撤去・型解決・PG18 パレット・テンプレート・TS 生成器・DB 別 fixture・**8 本の現代化** | **完了** |
+| 6-9 | ORM 出力の再設計（`sqlalchemy` 復活 ＋ JPA / Prisma / Drizzle の検討） | 次 |
+
+#### 次段階への入力 —— 6-9
+
+- **プロファイル変換が必要になった。** strict どうしでは `aka` に無い型名が例外になるので、
+  「PG の設計を sqlite で開く」には変換層が要る（`h2` だけが偶然そのまま通る）。
+  6-7 が「将来」として記録した項目が、8 本そろったことで実際の欠落になった
+- **`TYPE_MIGRATIONS` に mysql / mssql / oracle の分が無い**（6-8a 〜 6-8c の積み残し）。
+  id を撤去したのに移行表が無いので、旧い設計 JSON を持っている人が移行できない
+- **UI の size 欄を型ごとに閉じる。** 6-8d は DDL 側だけ塞いだ（決めたこと 8）
+- known-issue **#15**（Oracle の識別子 `"`）／63 バイト超・空文字の識別子は入力側で止めるしかない
+- SQLite の `CHECK (json_valid(x))` / `WITHOUT ROWID` は**設計モデルが持たない**ので出せない
+  （`keys[].columns` は列名の配列で、式も表オプションも表せない）
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -4905,8 +5165,8 @@ org のセキュリティ基準（分類 B）は着手前に一読済み。**依
 | PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事。**6-1 でも触っていない**が、`backend/php-cubrid/index.php:37` が消えた `db/cubrid/datatypes.xml` を読む dangling ができた（段階6-1 の記録） | Kotlin/Spring Boot へ移植し撤去 |
 | submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
-| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せる**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。未現代化 4 本の粗さ（6-5a が逐語で持ち込んだ 9 件。うち #12 / #13 は known-issues に隔離。**#14 が 6-6b で 10 件目として出た**）は **6-8**。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
-| 型パレット `db/<db>/datatypes.xml` | **段階6-7a〜6-7c で新設 3 本（`sql-standard` / `h2` / `mariadb`）が入り、対応 DB 8 本がそろった**（3 本とも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 / MariaDB 11.8.8 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入った** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。他 4 本は持たず従来動作 |
+| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せた**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。**段階6-8a 〜 6-8d で既存 4 本（mysql / mssql / oracle / sqlite）を現代化し、6-5a が逐語で持ち込んだ粗さ 9 件 ＋ 6-6b の 1 件が尽きた**（#12 / #14 は 6-8b、#13 は 6-8d）。骨格は **ansi 3 本 / mysql-style 2 本 / 独立 3 本**に落ち着き、8 本とも §6.3 の規約に載っている。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
+| 型パレット `db/<db>/datatypes.xml` | **段階6-7a〜6-7c で新設 3 本（`sql-standard` / `h2` / `mariadb`）が入り、対応 DB 8 本がそろった**（3 本とも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 / MariaDB 11.8.8 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入り、6-7a 〜 6-8d で 8 本すべてが持つようになった** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。**段階6-8d で最後の `sqlite` が strict になり、未現代化が 0 本に**（`re` を読むコードと先頭型フォールバックがリポジトリから消えた） |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 

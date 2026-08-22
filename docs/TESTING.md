@@ -162,7 +162,9 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 ### DDL golden — `tests/golden/ddl/<db>/<fixture>.sql`
 
 7 fixture × 8 DB = **56 本**（§6 段階6-7a〜6-7c で `sql-standard` / `h2` / `mariadb` が
-入り、**対応 DB 8 本がそろった**）。
+入り、**対応 DB 8 本がそろった**）。**段階6-8a 〜 6-8d で既存 4 本（`mysql` / `mssql` /
+`oracle` / `sqlite`）が現代化され、56 本すべてが「その DB の DDL」になった** ——
+それまでの非 PG の golden は upstream の XSLT を逐語移植した粗さを含んでいた。
 [js/io.ts](../js/io.ts) の `clientsql()` と同じ経路（`Designer.toDdl()` → `.trim()`）で採る。
 UI の `#textarea` に入る値と一致する。
 入力は**そのプロファイルの fixture**（`tests/fixtures/<db>/`。§6 段階6-6a）。
@@ -177,10 +179,12 @@ UI の `#textarea` に入る値と一致する。
 **§4 段階4-1b で追加。読み込み方向（`fromXML`）の安全網。** 上の 2 つは `toXML()` の**結果**しか
 押さえておらず、`fromXML` は「XML を再生する UI 操作列」なので、XML に出ない状態が丸ごと
 素通りしていた —— 選択クラス・型パレット由来の色・z-index・relation がどの**実体**に繋がったか・
-`clearTables()` の後始末。8 本（fixture 7 × postgresql ＋ `house-defaults` × **未現代化の 1 本**）。
-最後の 1 本の寄せ先は **6-8 で 1 プロファイルずつ動く** —— strict なパレットは未知の型を
-例外にするので、PG の設計（`UUID` / `JSONB`）を読ませられるのは未現代化のものだけ。
-6-8a で `mysql` が現代化されたので `oracle` へ移した（`state/oracle-house-defaults.json`）。
+`clearTables()` の後始末。8 本（fixture 7 × postgresql ＋ `house-defaults` × **`h2`**）。
+**最後の 1 本の寄せ先は 6-8d で `h2` に落ち着いた。** 6-8c までは「未現代化のプロファイル」が
+条件で（strict なパレットは未知の型を例外にするため）、mysql → oracle → sqlite と現代化の
+たびに動いていた。8 本すべてが strict になって動かす先が尽き、**house 既定の 8 型が全部 `aka` で
+解決する唯一の非 PG プロファイル**である `h2` へ移した（`state/h2-house-defaults.json`）。
+主張も「別パレットで読むと潰れる」から**「strict どうしなら潰れずに移る」**に変わっている。
 
 - 採取関数は [`../tests/support/state.ts`](../tests/support/state.ts) の 1 本だけ。**module スコープを
   参照しない自己完結関数**にしてあり、page 側はテンプレートリテラルで関数を展開して
@@ -235,7 +239,7 @@ serializer の出力と 1 バイトも違わなかった（**読み込み側と�
 
 | ファイル | 担当 |
 |---|---|
-| [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../js/io/palette.ts`](../js/io/palette.ts) と [`../js/io/xml-parser.ts`](../js/io/xml-parser.ts) を直に叩く（ハーネス不要。どちらも実行時 import 0 本なので `conflict.test.ts` と同じ立場）。**旧規則の参照実装をテスト内に置き、未現代化プロファイル × 全候補名で新旧を突き合わせる差分テスト**が主役。ほかに strict の `aka` 照合（旧型名 → 新型の表をリテラルで固定）・`length` の契約・`fkIndexFor`・パレット差し替え後の追随・旧パレット互換 |
+| [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../js/io/palette.ts`](../js/io/palette.ts) と [`../js/io/xml-parser.ts`](../js/io/xml-parser.ts) を直に叩く（ハーネス不要。どちらも実行時 import 0 本なので `conflict.test.ts` と同じ立場）。**8 プロファイル × 全候補名を掃き、解決先が必ずその名前を `sql` か `aka` に持つ型であることを見る全数テスト**が主役（6-8d まで「旧規則の参照実装との差分テスト」だったものを、比較相手がコードから消えたので裏返した）。ほかに `aka` 照合（旧型名 → 新型の表をリテラルで固定）・`length` の契約・`fkIndexFor`・パレット差し替え後の追随・**撤去した legacy 規則の再発防止 3 本**（人工パレット） |
 | [`../tests/browser/types.spec.ts`](../tests/browser/types.spec.ts) | 実ブラウザ側。`BIGINT` の解決（known-issue #3 の移設先）・**`UUID` の解決と strict の例外**（#4 の移設先。6-3）・XML 往復の安定・**FK 自動生成**（`rowManager` の対話経路。6-2 まで自動テストが 1 本も通っていなかった面）・パレット差し替え後の FK 生成・**型セレクタの中身**（`Row.buildTypeSelect`。パレットを読む唯一の UI 面で golden に 1 ビットも写らない。6-3） |
 
 ### 初期テーブルテンプレート — golden に 1 ビットも写らない面（§6 段階6-4）
@@ -246,8 +250,8 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 
 | ファイル | 担当 |
 |---|---|
-| [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../js/io/template.ts`](../js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。`postgresql` が §6.2 の 3 列を返すこと・未現代化 4 本が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外・`newrowtype` |
-| [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・未現代化プロファイルでは従来経路に落ちること |
+| [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../js/io/template.ts`](../js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。**8 本すべてが `<template>` と `newrowtype` を持つこと**・`postgresql` / `sql-standard` / `sqlite` の 3 列がその DB で house 既定をどう表すか・`<template>` を持たないパレット（旧 XML 同梱）が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外 |
+| [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・**`sqlite` の 3 列**（PK が既定値を持てない側の例） |
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は
 キー管理 UI から `CREATE INDEX` に届く経路（`KeyManager.add()` → avail から列を選んで `←`）。
@@ -265,10 +269,14 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 消えたので観測面を生成 DDL に移した）。fixture を足していないのは、`DDL_FIXTURES` に入れると
 golden がプロファイル数ぶん増えるため。
 
-差分テストの主張は段階ごとに引き継いでいる。6-2 は「旧規則と違うのは `postgresql/BIGINT` の
-1 件だけ」を完了判定にしていたが、**6-3 でその原因（`x_real`）ごと撤去され、`postgresql` が
-strict 側へ移った**ので、いまは「**未現代化の 4 プロファイルは 6-2 以前と 1 件も違わない**」
-という形になっている（6-8 で `re` を触るときにここが赤くなる）。
+差分テストの主張は段階ごとに引き継いできた。6-2 は「旧規則と違うのは `postgresql/BIGINT` の
+1 件だけ」を完了判定にし、6-3 でその原因（`x_real`）ごと撤去された後は「未現代化の N
+プロファイルは 6-2 以前と 1 件も違わない」という形になっていた。**6-8d で未現代化が 0 本になり、
+比較相手（`indexOfTypeNameLegacy`）もコードから消えたので役目を終えた。**
+
+**機構は捨てていない** —— 候補名の全数掃きはそのまま残し、「8 プロファイル × 全候補名で、
+解決先は必ずその名前を `sql` か `aka` に持つ型である」という不変条件テストに裏返してある。
+known-issue #10（`re` の後勝ち）も #4（先頭型フォールバック）も、再発すればこの形を破る。
 
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 
@@ -340,8 +348,8 @@ fs 経路はそのまま）。
 どのプロファイルにも同じだけ在り、**中身がその DB の型で書かれている**。読むのは
 `readFixture(db, name)` で、**db は省略できない** —— 「どのプロファイル向けの入力を、
 どのパレットで読んでいるか」がずれていること自体が主張になっているテストがあるため
-（known-issues #4 / #10 と `state/oracle-house-defaults.json` は
-**postgresql の fixture を未現代化プロファイルのパレットで読む**）。全プロファイル分が
+（`state/h2-house-defaults.json` は**postgresql の fixture を `h2` のパレットで読む**。
+6-8d まで known-issues #4 / #10 も同じ形で未現代化のパレットを使っていた）。全プロファイル分が
 実在することは [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が
 機械的に見る。
 
@@ -369,11 +377,11 @@ mysql 25・mssql 26 型ほか）、`house-defaults` は house 既定を「その
 [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts) が機械的に見る** ——
 パレットに型を足して fixture を忘れると、足りない型名を名指しで落ちる。
 
-**書けるのは現行パレットに実在する型だけ。** oracle の
-`TIMESTAMP WITH TIME ZONE`、mssql の `date` はパレットに無いので使えず、6-8 で足す。
-つまり **6-6b 時点の非 PG golden は「6-8 直前のベースライン」**であって、その DB の
-理想形ではない。house 既定が各 DB で何を失うかは
-[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階6-6b に表がある。
+**書けるのは現行パレットに実在する型だけ。** 6-6b の時点では oracle の
+`TIMESTAMP WITH TIME ZONE` も mssql の `date` もパレットに無く、**6-6b の非 PG golden は
+「6-8 直前のベースライン」**であってその DB の理想形ではなかった。**6-8a 〜 6-8d で 4 本とも
+現代化され、56 本すべてが「その DB の DDL」になっている。**house 既定が各 DB で何を失うかは
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階6-6b（表）と 6-8a 〜 6-8d の各エントリ。
 
 ---
 
@@ -421,6 +429,10 @@ npm test                  # Node 側も新しい golden で緑になるか
 
 移植で直すと `npm run known-issues` が赤くなる。それが正しい。運用手順は
 [`tests/known-issues/README.md`](../tests/known-issues/README.md)。
+
+**§6 段階6-8d で収録は 2 本になった**（#9 introspection・#15 Oracle の識別子）。
+どちらも §6 の型パレット / DDL 生成の話ではないので、**この隔離は §6 の残りを
+もう 1 つも指していない**。
 
 なお正常系の入力でも現行の欠陥はそのまま出力に出る（`UUID` → `INTEGER` など）。
 golden に写り込んでいる癖の一覧は [`tests/golden/README.md`](../tests/golden/README.md)。

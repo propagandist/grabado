@@ -50,6 +50,9 @@ class FileDesignStore(properties: GrabadoProperties) : DesignStore {
                 .filter { it.isRegularFile() }
                 .map { it.name }
                 .filterNot { it.startsWith(".") }
+                // 段階5-2: 正本ディレクトリは README や .gitattributes と同居しうる。
+                // 設計として扱うのは *.json だけ（判定は大小無視。DesignName と同じ規則）。
+                .filter { it.endsWith(".json", ignoreCase = true) }
                 .sorted() // String の自然順。Collator は使わない（ロケール依存＝非決定論）
                 .toList()
         }

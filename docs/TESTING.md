@@ -359,11 +359,15 @@ dialog ハンドラと衝突しない）。
 4-6 で保存が read-before-write（save の前に load を 1 回投げる）になり、**「サーバ上に何が
 置いてあるか」を作り分けられないと一致 / 不一致が試せない**。Node ハーネスの `OZ.Request`
 差し替えは URL をリポジトリ内ファイルに解決するだけなので、`backend/` で始まる URL だけを
-`php-file` の `data/` に相当する Map へ分岐させてある（`locale` / `datatypes` の
-fs 経路はそのまま）。
+正本ディレクトリに相当する Map へ分岐させてある（`locale` / `datatypes` の fs 経路はそのまま）。
+
+**★ 段階5-1c から、これは手書きの推測ではなく契約の第 2 実装。** 上の「backend の契約は 1 つの
+表に置く」のとおり、`tests/contract/backend-cases.json` の `virtual: true` のケースが
+Kotlin 実装と**同じ表**で検証する。挙動を変えるときは表を先に直すこと。
 
 | ハーネスの口 | 用途 |
 |---|---|
+| `callBackend(url, options)` | 仮想 backend を 1 往復だけ直接叩く（契約表を流す口。段階5-1c） |
 | `setServerFile(keyword, text)` | 仮想 backend に置く / `null` で消す（＝ load が 404） |
 | `getServerFile(keyword)` | save の write-through を検算する |
 | `clearServerFiles()` | テストごとの初期化 |

@@ -492,8 +492,14 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 | [`palette.ts`](../js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |
 | [`conflict.ts`](../js/io/conflict.ts) | 保存境界 | 保存前の外部変更検知の判定（純関数。`absent` / `clean` / `exists` / `conflict`） |
 | [`template.ts`](../js/io/template.ts) | 参照 | §6.2 初期テーブルテンプレート（§6 段階6-4 で追加）。`<template>` を読み、新規テーブルの初期列と PRIMARY を作る。`Add row` の既定型（`newrowtype`）も同じ層 |
+| [`convert.ts`](../js/io/convert.ts) | 出・前段 | プロファイル変換（§6 段階6-10a）。`DesignModel` → **別プロファイルの** `DesignModel` ＋ 落ちたものの一覧。純関数で、型は正規型（`kind`）1 段だけを介して写す |
 
 **12 本目の [`template.ts`](../js/io/template.ts) は §6 段階6-4 で足した**（§4 の 11 本ではない）。
+**13 本目の [`convert.ts`](../js/io/convert.ts) は §6 段階6-10a。** 格子の「出・形式側」の
+**手前**に立つ層で、形式を 1 つも知らない（バイト列に触れない）かわりに**型パレットを 2 つ**見る ——
+設計側と出力側で、その間を正規型で結ぶ。`db` の 1 文字列が決めていた 4 つのうち
+「DDL 生成器」と「型パレット」を分けたのがこの段階で、**設計 JSON の型キーの名前空間は
+分けていない**（読み込み時変換をやらない判断。`js/io/json-parser.ts` の db 照合はそのまま）。
 格子の外にあるのは、入出力ではなく**プロファイルの既定値**を読む層だから —— 位置づけは
 `palette.ts` と同じで、実行時の依存は 0 本（import は型だけ）。
 

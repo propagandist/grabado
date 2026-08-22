@@ -174,6 +174,37 @@ export class TypePalette {
     }
 
     /**
+     * この正規型を持つ型の添字（パレット順）。無ければ空（段階6-10a）。
+     *
+     * **6-9c が入れた kind を初めて逆向きに引く面。** それまで読み手は
+     * js/io/ddl/shared.ts の 1 箇所（DDL 中間モデルに載せるだけ）で、ORM 出力は
+     * 「kind -> 言語型」の表を自分で持っていたので前向きだけで足りていた。
+     * プロファイル変換（6-10）は逆向きが要る —— 元の型の kind を、**寄せ先のパレットの
+     * 型から探す**のが変換そのものだから。
+     *
+     * **戻りが配列なのは、1 つの kind に複数の型が当たるのが普通だから。**
+     * string は 8 本合計で 25 型ある（char / varchar / text / clob …）。どれに寄せるかは
+     * ここでは決めない —— size を取るかどうか（hasSize）で絞るのは呼び手
+     * （js/io/convert.ts）の仕事で、パレットは候補を並べるだけにしてある。
+     *
+     * **並びはパレットのファイル順で、それが決定論の根拠**（indexOfId と同じ論法）。
+     * db/<db>/datatypes.xml は group ごとに意味の順で並んでいるので、先頭に近いほど
+     * その kind の代表に近い。
+     *
+     * 語彙の検査はしない（kindAt と同じ立場。ファイル規則は palette-id.test.ts が持つ）。
+     */
+    candidatesForKind(kind: TypeKind): number[] {
+        const types = this.types();
+        const out: number[] = [];
+        for (let i = 0; i < types.length; i++) {
+            if (types[i]!.getAttribute("kind") === kind) {
+                out.push(i);
+            }
+        }
+        return out;
+    }
+
+    /**
      * id -> 添字。無ければ -1。
      *
      * **最初の一致が勝つ**が、id はパレット内で一意であることを

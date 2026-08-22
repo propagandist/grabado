@@ -67,6 +67,16 @@ export class Designer extends Visual<DesignerDom> {
      * 所有される側（Row / IO）は owner 鎖でここに到達する。
      */
     declare palette: TypePalette;
+    /**
+     * **出力先**の型パレット（段階6-10a）。設計のパレット（上の `palette`）とは別物で、
+     * 「PG で設計して MySQL 向けに出す」の MySQL 側がここに入る。
+     *
+     * 取得が非同期（db/<db>/datatypes.xml の XHR）なのに対し **生成は同期のまま**に
+     * したかったので、キャッシュを持って loadPalette / toDdl の 2 段にしてある ——
+     * toDdl を非同期にすると tests/browser の golden 採取も known-issue #15 も
+     * 呼び形が変わり、「既存の golden が動かない」という完了判定が薄まる。
+     */
+    declare outputPalettes: Record<string, TypePalette>;
     /** SVG で描くか。実体は getOption("vector") && document.createElementNS の truthy 値 */
     declare vector: boolean;
     declare svgNS: string;
@@ -95,6 +105,7 @@ export class Designer extends Visual<DesignerDom> {
          * 「未読込」が undefined になり TypeError で割れる。ここなら以降のどの行より先。
          */
         this.palette = new TypePalette();
+        this.outputPalettes = {};
 
         this._init();
         this._build();
@@ -186,13 +197,62 @@ export class Designer extends Visual<DesignerDom> {
 
     requestDB(): void {
         /* get datatypes file */
-        var db = this.getOption("db");
-        var bp = this.getOption("staticpath");
-        var url = bp + "db/" + db + "/datatypes.xml";
+        var url = this.paletteUrl(String(this.getOption("db")));
         OZ.Request(url, this.dbResponse.bind(this), {
             method: "get",
             xml: true,
         });
+    }
+
+    /**
+     * db/<db>/datatypes.xml の URL。**requestDB（設計のパレット）と loadPalette
+     * （出力先のパレット。段階6-10a）が共有する。**
+     */
+    paletteUrl(db: string): string {
+        return String(this.getOption("staticpath")) + "db/" + db + "/datatypes.xml";
+    }
+
+    /**
+     * 読み込み済みの出力先パレット。まだ無ければ null（段階6-10a）。
+     *
+     * 設計と同じ db を訊かれたら**設計のパレットそのもの**を返す —— 同じ db の
+     * パレットを 2 つ持つと、convertDesign の「同じ db なら恒等」がインスタンス比較で
+     * 決まらなくなる（db 名でも見ているので実害は無いが、二重に持つ意味が無い）。
+     */
+    paletteFor(db: string): TypePalette | null {
+        if (db === this.palette.db()) {
+            return this.palette;
+        }
+        return this.outputPalettes[db] ?? null;
+    }
+
+    /**
+     * 出力先のパレットを読み込む（段階6-10a）。読み込み済みなら XHR を出さずに即 callback。
+     *
+     * **設計のパレット（this.palette）には触らない。** 差し替えてしまうと、いま画面に
+     * 出ている行の型添字が別の型を指すことになる —— 6-8a / 6-8b で 2 度踏んだ事故で、
+     * だから読み込み経路（fromXML）は clearTables を先に置いている。ここは出力のためだけに
+     * 2 本目のパレットを持つので、その順序制約に一切関わらない。
+     */
+    loadPalette(db: string, callback: (ok: boolean) => void): void {
+        if (this.paletteFor(db)) {
+            callback(true);
+            return;
+        }
+        OZ.Request(
+            this.paletteUrl(db),
+            (xmlDoc: unknown) => {
+                if (!xmlDoc) {
+                    callback(false);
+                    return;
+                }
+                var loaded = new TypePalette();
+                loaded.setRoot((xmlDoc as Document).documentElement);
+                this.outputPalettes[db] = loaded;
+                callback(true);
+            },
+            { method: "get", xml: true },
+        );
     }
 
     dbResponse(xmlDoc: unknown): void {
@@ -471,8 +531,20 @@ export class Designer extends Visual<DesignerDom> {
      * 出荷側の呼び手は引き続き js/io.ts の finish() 1 か所（段階4-3b 以来）。
      * 出力が同一モデル→同一バイト列であることは 4-4 から変わらない。
      */
-    toDdl(): string {
-        return generateDdl(extractModel(this), this.palette);
+    /**
+     * **`targetDb` は出力先の db プロファイル（段階6-10a）。** 省略すると従来どおり
+     * 設計のパレットで出す。渡す前に loadPalette でパレットを読み込んでおくこと ——
+     * ここを非同期にしない理由はフィールド宣言（outputPalettes）に書いた。
+     */
+    toDdl(targetDb?: string): string {
+        var target = targetDb ? this.paletteFor(targetDb) : null;
+        if (targetDb && !target) {
+            throw new Error(
+                `出力先の型パレットが読み込まれていない: ${targetDb}` +
+                    "（loadPalette を先に呼ぶこと）",
+            );
+        }
+        return generateDdl(extractModel(this), this.palette, target ?? undefined);
     }
 
     /**

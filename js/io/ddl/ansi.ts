@@ -7,8 +7,9 @@
  * 分かったので、170 行のコピーを作るかわりにここへ寄せた。
  *
  * **6-7a の「3 本そろうまで待つ」は 8 本の一般化の話。** `mysql` / `mssql` / `oracle` /
- * `sqlite` / `mariadb` は DROP 文・GO・trigger + sequence・inline FK と骨格からして違うので、
- * それらを含めた抽象は 6-7c（mariadb）と 6-8（既存 4 本の現代化）で決める。
+ * `sqlite` / `mariadb` は GO・identity 句・inline FK と骨格からして違い、**6-7c 〜 6-8d の
+ * 結論は「1 つの抽象にしない」だった** —— mysql 系 2 本は mysql-style.ts に括り、
+ * 残る 3 本（mssql / oracle / sqlite）は独立実装のまま。
  * ここが受け持つのは「**CREATE TABLE ＋ ALTER TABLE ADD CONSTRAINT で組み立てる系**」だけ。
  *
  * 3 本の違いは 2 つに畳める:

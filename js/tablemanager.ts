@@ -198,9 +198,10 @@ export class TableManager {
             var y = e.clientY + scroll[1];
             newtable = this.owner.addTable(_("newtable"), x, y);
             /*
-             * grabado: §6.2 初期テーブルテンプレート（段階6-4）。テンプレートを持つのは
-             * 現代化済み（strict）のプロファイルだけで、無ければ false が返って
-             * 下の従来経路に落ちる —— 未現代化 4 本の初期テーブルは 1 バイトも変わらない。
+             * grabado: §6.2 初期テーブルテンプレート（段階6-4）。**8 プロファイルすべてが
+             * テンプレートを持つ**（6-8d で最後の sqlite が入った）ので、下の従来経路に
+             * 落ちるのは旧 XML 同梱パレットを読んだ直後だけ。分岐は残す —— 消すと
+             * その場合に 0 列のテーブルができる。
              */
             if (!applyTemplate(newtable, this.owner.palette)) {
                 var r = newtable.addRow("id", { ai: true });

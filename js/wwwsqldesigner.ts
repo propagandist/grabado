@@ -553,8 +553,15 @@ export class Designer extends Visual<DesignerDom> {
      * db プロファイル（型パレット）は変えない —— ORM は下敷きのプロファイルの上に乗り、
      * 型は正規型（6-9c の kind）を介して写す。同じ設計から DDL と ORM の両方を出せる。
      */
-    toOrm(target: string): string {
-        return generateOrm(extractModel(this), this.palette, target);
+    toOrm(target: string, targetDb?: string): string {
+        var output = targetDb ? this.paletteFor(targetDb) : null;
+        if (targetDb && !output) {
+            throw new Error(
+                `出力先の型パレットが読み込まれていない: ${targetDb}` +
+                    "（loadPalette を先に呼ぶこと）",
+            );
+        }
+        return generateOrm(extractModel(this), this.palette, target, output ?? undefined);
     }
 
     /*

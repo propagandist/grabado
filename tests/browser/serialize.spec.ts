@@ -253,29 +253,33 @@ test.describe("serializer 特性化（読込互換と形式非依存の性質）
 
     /*
      * 段階4-4 まではこのテストが <datatypes db="..."> ブロックの差で「パレット依存」を
-     * 示していた。ブロックごと撤去したので、根拠を型解決の結果そのものに移した
-     * （minimal では INTEGER が両 DB で同じ SQL 名に解決されるため、PG 固有の型を
-     * 並べた types-matrix を使う）。**段階6-5a で見る先を XML から DDL に移した** ——
-     * 型解決の結果がいちばん素直に出るのが <datatype> の後継である DDL の型名だから。
+     * 示していた。ブロックごと撤去したので、根拠を型解決の結果そのものに移した。
+     * **段階6-5a で見る先を XML から DDL に移した** —— 型解決の結果がいちばん素直に出るのが
+     * <datatype> の後継である DDL の型名だから。
+     *
+     * **段階6-8d で寄せ先と入力を替えた。** 6-8c まで「sqlite に BYTEA が無いので先頭型に
+     * 落ちる」（known-issue #4）を根拠にしていたが、8 本すべてが strict になって #4 の
+     * 実例が尽きた。いまの根拠は**同じ設計が別の型名で出ること**で、そちらのほうが強い ——
+     * 落ちるのではなく、**潰れずに移って綴りだけが変わる**ことを示せる。
+     * 入力を types-matrix から house-defaults にしたのは、PG 固有の型（INET / CIDR /
+     * VARBIT / INTERVAL）を含む前者が h2 のパレットで解決しないため。
      */
     test("型解決は型パレット依存（DB 横断 golden を持たない根拠）", async () => {
-        const xml = readFixture(SERIALIZER_DB, "types-matrix");
+        const xml = readFixture(SERIALIZER_DB, "house-defaults");
 
         await useDatatypes(page, "postgresql");
         await loadFixture(page, xml);
         const pg = await generateDdl(page, "postgresql");
 
-        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
-        await useDatatypes(page, "sqlite");
+        await useDatatypes(page, "h2");
         await loadFixture(page, xml);
-        const other = await generateDdl(page, "sqlite");
+        const other = await generateDdl(page, "h2");
 
-        // 同じ入力・同じ生成器でも解決結果が変わる。sqlite に BYTEA / JSONB は
-        // 無いので、一致が無いときの初期値 0（＝先頭の型）に落ちる
-        // ——known-issue #4 そのもの。**寄せ先は 6-8a / 6-8c で mysql -> oracle -> sqlite と
-        // 動いた**（現代化したプロファイルは BYTEA を aka で受けるので #4 の例に使えない）。
-        expect(pg).toContain("BYTEA");
-        expect(other).not.toContain("BYTEA");
+        // 同じ入力・同じ生成器でも、解決先の型名が変わる。
+        expect(pg).toContain("JSONB");
+        expect(other).toContain(" JSON");
+        expect(pg).toContain(" TEXT");
+        expect(other).toContain("CHARACTER LARGE OBJECT");
         expect(pg).not.toBe(other);
     });
 });

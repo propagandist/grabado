@@ -115,28 +115,13 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
         expect(await toJson(page)).toBe(before);
     });
 
-    test("未現代化のプロファイルでは従来どおり先頭型に落ちる（#4 は 6-8 まで残る）", async () => {
-        /* 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた（6-8d で消える） */
-        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
-        await useDatatypes(page, "sqlite");
-        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
-
-        /*
-         * strict 化は現代化済みプロファイルに限る（6-0 の決めたこと 2）。横断で例外にすると
-         * PG 用に書かれた fixture が読めず、どのプロファイルの DDL golden も採れなくなる。
-         */
-        const id = await page.evaluate(() => {
-            const xml =
-                `<sql><table x="0" y="0" name="t">` +
-                `<row name="c" null="1" autoincrement="0"><datatype>BYTEA</datatype></row>` +
-                `</table></sql>`;
-            window.d!.fromXML(new DOMParser().parseFromString(xml, "text/xml").documentElement);
-            return window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type);
-        });
-
-        /* sqlite パレットの先頭型 */
-        expect(id).toBe("text");
-    });
+    /*
+     * **「未現代化のプロファイルでは従来どおり先頭型に落ちる」は段階6-8d で消えた。**
+     * 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動き、8 本すべてが
+     * strict になって尽きた。反転版（strict 属性を持たないパレットでも例外になる）は
+     * tests/node/type-resolution.test.ts に人工パレットで置いてある —— ブラウザ側に
+     * 人工パレットの注入口を作るとハーネスの面が増えるため、そちらに寄せた。
+     */
 
     test("型セレクタが新しいパレットの 24 型を出す（golden が張らない UI の面）", async () => {
         /*
@@ -211,7 +196,6 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
         /* ここで旧実装は Designer.fkTypeFor を postgresql の内容で焼いていた */
         expect(await createFkChildId(page, "bigint_identity")).toBe("bigint");
 
-        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
         await useDatatypes(page, "sqlite");
         await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
 
@@ -221,10 +205,12 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
          * なっていた（実測は CUSTOMIZATIONS.md の段階6-2）。差し替えでキャッシュが
          * 捨てられないことが原因で、キャッシュごと廃止して塞いだ。
          *
-         * **寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた** ——
-         * 現代化したプロファイルは bigint_identity に fk を持つので、この側ではなくなる。
+         * **寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動き、6-8d の
+         * パレット差し替えでも動かなくて済んだ** —— SQLite に identity 型が無く
+         * AUTOINCREMENT は列の属性なので、fk を持つ型が 1 つも要らない。
+         * 見る型 id は 6-8d のパレットに合わせて numeric -> any に替えてある。
          */
-        expect(await createFkChildId(page, "numeric")).toBe("numeric");
+        expect(await createFkChildId(page, "any")).toBe("any");
         expect(await createFkChildId(page, "text")).toBe("text");
     });
 });

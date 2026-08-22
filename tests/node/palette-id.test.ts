@@ -192,10 +192,14 @@ describe("型パレットの id 規則（段階4-2b）", () => {
             });
 
             test("newrowtype は実在する id（段階6-4）", () => {
-                /* 属性を持たないプロファイル（未現代化の 4 本）は空振りでよい */
+                /*
+                 * **段階6-8d で「属性が無くてもよい」を落とした。** 6-8c までは未現代化
+                 * プロファイルが属性を持たず空振りが許されていたが、8 本すべてが持つように
+                 * なったので、許したままだと書き忘れが黙って通る（添字 0 の型になる）。
+                 */
                 const id = readNewRowType(db);
                 const ids = new Set(types.map((t) => t.id));
-                expect(id === undefined || ids.has(id)).toBe(true);
+                expect(id !== undefined && ids.has(id)).toBe(true);
             });
 
             test("sql がパレット内で重複しない", () => {
@@ -219,6 +223,27 @@ describe("型パレットの id 規則（段階4-2b）", () => {
             });
         });
     }
+
+    test('8 プロファイルすべてが strict="1" を持つ（ファイル規則。段階6-8d）', () => {
+        /*
+         * **js/ 側の読み手が 0 になった属性を、ここで test-enforced な規則にする。**
+         *
+         * strict="1" は 6-3 が「現代化済みの印」として入れたもので、照合規則・未知型の扱い・
+         * size の落とし方を切り替えていた。6-8d で 8 本すべてが現代化され、
+         * js/io/palette.ts の isStrict() は分岐ごと消えた。
+         *
+         * 属性まで消す案は採らなかった —— 消すと「このファイルは sql / aka の完全一致だけで
+         * 解決でき、re を持たず、length を守る」という**ファイルの契約を宣言する唯一の面**が
+         * 無くなる。6-9 で新しいプロファイルを足すとき、コードはもう何も止めてくれない。
+         */
+        const notStrict = DB_PROFILES.filter(
+            (db) =>
+                !readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8").includes(
+                    'strict="1"',
+                ),
+        );
+        expect(notStrict).toEqual([]);
+    });
 
     test("x_ 接頭辞の entry は 1 つも残っていない", () => {
         /*

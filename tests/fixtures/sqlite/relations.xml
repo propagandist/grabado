@@ -8,8 +8,12 @@
   参照先が後方のテーブルでも解決できる（projects -> teams の順に注意）。
 
   **構造は全プロファイルで同じ。型だけ SQLite のもの**（段階6-6b）——
-  ここで見たいのは FK と複合 PK の出方で、型の違いが混ざると 5 本の golden を
+  ここで見たいのは FK と複合 PK の出方で、型の違いが混ざると 8 本の golden を
   突き合わせられなくなる。
+
+  **6-8d で出方が 2 つ変わった**: employee_projects の複合 PK が UNIQUE ではなく
+  PRIMARY KEY として出るようになり（known-issue #13）、FK を持つので先頭に
+  PRAGMA foreign_keys = ON; が付く（SQLite の FK は接続ごと・既定 OFF）。
 -->
 <sql>
 <table x="20" y="20" name="employees">

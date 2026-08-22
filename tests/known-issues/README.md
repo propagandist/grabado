@@ -26,11 +26,8 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 
 | # | 現象 | 原因 | 経路 | 直る予定 |
 |---|---|---|---|---|
-| 4 | 型パレットに無い型は黙って先頭の型になる（`UUID` → `INTEGER`） | 一致が無いと初期値 `type: 0` が残る（[js/io/xml-parser.ts](../../js/io/xml-parser.ts)） | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（`postgresql` は段階6-3 で解消） | §6 段階6-8 |
-| 10 | `<type re="...">` の照合が壊れている。アンカーされておらず部分一致し、大文字小文字を区別し、`sql` の完全一致を後から上書きする | [js/io/palette.ts](../../js/io/palette.ts) の `indexOfTypeNameLegacy` が `re` を後勝ちで見る。壊れているのは規則よりパレット側で、`oracle` は `re="INT"` を integer と number の 2 型に、`mssql` は 4 型（tinyint/smallint/int/bigint）に振っている | **XML 読込のみ**／**未現代化の 4 プロファイルのみ**（同上） | §6 段階6-8 |
 | 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
 | 15 | `oracle`: 識別子に `"` を含むと実行できない DDL になる（ORA-25716）。**grabado の欠陥ではなく Oracle の制約**だが出力は実行できない | 他の 7 本と同じ `""` エスケープで出す。**Oracle だけが識別子内の `"` を許さない** | DDL 生成 | **6-9 以降**（直し方が生成器の中に無く、入力側で止めるしかない） |
-| 13 | `sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち、PRIMARY KEY が 1 つも無い DDL になる | [js/io/ddl/sqlite.ts](../../js/io/ddl/sqlite.ts) が「UNIQUE、または part 2 個以上の PRIMARY」をまとめて UNIQUE として出す（`db/sqlite/output.xsl:61-64` の逐語） | DDL 生成 | §6 段階6-8 |
 
 **#15 は §6 段階6-8c で新設した。** 生成した DDL を Oracle 23ai に流して見つけたもので、
 **実物に流さなければ golden は緑のまま実行できない DDL を固定していた**（6-8a の
@@ -38,39 +35,36 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 
 **#12 / #13 は §6 段階6-5a、#14 は 6-6b で新設した。** どれも XSLT を TS へ移植する過程や
 fixture を実型で書き直す過程で見つかった upstream からの粗さで、**移植が作った欠陥ではない**。
-**#12 と #14 は 6-8b（mssql の現代化）で直り**、下の「直したもの」へ移った。
-残るのは **#13**（sqlite）で、6-8d で消える。
+**#12 と #14 は 6-8b（mssql の現代化）で、#13 は 6-8d（sqlite の現代化）で直り**、
+3 本とも下の「直したもの」へ移った。
 
-**#11 は §6 段階6-4 で新設し、6-5b で PG から消えた**（下の「直したもの」）。囲む側の規則が
-upstream から値の中を見ていないもので、6-4 が作った欠陥ではない。未現代化の 4 本には残っている。
+**#11 は §6 段階6-4 で新設し、6-5b で PG から消え、6-8d で 8 本すべてから消えた**
+（下の「直したもの」）。囲む側の規則が upstream から値の中を見ていないもので、
+6-4 が作った欠陥ではない。
 
-**「経路」列は §4 段階4-7 の棚卸しで足した。**残る 5 本はどれも現象が消えていないが、
-**§4 を通したことで 3 本は届く範囲が狭まっている** —— そのぶん §6 で直すときの影響も狭い。
-**§6 段階6-3 で #4 / #10 はさらに狭まり、`postgresql` から消えた。**
-段階6-5b で #6 / #11 が出て、**6-8a（mysql）と 6-8b（mssql）でさらに 2 本が出た**。
-**6-8c で #10 は実例が尽きて消えた**（`re` を持つパレットが 1 つも無くなった）。
-**残るのは 4 本** —— #4 と #13 は `sqlite` の話で 6-8d、#15 は Oracle の制約で 6-9 以降、
-#9 は introspection で §5.2。
+**「経路」列は §4 段階4-7 の棚卸しで足した。**当時の 5 本はどれも現象が消えていなかったが、
+**§4 を通したことで 3 本は届く範囲が狭まっていた** —— そのぶん §6 で直すときの影響も狭かった。
+**§6 段階6-3 で #4 / #10 はさらに狭まって `postgresql` から消え**、段階6-5b で #6 / #11 が出て、
+6-8a（mysql）と 6-8b（mssql）でさらに 2 本が出た。**6-8c で #10 は実例が尽き、
+6-8d で #4 / #10 / #13 がまとめて出た**（§6 のパレット現代化が 8 本とも終わった）。
 
-- **#4 / #10 の再現は `postgresql` の fixture を別のパレットで読むことに依る**（段階6-6a）。
-  6-6a で fixture が DB 別になったので、ここは `readFixture(SERIALIZER_DB, ...)` と
-  **明示的に postgresql を指定する** —— `mysql` の fixture を mysql のパレットで読むのは
-  正常系であって、#4 / #10 はどちらも「そのパレットに無い型名を読ませたとき」の話。
-  6-6b で 4 プロファイルの fixture が実型に書き換わっても、ここの再現は動かない。
-- **#4 / #10 は設計 JSON では起きない。** 正本フォーマットの型キーは 4-2b で安定 `id` になり、
-  [json-parser.ts](../../js/io/json-parser.ts) は**パレットに無い id を throw** する
-  （「一致が無ければ添字 0」を持ち込まない）。残っているのは互換で読む XML 経路
-  （[xml-parser.ts](../../js/io/xml-parser.ts) → [palette.ts](../../js/io/palette.ts)）だけ。
-  テストが XML fixture を読ませているのはこのため。
-- **#4 / #10 は `postgresql` では起きない（段階6-3）。** `<datatypes strict="1">` を持つ
-  「現代化済み」プロファイルは `sql` / `aka` の**大小無視の完全一致だけ**で解決し（＝ `re` を
-  見ないので #10 が消える）、一致が無ければ**例外**になる（＝ 先頭型に落ちないので #4 が消える）。
-  残る 4 本が 6-8 で同じ形になると、この 2 行ごと消える。
+**残るのは 2 本** —— #15 は Oracle の制約で 6-9 以降、#9 は introspection で §5.2。
+**どちらも §6 の型パレット / DDL 生成の話ではない**ので、この表は §6 の残りを
+もう 1 つも指していない。
+
+- **#4 / #10 の再現条件（未現代化のパレットで `postgresql` の fixture を読む）は 6-8d で
+  消滅した。** 6-3 が「残る 4 本が同じ形になるとこの 2 行ごと消える」と書いた、その時点。
+  `js/io/palette.ts` の `indexOfTypeNameLegacy` と `js/io/xml-parser.ts` の先頭型
+  フォールバックが**コードごと**落ちている。再発の検知は
+  [`../node/type-resolution.test.ts`](../node/type-resolution.test.ts) の
+  「`re` はどのパレットでも読まれない」「strict 属性を持たないパレットでも未知の型は例外」
+  の 2 本で、**実データではもう再現できない**（`re` 属性を持つパレットが 0 本）ので
+  人工パレットに置いてある。
 - **#10 を 6-2 で直さなかったのは、直す向きが品質を下げるから。** `re` を素朴に先勝ちへ倒すと
   `mssql` は `INTEGER` → `tinyint`・`FLOAT` → `money` と**縮み**、oracle と合わせて DDL golden が
-  12 本動く。パレット側の `re` を直すのが本筋で、それは各プロファイルの現代化（6-8）の仕事。
-  DB 別 fixture（6-6）が無いうちは是非を検証する材料も無い。**6-3 が `postgresql` で採った形
-  （`re` を捨てて `aka` の完全一致に移す）がそのまま 6-8 の型紙になる。**
+  12 本動く。パレット側の `re` を直すのが本筋で、それは各プロファイルの現代化（6-8）の仕事だった。
+  **6-3 が `postgresql` で採った形（`re` を捨てて `aka` の完全一致に移す）がそのまま 6-8 の
+  型紙になった**（判断の記録として残す）。
 - **#5 は書き出し側では構造的に起きなくなった**（段階4-5）。`if (row.def)` が `""` を落とすので、
   grabado が書いた XML に空の `<default>` は出ない。残るのは introspection の出力（外部由来の XML）を
   直接 XSLT に食わせる経路だけ。
@@ -104,14 +98,20 @@ PG に `KEY (...)` 構文は無いので `CREATE INDEX idx_<table>_<cols>` に�
 | 6 | key が複数あると制約名が `<table>_pkey` で衝突する（`INDEX` / `FULLTEXT` が `KEY (...)` に落ちる件も同じ） | §6 段階6-5b | [`../node/ddl.test.ts`](../node/ddl.test.ts)「name が空のキーは §6.3 の規約で名前を組む」ほか 3 本 ＋ [`../browser/keys.spec.ts`](../browser/keys.spec.ts) |
 | 12 | `mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれ T-SQL が構文エラーになる | §6 段階6-8b | [`../node/ddl.test.ts`](../node/ddl.test.ts)「コメントは列定義の後ろに出す」。コメントは落とさず位置を変えた |
 | 14 | `mssql`: UNIQUE キーが T-SQL に無い `UNIQUE KEY (...)` で出る | §6 段階6-8b | 同「UNIQUE は T-SQL の構文で出す」 |
-| 11（PG のみ） | 既定値を `quote` で囲むとき値の中の `'` がエスケープされない | §6 段階6-5b | [`../node/ddl.test.ts`](../node/ddl.test.ts) の `LITERALS` 表（`O'Brien` → `'O''Brien'`）。**未現代化 4 本には残る**ので同ファイルの mysql のテストが「直っていない」側を押さえる |
+| 11（PG のみ） | 既定値を `quote` で囲むとき値の中の `'` がエスケープされない | §6 段階6-5b | [`../node/ddl.test.ts`](../node/ddl.test.ts) の `LITERALS` 表（`O'Brien` → `'O''Brien'`） |
+| 11（残る 7 本） | 同上 | §6 段階6-8d | 同じ `LITERALS` 表。**8 プロファイル横断で回る**ようにした（`quoteDefault` から strict / 未現代化の分岐ごと落ちた） |
+| 4 | 型パレットに無い型は黙って先頭の型になる | §6 段階6-8d | [`../browser/types.spec.ts`](../browser/types.spec.ts)「strict なパレットでは未知の型が例外になる」＋ [`../node/type-resolution.test.ts`](../node/type-resolution.test.ts)「strict 属性を持たないパレットでも未知の型は例外」。**`js/io/xml-parser.ts` のフォールバックごと消えた** |
+| 10 | `<type re="...">` の照合が壊れている | §6 段階6-8d | [`../node/type-resolution.test.ts`](../node/type-resolution.test.ts)「`re` はどのパレットでも読まれない」＋「`re` 属性を持つパレットはもう 1 つも無い」＋ 8 プロファイル × 全候補名の全数掃き。**`indexOfTypeNameLegacy` ごと消えた**（実例は 6-8c で尽きていた） |
+| 13 | `sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える | §6 段階6-8d | [`../node/ddl.test.ts`](../node/ddl.test.ts)「複合 PRIMARY KEY は PRIMARY KEY のまま出る」。表定義の中に `CONSTRAINT <名> PRIMARY KEY (...)` を置く（SQLite に `ALTER TABLE ADD CONSTRAINT` は無い） |
 
 #3 の記述にあった「`re` もアンカー無しの部分一致」は **#10 が引き継いだ**（6-2 で新設）。
 6-2 が直したのは `sql` の完全一致どうしの順序だけで、**6-3 で `postgresql` が `re` を
 持たなくなった**ぶんだけ #10 の範囲が縮んだ。`x_real`（#3 の entry 本体）も 6-3 で撤去され、
 `sql` の重複はどのプロファイルにも無くなっている。
 
-`fixtures/` はそのまま残す（`amp-in-name.xml` と `bigint-drift.xml` は移設先のテストが読む）。正常系
+`fixtures/` はそのまま残す。**読み手を持つのは 3 本**（`amp-in-name.xml` / `bigint-drift.xml` /
+`empty-default.xml` を移設先のテストが読む）で、`re-match-drift.xml` と `quote-in-default.xml` は
+**読み手を持たない記録**として置いてある（現象が消えたので再現に使えない）。正常系
 [`../fixtures/`](../fixtures/) へ昇格させると DDL golden の母集団が 35 → 40 本に増え、
 「DDL golden が無差分」という段階の完了判定がぼやけるため。
 

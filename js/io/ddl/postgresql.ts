@@ -19,8 +19,8 @@
  *   7. 列コメントは COMMENT ON COLUMN だけ。列定義の / * ... * / は二重なので出さない
  *   8. FK 名は fk_<table>_<参照元の列>（§6.3）。<table>_<column>_fkey ではない
  *
- * **未現代化の 4 プロファイル（mysql / mssql / oracle / sqlite）は 6-8 まで動かさない。**
- * 共通で使える規則は js/io/ddl/naming.ts に置いてあり、6-8 は呼ぶだけで済む。
+ * **共通で使える規則は js/io/ddl/naming.ts に置いてある。** 6-8a 〜 6-8d で残る 4 本を
+ * 現代化したとき、命名規約の側は実際に呼ぶだけで済んだ（足したのは IdentifierRules と語彙表）。
  */
 
 import { generateAnsi, type AnsiDialect } from "./ansi.ts";

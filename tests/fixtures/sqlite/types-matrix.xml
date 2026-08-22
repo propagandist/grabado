@@ -2,33 +2,36 @@
 <!--
   特性化テスト fixture: db/sqlite/datatypes.xml の型パレットを網羅する（5 型）。
 
-  **SQLite のパレットは「型」ではなく型親和性（type affinity）の 5 つ**で、他プロファイルの
-  ように型名が並んでいるわけではない。5 列で全部というのがこの DB の実際の姿で、
-  列数の少なさそのものが「SQLite で設計するとは何か」を示している。
+  **6-6b の「パレットは型ではなく型親和性の 5 つ」は 6-8d で訂正された。** STRICT テーブルを
+  出すようになり、パレットは **STRICT が受け付ける型名そのもの**（INTEGER / REAL / TEXT /
+  BLOB / ANY）になった。本数はたまたま 5 のままだが中身は別物で、旧 NUMERIC と NONE が
+  落ちて BLOB と ANY が入っている。5 列で全部というのがこの DB の実際の姿で、列数の
+  少なさそのものが「SQLite で設計するとは何か」を示している。
+
+  **STRICT では型名に括弧を書けない**（TEXT(255) も INT(11) も unknown datatype。実測）。
+  6-6b はここに TEXT(255) と書いてサイズを見ていたが、全型が length="0" になったので
+  この fixture には**サイズ付きの列が 1 つも無い**（8 本のうちここだけ）。
 
   **1 列 = パレットの 1 型**で、書く型名はパレットの sql 属性そのもの。
-  網羅は tests/node/fixture-set.test.ts が機械的に見るので、6-8 でパレットを
-  現代化したときの入れ忘れ・消し忘れがその場で赤くなる。
-
-  TEXT だけが length="1" なのでサイズを書ける（SQLite は括弧の中身を無視するが、
-  親和性の判定には使う）。
+  網羅は tests/node/fixture-set.test.ts が機械的に見るので、パレットを動かしたときの
+  入れ忘れ・消し忘れがその場で赤くなる。
 -->
 <sql>
 <table x="20" y="20" name="type_samples">
-<row name="c_text" null="1" autoincrement="0">
-<datatype>TEXT(255)</datatype>
-</row>
-<row name="c_numeric" null="1" autoincrement="0">
-<datatype>NUMERIC</datatype>
-</row>
 <row name="c_integer" null="0" autoincrement="0">
 <datatype>INTEGER</datatype>
 </row>
 <row name="c_real" null="1" autoincrement="0">
 <datatype>REAL</datatype>
 </row>
-<row name="c_none" null="1" autoincrement="0">
-<datatype>NONE</datatype>
+<row name="c_text" null="1" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="c_blob" null="1" autoincrement="0">
+<datatype>BLOB</datatype>
+</row>
+<row name="c_any" null="1" autoincrement="0">
+<datatype>ANY</datatype>
 </row>
 <key type="PRIMARY" name="type_samples_pkey">
 <part>c_integer</part>

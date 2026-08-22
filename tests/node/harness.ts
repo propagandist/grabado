@@ -325,6 +325,13 @@ export async function createHarness(): Promise<NodeHarness> {
             const doc = new window.DOMParser().parseFromString(xml, "text/xml");
             // 段階4-0b で window.DATATYPES から Designer のプロパティになった。
             // 差し替えの中身（dbResponse() と同じ「documentElement を入れる」操作）は不変。
+            //
+            // **空にしてから差し替える**（段階6-8d）。旧パレットで解決済みのテーブルを
+            // 残したまま型の少ないパレットへ移ると、後始末が範囲外の型添字を引いて落ちる
+            // （6-8a / 6-8b で 2 度踏んだ）。実アプリ側は Designer.fromXML が
+            // 「clearTables() -> パレット差し替え」の順を守っており、ここはその順序制約が
+            // ハーネスに写っていなかっただけ。各テストが書いていた儀式をここへ畳む。
+            designer.clearTables();
             designer.palette.setRoot(doc.documentElement);
         },
         loadFixture(xml: string): void {

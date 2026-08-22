@@ -12,11 +12,13 @@
  *
  * で、必要な型は 6-3 のパレット差し替えでそろった。
  *
- * **テンプレートを持つのは現代化済み（strict）のプロファイルだけ。** 未現代化の 4 本
- * （mysql / mssql / oracle / sqlite）は <template> を持たないので readTemplate() が
- * 空を返し、呼び手が従来の「id 1 列 ＋ autoincrement」に落ちる。6-8 でそちら側にも入る。
- * uuid 相当の型が mssql の uniqueidentifier しか無く、6-8 の現代化方針を先取りして
- * 決めることになるため、この段階では触らない（6-3 の strict と同じ型紙）。
+ * **段階6-8d で 8 プロファイルすべてが <template> を持つ。** 6-4 は postgresql だけで、
+ * 6-7a 〜 6-8d が残る 7 本を入れた —— テンプレートは「そのプロファイルが house 既定を
+ * 最も近く表す形」なので、パレットの現代化と一体でなければ決められなかった。
+ *
+ * readTemplate() が空を返す経路は残る。**旧 XML 同梱の <datatypes>**（段階4-2b 以前の
+ * 設計ファイル）は <template> を持たないので、そのときは呼び手が従来の
+ * 「id 1 列 ＋ autoincrement」に落ちる。
  *
  * 置き場所が js/io/ なのは js/io/palette.ts と同じ理由（段階4-0a の記録）。本ファイルの
  * import は型だけで、実行時の依存は 0 本 —— tests/node からハーネス無しで直に叩ける。
@@ -74,7 +76,7 @@ export function readTemplate(palette: TypePalette): TemplateRow[] {
  * Add row ボタンで足す行の既定型（<datatypes newrowtype="...">。無ければ添字 0）。
  *
  * 6-3 が 6-4 へ送った項目。CLAUDE.md の「text 優先」に合わせて postgresql は text を指す。
- * 属性を持たない未現代化プロファイルは従来どおり先頭の型になる（integer 相当）。
+ * 属性を持たないパレット（旧 XML 同梱の <datatypes>）は先頭の型になる。
  *
  * Row のコンストラクタ既定（js/row.ts の data.type = 0）は動かしていない —— あそこは
  * 読み込み経路（js/io/apply.ts）も通る道で、直後の update() が必ず型を入れる。
@@ -91,8 +93,8 @@ export function newRowType(palette: TypePalette): number {
 /**
  * テンプレートを table に適用する。テンプレートが無ければ何もせず false。
  *
- * 呼び手（js/tablemanager.ts）が false のときだけ従来の初期列を作るので、
- * 未現代化プロファイルの挙動は 1 バイトも変わらない。
+ * 呼び手（js/tablemanager.ts）が false のときだけ従来の初期列を作る。**8 プロファイルは
+ * すべて <template> を持つ**ので、そちらに落ちるのは旧 XML 同梱パレットの経路だけ。
  *
  * PRIMARY キーは **primary な行が 1 つ以上あるときだけ**作る（空の <key> を書き出さない）。
  * 行より先に作るのは複合 PK を書けるようにするため。

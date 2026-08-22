@@ -41,33 +41,32 @@ test.describe("読み込み後の状態 特性化（fromXML）", () => {
         });
     }
 
-    // postgresql だけだと <default> の quote 剥がしと sql/re 照合が 1 パレットぶんしか
+    // postgresql だけだと <default> の quote 剥がしと型の照合が 1 パレットぶんしか
     // 通らない。別プロファイルを 1 本だけ足して、パレット依存の解決が parser 側に
     // 移っても結果が変わらないことを押さえる。
     //
     // **入力は postgresql の fixture のまま**（段階6-6a）。見たいのは「同じ入力を別のパレットで
     // 読むと解決がどう変わるか」なので、その DB の fixture に差し替えるとこの主張が消える。
     //
-    // **寄せ先は未現代化のプロファイルでなければならない**（段階6-8a）。strict なパレットは
-    // 未知の型を例外にするので、PG の設計（UUID / JSONB）を読ませると落ちる —— それは
-    // known-issue #4 が解消したことの証明であって、状態スナップショットの主張ではない。
-    // 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた。**6-8d で
-    // 未現代化が尽きる**ので、そのときこのテストは「strict どうしで読む」形に作り直すか、
-    // 役目を終えて消える。
+    // **寄せ先は h2 に落ち着いた**（段階6-8d）。6-8a まで「未現代化のプロファイルでなければ
+    // ならない」——strict なパレットは未知の型を例外にするので、寄せ先は mysql -> oracle ->
+    // sqlite と現代化のたびに動いてきた。6-8d で未現代化が 0 本になり、動かす先が尽きた。
     //
-    // **空にしてからパレットを差し替える。** sqlite は 5 型しか無く、前のテストが残した
-    // テーブル（postgresql の 24 型で解決済み）を後始末すると範囲外の型添字を引いて落ちる
-    // （6-8a / 6-8b で 2 度踏んだのと同じ形）。
-    test("state golden: house-defaults を sqlite パレットで読む", async () => {
-        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
-        await useDatatypes(page, "sqlite");
+    // **h2 は house 既定の 8 型（UUID / TEXT / INTEGER / JSONB / TIMESTAMP WITH TIME ZONE /
+    // DECIMAL(12,2) / DATE / BOOLEAN）が全部 aka で解決する唯一の非 PG プロファイル**なので、
+    // 主張が「別パレットで読むと潰れる」から**「strict どうしなら潰れずに移る」**に変わる。
+    // 次に動く先が要らない形で、6-9 のプロファイル変換への足がかりにもなる。
+    //
+    // 空にしてから差し替える儀式は useDatatypes() の中へ畳んだ（tests/browser/harness.ts）。
+    test("state golden: house-defaults を h2 パレットで読む", async () => {
+        await useDatatypes(page, "h2");
         await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
 
         const actual = await captureState(page);
-        assertNoCarriageReturn(actual, "state(sqlite/house-defaults)");
+        assertNoCarriageReturn(actual, "state(h2/house-defaults)");
 
         const expected = writeOrReadGolden(
-            goldenPath("state", "sqlite-house-defaults.json"),
+            goldenPath("state", "h2-house-defaults.json"),
             actual,
         );
         expect(actual).toBe(expected);

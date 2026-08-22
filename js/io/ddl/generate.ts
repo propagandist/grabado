@@ -21,8 +21,10 @@
  * **段階6-7a で sql-standard、6-7b で h2 が入った。** どちらも骨格は postgresql と同じで、
  * 違うのは識別子の語彙と、標準に無い COMMENT ON / CREATE INDEX の有無だけ。**6-7b で
  * その 3 本を js/io/ddl/ansi.ts へ寄せた** —— h2 が postgresql と構文レベルで同一で、
- * 170 行のコピーを作るしかなくなったため。**残る 4 本（mysql / mssql / oracle / sqlite）は
- * 骨格からして違う**ので、それらを含む抽象は 6-7c（mariadb）と 6-8 で決める。
+ * 170 行のコピーを作るしかなくなったため。**段階6-8d で 8 本そろい、骨格は 3 通りに
+ * 落ち着いた**: ansi.ts（postgresql / sql-standard / h2）／ mysql-style.ts
+ * （mysql / mariadb）／ 独立実装（mssql / oracle / sqlite）。3 本目の骨格は作っていない ——
+ * 独立の 3 本は「キーを表定義に置く」以外に共通点が無く、抽象の中身が boolean の束になる。
  *
  * export は 1 本だけにしてある。未使用の export を出すと、ツリーシェイクを切っている
  * Node ハーネス（tests/node/harness.ts）の束と dist の束が構造的にずれる。

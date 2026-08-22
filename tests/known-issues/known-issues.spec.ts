@@ -1,12 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect, type Page } from "@playwright/test";
-import {
-    REPO_ROOT,
-    SERIALIZER_DB,
-    readFixture,
-    readKnownIssueFixture,
-} from "../support/fixtures.ts";
+import { REPO_ROOT, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
 import { generateDdl, loadFixture, openDesigner, useDatatypes } from "../browser/harness.ts";
 
 /**
@@ -42,36 +37,19 @@ test.afterAll(async () => {
  * 「re もアンカー無しの部分一致」はそちらが引き継ぐ。
  */
 
-test("#4 型パレットに無い型は黙って先頭の型になる（未現代化プロファイル）", async () => {
-    // **postgresql は 6-3、mysql は 6-8a、mssql は 6-8b、oracle は 6-8c で解消した**
-    // （uuid 相当の型と strict 化）。移設先は tests/browser/types.spec.ts の
-    // 「UUID が uuid に解決される」と「strict なパレットでは未知の型が例外になる」。
-    // **ここに残るのは sqlite だけで、6-8d で消える**（そのとき #4 の項目ごと無くなる）。
-    //
-    // **入力は postgresql の fixture でなければならない**（段階6-6a で fixture が DB 別に
-    // なった）。見たいのは「そのパレットに無い型名を読ませたとき」で、sqlite の fixture を
-    // sqlite のパレットで読むのは正常系。
-    //
-    // **空にしてからパレットを差し替える** —— sqlite は 5 型しか無く、前のテストが残した
-    // テーブルを後始末すると範囲外の型添字を引いて落ちる（6-8a / 6-8b で踏んだ形）。
-    await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
-    await useDatatypes(page, "sqlite");
-    await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
-
-    const id = await page.evaluate(() =>
-        window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type),
-    );
-
-    // fixture の users.id は UUID。sqlite パレットに uuid 型が無く、
-    // js/io/xml-parser.ts の初期値 type:0 が残るため先頭型（text）になる
-    // （設計 JSON は未知の id を throw するのでこの経路を持たない）。
-    // **寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた。**
-    expect(id).toBe("text");
-
-    // 落ちた結果は DDL にもそのまま出る（sqlite は全列が TEXT に潰れる）
-    const ddl = await generateDdl(page, "sqlite");
-    expect(ddl).toContain("'id' TEXT");
-});
+/*
+ * **#4（型パレットに無い型が黙って先頭の型になる）は §6 段階6-8d で消えた。**
+ *
+ * postgresql は 6-3、mysql は 6-8a、mssql は 6-8b、oracle は 6-8c、sqlite は 6-8d で
+ * strict になり、**js/io/xml-parser.ts のフォールバックそのものが落ちた**。
+ * 直したというより、現象に到達する分岐がコードから無くなった。
+ *
+ * 移設先は tests/browser/types.spec.ts の「UUID が uuid に解決される」と
+ * 「strict なパレットでは未知の型が例外になる」、および
+ * tests/node/type-resolution.test.ts の「strict 属性を持たないパレットでも未知の型は例外」
+ * （**旧 XML 同梱の <datatypes> を読む経路は実アプリに生きている**ので、そちらは人工パレットで
+ * 押さえてある）。fixtures/ の入力はそのまま残す（README の「黙って消さない」）。
+ */
 
 /*
  * #5（空の <default></default> で ` DEFAULT ` だけが残る）は §6 段階6-5a で**構造的に消えた**。
@@ -124,44 +102,23 @@ test("#9 introspection サンプル（PG18 実出力）が well-formed でなく
 
 /*
  * #11（既定値を quote で囲むとき値の中の ' がエスケープされない）は §6 段階6-5b で
- * **strict なプロファイルだけ**直した（js/io/ddl/shared.ts の escapeLiteral）。
- * #4 と同じ形で、現象は未現代化の 1 本（sqlite）だけに残っている
- * ——直るのは 6-8。fixtures/quote-in-default.xml はそのまま残してある。
+ * **strict なプロファイルだけ**直し、**6-8d で 8 本すべてから消えた**
+ * （js/io/ddl/shared.ts の quoteDefault から strict / 未現代化の分岐ごと落ちた）。
+ * fixtures/quote-in-default.xml は読み手を持たない記録として残してある。
  *
- * 「直った後の挙動」は tests/node/ddl.test.ts の LITERALS 表（O'Brien -> 'O''Brien'）、
- * 「未現代化では直っていない」ことは同ファイルの mysql のテストが押さえる。
+ * 「直った後の挙動」は tests/node/ddl.test.ts の LITERALS 表（O'Brien -> 'O''Brien'）で、
+ * **6-8d から 8 プロファイル横断で回る**。
  */
 
 /*
- * §6 段階6-5a が新設した 2 件のうち、**#12 は 6-8b で直った**（mssql の現代化）。
- * 移設先は tests/node/ddl.test.ts の「mssql（段階6-8b）」。残るのは #13 で、6-8d で消える。
+ * **§6 段階6-5a が新設した 2 件は両方とも出た。** #12 は 6-8b（mssql の現代化）、
+ * **#13（sqlite の複合 PRIMARY KEY が UNIQUE に落ちる）は 6-8d**（sqlite の現代化）。
+ * どちらも移設先は tests/node/ddl.test.ts —— 前者は「mssql（段階6-8b）」、
+ * 後者は「sqlite（段階6-8d）」の「複合 PRIMARY KEY は PRIMARY KEY のまま出る」。
+ *
+ * #13 の直し方は「表定義の中に CONSTRAINT <名> PRIMARY KEY (...) を置く」で、
+ * SQLite に ALTER TABLE ADD CONSTRAINT が無い以上それしか無い（実測）。
  */
-
-test("#13 sqlite: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える", async () => {
-    /*
-     * **空にしてからパレットを差し替える。** 逆にすると、前のテストが残したテーブル
-     * （oracle の 15 型で解決済み）を sqlite の 5 型で後始末することになり、
-     * clearTables() が範囲外の型添字を引いて Row.getColor で落ちる。
-     * 6-8a が template.spec.ts で踏んだのと同じ形で、**プロファイルが現代化されて
-     * 寄せ先が動くたびに露出する**（型数の少ない側へ切り替えると起きる）。
-     */
-    await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
-    await useDatatypes(page, "sqlite");
-    await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
-
-    const ddl = await generateDdl(page, "sqlite");
-
-    /*
-     * db/sqlite/output.xsl:61-64 は「UNIQUE、または part が 2 個以上の PRIMARY」を
-     * まとめて UNIQUE (...) として出す。単一列 PK だけが列定義に inline されるので、
-     * **複合 PK を持つテーブルには PRIMARY KEY が 1 つも無い DDL ができる**。
-     * employee_projects の PK は (employee_id, project_id) の複合。
-     */
-    const composite = ddl.slice(ddl.indexOf("CREATE TABLE 'employee_projects'"));
-    const createTable = composite.slice(0, composite.indexOf(");"));
-    expect(createTable).toContain("UNIQUE (employee_id, project_id)");
-    expect(createTable).not.toContain("PRIMARY KEY");
-});
 
 /*
  * §6 段階6-8c で新設。**grabado の生成器の欠陥ではなく Oracle の制約**だが、

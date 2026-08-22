@@ -93,17 +93,18 @@ describe("DDL golden（Node）", () => {
             return Array.from({ length: count }, (_, i) => {
                 /*
                  * 列の見つけ方が 4 通りあるのは、プロファイルごとに識別子の囲み方が違うため
-                 * （裸 / バッククォート / 二重引用符 / **シングルクォート**）。
+                 * （裸 / バッククォート / 二重引用符 / **角括弧**）。
                  * **6-8 で寄せ先が 1 本ずつ動くたびに増えた** —— 6-8a で oracle の `"`、
-                 * 6-8c で sqlite の `'`（upstream の sqlite は識別子を文字列リテラルの
-                 * 記号で囲む。known-issues に挙がっている粗さの 1 つで、6-8d で直る）。
+                 * 6-8c で sqlite の `'`。**6-8d で `'` が消え**（sqlite が `"` に移った）、
+                 * かわりに mssql の `[ ]` が入った —— 規則を 8 プロファイル横断で見るように
+                 * したため（下の LITERALS のテスト）。
                  */
                 const line = lines.find(
                     (l) =>
                         l.includes(`c${i} `) ||
                         l.includes(`\`c${i}\` `) ||
                         l.includes(`"c${i}"`) ||
-                        l.includes(`'c${i}'`),
+                        l.includes(`[c${i}]`),
                 );
                 if (line === undefined) {
                     throw new Error(`列 c${i} が DDL に無い:\n${ddl}`);
@@ -180,39 +181,26 @@ describe("DDL golden（Node）", () => {
             ).toEqual(cases.map((c) => c[1]));
         });
 
-        test("sqlite（未現代化）: 6-4 以前のまま CURRENT_TIMESTAMP だけが特例", () => {
+        test("文字列の引用とエスケープは 8 プロファイルで同じ（known-issue #11 が全本で消えた）", () => {
             /*
-             * 未現代化プロファイルの規則は 1 文字も変えていない（6-8 で 1 本ずつこちら側に移る）。
-             * **6-8c で oracle が抜けたので寄せ先は sqlite だけになった**（6-8d で消える）。
-             * ddl/sqlite の golden 7 本が 1 バイトも動かないことの
-             * 裏付けがこれ —— golden 側は「動かなかった」しか言えないが、ここは
-             * 「動かない規則が実際に何か」を書いてある。
+             * **段階6-8d で作り直した最重要のテスト。**
              *
-             * NULL が 'NULL' として出るのは mysql が PG の default != 'NULL' 分岐を
-             * 持たないため。囲む側の規則（未現代化なので CURRENT_TIMESTAMP 以外は囲む）と
-             * 出力側の規則（句を落とすか）が別物であることがここに出ている。
+             * 6-8c まではここが「sqlite（未現代化）は 6-4 以前のまま CURRENT_TIMESTAMP だけが
+             * 特例」という**直っていない側**の主張だった —— 未現代化プロファイルは値の中を
+             * 一度も見ずに引用符を前後に足すだけで、O'Brien が DEFAULT 'O'Brien' という
+             * 壊れた DDL になっていた（known-issue #11）。寄せ先は 6-8a / 6-8c で
+             * mysql -> oracle -> sqlite と動き、6-8d で尽きた。
+             *
+             * js/io/ddl/shared.ts の quoteDefault から分岐ごと消えたので、主張を
+             * 「**8 本すべてで同じ**」に反転させてある。プローブは CHAR —— 8 パレット全部が
+             * quote="'" の型に解決する（oracle に VARCHAR は無く、PG と sqlite では text に寄る）。
              */
-            const inputs = [
-                "0",
-                "now()",
-                "uuidv7()",
-                "CURRENT_TIMESTAMP",
-                "NULL",
-                "hello",
-                "O'Brien",
-            ];
-            /* **6-8c で oracle が現代化されたので寄せ先を sqlite に移した**（6-8d で消える） */
-            expect(ddlDefaults("sqlite", inputs)).toEqual([
-                "'0'",
-                "'now()'",
-                "'uuidv7()'",
-                "CURRENT_TIMESTAMP",
-                "'NULL'",
-                "'hello'",
-                /* known-issues #11 は未現代化プロファイルには**残っている**（6-8 で移る）。
-                   28 本の golden が動かないことの規則側の裏付けがこの 1 行 */
-                "'O'Brien'",
-            ]);
+            const inputs = LITERALS.map((c) => c[0]);
+            const expected = LITERALS.map((c) => c[1]);
+
+            for (const db of DB_PROFILES) {
+                expect([db, ddlDefaults(db, inputs)]).toEqual([db, expected]);
+            }
         });
 
         test("式は round-trip する（囲まなくなっても読み直しで変わらない）", () => {
@@ -431,7 +419,7 @@ describe("DDL golden（Node）", () => {
                 "ADD CONSTRAINT probe_pkey PRIMARY KEY (c0);",
             );
 
-            /* 未現代化プロファイルでも "null" は出ない（6-5b が源流を直したので全 5 本に効く） */
+            /* 別の骨格でも "null" は出ない（6-5b が源流を直したので 8 本すべてに効く） */
             expect(ddlOf("mssql", xml)).not.toContain("null");
         });
 
@@ -495,6 +483,130 @@ describe("DDL golden（Node）", () => {
 
             expect(ddl).toContain("CONSTRAINT probe_c0_key UNIQUE (c0)");
             expect(ddl).not.toContain("UNIQUE KEY");
+        });
+    });
+
+    describe("sqlite（段階6-8d）", () => {
+        test("複合 PRIMARY KEY は PRIMARY KEY のまま出る（known-issue #13 の移設先）", () => {
+            /*
+             * 6-8d まで「UNIQUE、または part が 2 個以上の PRIMARY」をまとめて UNIQUE として
+             * 出しており、**複合 PK を持つ設計から PRIMARY KEY が 1 つも無い DDL が出ていた**
+             * （db/sqlite/output.xsl の逐語移植）。SQLite に ALTER TABLE ADD CONSTRAINT は
+             * 無いので、表定義の中に置くのが唯一の直し方。
+             */
+            const ddl = ddlOf(
+                "sqlite",
+                tableXml(
+                    "probe",
+                    ["c0", "c1"],
+                    [{ type: "PRIMARY", name: "pk_probe", parts: ["c0", "c1"] }],
+                ),
+            );
+
+            expect(ddl).toContain("CONSTRAINT pk_probe PRIMARY KEY (c0, c1)");
+            expect(ddl).not.toContain("UNIQUE");
+        });
+
+        test("STRICT を付け、FK があるときだけ PRAGMA foreign_keys を出す", () => {
+            /*
+             * SQLite の foreign_keys は**接続ごとの設定で既定が OFF** なので、書かないと
+             * 生成 DDL の FK が「作られるが 1 度も検査されない」状態になる（実測で対照済み。
+             * CUSTOMIZATIONS.md の段階6-8d）。関係の無い設計には出さない。
+             */
+            const plain = ddlOf("sqlite", tableXml("probe", ["c0"]));
+            expect(plain).toContain(") STRICT;");
+            expect(plain).not.toContain("PRAGMA");
+
+            const withFk = [
+                '<?xml version="1.0" encoding="utf-8" ?>',
+                "<sql>",
+                '<table x="0" y="0" name="parent">',
+                '<row name="id" null="0" autoincrement="0"><datatype>TEXT</datatype></row>',
+                '<key type="PRIMARY" name="parent_pkey"><part>id</part></key>',
+                "</table>",
+                '<table x="0" y="0" name="child">',
+                '<row name="parent_id" null="0" autoincrement="0">',
+                "<datatype>TEXT</datatype>",
+                '<relation table="parent" row="id" />',
+                "</row>",
+                "</table>",
+                "</sql>",
+                "",
+            ].join("\n");
+            const ddl = ddlOf("sqlite", withFk);
+
+            expect(ddl.startsWith("PRAGMA foreign_keys = ON;\n")).toBe(true);
+            /* FK も表定義の中（ALTER TABLE ADD CONSTRAINT が無い唯一のプロファイル） */
+            expect(ddl).toContain(
+                "CONSTRAINT fk_child_parent_id FOREIGN KEY (parent_id) REFERENCES parent (id)",
+            );
+            expect(ddl).not.toContain("ALTER TABLE");
+        });
+
+        test("識別子は \" で囲み、コメントは行コメントに落とす", () => {
+            /*
+             * 6-8d まで**すべての識別子をシングルクォートで囲み**（SQLite では文字列
+             * リテラルにもなる記法）、**コメントを 1 つも出していなかった**。
+             * COMMENT ON は SQLite に無いので sql-standard / mssql と同じ落とし先にする。
+             */
+            const xml = [
+                '<?xml version="1.0" encoding="utf-8" ?>',
+                "<sql>",
+                '<table x="0" y="0" name="order">',
+                '<row name="c0" null="1" autoincrement="0">',
+                "<datatype>TEXT</datatype>",
+                "<comment>1 行目\n2 行目</comment>",
+                "</row>",
+                "<comment>予約語のテーブル</comment>",
+                "</table>",
+                "</sql>",
+                "",
+            ].join("\n");
+            const ddl = ddlOf("sqlite", xml);
+
+            /* order は SQLite の予約語（実測 59 語のうちの 1 つ） */
+            expect(ddl).toContain('CREATE TABLE "order" (');
+            expect(ddl).toContain('-- "order": 予約語のテーブル');
+            /* 改行は 1 行に畳む（-- は行末までなので 2 行目が SQL として解釈される） */
+            expect(ddl).toContain('-- "order".c0: 1 行目 2 行目');
+            expect(ddl).not.toContain("'order'");
+        });
+
+        test("AUTOINCREMENT は合法形のときだけ出し、それ以外は理由を残す", () => {
+            /*
+             * SQLite が受けるのは**単一列の INTEGER PRIMARY KEY** だけ（実測 6 パターン）。
+             * 6-8d まで型も PK も見ずに AUTOINCREMENT を出しており、実行できない DDL に
+             * なっていた。黙って落とさないのは 6-8c の ??INDEX?? と同じ立場。
+             */
+            const ai = (datatype: string, parts: readonly string[]) =>
+                [
+                    '<?xml version="1.0" encoding="utf-8" ?>',
+                    "<sql>",
+                    '<table x="0" y="0" name="probe">',
+                    `<row name="c0" null="0" autoincrement="1"><datatype>${datatype}</datatype></row>`,
+                    '<row name="c1" null="0" autoincrement="0"><datatype>TEXT</datatype></row>',
+                    `<key type="PRIMARY" name="probe_pkey">${parts
+                        .map((p) => `<part>${p}</part>`)
+                        .join("")}</key>`,
+                    "</table>",
+                    "</sql>",
+                    "",
+                ].join("\n");
+
+            const ok = ddlOf("sqlite", ai("INTEGER", ["c0"]));
+            expect(ok).toContain("CONSTRAINT probe_pkey PRIMARY KEY (c0 AUTOINCREMENT)");
+            expect(ok).not.toContain("--");
+
+            /* TEXT の PK には付けられない（AUTOINCREMENT is only allowed on an INTEGER PRIMARY KEY） */
+            const wrongType = ddlOf("sqlite", ai("TEXT", ["c0"]));
+            expect(wrongType).not.toContain("AUTOINCREMENT (");
+            expect(wrongType).toContain("PRIMARY KEY (c0)");
+            expect(wrongType).toContain("-- probe.c0: AUTOINCREMENT は");
+
+            /* 複合 PK にも付けられない（near ",": syntax error） */
+            const composite = ddlOf("sqlite", ai("INTEGER", ["c0", "c1"]));
+            expect(composite).toContain("PRIMARY KEY (c0, c1)");
+            expect(composite).toContain("-- probe.c0: AUTOINCREMENT は");
         });
     });
 

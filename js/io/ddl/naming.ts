@@ -3,15 +3,16 @@
  * grabado: §6.3 の命名規約と識別子の引用（HANDOVER §6 段階6-5b）。
  *
  * 6-5a まで、この 2 つは 5 本の output.xsl の中にそれぞれ手書きで散っていた。6-5b は
- * **postgresql だけ**をここへ寄せる（6-3 / 6-4 と同じ型紙 —— 未現代化の 4 本は 6-8 で移る）。
+ * **postgresql だけ**をここへ寄せ、6-7a 〜 6-8d で残る 7 本が移った。
  *
- * 規則を性質で 2 つに割ってある:
+ * 規則を性質で 2 つに割ってあるのが効いた:
  *
  *   命名規約   dialect 非依存。fk_<t>_<c> / idx_<t>_<c> / <t>_pkey / <t>_<c>_key
- *              -> 6-8 は**呼ぶだけ**
- *   引用       dialect 依存。囲む文字が 5 通りある（" / ` / [ ] / ' / 大文字の扱い）
- *              -> 6-8 は IdentifierRules を 4 つ足す。規則本体（裸で出せる条件）は共有
- *              **6-7c の mariadb が ` を使う初めてのプロファイル**で、規則本体は変えずに済んだ
+ *              -> 8 本とも**呼ぶだけ**で済んだ
+ *   引用       dialect 依存。囲む文字が 3 通り（" / ` / [ ]）＋ 裸で書ける形の違い
+ *              -> IdentifierRules を 8 つ並べる。規則本体（quoteIdentifier）は共有
+ *              **6-7c の mariadb が ` を使う初めてのプロファイル**で、規則本体は変えずに済んだ。
+ *              **6-8c の oracle だけが bare を差し替えた**（大文字へ畳むので全部囲む）
  *
  * **段階6-7a で sql-standard が、6-7b で h2 が入った。** 命名規約はどちらもそのまま呼ぶだけで
  * 済み（dialect 非依存という切り方が効いた）、足したのは IdentifierRules と語彙表だけ。
@@ -29,6 +30,7 @@ import {
     MYSQL_RESERVED,
     ORACLE_RESERVED,
     POSTGRESQL_RESERVED,
+    SQLITE_RESERVED,
     SQL_STANDARD_RESERVED,
 } from "./keywords.ts";
 
@@ -168,6 +170,26 @@ export const ORACLE_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split('"').join('""'),
     reserved: ORACLE_RESERVED,
     bare: BARE_UPPER,
+};
+
+/**
+ * SQLite の区切り識別子（段階6-8d）。**囲み方は postgresql / sql-standard / h2 と同じ "。**
+ *
+ * SQLite は互換のため [ ] や ` ` や ' ' も識別子として受けるが、標準の " を採る ——
+ * 6-8d まで upstream が ' で囲んでいたのが、この段階で消える粗さの 1 つ（' は文字列
+ * リテラルの記号でもあり、文脈で意味が割れる）。値の中の " は "" にする。
+ * **Oracle と違って SQLite は識別子の中の " を受ける**ので、known-issue #15 に
+ * 当たる制約はここには無い（実測: "say ""hi""" が通る）。
+ *
+ * bare は BARE_LOWER。SQLite の裸の識別子は**大小を畳まず書いたまま保つ**（照合が
+ * ASCII 大小無視なだけ）ので、Oracle のように全部囲む理由が無い。
+ */
+export const SQLITE_IDENTIFIER: IdentifierRules = {
+    open: '"',
+    close: '"',
+    escape: (name) => name.split('"').join('""'),
+    reserved: SQLITE_RESERVED,
+    bare: BARE_LOWER,
 };
 
 

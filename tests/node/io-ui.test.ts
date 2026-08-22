@@ -246,8 +246,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
 
         test("書き出せない設計ではプリフライトすら投げない", () => {
             /* serializer が落ちる状態（型パレット未取得）。通信の前に止まる */
-            const palette = (h.io as unknown as { owner: { palette: { setRoot(e: unknown): void } } })
-                .owner.palette;
+            const palette = (h.io as unknown as {
+                owner: { palette: { setRoot(e: unknown): void; element(): unknown } };
+            }).owner.palette;
+            const loaded = palette.element();
             palette.setRoot(h.window.document.createElement("nothing"));
 
             h.io.serversave(undefined, "orders");
@@ -255,7 +257,8 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.takeAlerts()).toHaveLength(1);
             expect(h.takeRequests()).toEqual([]);
 
-            h.useDatatypes(SERIALIZER_DB);
+            /* 後始末に useDatatypes を使わない理由は同ファイル末尾の同型のテストに書いてある */
+            palette.setRoot(loaded);
         });
     });
 
@@ -397,8 +400,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             const before = h.io.dom.ta.value;
 
             h.io.dom.ta.value = before;
-            const palette = (h.io as unknown as { owner: { palette: { setRoot(e: unknown): void } } })
-                .owner.palette;
+            const palette = (h.io as unknown as {
+                owner: { palette: { setRoot(e: unknown): void; element(): unknown } };
+            }).owner.palette;
+            const loaded = palette.element();
             palette.setRoot(h.window.document.createElement("nothing"));
 
             h.io.clientsave();
@@ -406,8 +411,13 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.takeAlerts()).toHaveLength(1);
             expect(h.io.dom.ta.value).toBe(before);
 
-            /* 後始末（beforeEach が useDatatypes で戻すが、明示しておく） */
-            h.useDatatypes(SERIALIZER_DB);
+            /*
+             * 後始末は **useDatatypes を通さず元の要素に戻す**（段階6-8d）。useDatatypes は
+             * 「空にしてから差し替える」契約になったので、型を 1 つも持たないこのパレットを
+             * 入れたまま呼ぶと clearTables() -> Row.getColor が範囲外の型添字を引いて落ちる。
+             * ここは壊れたパレットを**わざと**入れている唯一のテストで、実アプリには無い状態。
+             */
+            palette.setRoot(loaded);
         });
     });
 });

@@ -32,8 +32,9 @@ json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加�
 
 **これで非 PG の golden が初めて「その DB の DDL」になった。** 6-6a まではどれも
 PG 用の型名を読ませた結果で、`oracle` は uuid / jsonb / timestamptz が全部 `INTEGER`、
-`sqlite` は全列 `TEXT` に落ちていた。ただし**書けるのは現行パレットに実在する型だけ**なので、
-21 本は「**6-8 直前のベースライン**」であってその DB の理想形ではない。
+`sqlite` は全列 `TEXT` に落ちていた。当時は**書けるのが現行パレットに実在する型だけ**だったので
+21 本は「**6-8 直前のベースライン**」でしかなかったが、**6-8a 〜 6-8d で 4 本とも現代化され、
+56 本すべてが「その DB の DDL」になっている。**
 
 **§6 段階6-5a で `ddl-input/` の 7 本が消えた。** あれは `Designer.toXML()` の出力＝
 `db/<db>/output.xsl` への入力で、DDL 生成だけが「モデル -> 中間 XML -> XSLT -> 文字列」の
@@ -71,24 +72,28 @@ relation の色）は [`../../docs/TESTING.md`](../../docs/TESTING.md) と
 - ~~`users` に PRIMARY と UNIQUE があるため制約名 `users_pkey` が 2 回出る~~
   **§6 段階6-5b で `postgresql` から消えた**（制約名は `key/@name` を優先し、空のときだけ
   §6.3 の規約で組む）。`users` の UNIQUE は fixture が持っていた `users_email_key` として出る。
-  未現代化の 4 本は元から `key/@name` を読んでいるのでこの癖を持たない
+  他の 7 本は元から `key/@name` を読んでいるのでこの癖を持たない
 - ~~`DEFAULT 'now()'` / `DEFAULT 'uuidv7()'` のように式が引用符で囲まれる~~
-  **§6 段階6-4 で `postgresql` から消えた**（式は `quote` を当てない）。未現代化の 4 本は
-  従来規則のままだが、そちらは `UUID` が先頭型（`quote=""`）に落ちるので元から裸で出ている
-  —— つまり**この癖はもうどの golden にも無い**。囲む側の規則（値の中の `'` を
-  エスケープしない）も **6-5b で `postgresql` からは消えた**（未現代化の 4 本には残る。
-  known-issues #11 の脚注）
+  **§6 段階6-4 で `postgresql` から消え、6-8a 〜 6-8d で 8 本すべてから消えた**
+  （式は `quote` を当てない）。囲む側の規則（値の中の `'` をエスケープしない ＝
+  known-issue #11）も **6-5b で `postgresql`、6-8d で残る 7 本**から消えている ——
+  `js/io/ddl/shared.ts` の `quoteDefault` から strict / 未現代化の分岐ごと落ちた
 - ~~`BIGINT GENERATED ALWAYS AS IDENTITY NOT NULL` のように制約が重なる~~
   **§6 段階6-5b で `postgresql` から消えた**（identity は暗黙で NOT NULL なので句を出さない）。
   同じ段階で `@autoincrement=1` の `BIGSERIAL` 固定も無くなり、型を残して IDENTITY 句を足す形になった
 - **`mssql`: 最終列にコメントがあると区切りカンマが `--` に飲まれる**（known-issues #12。
   `ddl/mssql/relations.sql` に実物がある）
-- **`sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える**（known-issues #13。
-  `ddl/sqlite/relations.sql`）
+- ~~**`sqlite`: 複合 PRIMARY KEY が UNIQUE に落ち PRIMARY KEY が消える**~~（known-issues #13）
+  **§6 段階6-8d で消えた**（sqlite の現代化）。表定義の中に `CONSTRAINT <名> PRIMARY KEY (...)`
+  を置く —— SQLite に `ALTER TABLE ADD CONSTRAINT` は無いのでそれしか無い。あわせて
+  識別子が `'` から `"` になり、`) STRICT;` が付き、FK を持つ設計には先頭に
+  `PRAGMA foreign_keys = ON;` が出て、**コメントが初めて出るようになった**（`--` の行コメント）
 - ~~**未現代化のプロファイルでは `UUID` が型パレットに無く `INTEGER` に落ちている**~~
   **§6 段階6-6b で golden から消えた** —— 各 DB の fixture がその DB の型で書かれ、
   もう PG の型名を読ませていないため。**#4 / #10 そのものは 6-8 まで残り**、再現は
-  known-issues 側が **postgresql の fixture を明示的に読む**形で保っている
+  known-issues 側が **postgresql の fixture を明示的に読む**形で保っていた。
+  **#4 / #10 そのものが消えたのは 6-8d**（8 本すべてが strict になり、
+  `js/io/xml-parser.ts` のフォールバックと `indexOfTypeNameLegacy` がコードごと落ちた）
 - ~~**`oracle`: `INTEGER` と書いた列が `NUMBER` になる**~~
   **§6 段階6-8c で消えた**（oracle の現代化）。**これで `re` を持つパレットが 1 つも無くなり、
   known-issue #10 は実例ごと尽きた**。あわせて桁揃えと DROP のコメントブロックが落ち、
@@ -146,4 +151,4 @@ golden はすべて fixture を読み込んでから採るので、「テーブ�
 **§6 段階6-5a（`output.xsl` の TS 生成器化）で `ddl/` は 1 バイトも動いていない。**
 5 本の XSLT（計 952 行）を [`../../js/io/ddl/`](../../js/io/ddl/) へ**逐語移植**した段階なので、
 それが完了判定そのもの。上に挙げた癖はすべて TS 側で忠実に再現してある（PG のぶんを直すのが
-6-5b、未現代化 4 本のぶんが 6-8）。**動いたのは `ddl-input/` の 7 本が消えたことだけ。**
+6-5b、残る 4 本のぶんが 6-8a 〜 6-8d）。**動いたのは `ddl-input/` の 7 本が消えたことだけ。**

@@ -66,6 +66,11 @@ export async function openDesigner(page: Page): Promise<void> {
  * URL では切り替えられない。dbResponse()（同 91-99）と同じく型パレットを直接
  * 差し替えるのが実経路どおりで、かつ 1 ページで 5 DB を回せる。
  * 差し替え口は段階4-0b で window.DATATYPES から d.palette になった（操作は同じ）。
+ *
+ * **空にしてから差し替える**（段階6-8d）。旧パレットで解決済みのテーブルを残したまま
+ * 型の少ないパレットへ移ると、後始末が範囲外の型添字を引いて落ちる（6-8a / 6-8b で
+ * 2 度踏んだ）。実アプリ側は Designer.fromXML が「clearTables() -> パレット差し替え」の
+ * 順を守っており、ここはその順序制約がハーネスに写っていなかっただけ。
  */
 export async function useDatatypes(page: Page, db: string): Promise<void> {
     await page.evaluate(async (dbName) => {
@@ -74,6 +79,7 @@ export async function useDatatypes(page: Page, db: string): Promise<void> {
             throw new Error(`datatypes.xml が取れない: ${dbName} (${res.status})`);
         }
         const doc = new DOMParser().parseFromString(await res.text(), "text/xml");
+        window.d!.clearTables();
         window.d!.palette.setRoot(doc.documentElement);
     }, db);
 }

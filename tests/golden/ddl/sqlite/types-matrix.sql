@@ -1,7 +1,8 @@
-CREATE TABLE 'type_samples' (
-'c_text' TEXT(255),
-'c_numeric' NUMERIC,
-'c_integer' INTEGER NOT NULL  PRIMARY KEY,
-'c_real' REAL,
-'c_none' NONE
-);
+CREATE TABLE type_samples (
+  c_integer INTEGER NOT NULL,
+  c_real REAL,
+  c_text TEXT,
+  c_blob BLOB,
+  c_any ANY,
+  CONSTRAINT type_samples_pkey PRIMARY KEY (c_integer)
+) STRICT;

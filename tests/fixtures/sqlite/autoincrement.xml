@@ -6,6 +6,9 @@
   段階6-5b から <datatype> を残して GENERATED ALWAYS AS IDENTITY を足す）。
 
   **構造は全プロファイルで同じ。型だけ SQLite のもの**（段階6-6b）。
+
+  **この構造そのものが SQLite の制約**（段階6-8d）—— AUTOINCREMENT を書ける形は
+  「単一列の INTEGER PRIMARY KEY」しか無く、INT でも TEXT でも複合 PK でも拒まれる。
 -->
 <sql>
 <table x="20" y="20" name="counters">

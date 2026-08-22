@@ -133,27 +133,44 @@ test.describe("初期テーブルテンプレート（段階6-4）", () => {
         expect(await addRowByUi(page)).toBe("text");
     });
 
-    test("sqlite（未現代化）: 従来どおり id 1 列 ＋ autoincrement", async () => {
+    test("sqlite: house 既定を STRICT で表せる 3 列（段階6-8d）", async () => {
         /*
-         * 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動いた（6-8d で消える）。
+         * **段階6-8d で反転した主張。** 6-8c まではここが「未現代化なので従来どおり
+         * id 1 列 ＋ autoincrement」で、寄せ先は 6-8a / 6-8c で mysql -> oracle -> sqlite と
+         * 動いてきた。8 本すべてが <template> を持つようになったので、寄せ先は要らない。
          *
-         * **空にしてからパレットを差し替える**のが要点。逆にすると、前のテストが
-         * postgresql のテンプレート（24 型）で作ったテーブルが残ったまま oracle（15 型）に
-         * 切り替わり、clearTables() の後始末が範囲外の型添字を引いて Row.getColor で落ちる。
-         * mysql（23 型）が寄せ先だった間は添字が収まっていたので露出しなかった。
-         * UI では db の切り替えにリロードが要る（現行契約）ので、この順序はテスト側の制約。
+         * **UI から新規テーブルを作る経路は golden に 1 ビットも写らない**（golden はすべて
+         * toDdl / toJson 経由）。8 本目のテンプレートが UI に届いたことを見るのはここだけ。
+         *
+         * house 既定が SQLite で何を失うかがそのまま出る —— **PK は TEXT で既定値なし**
+         * （uuid 生成関数が無い）、監査列も TEXT（STRICT に日時型が無い）。
+         *
+         * パレットを差し替える前に空にする儀式は useDatatypes() の中へ畳んだ
+         * （tests/browser/harness.ts。段階6-8d）。
          */
-        await loadFixture(page, readFixture(SERIALIZER_DB, "empty"));
         await useDatatypes(page, "sqlite");
 
         const added = await addTableByUi(page);
 
-        /* テンプレートを持たないプロファイルは 6-3 以前と 1 バイトも変わらない */
         expect(added.rows).toEqual([
-            { title: "id", type: "text", def: "", nll: true, ai: true },
+            { title: "id", type: "text", def: "", nll: false, ai: false },
+            {
+                title: "created_at",
+                type: "text",
+                def: "CURRENT_TIMESTAMP",
+                nll: false,
+                ai: false,
+            },
+            {
+                title: "updated_at",
+                type: "text",
+                def: "CURRENT_TIMESTAMP",
+                nll: false,
+                ai: false,
+            },
         ]);
         expect(added.keys).toEqual([{ type: "PRIMARY", parts: ["id"] }]);
-        /* 既定型も先頭の型のまま（newrowtype を持たない） */
+        /* newrowtype="text"（添字 0 は integer なので、この属性が効いていることの証拠） */
         expect(await addRowByUi(page)).toBe("text");
     });
 });

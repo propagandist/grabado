@@ -6,6 +6,10 @@
 # するのは公開 OSS のコンテナ env として危うい（base image や他プロセスと衝突しうる）。
 grabado:
   schema-dir: ${GRABADO_SCHEMA_DIR:${SCHEMA_DIR:/data/schema}}
+  # 副作用（保存・introspection・AI）を止める。**公開デモは true 一択**
+  # —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。
+  # 落ちるのはその 3 つだけで、list / load は生きている（読み取りビューア）。
+  readonly: ${GRABADO_READONLY:${READONLY:false}}
 
 server:
   tomcat:

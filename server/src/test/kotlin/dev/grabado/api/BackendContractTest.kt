@@ -138,9 +138,20 @@ class BackendContractTest {
          *   `for` で回すのが確実（同じ罠が [contract] の ids 側にもある）。
          */
         @JvmStatic
-        fun cases(): List<Arguments> = buildList {
+        fun cases(): List<Arguments> = casesFor(null)
+
+        /**
+         * 指定した `serverMode` のケースだけを返す（`null` は「モード指定なし」＝通常起動）。
+         *
+         * `serverMode` を持つケースは別の起動条件を要求するので、通常のテストでは流さない
+         * —— `readonly` は [ReadOnlyContractTest] が持つ。
+         */
+        fun casesFor(serverMode: String?): List<Arguments> = buildList {
             for (case in table().path("cases")) {
-                add(Arguments.of(case.path("id").asString(), case))
+                val mode = if (case.has("serverMode")) case.path("serverMode").asString() else null
+                if (mode == serverMode) {
+                    add(Arguments.of(case.path("id").asString(), case))
+                }
             }
         }
 

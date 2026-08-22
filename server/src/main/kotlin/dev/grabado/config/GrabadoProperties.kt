@@ -14,8 +14,14 @@ import java.nio.file.Path
  * @property schemaDir 正本ディレクトリ。git 管理の設計 JSON が置かれ、save は
  *   ここへ write-through する（CLAUDE.md 制約2）。既定 `/data/schema` は
  *   コンテナの mount 先（HANDOVER §2.1）。
+ * @property readonly 副作用（保存・introspection・AI）を止める。**公開デモは `true` 一択** ——
+ *   AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。
+ *   落ちるのはその 3 つだけで、`list` / `load` は生きている（読み取りビューア）。
+ *   編集ストアはブラウザ内なので、READONLY でも「読んで・描いて・DDL を出す」体験は
+ *   完全に提供できる。
  */
 @ConfigurationProperties("grabado")
 data class GrabadoProperties(
     val schemaDir: Path,
+    val readonly: Boolean = false,
 )

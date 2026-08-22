@@ -92,6 +92,7 @@
     <string name="httpresponse">서버 응답</string>
     <string name="http201">저장되었습니다</string>
     <string name="http400">Bad Request</string>
+    <string name="http403">Forbidden</string>
     <string name="http404">찾을 수 없습니다(Not Found)</string>
     <string name="http405">Method Not Allowed</string>
     <string name="http500">내부 서버 에러(Internal Server Error)</string>

@@ -23,6 +23,7 @@
     "  request.body   POST の body",
     "  request.backend パスの <backend名>。省略時は php-mysql（フロントの既定）",
     "  request.trailingSlash パス末尾の / の有無。省略時 true（実測 URL の形）",
+    "  serverMode    'readonly' なら GRABADO_READONLY=true で起動したサーバに流す。省略時は通常",
     "  expect.status  必須",
     "  expect.body    省略時は検査しない。\"\" は空 body を要求する",
     "  expect.headers 省略時は検査しない"
@@ -254,6 +255,40 @@
       "seed": { "a.json": "{}" },
       "request": { "method": "GET", "action": "list", "backend": "..%2F..%2Fetc" },
       "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "readonly-save-is-forbidden",
+      "note": "段階5-3: GRABADO_READONLY=true では保存の副作用を止める。501（実装が無い）でも 503（一時的に不能）でもなく 403（このデプロイでは禁止）—— 501 に寄せると『READONLY だから save できない』と『サーバが壊れている』が同じ画面になる",
+      "serverMode": "readonly",
+      "request": { "method": "POST", "action": "save", "keyword": "orders.json", "body": "{}" },
+      "expect": { "status": 403, "body": "" },
+      "virtual": false
+    },
+    {
+      "id": "readonly-list-still-works",
+      "note": "READONLY で落ちるのは保存・introspection・AI の 3 つだけ。読み取りビューアとして list / load は生きている",
+      "serverMode": "readonly",
+      "seed": { "a.json": "{}" },
+      "request": { "method": "GET", "action": "list" },
+      "expect": { "status": 200, "body": "a.json\n" },
+      "virtual": false
+    },
+    {
+      "id": "readonly-load-still-works",
+      "note": "編集ストアはブラウザ内なので、READONLY でも「読んで・描いて・DDL を出す」体験は完全に提供できる",
+      "serverMode": "readonly",
+      "seed": { "orders.json": "{\"formatVersion\":2}\n" },
+      "request": { "method": "GET", "action": "load", "keyword": "orders.json" },
+      "expect": { "status": 200, "body": "{\"formatVersion\":2}\n" },
+      "virtual": false
+    },
+    {
+      "id": "readonly-import-is-still-not-implemented",
+      "note": "introspection は READONLY で無効化する対象（SSRF の踏み台になるため）だが、段階5-3 の時点では実装そのものが無いので 501 のまま。403 に変わるのは 5-7",
+      "serverMode": "readonly",
+      "request": { "method": "GET", "action": "import" },
+      "expect": { "status": 501 },
       "virtual": false
     },
     {

@@ -5455,6 +5455,127 @@ other
 - golden は `tests/golden/orm/<target>/<fixture>.<ext>` を新設する。**`db/` にディレクトリを
   作らない**こと —— 作った瞬間 `DB_PROFILES` に入り、パレットの契約を全部背負う
 
+---
+
+### 2026-08-22 HANDOVER §6「機能」段階6-9d —— ORM 出力の骨格と JPA（Kotlin）
+
+**6-0 が「ORM 出力カテゴリの 1 本目」と書いた項目**（撤去した `sqlalchemy` を作り直す話の本体）。
+出力の 2 本目の軸が入り、`tests/golden/orm/` が新設された。
+
+#### 決めたこと 1: ORM は**出力の別の軸**（6-9a で決め、ここで実装した）
+
+`db` の 1 文字列が「型パレット」と「生成器」と「設計 JSON の型キーの名前空間」を同時に
+決めていたところに、**db を変えずに出力だけ切り替える軸**を足した。実装は 3 か所:
+
+| 場所 | 役割 |
+|---|---|
+| `js/io/orm/generate.ts` | ターゲットの登録（`ORM_TARGETS`）と入口。**db プロファイルの switch とは別の表** |
+| `js/wwwsqldesigner.ts` | `toOrm(target)`。`toDdl()` と対で、どちらも同じ `extractModel(this)` を渡す |
+| `js/io.ts` ＋ `index.html` | Save/Load ダイアログに ORM ターゲットの select ＋ ボタン。**既存の「SQL 出力」は 1 ビットも変えていない** |
+
+**`db/` にディレクトリを作らなかった**のが要点 —— 作った瞬間 `DB_PROFILES`
+（`tests/support/fixtures.ts` が `db/` の実体を母集団にしている）に入り、ORM が型パレットの
+契約を全部背負う。ブラウザ側に「**同じ設計から DDL と ORM の両方が出る**」テストを 1 本置いて、
+この判断が実際に効いていることを固定した。
+
+#### 決めたこと 2: 型は**正規型 1 段だけ**を介して写す
+
+`js/io/ddl/shared.ts` の `buildDdlModel` に `kind` と `size` を足し、**型パレットを読むのは
+今もそこ 1 か所**のまま。ORM 生成器はパレットを 1 度も触らない。
+
+JPA 側の表は 21 行（`KOTLIN_TYPES`）。**写せない型は `null` にして `String` に落とし、
+理由を行コメントで残す** —— `interval` / `json` / `xml` / `geometry` / `other` の 5 つ。
+黙って `String` にすると、設計が持っていた意味が生成物から消えたことに誰も気づけない。
+
+```kotlin
+    @Column(name = "preferences", nullable = false)
+    /* json: JPA の標準に対応する型が無いので String で出す（JSONB） */
+    var preferences: String,
+```
+
+`int8` を `Byte` ではなく `Short` にしたのは、**mssql の `tinyint` が 0..255 で
+Kotlin の `Byte` が符号付き**だから（`Byte` にすると 128 以上が負になる）。
+
+#### 決めたこと 3: **逆参照（`@OneToMany`）は出さない**（ユーザー承認）
+
+設計モデルは「子側の FK 1 本」しか持たない。親側のコレクション名（`articles` / `tags`）は
+**発明するしかなく**、6-5b の「生成器は識別子を書き換えない」と衝突する。多重度（1:1 / 1:N）も
+同じ理由で推論しない —— FK 列に UNIQUE があれば 1:1、という推論は**外れたときに黙って嘘になる**。
+
+出すのは `@ManyToOne` ＋ `@JoinColumn` だけ。1:1 が欲しい人は `@OneToOne` に直す
+（型は合っているので 1 語の書き換えで済む）。
+
+**PK でもある FK 列はスカラーで出す。** 関連にすると JPA の derived identity
+（`@IdClass` のフィールドが参照先の id 型になる規則）に踏み込み、生成物を読む人が JPA の
+細則を知らないと直せなくなる。多対多の中間テーブルがまさにこの形。
+
+#### 決めたこと 4: クラス名は変換し、**元の名前は必ず残す**（ユーザー承認）
+
+`articles` → `Article`。**単数化は英語の規則だけ**（`-ies` / `-(s|x|z|ch|sh)es` / `-s`）で、
+倒せない語（`people` / `children`）はそのまま残す —— 不規則複数の表を持つと、その表に無い語で
+黙って間違える。**元のテーブル名は `@Table(name = ...)` に必ず出る**ので、単数化が外れても
+情報は 1 つも失われない。テストが `people` → `People` を**倒せないこととして固定**している。
+
+#### 決めたこと 5: Kotlin 識別子は 3 段（**golden を採って初めて気づいた**）
+
+最初の採取で `quotes-i18n` から **`var say "hi": String?` という書けない Kotlin** が出た。
+DB の識別子はどんな文字でも持てるが、Kotlin のソースには書けない。3 段にした:
+
+| 段 | 例 | 名前 |
+|---|---|---|
+| そのまま書ける | `createdAt` / `顧客` | 変わらない |
+| バッククォートで囲めば書ける | `` `say "hi"` `` / `` `order by` `` | **1 文字も失わない** |
+| 囲んでも書けない（JVM が名前に使えない `. ; [ ] / < > : \` と改行） | `a.b` → `a_b` | ここで初めて変わる |
+
+**DB の名前を書き換えているのではない**（`@Column(name = ...)` に必ず残る）。6-5b の
+「識別子を書き換えない」は**出力先の SQL で意味が変わること**を禁じた判断で、言語識別子は別。
+
+**実物を採らなければ気づけなかった**という点で、6-8a の `DEFAULT (UUID())` や
+6-8c の `SYSTIMESTAMP` と同じ形（あちらは DB に流して、こちらは golden を読んで）。
+
+#### 決めたこと 6: golden は **14 本**（8 × 7 = 56 本にしない）
+
+ORM 出力は「型の写像」と「構造の組み立て」に分かれ、**構造の側はプロファイルに依らない**
+（生成器が見るのは `kind` と関係とキーだけで、SQL 型名も識別子の引用も通らない）:
+
+```
+型の写像   8 プロファイル × types-matrix   そのプロファイルの全型が 1 列ずつ入っている
+構造       postgresql × 残り 6 本           複合 PK・自己参照 FK・identity・日本語識別子
+```
+
+`types-matrix` が全型網羅であることは `fixture-set.test.ts` が機械的に押さえているので、
+**8 本を掃けば 172 型ぜんぶを通ったことになる**。ORM が 4 本になっても 56 本で、DDL と同じ桁。
+
+テーブルが 0 件なら **1 バイトも出さない**（DDL の `empty.sql` が 0 バイトなのと揃える）——
+見出しだけのファイルは「生成に失敗した」と見分けが付かない。
+
+#### 検証
+
+| | 6-9c | 6-9d |
+|---|---|---|
+| `npm test` | 321 passed | **349 passed**（`orm.test.ts` 28 本を新設） |
+| `npm run test:browser` | 134 passed | **151 passed**（`orm.spec.ts` 17 本を新設） |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**既存の golden（`ddl` 56 / `json` 7 / `state` 8）は 1 バイトも動いていない。**
+動いたのは `tests/golden/orm/` の新設 14 本だけで、`DdlRow` に `kind` と `size` を足した
+変更も 8 本の DDL 生成器には 1 文字も届いていない（あちらは解決済みの `datatype` しか見ない）。
+
+依存は 1 本も増やしていない。CI のワークフローも増やしていない。
+
+#### 次段階への入力 —— 6-9e（残る ORM）と 6-10（プロファイル変換）
+
+- **Prisma / Drizzle / SQLAlchemy は「正規型 → 言語型」の表 1 つで書ける** —— 骨格
+  （`ORM_TARGETS` への登録・UI の select・golden の母集団）は 6-9d が用意した。
+  ただし **Prisma と Drizzle は逆参照を書式として要求する**（`@relation` / `references`）ので、
+  「逆参照を出さない」判断をそのまま持ち込めるかは 1 本目を書くときに決め直す
+- **6-10 のプロファイル変換は `kind` の上に立つ。** `other` に落ちる型（PG の `inet` /
+  mssql の `hierarchyid` / sqlite の `ANY`）は**変換できないことが分かる**ので、そこで止まれる
+- JPA の `@GeneratedValue(strategy = IDENTITY)` は下敷きのプロファイルに依らず固定。
+  sequence 方式（Oracle / PG）を選べるようにするかは未決
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

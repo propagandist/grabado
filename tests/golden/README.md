@@ -7,9 +7,10 @@
 **意図しない挙動変化が起きたら赤くする**こと。CLAUDE.md の Hard Constraint 1 が言う安全網の実体。
 
 ```
-ddl/<db>/<fixture>.sql   Designer.toDdl() の出力。8 DB × 7 fixture
-state/<fixture>.json     fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
-json/<fixture>.json      Designer.toJson() の出力（§4 段階4-2 で追加）
+ddl/<db>/<fixture>.sql       Designer.toDdl() の出力。8 DB × 7 fixture
+orm/<target>/<db>/<f>.kt     Designer.toOrm() の出力（§6 段階6-9d で追加）
+state/<fixture>.json         fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
+json/<fixture>.json          Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
 
 **§6 段階6-6a で入力が DB 別になり、6-6b でその中身が各 DB の実型になった。**
@@ -152,3 +153,22 @@ golden はすべて fixture を読み込んでから採るので、「テーブ�
 5 本の XSLT（計 952 行）を [`../../js/io/ddl/`](../../js/io/ddl/) へ**逐語移植**した段階なので、
 それが完了判定そのもの。上に挙げた癖はすべて TS 側で忠実に再現してある（PG のぶんを直すのが
 6-5b、残る 4 本のぶんが 6-8a 〜 6-8d）。**動いたのは `ddl-input/` の 7 本が消えたことだけ。**
+
+## ORM 出力（`orm/` — §6 段階6-9d で新設）
+
+**DDL と違って 8 × 7 = 56 本にしていない。** ORM 出力は「型の写像」と「構造の組み立て」に
+分かれ、**構造の側はプロファイルに依らない**（生成器が見るのは正規型 `kind` と関係とキーだけで、
+SQL 型名も識別子の引用も通らない）。母集団は 2 つで足りる:
+
+```
+型の写像   8 プロファイル × types-matrix   そのプロファイルの全型が 1 列ずつ入っている
+構造       postgresql × 残り 6 本           複合 PK・自己参照 FK・identity・日本語識別子
+```
+
+合わせて **14 本**。ORM が 4 本（JPA / Prisma / Drizzle / SQLAlchemy）になっても 56 本で、
+DDL の 56 本と同じ桁に収まる。母集団の定義は
+[`../support/fixtures.ts`](../support/fixtures.ts) の `ormGoldenCases`。
+
+**`db/` にディレクトリを作っていない**のが要点 —— 作った瞬間 `DB_PROFILES` に入り、
+ORM が型パレットの契約（`strict` / `<template>` / `newrowtype` / 全型網羅）を背負うことになる。
+ORM は下敷きの db プロファイルの上に乗る別の軸で、**同じ設計から DDL と ORM の両方が出せる**。

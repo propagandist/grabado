@@ -113,4 +113,7 @@
     <string name="identifierforbidden">識別子に使えない文字があります</string>
     <string name="identifiertruncated">黙って切られます</string>
 
+    <!-- orm output (grabado) -->
+    <string name="clientorm">ORM 出力</string>
+
 </locale>

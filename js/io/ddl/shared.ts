@@ -25,7 +25,7 @@
  * 生値だった（& を含む識別子が現行どおり生のまま DDL に出るのはこのため）。
  */
 
-import type { TypePalette } from "../palette.ts";
+import type { TypeKind, TypePalette } from "../palette.ts";
 import type { DesignModel, TableModel, RowModel, KeyModel } from "../model.ts";
 
 /** <relation table="..." row="..." /> */
@@ -39,6 +39,13 @@ export interface DdlRow {
     readonly name: string;
     /** <datatype> のテキスト。型の sql 属性 ＋ size があれば "(size)" */
     readonly datatype: string;
+    /**
+     * 正規型（段階6-9c）。**ORM 出力（6-9d〜）だけが読む** —— 8 本の DDL 生成器は
+     * 解決済みの datatype しか見ない。旧 XML 同梱のパレットには kind が無いので null になりうる。
+     */
+    readonly kind: TypeKind | null;
+    /** サイズ / 精度（"255" や "12,2"）。DDL は datatype に畳んであるが ORM は別々に要る */
+    readonly size: string;
     /** <default> 要素が在るか（XSLT の test="default"）。"" は要素ごと出ない */
     readonly hasDefault: boolean;
     /** <default> のテキスト。型の quote を適用済み */
@@ -108,6 +115,8 @@ function buildRow(row: RowModel, palette: TypePalette): DdlRow {
     return {
         name: row.title,
         datatype: datatype,
+        kind: palette.kindAt(row.type),
+        size: row.size,
         hasDefault: row.def !== "",
         def: row.def === "" ? "" : quoteDefault(row.def, elm),
         nullable: row.nll,

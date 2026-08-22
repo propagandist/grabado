@@ -118,4 +118,7 @@ Overwrite it?</string>
     <string name="identifierforbidden">Character not allowed in identifiers</string>
     <string name="identifiertruncated">silently truncated</string>
 
+    <!-- orm output (grabado) -->
+    <string name="clientorm">ORM output</string>
+
 </locale>

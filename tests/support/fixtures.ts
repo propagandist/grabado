@@ -62,6 +62,34 @@ export const FIXTURES: readonly Fixture[] = Object.freeze([
 
 export const DDL_FIXTURES = FIXTURES.filter((f) => f.ddl);
 
+/**
+ * ORM 出力の golden の母集団（段階6-9d）。**DDL の 56 本と同じ形にはしない。**
+ *
+ * ORM 出力は「型の写像」と「構造の組み立て」に分かれ、**構造の側はプロファイルに依らない**
+ * （生成器が見るのは正規型 kind と関係とキーだけで、SQL 型名も識別子の引用も通らない）。
+ * だから 8 × 7 = 56 本は要らず、次の 2 つで足りる:
+ *
+ *   型の写像   8 プロファイル × types-matrix（**そのプロファイルの全型が 1 列ずつ**入っている）
+ *   構造       postgresql × 残り 6 本（複合 PK・自己参照 FK・identity・日本語識別子）
+ *
+ * 合わせて 14 本。ORM が 4 本になっても 56 本で、DDL の 56 本と同じ桁に収まる。
+ */
+export function ormGoldenCases(dbProfiles: readonly string[]): ReadonlyArray<{
+    readonly db: string;
+    readonly fixture: string;
+}> {
+    const cases: Array<{ db: string; fixture: string }> = [];
+    for (const db of dbProfiles) {
+        cases.push({ db: db, fixture: "types-matrix" });
+    }
+    for (const f of DDL_FIXTURES) {
+        if (f.name !== "types-matrix") {
+            cases.push({ db: SERIALIZER_DB, fixture: f.name });
+        }
+    }
+    return cases;
+}
+
 /** そのプロファイルの fixture が置かれたディレクトリ（段階6-6a で DB 別になった） */
 export function fixtureDir(db: string): string {
     return join(FIXTURE_DIR, db);

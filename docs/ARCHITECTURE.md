@@ -570,9 +570,16 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 
 ## 7. Kotlin backend の契約（到達点）
 
-**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階5-0 にある。** ここはその結果
-としての契約表で、**実装が追いつくまでは「予定」**。各段階が実装した時点で、その行を実測どおりの
-記述に置き換える。
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階5-0 にある。**
+
+**実装は [`../server/`](../server/)（Kotlin / Spring Boot 4・Gradle・JVM 21）。段階5-1b までの行は
+実装済みで、テストが毎回確かめている**（下の §7.4）。それ以降の段階の行は**予定**で、実装が
+入った時点で実測どおりに書き換える。
+
+**機械可読な契約表は [`../tests/contract/backend-cases.json`](../tests/contract/backend-cases.json)。**
+この章は散文の正で、表はそれを 1 ケース 1 行にしたもの。Kotlin の
+`BackendContractTest` が全ケースを実 HTTP に流し、段階5-1c で `tests/node/` の
+仮想 backend も同じ表を読む —— **契約を 2 言語で二重に書かないため**。
 
 ### 7.1 §4（旧 PHP）からの差分
 
@@ -605,5 +612,25 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | env | 既定 | 用途 |
 |---|---|---|
 | `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ） |
-| `GRABADO_READONLY`（`READONLY` も読む） | `false` | save / introspection / AI を止める。公開デモは `true` 一択 |
-| introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする） |
+| `GRABADO_READONLY`（`READONLY` も読む） | `false` | save / introspection / AI を止める。公開デモは `true` 一択。**入るのは 5-3** |
+| introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする）。**入るのは 5-7** |
+
+### 7.4 走らせ方（段階5-1b 時点）
+
+```bash
+cd server && ./gradlew test          # 契約テスト＋振る舞い＋純粋な核（64 本）
+cd server && ./gradlew bootRun       # 8080 で起動（要 GRABADO_SCHEMA_DIR、既定は /data/schema）
+```
+
+フロントと繋いで実物を触るときは 2 プロセス:
+
+```bash
+cd server && GRABADO_SCHEMA_DIR=../tests/tmp-schema ./gradlew bootRun   # 8080
+npm run dev                                                            # 4173（/backend を 8080 へ proxy）
+```
+
+`vite.config.ts` の dev proxy が `/backend` を backend へ回す（**同一オリジンのまま**なので
+`tests/browser/harness.ts` の「オリジン外へのリクエストが出たら失敗」検査に触れない）。
+backend を起こしていなければ ECONNREFUSED になるだけで、5-1b 以前と同じ体験。
+
+テストの層は [`TESTING.md`](TESTING.md) に集約してある。

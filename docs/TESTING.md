@@ -22,6 +22,17 @@ npm run typecheck     # js/ src/ tests/ と *.config.ts（strict / noUncheckedIn
 npm run migrate:design -- <ファイル>  # 設計 JSON の移行（§4 段階4-2b の形式 ＋ §6 段階6-3 の型 id）
 ```
 
+backend（`server/`。段階5-1b で入った Kotlin / Spring Boot）は Gradle 側にある。**要 JDK 21。**
+
+```bash
+cd server && ./gradlew test    # 64 本。Node/Playwright とは独立に回る
+cd server && ./gradlew build   # test ＋ bootJar
+```
+
+`npm test` 系と `./gradlew test` は**互いに依存しない**。フロントのテストは仮想 backend
+（[`../tests/node/harness.ts`](../tests/node/harness.ts)）を使うので、Kotlin を起動しない。
+CI もワークフローを分けてある（`.github/workflows/ci-frontend.yml` / `ci-server.yml`）。
+
 `npm run test:browser` と `npm run known-issues` は **Vite dev server** を Playwright が勝手に起動する
 （[`../vite.config.ts`](../vite.config.ts)、127.0.0.1:4173）。手で立てる必要はない。
 root はリポジトリルートのままなので、`index.html` / `db/` / `locale/` / `styles/` の URL は
@@ -517,7 +528,35 @@ tests/
   node/          vitest + jsdom。同じ golden を高速に検証
   known-issues/  既知の不具合（golden を持たない）
   dist/          build 成果物のスモーク（golden は読むだけ）
+  contract/      backend の HTTP 契約（言語非依存の表。§5 段階5-1b）
+
+server/src/test/kotlin/dev/grabado/
+  api/BackendContractTest.kt    tests/contract/ の表を実 HTTP に流す
+  api/BackendBehaviourTest.kt   表で書けないもの（往復・副作用の不在）
+  design/DesignNameTest.kt      keyword の検証規則（純粋な表テスト）
+  design/FileDesignStoreTest.kt 実 FS への I/O（@TempDir）
 ```
+
+## backend の契約は 1 つの表に置く（§5 段階5-1b）
+
+[`../tests/contract/backend-cases.json`](../tests/contract/backend-cases.json) が
+「1 リクエスト → 1 レスポンス」を 25 ケース持つ。読み手は 2 つ:
+
+1. **Kotlin** — `BackendContractTest` が `@ParameterizedTest` で全ケースを実サーバに流す
+2. **TypeScript** — 仮想 backend（`tests/node/harness.ts`）に `virtual: true` のケースを流す（**段階5-1c で配線**）
+
+こうすると仮想 backend が「サーバについての手書きの推測」から「**同じ表で検証された第 2 実装**」に
+変わる。散文の正は [`ARCHITECTURE.md`](ARCHITECTURE.md) §4（実測・旧 PHP）と §7（Kotlin の到達点）で、
+表はそれを機械可読にしたもの。手で書いた表が腐る問題への対処は、`type-mapping.test.ts` が
+`docs/TYPE-MAPPING.md` を実装と 1 セルずつ突き合わせているのと同じイディオム。
+
+`virtual: false` は仮想 backend では再現できないケース（Map であってファイルシステムでは
+ないので、パス解決や dotfile の扱いを模せない）。**模せる範囲を表の中で宣言する**ことで、
+harness がどこまでサーバなのかが文書ではなくデータになる。
+
+**Kotlin 側は MockMvc ではなく実サーバ（`RANDOM_PORT`）を使う。** 契約には日本語 keyword の
+URL 往復と `%2F` の扱いが含まれ、どちらもサーブレットコンテナのデコード層の話で
+**MockMvc はそこを素通りする**。JDK 標準の `HttpClient` を使うので依存も増えない。
 
 ## 配布物のスモーク（`npm run test:dist`）
 

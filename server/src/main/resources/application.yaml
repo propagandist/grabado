@@ -1,0 +1,18 @@
+# 外向きの env 名は HANDOVER §2.4 のものを保ち、内側では型付きの
+# @ConfigurationProperties で受ける（テストが値をコンストラクタで作れる＝
+# Spring を起動せずに store をテストできる）。
+#
+# GRABADO_ 前綴りを正とし、裸の一般語（SCHEMA_DIR）も互換で読む。裸の名前だけに
+# するのは公開 OSS のコンテナ env として危うい（base image や他プロセスと衝突しうる）。
+grabado:
+  schema-dir: ${GRABADO_SCHEMA_DIR:${SCHEMA_DIR:/data/schema}}
+
+server:
+  tomcat:
+    # 日本語の keyword が URL エンコードで往復するのは実測契約（ARCHITECTURE §4.3）。
+    # 既定に任せず明示する。
+    uri-encoding: UTF-8
+
+spring:
+  application:
+    name: grabado

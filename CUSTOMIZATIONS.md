@@ -6443,6 +6443,210 @@ SHA ピンの管理対象も増える。まず素の形で回し、
 
 ---
 
+### 2026-08-22 HANDOVER §5「backend」段階5-1b —— Gradle/Spring Boot の骨格と、実測契約そのままの list/load/save
+
+**Kotlin が 1 行も無かったリポジトリに backend の実体が入った。** 実装は
+[`server/`](server/)（Spring Boot 4.1.1 / Kotlin 2.4.10 / Gradle 9.7.1 / JVM 21）。
+
+**フロントは 1 行も触っていない。** 5-1b の完了条件は「既存 601 本と golden 114 本が 1 本も
+動かずに緑」で、それが「Kotlin が実測契約を満たした」ことの証明になる。契約を同時に動かすと
+「満たしたから緑」なのか「期待値を合わせたから緑」なのか区別できなくなる。
+
+#### 決めたこと 1: URL は 1 文字も変えず、`{backend}` は**受けて捨てる**
+
+`@RequestMapping(path = ["/backend/{backend}/", "/backend/{backend}"])` で受け、値を読まない。
+`CONFIG.DEFAULT_BACKEND` が `["php-mysql"]`（配列バグ）のままでも、`?backend=` に何を渡されても
+同じハンドラに届く。**ファイルシステムには絶対に到達させない**ことをテストでも押さえた
+（`<backend名>` を変えても同じ正本ディレクトリを見る／その名前のディレクトリを作らない）。
+
+**パスを 2 つ登録している**のは、実測 URL が `backend/php-file/?action=list` と**ディレクトリ
+末尾に `/` が付く**のに対し、Spring Boot 3 以降は trailing slash match が既定 off だから。
+
+#### 決めたこと 2: 未知 action の 501 は**フォールバックを明示的に置く**
+
+`params = "action=..."` の条件に当たらないリクエストを Spring は **404** で返す。実測契約は
+501 なので、条件なしの `@RequestMapping` を最後に置いた。**これはテストが無いと「緑なのに
+契約違反」で通る**（5-0 の申し送りどおり、先にテストを書いた）。
+
+フォールバックの中で action を見て分岐する:
+
+| 来たもの | 返す |
+|---|---|
+| 既知の action に違う HTTP メソッド | **405**（PHP は method を見ていなかったので**強化**＝意図した挙動変更） |
+| `import` / `remove` / 未知 / 指定なし | **501**（実測どおり。`import` の中身は 5-7） |
+
+#### 決めたこと 3: save の body は `inputStream` を直読みする
+
+`@RequestBody ByteArray` を使わない。`js/oz.ts` は POST のとき
+`Content-Type: application/x-www-form-urlencoded` を立てた**あと**に呼び手の
+`application/json` を足しており、XHR の `setRequestHeader` は同名ヘッダを `, ` で連結する。
+`@RequestBody` は `MediaType.parseMediaType` を通るので、**結合値なら 415 で全滅**する。
+PHP は `php://input` を直読みするので §0 実測では絶対に露見しない類の罠。
+
+直読みは「**backend は body を解釈しない**」という実測契約の直訳でもある。壊れた JSON を
+保存して読み戻すテストで、それが実際に成り立つことを確かめた。
+
+#### 決めたこと 4: 実測から**先に**動かしたもの（3 つ）と、その理由
+
+5-0 の分割表では 5-2 に置いていたが、5-1b に前倒しした。**いずれもフロントに届かないので、
+既存 601 本は 1 本も動かない。**
+
+| 項目 | 前倒しの理由 |
+|---|---|
+| **トラバーサルを 400 で拒む** | 5-1b の時点で穴を開けないため。php-file は `basename()` で**黙って書き換えて保存**していた。どちらも「repo 外に書けない」点は同じだが、書き換えると `js/io/conflict.ts` の `Baseline.name` と実ファイル名がずれ、段階4-6 の外部変更検知が別のファイルを見張る |
+| **`load` を `application/octet-stream` + `nosniff` + `attachment`** | 実測は `text/xml` 固定だが、フロントは 4-3b から中身の先頭 1 文字で判別するので**見ない**。一時的にでも嘘の Content-Type を書く理由がない。ここは分類 B のリポジトリで**同一オリジンから任意のユーザー内容を返す唯一の経路** |
+| **`list` の昇順固定と dotfile 除外** | PHP の `glob` は fs 順＝**未規定**だったので、昇順にしても契約違反ではない。dotfile を返さないのは `glob` と同じ挙動で、ついでに save の一時ファイル（`.grabado-*.tmp`）が見える窓も塞げる |
+
+`.json` の強制（大小無視）・制御文字全般・Windows 予約名・255 バイト超は **5-2 のまま**。
+規則を足すたびに、それがフロントに届くかどうかを 1 段階ずつ確かめる。
+
+#### 決めたこと 5: 契約は**機械可読な表 1 つ**に置く
+
+[`tests/contract/backend-cases.json`](tests/contract/backend-cases.json)（25 ケース）。
+Kotlin の `BackendContractTest` が `@ParameterizedTest` で全ケースを実 HTTP に流す。
+**5-1c で `tests/node/` の仮想 backend にも同じ表を流す** —— そうすると仮想 backend が
+「サーバについての手書きの推測」から「**同じ表で検証された第 2 実装**」になる。
+
+`virtual: false` は仮想 backend では再現できないケース（Map であってファイルシステムでは
+ないので、パス解決や dotfile を模せない）。**模せる範囲を表の中で宣言する**ことで、
+harness がどこまでサーバなのかが文書ではなくデータになる。
+
+散文の正は `ARCHITECTURE.md` §4（実測・旧 PHP）と §7（Kotlin の到達点）のまま。手で書いた表が
+腐る問題への対処は、`type-mapping.test.ts` が `docs/TYPE-MAPPING.md` を実装と 1 セルずつ
+突き合わせているのと同じイディオム。
+
+#### 決めたこと 6: Kotlin のテストは **MockMvc ではなく実サーバ**
+
+契約には**日本語 keyword の URL 往復**と `%2F` の扱いが含まれ、どちらもサーブレットコンテナの
+デコード層の話で **MockMvc はそこを素通りする**。`@SpringBootTest(webEnvironment = RANDOM_PORT)`
+＋ JDK 標準の `HttpClient` なら実際に通り、しかも依存が 1 つも増えない。
+
+**Boot 4 では `@AutoConfigureMockMvc` が `spring-boot-starter-test` の外に出ている**ので、
+MockMvc を使うなら依存を 1 つ足すことになった。結果的に、正しいほうが安かった。
+
+#### 実測で分かったこと: Tomcat は `%2F` を含むパスを 400 で拒む
+
+契約表に「`<backend名>` に `..%2F..%2Fetc` を入れても 200」と書いて走らせたら **400** だった。
+**アプリに届く前にサーブレットコンテナの段階で閉じている**。実測に合わせて表を直し、
+ケース名も `backend-segment-encoded-slash-is-rejected` に変えた（エンコードしない `..` を含む
+名前は普通のパスセグメントとして届き、`<backend名>` を読まないので無害 —— こちらも表に足した）。
+
+#### 依存とビルド
+
+| | 選んだもの | 備考 |
+|---|---|---|
+| Spring Boot | **4.1.1** | 新規プロジェクトなので最新メジャー。3.5.x（旧世代）を選ぶ理由が無い。**Jackson 3（`tools.jackson`）** に移っている点だけ注意 |
+| Kotlin | **2.4.10** | `jvmToolchain(21)` で出力を固定（開発機の JDK が何であれ決定論的）。`allWarningsAsErrors` |
+| Gradle | **9.7.1** | wrapper を commit し、`gradle-wrapper.properties` に **`distributionSha256Sum`** を書いた |
+| BOM | `platform(spring-boot-dependencies)` | `io.spring.dependency-management` plugin を使わない（plugin を 1 つ減らせる） |
+| 版の置き場 | `gradle/libs.versions.toml` | Dependabot の gradle ecosystem が読む。starter の版は**書かない**（BOM が解決するので必ず Boot に追随する） |
+
+**入れなかったもの**: `starter-jdbc`（DB レス既定を構造で保証 —— HikariCP が classpath に無い
+＝ `spring.datasource.*` の auto-configuration がそもそも存在しない。JDBC は 5-7）/
+`starter-security`（認証も認可も無い。要るのはヘッダ 3 本で、`OncePerRequestFilter` 20 行で足りる）/
+`starter-validation`（`keyword` の検証は純関数で書きたい）/ `jackson-module-kotlin`
+（いま JSON は書き出し方向しか無い）。
+
+**入れたもの**: `kotlin-reflect`。`@ConfigurationProperties` の constructor binding が
+パラメータ名を reflect 越しに読むため、無いと `ClassNotFoundException:
+kotlin.reflect.jvm.ReflectJvmMapping` で **Bean 生成ごと落ちる**（実際に踏んだ）。
+
+**★ `dependencyLocking` を最初の commit から有効にした。** org `security-baseline.md`
+§3.12 / §5.1 が分類 B に対して「解決済みの依存グラフをどこにも持たない」を崩れる変更として
+名指ししており、Gradle は locking が既定 off。効いていることは実地で確認できた ——
+`kotlin-reflect` を足したとき **`Resolved ... which is not part of the dependency lock state` で
+ビルドが止まった**。更新は `./gradlew dependencies --write-locks`。
+
+#### そのほか
+
+- **`server/` を新設**（`backend/` を再利用しない。5-0 の決定どおり）。PHP の撤去は 5-2
+- `.gitattributes` に **`gradlew` は LF / `gradlew.bat` は CRLF / jar は binary** を足した。
+  抜けると **Windows で clone した人の `./gradlew` が起動しない**（`.githooks/**` と同じ問題）
+- **`gradlew` の実行ビットを git に記録した**（`git update-index --chmod=+x`）。Windows で
+  `gradle wrapper` を実行すると mode 100644 のままコミットされ、**Linux では
+  `./gradlew: Permission denied`（exit 126）で CI が落ちる**。改行だけ直しても駄目で、
+  これは `.gitattributes` では表現できない別の属性 —— **実際に CI で踏んでから直した**
+- `.gitignore` に `/server/bin/` を足した（VSCode の Kotlin 拡張が作る Eclipse 系の出力）
+- `vite.config.ts` に **dev proxy**（`/backend` → 8080）。**同一オリジンのまま**なので
+  `tests/browser/harness.ts` の「オリジン外へのリクエストが出たら失敗」検査に触れない。
+  backend を起こしていなければ ECONNREFUSED になるだけで、5-1b 以前と同じ体験
+- 起動時 fail-fast —— 正本ディレクトリが存在しない / ディレクトリでない / 読めない / 書けないなら
+  **起動させない**。mount 忘れでコンテナ内 fs に書き、コンテナ破棄で設計を失う事故を塞ぐ
+- save は同じディレクトリの一時ファイル → `ATOMIC_MOVE`。正本は git 管理のファイルなので、
+  **半端に書かれた JSON が `git add` される**のが最悪の失敗
+- `.github/workflows/ci-server.yml` と `.github/dependabot.yml` を追加（下記）
+
+#### CI —— Gradle を入れる当事者として
+
+- **`ci-server.yml` は `paths: server/** , tests/contract/** , 自分自身` で絞る。**
+  Kotlin を 1 行も触らない PR で Gradle を回さない。frontend と別ワークフローなのは
+  `paths` が `on:` にしか書けないため（5-1a の記録と同じ理由）
+- `gradle/actions/setup-gradle` に **`validate-wrappers: true`**。`gradle-wrapper.jar` を
+  Gradle の既知リリースのハッシュと毎回突き合わせる。**60KB の不透明なバイナリを分類 B の
+  リポジトリに置く懸念は、これで「検証済みバイナリ」に変わる**（`distributionSha256Sum` と 2 段）
+- 最後に `git diff --exit-code`。**`--write-locks` を忘れたまま依存を足した PR をここで捕まえる**
+- **★ GitHub の「Automatic dependency submission」は有効にしない。** Gradle プロジェクトで
+  **全ブランチの全 push に走り**、cartera では 9.5 日で 123 回・**月換算 1,100 分＝org 枠の
+  半分以上**を単独で消費した実測がある。依存グラフが使われるのは default branch だけなのに、である。
+  **判断をワークフローのコメントに書いた** —— Kotlin を入れた誰かが善意で有効化する経路を先に塞ぐため
+- `.github/dependabot.yml` を追加（github-actions / gradle / npm）。**SHA ピンは Dependabot と
+  セットで初めて安全**（凍結したまま放置すると、セキュリティ修正が降りてこないぶん浮動タグより悪い）。
+  更新 PR も枠を食うので weekly ＋ grouped ＋ limit 3。**Dependabot は `gradle.lockfile` を
+  更新できない**ので、gradle の更新 PR は上の `git diff --exit-code` で落ちる ——
+  落ちること自体が「ロックを更新し忘れていない」証拠になる
+
+#### 検証
+
+| | 5-1a | 5-1b |
+|---|---|---|
+| `npm test` | 407 passed | **407 passed** |
+| `npm run test:browser` | 189 passed | **189 passed** |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | （無し） | **64 passed** |
+
+golden 114 本は無差分。`js/` `src/` `tests/browser/` `tests/node/` `db/` `locale/` `index.html` の
+diff は空（`tests/` は `contract/` の新規追加のみ）。
+
+Kotlin 側の内訳: 契約表 25 ケース ＋ 表の健全性 1 / 振る舞い 9 / `DesignName` 19 / `FileDesignStore` 10。
+
+**CI の実測**（PR の run。5-1a と同じく `jobs` API の `steps[]` から採った）:
+
+| ワークフロー | 内訳 | 合計 |
+|---|---|---|
+| `ci-frontend.yml` | （5-1a の記録どおり。Chromium 27 秒が最大） | 77 秒 → 課金 **2 分** |
+| `ci-server.yml` | セットアップ 4 秒 ／ **ビルドとテスト 76 秒** ／ 残り 3 秒 | 83 秒 → 課金 **2 分** |
+
+`ci-server.yml` の 76 秒は**ほぼ全部が Gradle 本体**（依存解決 ＋ Kotlin コンパイル ＋
+Spring コンテキスト 2 回起動）。`setup-gradle` のキャッシュ復元は 0 秒 —— org の cartera で
+「遅いと思っていたジョブの時間はほぼテスト本体で、キャッシュ復元は数秒だった」という
+実測が出ているのと同じ形で、**キャッシュを疑う前に測るべき**という規約 §3③ の実例が
+grabado にも 2 つ揃った。
+
+**両方に触れる PR（これがそれ）は 4 分**だが、`paths` で絞ってあるので通常はどちらか一方
+＝ 2 分。`timeout-minutes: 20` は実測 83 秒に対して十分な余裕がある。
+
+#### 次段階への入力
+
+- **5-1c（新設）: 契約表を TS 側にも流す。** `tests/node/harness.ts` の仮想 backend に
+  `virtual: true` の 14 ケースを流し、**未知 action の応答を 404 → 501 に直す**（現在の 404 は
+  php-file の fs 解決に落ちた頃の副産物で、実契約と違う）。あわせて「表に出てくる全 status が
+  `js/io.ts` の `check()` に載っていること」を機械的に確認するテストを置く ——
+  **400 / 403 / 412 が無言で成功に倒れる**問題を再発不能にするため。
+  5-0 の分割では 5-1b に含めていたが、**5-1b の完了条件（既存テストが 1 本も動かない）を
+  純粋に保つため**に分けた
+- **5-2 で PHP を撤去する。** `backend/` ごと `git rm` ＋ submodule ＋ `.gitmodules`。
+  同じ PR で `.json` 強制・`keyword` 検証の残り・`list` の `*.json` 限定を入れる
+- **`js/oz.ts` の Content-Type 結合は未実測のまま。** 直読みにしたので**設計は分岐しない**が、
+  結合しているなら `js/oz.ts` の form ヘッダは撤去できる（form でボディを送る呼び手は現在 1 つも無い）。
+  測るなら `npm run dev` ＋ 受け口を立てて生ヘッダを読む
+- **Boot 4 は Jackson 3（`tools.jackson`）。** `JsonNode` が自前の `map(...)` を持つので
+  **Kotlin の `Iterable.map` が解決されない**（`for` で回す）。`asText()` ではなく `asString()`、
+  `fields()` ではなく `properties()`。5-7 で introspection JSON を組むときに再び効く
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

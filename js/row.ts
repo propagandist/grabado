@@ -9,6 +9,7 @@
 
 import { OZ } from "./oz.ts";
 import { _, publish } from "./globals.ts";
+import { identifierHint } from "./identifier-hint.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";
@@ -155,6 +156,28 @@ export class Row extends Visual<RowDom> {
         }
 
         super.setTitle(t);
+        this.syncIdentifierWarning();
+    }
+
+    /**
+     * 列名が現在のプロファイルでそのまま使えるかを見て、印と説明を付け外しする（段階6-9b）。
+     *
+     * **止めない。** 拒むと、PG で作った設計を oracle で開いた瞬間に既存の名前が不正になり、
+     * 直せない状態に落ちる（判断は CUSTOMIZATIONS.md の段階6-9b）。
+     *
+     * 説明は**名前セルの tooltip** に置く。コメントの tooltip は行のコンテナ側にあり
+     * （redraw が入れる）、置き場所が分かれているので取り合いにならない。
+     */
+    syncIdentifierWarning(): void {
+        var hint = identifierHint(this.getTitle(), this.owner.owner.palette);
+        if (hint) {
+            this.dom.title.title = hint;
+            OZ.DOM.addClass(this.dom.title, "invalid");
+        } else {
+            /* **属性ごと外す。** title="" を置くと DOM が変わり、状態 golden が動く */
+            this.dom.title.removeAttribute("title");
+            OZ.DOM.removeClass(this.dom.title, "invalid");
+        }
     }
 
     click(e: MouseEvent): void {

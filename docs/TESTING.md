@@ -252,6 +252,8 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 |---|---|
 | [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../js/io/template.ts`](../js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。**8 本すべてが `<template>` と `newrowtype` を持つこと**・`postgresql` / `sql-standard` / `sqlite` の 3 列がその DB で house 既定をどう表すか・`<template>` を持たないパレット（旧 XML 同梱）が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外 |
 | [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・**`sqlite` の 3 列**（PK が既定値を持てない側の例） |
+| [`../tests/node/identifier.test.ts`](../tests/node/identifier.test.ts) | [`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts) の識別子検査を直に叩く（ハーネス不要。段階6-9b）。**どの名前が・どのプロファイルで・なぜ使えないか**の 3 つ組。8 本の上限と単位の表（実測と一次資料の別つき）・**囲めば通るものは 1 件も警告しない**こと・known-issue #15 が直っていないこと |
+| [`../tests/browser/identifier.spec.ts`](../tests/browser/identifier.spec.ts) | 実ブラウザ側（段階6-9b）。**警告が画面に届いているか** —— 波線（`class="invalid"`）と理由の tooltip、テーブル名ではコメントと重ねること、**警告が出ても名前はモデルに入る**（止めない）こと |
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は
 キー管理 UI から `CREATE INDEX` に届く経路（`KeyManager.add()` → avail から列を選んで `←`）。

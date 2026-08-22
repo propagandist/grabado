@@ -107,4 +107,10 @@
     <string name="unknownformat">読み取れないデータです。設計JSON（{...}）かXML（&lt;sql&gt;...）を入れてください。</string>
     <string name="docs">ドキュメント</string>
 
+    <!-- identifier warnings (grabado) -->
+    <string name="identifierempty">識別子が空です</string>
+    <string name="identifiertoolong">識別子が長すぎます</string>
+    <string name="identifierforbidden">識別子に使えない文字があります</string>
+    <string name="identifiertruncated">黙って切られます</string>
+
 </locale>

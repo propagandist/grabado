@@ -22,6 +22,7 @@
  */
 
 import { OZ } from "./oz.ts";
+import { identifierHint } from "./identifier-hint.ts";
 import { publish } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import { Row, type RowData } from "./row.ts";
@@ -154,6 +155,33 @@ export class Table extends Visual<TableDom> {
             }
         }
         super.setTitle(t);
+        this.syncTitleTooltip();
+    }
+
+    /**
+     * テーブル名の tooltip と警告の印（段階6-9b）。
+     *
+     * **テーブルは名前セルの tooltip をコメントに使っている**（Row はコンテナ側なので
+     * 分かれている）ので、コメントと識別子の警告を 1 か所に重ねる。両方あるときは改行で
+     * つなぐ —— どちらかを落とすと「もう片方が消えた」ように見える。
+     */
+    syncTitleTooltip(): void {
+        var hint = identifierHint(this.getTitle(), this.owner.palette);
+        var parts = [this.data.comment, hint].filter(function (one) {
+            return one !== "";
+        });
+        var text = parts.join("\n");
+        if (text === "") {
+            /* **属性ごと外す。** title="" を置くと DOM が変わり、状態 golden が動く */
+            this.dom.title.removeAttribute("title");
+        } else {
+            this.dom.title.title = text;
+        }
+        if (hint) {
+            OZ.DOM.addClass(this.dom.title, "invalid");
+        } else {
+            OZ.DOM.removeClass(this.dom.title, "invalid");
+        }
     }
 
     getRelations(): Relation[] {
@@ -412,7 +440,8 @@ export class Table extends Visual<TableDom> {
 
     setComment(c: string): void {
         this.data.comment = c;
-        this.dom.title.title = this.data.comment;
+        /* grabado: 段階6-9b。tooltip は識別子の警告と共有するので直接入れない */
+        this.syncTitleTooltip();
     }
 
     getComment(): string {

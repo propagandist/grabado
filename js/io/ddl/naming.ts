@@ -34,6 +34,28 @@ import {
     SQL_STANDARD_RESERVED,
 } from "./keywords.ts";
 
+/**
+ * 識別子の長さの上限（段階6-9b）。
+ *
+ * **単位も超えたときの挙動もプロファイルで違う**ので、数字 1 つでは表せない:
+ *
+ *   postgresql  63 バイト   **黙って切る**（エラーにならない。実測 PG 18）
+ *   mysql       64 文字     拒む（ERROR 1059。実測 MySQL 8.4）
+ *   mariadb     64 文字     拒む（ERROR 1103。実測 MariaDB 11）
+ *   sqlite      上限なし    実測（10,000 文字でも通る）ので limit を持たない
+ *
+ * **いちばん危ないのは postgresql** —— 64 文字目以降が黙って消えるので、設計と DB が
+ * エラー無しで食い違う。house 標準が PG であることを考えると、この 1 本のために警告を
+ * 出す価値がある（段階6-9b の判断。CUSTOMIZATIONS.md）。
+ */
+export interface IdentifierLimit {
+    readonly max: number;
+    /** PG と Oracle は**バイト**、MySQL 系と SQL Server は**文字**で数える */
+    readonly unit: "bytes" | "chars";
+    /** 超えたときに DB がどうするか。**truncate は postgresql だけ** */
+    readonly onExceed: "error" | "truncate";
+}
+
 /** プロファイルごとの識別子の囲み方 */
 export interface IdentifierRules {
     /** 開き記号 */
@@ -58,6 +80,16 @@ export interface IdentifierRules {
      * 経路（§5.2）を持つのは Oracle のほう。
      */
     readonly bare: RegExp;
+    /**
+     * 識別子の長さの上限（段階6-9b）。**数え方も超えたときの挙動もプロファイルで違う。**
+     * 上限が無い（か未計測の）プロファイルは持たない。
+     */
+    readonly limit?: IdentifierLimit;
+    /**
+     * 囲んでも書けない文字（段階6-9b）。**Oracle の `"` だけ**（known-issue #15）。
+     * 他の 7 本はエスケープで通るので持たない。
+     */
+    readonly forbidden?: RegExp;
 }
 
 /**
@@ -82,6 +114,8 @@ export const POSTGRESQL_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split('"').join('""'),
     reserved: POSTGRESQL_RESERVED,
     bare: BARE_LOWER,
+    /* 実測（PG 18）: 64 文字目以降が**黙って切られる**。日本語 22 文字（66 バイト）も 63 バイトに切られた */
+    limit: { max: 63, unit: "bytes", onExceed: "truncate" },
 };
 
 /**
@@ -97,6 +131,8 @@ export const SQL_STANDARD_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split('"').join('""'),
     reserved: SQL_STANDARD_RESERVED,
     bare: BARE_LOWER,
+    /* SQL:2016 の <identifier> は 128 文字。**規格が一次資料なので実測は無い**（実装も無い） */
+    limit: { max: 128, unit: "chars", onExceed: "error" },
 };
 
 /**
@@ -113,6 +149,7 @@ export const H2_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split('"').join('""'),
     reserved: H2_RESERVED,
     bare: BARE_LOWER,
+    /* **上限を持たせない** —— H2 は文書化された上限を持たず、6-9b では実測もしていない */
 };
 
 /**
@@ -128,6 +165,8 @@ export const MARIADB_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split("`").join("``"),
     reserved: MARIADB_RESERVED,
     bare: BARE_LOWER,
+    /* 実測（MariaDB 11）: 65 文字で ERROR 1103 */
+    limit: { max: 64, unit: "chars", onExceed: "error" },
 };
 
 /**
@@ -140,6 +179,8 @@ export const MYSQL_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split("`").join("``"),
     reserved: MYSQL_RESERVED,
     bare: BARE_LOWER,
+    /* 実測（MySQL 8）: 65 文字で ERROR 1059 */
+    limit: { max: 64, unit: "chars", onExceed: "error" },
 };
 
 /**
@@ -154,6 +195,8 @@ export const MSSQL_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split("]").join("]]"),
     reserved: MSSQL_RESERVED,
     bare: BARE_LOWER,
+    /* 128 文字（sysname）。**ドキュメント由来で実測していない**（イメージが手元に無い） */
+    limit: { max: 128, unit: "chars", onExceed: "error" },
 };
 
 /**
@@ -170,6 +213,10 @@ export const ORACLE_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split('"').join('""'),
     reserved: ORACLE_RESERVED,
     bare: BARE_UPPER,
+    /* 12.2 以降 128 バイト。**ドキュメント由来で実測していない** */
+    limit: { max: 128, unit: "bytes", onExceed: "error" },
+    /* known-issue #15。**Oracle だけが識別子内の " を許さない**（ORA-25716。6-8c で実測） */
+    forbidden: /"/,
 };
 
 /**
@@ -190,6 +237,7 @@ export const SQLITE_IDENTIFIER: IdentifierRules = {
     escape: (name) => name.split('"').join('""'),
     reserved: SQLITE_RESERVED,
     bare: BARE_LOWER,
+    /* **上限を持たせない** —— 実測で 10,000 文字の識別子も通った（SQLite 3.51.2） */
 };
 
 
@@ -252,4 +300,88 @@ export function keyConstraintName(key: DdlKey, table: string): string {
  */
 export function foreignKeyName(table: string, column: string): string {
     return "fk_" + table + "_" + column;
+}
+
+/**
+ * db プロファイル名 -> 識別子の規則（段階6-9b）。
+ *
+ * ここに表を置くのは、8 つの IdentifierRules が全部このファイルに在るため。
+ * 生成器側（js/io/ddl/generate.ts）の switch は「どの生成器を呼ぶか」の表で、
+ * こちらは「識別子をどう書くか」の表 —— 6-9c 以降 ORM 出力が別軸で入ると
+ * 前者だけが増える（ORM も識別子の規則は下敷きの DB プロファイルに従う）。
+ *
+ * 知らない名前には null を返す。旧い設計 XML に同梱された <datatypes db="cubrid"> の
+ * ような、対応 DB から外れたプロファイル名が来うるため（6-1 で 4 本撤去した）。
+ */
+const IDENTIFIER_RULES: Readonly<Record<string, IdentifierRules>> = {
+    postgresql: POSTGRESQL_IDENTIFIER,
+    "sql-standard": SQL_STANDARD_IDENTIFIER,
+    h2: H2_IDENTIFIER,
+    mariadb: MARIADB_IDENTIFIER,
+    mysql: MYSQL_IDENTIFIER,
+    mssql: MSSQL_IDENTIFIER,
+    oracle: ORACLE_IDENTIFIER,
+    sqlite: SQLITE_IDENTIFIER,
+};
+
+export function identifierRulesFor(db: string | null): IdentifierRules | null {
+    return (db && IDENTIFIER_RULES[db]) || null;
+}
+
+/**
+ * 識別子がそのプロファイルでそのまま使えないときの理由（段階6-9b）。
+ *
+ * kind が locale のキーになる（js/row.ts / js/table.ts が `_()` に通す）。
+ */
+export type IdentifierIssue =
+    | { readonly kind: "identifierempty" }
+    | {
+          readonly kind: "identifiertoolong";
+          readonly length: number;
+          readonly limit: IdentifierLimit;
+      }
+    | { readonly kind: "identifierforbidden"; readonly char: string };
+
+/**
+ * 識別子を検査する（段階6-9b）。問題が無ければ null。
+ *
+ * **止めるのではなく警告するための関数。** 6-5b が「生成器が識別子を書き換えるのは採らない」
+ * と決着させ（設計と DDL が食い違い、introspection の往復が壊れる）、残る手は「入力側で
+ * 気づけるようにする」だけになった。入力を拒まない理由は 6-9b の記録 —— **PG で作った設計を
+ * oracle で開いた瞬間に既存の名前が不正になる**ので、拒むと直せない状態に落ちる。
+ *
+ * 見るのは 3 つだけで、どれも**その DB で実際に壊れる**ことが分かっているもの:
+ *
+ *   empty      名前の無い列 / テーブル。**sqlite だけは実際には作れてしまう**（実測）が、
+ *              設計として壊れているので全プロファイルで警告する
+ *   too-long   上限はプロファイルごと（IdentifierLimit）。**postgresql は黙って切る**
+ *   forbidden  Oracle の " だけ（known-issue #15）
+ *
+ * 「予約語だから囲まれる」は**問題ではない**ので見ない —— quoteIdentifier が必ず囲むので
+ * 実行できる DDL になる。ここで警告すると house 標準の snake_case が大量に引っかかる。
+ */
+export function identifierIssue(name: string, rules: IdentifierRules): IdentifierIssue | null {
+    if (name === "") {
+        return { kind: "identifierempty" };
+    }
+
+    if (rules.forbidden) {
+        const hit = rules.forbidden.exec(name);
+        if (hit) {
+            return { kind: "identifierforbidden", char: hit[0] };
+        }
+    }
+
+    if (rules.limit) {
+        /* バイト数は UTF-8 で数える（PG の NAMEDATALEN も Oracle の 128 バイトも UTF-8 前提） */
+        const length =
+            rules.limit.unit === "bytes"
+                ? new TextEncoder().encode(name).length
+                : [...name].length;
+        if (length > rules.limit.max) {
+            return { kind: "identifiertoolong", length: length, limit: rules.limit };
+        }
+    }
+
+    return null;
 }

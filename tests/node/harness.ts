@@ -274,9 +274,14 @@ export async function createHarness(): Promise<NodeHarness> {
             return;
         }
         if (action === "list") {
-            /* 昇順・末尾にも改行・空なら 0 バイト。dotfile は返さない（段階5-1b） */
+            /*
+             * 昇順・末尾にも改行・空なら 0 バイト。dotfile は返さない（段階5-1b）。
+             * 段階5-2 から **`*.json` だけ**（大小無視）—— 正本ディレクトリは README や
+             * .gitattributes と同居しうるので、設計として扱うものを絞る。
+             */
             const names = Array.from(serverFiles.keys())
                 .filter((name) => !name.startsWith("."))
+                .filter((name) => name.toLowerCase().endsWith(".json"))
                 .sort();
             callback(names.map((name) => name + "\n").join(""), 200, {});
             return;

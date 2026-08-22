@@ -52,11 +52,11 @@
       "virtual": false
     },
     {
-      "id": "list-keeps-non-json",
-      "note": "段階5-1b は実測契約そのまま。拡張子の強制（*.json だけを返す）は 5-2",
-      "seed": { "legacy": "<sql/>", "a.json": "{}" },
+      "id": "list-only-json",
+      "note": "段階5-2: 正本ディレクトリは *.json だけを設計として扱う。README や .gitattributes が同居していても一覧に出さない。拡張子の判定は大小無視",
+      "seed": { "legacy": "<sql/>", "README.md": "# schema", "a.json": "{}", "B.JSON": "{}" },
       "request": { "method": "GET", "action": "list" },
-      "expect": { "status": 200, "body": "a.json\nlegacy\n" },
+      "expect": { "status": 200, "body": "B.JSON\na.json\n" },
       "virtual": false
     },
     {
@@ -78,6 +78,46 @@
       "id": "save-missing-keyword",
       "note": "php-file は 200 + PHP の Fatal error 本文を返していた。移植先では 400（ARCHITECTURE §4.3 の申し送り）",
       "request": { "method": "POST", "action": "save", "keyword": null, "body": "{}" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "save-rejects-non-json-extension",
+      "note": "段階5-2: 正本ディレクトリに設計以外を作らせない。フロントは jsonKeyword() が必ず .json を付けるので到達しない（＝ UI から見た挙動は変わらない）",
+      "request": { "method": "POST", "action": "save", "keyword": "orders.txt", "body": "{}" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "save-rejects-extensionless",
+      "note": "php-file 時代の data/default のような拡張子なしファイルは、もう作れない",
+      "request": { "method": "POST", "action": "save", "keyword": "default", "body": "{}" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "save-accepts-uppercase-extension",
+      "note": "jsonKeyword() は .JSON を二重付与しないので、大文字のまま届く経路が実在する。拡張子の判定は大小無視",
+      "request": { "method": "POST", "action": "save", "keyword": "Orders.JSON", "body": "{}" },
+      "expect": { "status": 201 },
+      "virtual": true
+    },
+    {
+      "id": "save-rejects-windows-reserved-name",
+      "note": "段階5-2: 開発機が Windows でも動く。ここを通すと FileDesignStore が OS 依存の例外で 500 になる",
+      "request": { "method": "POST", "action": "save", "keyword": "CON.json", "body": "{}" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "save-rejects-too-long-name",
+      "note": "段階5-2: UTF-8 で 255 バイト超は ext4 / NTFS の上限。ここで弾かないと IOException が 500 になる（この名前は 260 バイト）",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+        "body": "{}"
+      },
       "expect": { "status": 400 },
       "virtual": false
     },
@@ -134,6 +174,14 @@
       "id": "load-traversal",
       "note": "php-file は basename() で黙って書き換えていた。移植先は 400 で拒む（Baseline.name とファイル名がずれないため）",
       "request": { "method": "GET", "action": "load", "keyword": "../../etc/passwd" },
+      "expect": { "status": 400 },
+      "virtual": false
+    },
+    {
+      "id": "load-rejects-non-json-extension",
+      "note": "段階5-2: 読み出しにも同じ規則を掛ける。正本ディレクトリに同居する README や .gitattributes を API から読めないようにする",
+      "seed": { "README.md": "# schema" },
+      "request": { "method": "GET", "action": "load", "keyword": "README.md" },
       "expect": { "status": 400 },
       "virtual": false
     },

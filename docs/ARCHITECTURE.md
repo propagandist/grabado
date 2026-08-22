@@ -40,11 +40,19 @@ styles/                    スタイル（保持）
 locale/                    多言語（日本語ロケール微調整の対象）
 db/<db>/                   DB プロファイル。型パレット差分の対象
   datatypes.xml            型パレット定義（**段階6-5a 以降、db/ にはこれしか無い**）
-backend/                   各種 backend 実装（下記）。PHP は廃止予定
-  php-file/                ファイル I/O 版。house 到達点に最も近い（§4 実測の主対象）
-  php-postgresql/          PostgreSQL 版。introspection(import) の実測対象
-  php-mysql/ php-s3/ ...   その他多数（参照のみ）
-  php-s3/amazon-s3-php/    submodule（未初期化。PHP 撤去時に削除）
+~~backend/~~               **段階5-2 で撤去**（PHP 15 本 ＋ submodule `php-s3/amazon-s3-php`）。
+                          ★ 旧実装は commit 7b3bb3d に残っている:
+                              git show 7b3bb3d:backend/php-file/index.php
+                              git show 7b3bb3d:backend/php-postgresql/index.php
+                          実測の結果は §4 に、introspection の実出力は
+                          samples/introspection-postgresql.xml にバイト列で固定してある。
+server/                   ★ §5 段階5-1b で追加。Kotlin / Spring Boot 4（下記）
+  src/main/kotlin/dev/grabado/
+    api/                    URL 形状・status・ヘッダ（契約を持つ唯一の層）
+    design/                 keyword の検証（純粋）と正本ディレクトリへの I/O
+    config/                 設定（@ConfigurationProperties）とセキュリティヘッダ
+  gradle/libs.versions.toml 版はここ 1 か所（Dependabot が読む）
+  gradle.lockfile           依存ロック（org security-baseline §3.12）
 license.txt               BSD License（保持必須）
 Dockerfile                upstream の Dockerfile（busybox httpd。house 版で置換予定）
 ```
@@ -56,7 +64,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 | frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-3b で 18 本すべてを `.ts` 化・段階3-4 で `SQL.*` と `window` 登録を撤去** | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
 | **DDL 生成** | ~~`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）~~ → **段階6-5a で [`../js/io/ddl/`](../js/io/ddl/) へ逐語移植（XSLT は撤去）** | TS 実装（**§6.3 の規約は 6-5b**） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
-| backend | PHP（`backend/php-*`） | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy） | — |
+| backend | ~~PHP（`backend/php-*`）~~ **段階5-2 で撤去** | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy）。**段階5-1b で `server/` に実体が入り、list/load/save は実測契約を満たしている**（§7）。introspection は 5-7、AI proxy は §11 | — |
 | 永続化 | 共有 PG / ファイル 各種 | git 管理 JSON ファイル正本（DB レス既定） | — |
 | 型パレット | `db/*/datatypes.xml` | PostgreSQL 18 型パレット（§6.1）。**`postgresql` は段階6-3 で差し替え済み**（24 型・`strict="1"`）。残る 4 本は 6-8 | — |
 | 配布 | 共有サーバ＋外部 PG | マルチステージ Docker・各自ローカル | — |
@@ -73,10 +81,20 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 - [x] ブラウザ UI からの end-to-end 操作確認（§3 段階1 で実施。テーブル追加・カラム追加・SQL 出力・
       スタイル切替・ロケール切替・cookie 保存が Vite バンドル後も動くことを確認）
 
-## 4. backend 契約（実測・旧 PHP。段階5-2 で撤去）
+## 4. backend 契約（実測・旧 PHP。**段階5-2 で撤去済み**）
 
 **この章は upstream の PHP backend を実際に起動して測った記録**で、`backend/` は段階5-2 で
-リポジトリから消える（撤去後も `git show <sha>:backend/php-postgresql/index.php` で読める）。
+リポジトリから消えた。**旧実装は commit `7b3bb3d` に残っている**:
+
+```bash
+git show 7b3bb3d:backend/php-file/index.php         # save / load / list の形
+git show 7b3bb3d:backend/php-postgresql/index.php   # introspection の SQL（§4.6 の 2 不具合込み）
+```
+
+凍結コピーを `docs/` に置くことはしない（それ自体が二重管理になる）。introspection の実出力は
+[`samples/introspection-postgresql.xml`](samples/introspection-postgresql.xml) にバイト列で固定してあり、
+5-7 で必要になるのは「どのカタログを読むかの意味」と「出力構造」の 2 つだけ。**PG18 の 2 不具合は
+「再現しない」と決めてあるので、そもそも逐語移植ではない。**
 
 **Kotlin 実装が満たすべき契約は §7。** 移植は §4 の実測に一致させるところから始め（段階5-1b は
 URL も status も 1 文字も変えない）、そこから段階ごとに変えていく。**変更点は §7 の表に集約する。**

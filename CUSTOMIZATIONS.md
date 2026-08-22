@@ -6741,12 +6741,107 @@ locale の網羅 1。**既存 407 本は 1 本も動いていない**（425 − 
 
 ---
 
+### 2026-08-22 HANDOVER §5「backend」段階5-2 —— PHP を撤去し、正本ディレクトリの規則を入れる
+
+**upstream 由来の PHP backend 15 実装（31 ファイル）と submodule が消えた。** 同じ PR で、
+正本ディレクトリが受け付ける名前の規則を確定した。
+
+**フロントは 1 行も触っていない**（触ったのは `tests/node/harness.ts` の仮想 backend だけ）。
+`js/io.ts` の `jsonKeyword()` が必ず `.json` を付けるので、**新しい規則はどれも UI からは
+到達しない** —— 変わるのは「公開 API として何を受け付けないか」だけ。
+
+#### 決めたこと 1: PHP は「Kotlin が実測契約を満たしたことを確かめてから」消した
+
+5-0 では「最初に消す」「最後まで残す」の中間として 5-2 に置いた。実際その順序が効いた ——
+**5-1b で 25 ケース、5-1c で仮想 backend まで揃えてから消した**ので、消す時点で
+「PHP と同じ契約を Kotlin が満たす」は表で証明済みだった。
+
+**旧実装は commit `7b3bb3d` に残っている。**
+
+```bash
+git show 7b3bb3d:backend/php-file/index.php         # save / load / list の形
+git show 7b3bb3d:backend/php-postgresql/index.php   # introspection の SQL（§4.6 の 2 不具合込み）
+```
+
+**凍結コピーを `docs/` に置くことはしない** —— それ自体が二重管理になる。5-7 で必要になるのは
+「どのカタログを読むかの意味」と「出力構造」の 2 つだけで、後者は
+`docs/samples/introspection-postgresql.xml` にバイト列で固定してある。**PG18 の 2 不具合は
+「再現しない」と決めてあるので、そもそも逐語移植ではない。**
+
+撤去したもの: `backend/` 31 ファイル（`php-file` / `php-postgresql` / `php-mysql` / `php-pdo` /
+`php-sqlite` / `php-s3` / `php-blank` / `php-cubrid` / `php-mysql+file` / `perl-file` / `asp-file` /
+`cf-mysql` / `web2py`）、submodule `backend/php-s3/amazon-s3-php`、`.gitmodules`。
+**6-1 が作った `backend/php-cubrid/index.php:37` の dangling も一緒に消えた。**
+
+#### 決めたこと 2: 規則は 6 つ。**表を先に直してから実装した**
+
+5-0 の申し送りどおり、`tests/contract/backend-cases.json` を先に書き換えてから Kotlin を直した。
+おかげで「実装に合わせて期待値を書いた」形にならない。
+
+| 規則 | 拒否理由 | 入った段階 |
+|---|---|---|
+| 空 / 未指定 | `MISSING` | 5-1b |
+| パス区切り・`..` 始まり | `TRAVERSAL` | 5-1b |
+| **制御文字（NUL 含む）** | `CONTROL_CHARACTER` | **5-2** |
+| **`.json` で終わらない**（大小無視） | `NOT_JSON` | **5-2** |
+| **UTF-8 で 255 バイト超** | `TOO_LONG` | **5-2** |
+| **Windows の予約デバイス名**（`CON.json` など） | `WINDOWS_RESERVED` | **5-2** |
+
+- **NUL は `TRAVERSAL` から `CONTROL_CHARACTER` に移った**（どちらも 400 なので外から見た挙動は
+  同じ）。制御文字の規則ができたので、そちらに寄せるほうが分類として素直
+- **長さは文字数ではなくバイト数**。日本語は UTF-8 で 3 バイトなので、85 文字で上限に届く
+- **Windows 予約名は前方一致で弾かない**（`CONSOLE.json` は通る）。開発機が Windows でも動かす
+  ための規則で、ここを通すと `FileDesignStore` が OS 依存の例外を投げて 500 になる
+- `list` も **`*.json` だけ**を返すようにした（大小無視）。正本ディレクトリは `README.md` や
+  `.gitattributes` と同居しうる ——「そのディレクトリにあるもの全部が設計」ではない
+
+#### そのほか
+
+- **仮想 backend（`tests/node/harness.ts`）も同時に揃えた。** 契約表が両側を検証するので、
+  片方だけ直すと赤くなる。5-1c で作った仕掛けが最初に効いた場面
+- `js/config.ts` の `AVAILABLE_BACKENDS` は **PHP の名前のまま残っている**（撤去は 5-5）。
+  実体の無いディレクトリ名がセレクタに並ぶ状態になるが、**Kotlin は `{backend}` を読まない**ので
+  動作には影響しない。5-5 でセレクタごと消える
+- 契約表の `note` にある「php-file は…」という記述は**実測の記録**なので残す（歴史であって
+  現状の説明ではない）
+
+#### 検証
+
+| | 5-1c | 5-2 |
+|---|---|---|
+| `npm test` | 425 passed | **426 passed**（契約表に `virtual: true` が 1 ケース増えた） |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 64 passed | **84 passed** |
+
+golden 114 本は無差分。`js/` `src/` `index.html` `db/` `locale/` の diff は空。
+差分は **+207 / -3297**（削除が本体）。
+
+Kotlin の内訳: 契約表 31 ケース ＋ 表の健全性 1 / 振る舞い 9 / `DesignName` 33 / `FileDesignStore` 10。
+
+#### 次段階への入力
+
+- **5-3: READONLY で副作用を止める。** `grabado.readonly` を足し、save を **403**。
+  `locale` に `http403` を足して `js/io.ts` の `check()` に `case 403` を足すこと ——
+  **忘れたら `backend-contract.test.ts` が赤くする**（契約表に 403 のケースを足した時点で）。
+  実現は `DesignStore` の Bean 差し替え（`ReadOnlyDesignStore` の delegate）
+- **5-4 の 412 だけは `check()` に通さない**と決めてある（フロントが握って confirm に流す）。
+  契約表に 412 を載せるときは `backend-contract.test.ts` の網羅テストの対象から外す必要があり、
+  **そのとき「なぜ 412 だけ別扱いか」を表かテストに書くこと**
+- **`Dockerfile` は upstream の busybox httpd のまま**で、いま何も配れない。§2 の仕事だが、
+  `backend/` が消えて `COPY backend/ ./` が壊れたので**参照だけは先に直っている**（HANDOVER §2.2 の
+  骨格は `server/` を指すよう §2 で書き換える）
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
 |---|---|---|
-| PHP backend（`backend/php-*` 他） | 保持。**§0 実測完了**（契約は ARCHITECTURE §4）。**段階4-6 でも 1 行も触っていない** —— 外部変更検知はフロント側の read-before-write で、条件付き更新（ETag / `If-Match`）は §5.1 の仕事。**6-1 でも触っていない**が、`backend/php-cubrid/index.php:37` が消えた `db/cubrid/datatypes.xml` を読む dangling ができた（段階6-1 の記録） | Kotlin/Spring Boot へ移植し撤去 |
-| submodule `backend/php-s3/amazon-s3-php` | 参照のみ（未初期化） | PHP 撤去時に削除 |
+| ~~PHP backend（`backend/php-*` 他）~~ | **段階5-2 で撤去**（15 実装 31 ファイル）。§0 実測完了（契約は ARCHITECTURE §4）→ **段階5-1b で Kotlin が実測契約を満たしたことを確かめてから消した**。1 行も触らないまま役目を終えている（4-6 の外部変更検知はフロント側の read-before-write、6-1 の dangling も放置のまま撤去） | **完了。旧実装は commit `7b3bb3d`**（`git show 7b3bb3d:backend/php-file/index.php`）。凍結コピーは置かない ——それ自体が二重管理になる |
+| ~~submodule `backend/php-s3/amazon-s3-php`~~ | **段階5-2 で削除**（`.gitmodules` ごと） | 完了 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
 | ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せた**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。**段階6-8a 〜 6-8d で既存 4 本（mysql / mssql / oracle / sqlite）を現代化し、6-5a が逐語で持ち込んだ粗さ 9 件 ＋ 6-6b の 1 件が尽きた**（#12 / #14 は 6-8b、#13 は 6-8d）。骨格は **ansi 3 本 / mysql-style 2 本 / 独立 3 本**に落ち着き、8 本とも §6.3 の規約に載っている。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
 | 型パレット `db/<db>/datatypes.xml` | **段階6-7a〜6-7c で新設 3 本（`sql-standard` / `h2` / `mariadb`）が入り、対応 DB 8 本がそろった**（3 本とも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 / MariaDB 11.8.8 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入り、6-7a 〜 6-8d で 8 本すべてが持つようになった** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。**段階6-8d で最後の `sqlite` が strict になり、未現代化が 0 本に**（`re` を読むコードと先頭型フォールバックがリポジトリから消えた） |

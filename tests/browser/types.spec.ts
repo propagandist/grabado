@@ -155,6 +155,57 @@ test.describe("型解決（段階6-2 / 6-3）", () => {
         expect(menu.labels).not.toContain("JSON");
     });
 
+    test("size 欄は型がサイズを取るときだけ開く（段階6-9a）", async () => {
+        /*
+         * 6-3 が `length` を読む契約にしたのは**読み込み側だけ**で、UI は型と無関係に
+         * size を打てるままだった（`db/postgresql/datatypes.xml` の頭が「全プロファイルが
+         * strict になる 6-8 まで片側だけ閉じる形になる」と送っていた項目）。
+         * 6-8d が DDL 側を塞ぎ、6-9a でここを閉じて 3 経路（読み込み・DDL・UI）が
+         * 同じ `TypePalette.hasSize` を共有する形になった。
+         *
+         * ここも golden に 1 ビットも写らない UI の面。
+         */
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
+
+        const result = await page.evaluate(() => {
+            const d = window.d!;
+            const row = d.tables[0]!.rows[0]!;
+            const indexOf = (id: string) => d.palette.indexOfId(id);
+
+            row.expand();
+            const select = row.dom.type;
+            const size = row.dom.size;
+
+            /* varchar は length="1"。打てて、値も残る */
+            select.selectedIndex = indexOf("varchar");
+            select.dispatchEvent(new Event("change"));
+            const openForVarchar = !size.disabled;
+            size.value = "10";
+
+            /* uuid は length="0"。閉じて、打ってあった値も捨てる */
+            select.selectedIndex = indexOf("uuid");
+            select.dispatchEvent(new Event("change"));
+            const closedForUuid = size.disabled;
+            const clearedValue = size.value;
+
+            row.collapse();
+            return {
+                openForVarchar,
+                closedForUuid,
+                clearedValue,
+                storedSize: row.data.size,
+            };
+        });
+
+        expect(result).toEqual({
+            openForVarchar: true,
+            closedForUuid: true,
+            clearedValue: "",
+            storedSize: "",
+        });
+    });
+
     test("XML を読み直しても型がドリフトしない", async () => {
         /*
          * 段階6-5a まで「toXML -> fromXML -> toXML」の往復で見ていた。XML の書き出しが

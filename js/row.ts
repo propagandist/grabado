@@ -112,6 +112,7 @@ export class Row extends Visual<RowDom> {
 
         this.enter = this.enter.bind(this);
         this.changeComment = this.changeComment.bind(this);
+        this.syncSizeField = this.syncSizeField.bind(this);
 
         OZ.Event.add(this.dom.container, "click", this.click.bind(this));
         OZ.Event.add(this.dom.container, "dblclick", this.dblclick.bind(this));
@@ -194,6 +195,17 @@ export class Row extends Visual<RowDom> {
             )[p];
         }
 
+        /*
+         * grabado: 段階6-9a。**サイズを取らない型は size を持たない。**
+         * def の正規化（上）と同じ立場で、ここ 1 箇所に置く —— UI・FK の伝播
+         * （下のループが親の size をそのまま子へ渡す）・テンプレート適用の 3 経路が
+         * 同じ規則を通る。読み込み側は js/io/xml-parser.ts が同じ判定を持っており、
+         * どちらを通っても同じ状態になる。
+         */
+        if (!des.palette.hasSize(this.data.type)) {
+            this.data.size = "";
+        }
+
         var elm = this.getDataType();
         for (var i = 0; i < this.relations.length; i++) {
             var r = this.relations[i]!;
@@ -252,6 +264,14 @@ export class Row extends Visual<RowDom> {
 
         this.dom.type = this.buildTypeSelect(this.data.type);
         elms.push(["type", this.dom.type]);
+        /*
+         * grabado: 段階6-9a。型を切り替えたら size 欄の開閉も切り替える。
+         * 6-3 が length を読む契約にしたのは読み込み側だけで、**UI は型と無関係に
+         * size を打てるまま**だった（db/postgresql/datatypes.xml の頭が「片側だけ
+         * 閉じる形になる」と送っていた項目）。DDL 側は 6-8d が塞いだので出力は
+         * 壊れないが、打った値が黙って消えるのは UI として不親切。
+         */
+        OZ.Event.add(this.dom.type, "change", this.syncSizeField);
 
         this.dom.size = OZ.DOM.elm("input");
         this.dom.size.type = "text";
@@ -359,6 +379,25 @@ export class Row extends Visual<RowDom> {
         this.dom.size.value = this.data.size;
         this.dom.nll.checked = this.data.nll;
         this.dom.ai.checked = this.data.ai;
+        this.syncSizeField();
+    }
+
+    /**
+     * size 欄を選択中の型に合わせて開閉する（段階6-9a）。
+     *
+     * サイズを取らない型（<type length="0">）では**入力できないようにし、値も捨てる** ——
+     * 残すと update() が正規化して黙って消えるので、打ってから消えるより打てないほうがよい。
+     * 判定は読み込み側（js/io/xml-parser.ts）と DDL 側（js/io/ddl/shared.ts）と同じ
+     * TypePalette.hasSize で、**3 経路が 1 つの規則を共有する**。
+     *
+     * 属性を持たない旧パレットでは hasSize が true を返すので、従来どおり自由に打てる。
+     */
+    syncSizeField(): void {
+        var takesSize = this.owner.owner.palette.hasSize(this.dom.type.selectedIndex);
+        this.dom.size.disabled = !takesSize;
+        if (!takesSize) {
+            this.dom.size.value = "";
+        }
     }
 
     redraw(): void {

@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import {
     migrateDesignJson,
     readPalette,
 } from "../../tools/migrate-design.mjs";
-import { SERIALIZER_DB } from "../support/fixtures.ts";
+import { REPO_ROOT, SERIALIZER_DB } from "../support/fixtures.ts";
 
 /*
  * 設計 JSON の移行ツールの検査（HANDOVER §4 段階4-2b ＋ §6 段階6-3）。
@@ -195,6 +197,17 @@ function v2(design: unknown): string {
     return `${JSON.stringify(design, null, 2)}\n`;
 }
 
+/** db/<db>/datatypes.xml の <type id="..."> が持つ length 属性（無ければ undefined） */
+function paletteLength(db: string, id: string): string | undefined {
+    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    for (const tag of xml.match(/<type\s[^>]*?\/>/g) ?? []) {
+        if (/\sid="([^"]*)"/.exec(tag)?.[1] === id) {
+            return /\slength="([^"]*)"/.exec(tag)?.[1];
+        }
+    }
+    throw new Error(`${db} に型 id ${id} が無い`);
+}
+
 /** 1 列だけの v2 設計。type / size を差し替えて使う */
 function oneColumn(column: Record<string, unknown>): string {
     return v2({
@@ -360,16 +373,101 @@ describe("設計 JSON の移行（型 id・段階6-3）", () => {
 
     test("db ごとに表を引く（他プロファイルの同名 id を巻き込まない）", () => {
         /*
-         * 型 id はプロファイル内で一意なだけ。mysql にも json / char / timestamp はあるが、
-         * 6-3 で現代化したのは postgresql だけなので mysql のファイルは 1 バイトも動かない。
+         * 型 id はプロファイル内で一意なだけ。**postgresql の char は text に寄るが、
+         * mysql / mssql / oracle の char はどれも現役の型**なので 1 バイトも動かない。
+         * 6-9a で 4 プロファイルぶんの表がそろったぶん、この分離が実際に効くようになった。
          */
-        const mysqlDesign = v2({
+        for (const db of ["mysql", "mssql", "oracle"]) {
+            const design = v2({
+                formatVersion: 2,
+                db,
+                tables: [{ name: "t", x: 0, y: 0, columns: [{ name: "c", type: "char" }] }],
+            });
+            const out = migrateDesignJson(design, loadPalette);
+            expect([db, out.changed, out.text]).toEqual([db, false, design]);
+        }
+    });
+});
+
+/* ------------------ 6-8a〜6-8d の現代化ぶん（段階6-9a） ------------------ */
+
+/**
+ * 段階6-9a の移行表。**6-8a〜6-8c は撤去した型 id があるのに表を入れていなかった**ので、
+ * 旧い設計 JSON がその 3 プロファイルで移行できない状態だった（sqlite は 6-8d で入れてある）。
+ *
+ * 6-3 の表と同じく、**ここが唯一「意味的判断」を固定している場所**。寄せ先の根拠は
+ * 各プロファイルの新パレットの `aka`（旧 sql 名 -> 新型）で、表と aka が同じ判断を
+ * 指していることを目で確かめられるようにしてある。判断の記録は CUSTOMIZATIONS.md の段階6-9a。
+ */
+const MODERNIZED_MIGRATIONS: ReadonlyArray<readonly [string, string, string]> = [
+    /* 6-8a mysql */
+    ["mysql", "int", "integer"],
+    ["mysql", "mediumtext", "text"],
+    ["mysql", "blob", "bytea"],
+    /* 6-8b mssql —— 撤去 10 型。大半が SQL Server 側で非推奨だったもの */
+    ["mssql", "int", "integer"],
+    ["mssql", "money", "decimal"],
+    ["mssql", "smallmoney", "decimal"],
+    ["mssql", "numeric", "decimal"],
+    ["mssql", "text", "nvarchar"],
+    ["mssql", "ntext", "nvarchar"],
+    ["mssql", "bit", "boolean"],
+    ["mssql", "image", "varbinary"],
+    /* **T-SQL の timestamp は日時ではない**（rowversion の旧称）。datetime2 に寄せると意味が変わる */
+    ["mssql", "timestamp", "rowversion"],
+    ["mssql", "uniqueidentifier", "uuid"],
+    /* id は変わらないが 6-8b が length="1" -> "0" に直したので size だけ落ちる */
+    ["mssql", "sql_variant", "sql_variant"],
+    /* 6-8c oracle —— 撤去は 1 型だけ（6-8c は新設が 9 型の段階だった） */
+    ["oracle", "double_precision", "float"],
+    /* 6-8d sqlite */
+    ["sqlite", "numeric", "any"],
+    ["sqlite", "none", "any"],
+    ["sqlite", "text", "text"],
+];
+
+describe("設計 JSON の移行（型 id・段階6-8a〜6-8d ぶん）", () => {
+    function migratedIn(db: string, column: Record<string, unknown>) {
+        const design = v2({
             formatVersion: 2,
-            db: "mysql",
-            tables: [{ name: "t", x: 0, y: 0, columns: [{ name: "c", type: "json" }] }],
+            db,
+            tables: [{ name: "t", x: 0, y: 0, columns: [column] }],
         });
-        const out = migrateDesignJson(mysqlDesign, loadPalette);
-        expect(out.changed).toBe(false);
-        expect(out.text).toBe(mysqlDesign);
+        return JSON.parse(migrateDesignJson(design, loadPalette).text).tables[0].columns[0];
+    }
+
+    test("撤去・改名された 17 型が寄せ先の id になる", () => {
+        const actual = MODERNIZED_MIGRATIONS.map(
+            ([db, from]) => [db, from, migratedIn(db, { name: "c", type: from }).type] as const,
+        );
+        expect(actual).toEqual(MODERNIZED_MIGRATIONS.map(([db, f, t]) => [db, f, t]));
+    });
+
+    test("**移行表の dropSize が寄せ先パレットの length と一致している**", () => {
+        /*
+         * tools/migrate-design.mjs の冒頭が「判断は db/<db>/datatypes.xml の length と
+         * 一致していなければならない」と宣言している契約を、機械で見る（段階6-9a で足した）。
+         * それまでは golden 経由の間接的な検査しか無く、**表を手で書くたびに漏れうる形**
+         * だった —— 実際 6-9a は 17 件のうち 8 件で dropSize が要ることに、この検査を
+         * 書いて初めて気づける状態にした。
+         *
+         * 見方: size を持つ列を移行させ、寄せ先が length="0" なら size キーが消えること、
+         * length="1" なら残ることを、表の全件について確かめる。
+         */
+        const wrong: string[] = [];
+
+        for (const [db, from] of MODERNIZED_MIGRATIONS) {
+            const out = migratedIn(db, { name: "c", type: from, size: "10" });
+            const takesSize = paletteLength(db, out.type) !== "0";
+            const kept = out.size !== undefined;
+            if (takesSize !== kept) {
+                wrong.push(
+                    `${db}/${from} -> ${out.type}: length="${paletteLength(db, out.type)}" なのに ` +
+                        (kept ? "size が残っている" : "size が落ちている"),
+                );
+            }
+        }
+
+        expect(wrong).toEqual([]);
     });
 });

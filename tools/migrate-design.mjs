@@ -54,14 +54,16 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  *
  * プロファイルごとに持つ —— 型 id はプロファイル内で一意なだけなので、db を見ずに
  * 適用すると別プロファイルの同名 id を巻き込む（js/io/json-parser.ts が db を照合するのと
- * 同じ論法）。6-3 で現代化したのは postgresql だけで、6-8 で残る 4 本が現代化された ——
- * **表に増えたのは id を撤去した sqlite（6-8d）だけ**で、mysql / mssql / oracle の分は
- * 6-8a〜6-8c が入れていない（撤去した id があるのに表が無い。6-9 の宿題）。
+ * 同じ論法）。6-3 で現代化したのは postgresql だけで、6-8 で残る 4 本が現代化された。
+ * **段階6-9a で 8 本ぶんがそろった** —— 6-8a〜6-8c は撤去した id があるのに表を入れて
+ * おらず、旧い設計 JSON がその 3 プロファイルで移行できない状態だった。
  *
  * `dropSize` は寄せ先が length="0"（サイズを持たない型）のとき。落とさないと `TEXT(10)` の
  * ような壊れた DDL が出る。**判断は db/<db>/datatypes.xml の length と一致していなければ
  * ならない** —— 同じ規則を読み込み側（js/io/xml-parser.ts）も持っており、食い違うと
- * 「移行したファイル」と「XML から読み直したファイル」が別物になる。一致は golden が見る。
+ * 「移行したファイル」と「XML から読み直したファイル」が別物になる。
+ * **一致は tests/node/migrate-design.test.ts が機械的に見る**（段階6-9a で足した。
+ * それまでは golden 経由の間接的な検査しか無く、表を手で書くたびに漏れうる形だった）。
  *
  * **この表は「旧 id -> 新 id」で、db/postgresql/datatypes.xml の aka（「旧 sql 名 -> 新型」）
  * とは別物。** 前者は正本ファイルの移行、後者は互換で読む XML の照合。
@@ -87,16 +89,73 @@ const TYPE_MIGRATIONS = {
         json: { to: "jsonb" },
     },
     /*
+     * 段階6-9a（6-8a の積み残し）。mysql の現代化で撤去した 3 型。
+     * 寄せ先は 6-8a が新パレットの aka にそのまま書いている（旧 sql 名 -> 新型）ので、
+     * 表と aka が同じ判断を指していることを目で確かめられる。
+     */
+    mysql: {
+        /* INT は INTEGER と同義。新 integer の sql が INT なので綴りも変わらない */
+        int: { to: "integer", dropSize: true },
+        /* MEDIUMTEXT は LONGTEXT に寄せた（6-8a が text の aka で受けている） */
+        mediumtext: { to: "text", dropSize: true },
+        /* BLOB -> LONGBLOB。id は他 7 本と揃えて bytea */
+        blob: { to: "bytea", dropSize: true },
+    },
+    /*
+     * 段階6-9a（6-8b の積み残し）。mssql は 10 型と最も多い —— 撤去された型の大半が
+     * **SQL Server 側で非推奨**（text / ntext / image は 2005 以降、timestamp は rowversion の
+     * 旧称）で、6-8b はそれらを現行の型へ寄せた。
+     */
+    mssql: {
+        int: { to: "integer", dropSize: true },
+        /* CLAUDE.md「numeric（not money）」。money / smallmoney は精度が固定の通貨型 */
+        money: { to: "decimal" },
+        smallmoney: { to: "decimal" },
+        /* numeric と decimal は T-SQL でも同義語（旧パレットの note にそう書いてある） */
+        numeric: { to: "decimal" },
+        /* text / ntext は 2005 で非推奨。6-8b が nvarchar の aka で受けている */
+        text: { to: "nvarchar" },
+        ntext: { to: "nvarchar" },
+        /* bit は T-SQL の boolean そのもの（新 boolean の sql が bit） */
+        bit: { to: "boolean", dropSize: true },
+        /* image も 2005 で非推奨。varbinary の aka が IMAGE を受けている */
+        image: { to: "varbinary" },
+        /*
+         * **T-SQL の timestamp は日時ではない** —— 旧パレットの note が
+         * 「Locally unique binary number updated as a row gets updated」と書いているとおり
+         * rowversion の旧称。日時が欲しかった人は datetime / datetime2 を選んでいるはずで、
+         * ここを datetime2 に寄せると**意味が変わる**（8 バイトの版数が日時になる）。
+         */
+        timestamp: { to: "rowversion", dropSize: true },
+        /* GUID。**size が落ちる**（旧 length="1" -> 新 uuid は length="0"） */
+        uniqueidentifier: { to: "uuid", dropSize: true },
+        /* id は変わらないが 6-8b が length="1" -> "0" に直したので size だけ落とす */
+        sql_variant: { to: "sql_variant", dropSize: true },
+    },
+    /*
+     * 段階6-9a（6-8c の積み残し）。oracle は 1 型だけ —— 6-8c は撤去より新設
+     * （binary_float / binary_double / boolean / interval 2 種ほか 9 型）の段階だった。
+     */
+    oracle: {
+        /* DOUBLE PRECISION は FLOAT の別名（新 float の aka がそう受けている） */
+        double_precision: { to: "float" },
+    },
+    /*
      * 段階6-8d。STRICT テーブルが受ける型名は 6 語しか無く、**括弧も書けない**
      * （TEXT(255) は unknown datatype。実測）ので、**id が変わらない text にも dropSize が
      * 要る** —— 旧パレットの text は length="1" で、設計 JSON に size を持てた。
      * integer / real は旧パレットでも length="0" なので表に入れない。
      */
     sqlite: {
-        /* STRICT に NUMERIC 親和性の型は無い。ANY は値を変換せずそのまま格納する */
-        numeric: { to: "any" },
+        /*
+         * STRICT に NUMERIC 親和性の型は無い。ANY は値を変換せずそのまま格納する。
+         * **dropSize は 6-9a で足した** —— 6-8d は「id が変わらない text にも要る」ことに
+         * 気づいて text だけ入れ、寄せ先が同じ length="0" のこの 2 件を落としていた
+         * （表と length の一致検査を書いて初めて出た。tests/node/migrate-design.test.ts）。
+         */
+        numeric: { to: "any", dropSize: true },
         /* NONE は SQLite に実在しない型名だった（upstream が親和性の名前を型として出していた） */
-        none: { to: "any" },
+        none: { to: "any", dropSize: true },
         /* id も意味も変わらないが、STRICT は型名に括弧を書けないので size だけ落とす */
         text: { to: "text", dropSize: true },
     },

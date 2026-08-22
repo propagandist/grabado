@@ -5370,6 +5370,91 @@ CI のワークフローも増やしていない。org のセキュリティ基�
 - `js/io/ddl/shared.ts` の `DdlRow` は `datatype` を文字列に潰すので**そのままでは流用できない**
   （ORM 生成器は型 id が要る）。`DdlRow` に型 id を足すか、ORM 用の別ビルダを作るかの判断が要る
 
+---
+
+### 2026-08-22 HANDOVER §6「機能」段階6-9c —— 正規型を型パレットに入れる
+
+**ORM 出力の下ごしらえ。出力は 1 バイトも動かない。** 6-9 を割ったとき 6-9c は
+「ORM の骨格 ＋ JPA」だったが、**型の写像だけを先に切り出した** ——
+`golden の増減を全部説明できる単位` にすると、この段階は「**golden が 1 本も動かない**」
+という完了判定になる。172 型に属性を 1 つ足す作業を、生成器の新設と混ぜない。
+
+#### 決めたこと 1: 写像は**正規型としてパレットに持つ**（ユーザー承認）
+
+「SQL 型 → 言語型」の表をどこに持つかの選択。ORM ごとに `(db, 型 id)` の表を持つ案は、
+**ORM が 4 本（JPA / Prisma / Drizzle / SQLAlchemy）になったとき同じ写像を 4 回書く**
+ことになる。各 `<type>` に `kind` を 1 つ足せば、ORM 側は「正規型 → 言語型」の小さい表
+1 つで済む。
+
+**同じ写像を 6-10 のプロファイル変換が要る** ——「PG で設計して MySQL 用 DDL も出す」は
+まさに型の写像で、6-8d が「変換が要るならそれは 6-9 の変換層の仕事」と送った項目。
+土台を共有できるのがこの案を採った決め手。
+
+「ORM は postgresql の設計からだけ出す」案は採らない —— CLAUDE.md の
+「対応 DB を絞る・PG だけ整えて他を放置する判断はしない」と正面から衝突する。
+
+#### 決めたこと 2: 語彙は **21 語で閉じる**
+
+```
+int8 int16 int32 int64 decimal float32 float64
+string binary boolean
+date time time_tz timestamp timestamp_tz interval
+uuid json xml geometry
+other
+```
+
+決めたのは 4 つ:
+
+| 決めたこと | 例 |
+|---|---|
+| **名前ではなく値の域で決める** | **Oracle の `DATE` は時刻を含む**ので `timestamp`（`date` ではない）。名前で決めると変換が壊れる |
+| **tz の有無を分ける** | house 標準が `timestamptz` 固定。ここが潰れると設計の意味が消える。MySQL 系で tz を持つのは `TIMESTAMP` だけ（パレットの label が `Timestamp (UTC)` と書いていた） |
+| **生成（identity）は含めない** | `bigint_identity` は `int64`。生成は列の性質（`RowData.ai`）と型の `sql` に既に在り、混ぜると「`int64` と `int64_identity` のどちらに写すか」を変換のたびに考えることになる |
+| **`other` は逃げ道ではなく主張** | 「正規型に写せない」の明示。PG の `inet` / `cidr` / `bit`、mssql の `hierarchyid` / `sql_variant` / `rowversion`、mysql の `enum` / `set` / `year`、sqlite の `ANY` |
+
+`char` / `varchar` / `text` / `clob` を `string` 1 つに畳んだのは、**別は `length` 属性と `sql` が
+既に持っている**ため。`kind` に境界を持ち込むと同じ情報が 2 か所になる。
+
+#### 決めたこと 3: 語彙の検査は**ファイル規則**（実行時に見ない）
+
+`TypePalette.kindAt()` は属性を読むだけで、値が語彙に載っているかを検査しない ——
+実行時に見ると「知らない値が来たらどうするか」という分岐が増える。パレットはリポジトリが
+持つファイルなので、`tests/node/palette-id.test.ts` が **172 型ぜんぶ**について押さえる
+（`strict="1"` を 6-8d でファイル規則にしたのと同じ立場）。
+
+あわせて「**プロファイルをまたいで同じ意味に使われている**」を代表だけリテラルで固定した ——
+6-10 の変換層はここが揃っていることに依る（PG の `timestamptz` と oracle の
+`TIMESTAMP WITH TIME ZONE` が同じ `kind` でなければ、変換のしようがない）。
+
+#### 検証
+
+| | 6-9b | 6-9c |
+|---|---|---|
+| `npm test` | 319 passed | **321 passed**（`palette-id` に 2 本） |
+| `npm run test:browser` | 134 passed | 134 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**golden は 1 本も動いていない。それがこの段階の完了判定そのもの** ——
+`kind` はどの生成器からも読まれておらず、172 型に属性が 1 つ増えただけ。
+読み手が付くのは 6-9d（ORM 出力）と 6-10（変換層）。
+
+#### 次段階への入力 —— 6-9d（ORM 出力の骨格 ＋ JPA）
+
+- **出力軸を足す**（6-9a の決めたこと 1）。UI は Save/Load ダイアログの「SQL 出力」の隣に
+  **ターゲット select ＋ ボタン**（ユーザー承認）—— 既存の `clientsql` 経路を 1 ビットも変えない
+- **1 本目は JPA（Kotlin）**。`kind` → 言語型の表を書く。`other` は「写せない」ので
+  そこで止まれる（JPA なら `String` に落とさず、コメントで理由を出すのが素直）
+- **関係は子側だけ**（`@ManyToOne` ＋ `@JoinColumn`。ユーザー承認）。逆参照（`@OneToMany`）は
+  **設計モデルが持たない情報を捏造する**ことになるので出さない。多重度も同じ理由で推論しない
+- **クラス名は変換する**（`articles` → `Article`）。**元のテーブル名は `@Table(name = ...)` に
+  必ず残す**ので往復が壊れない。単数化は英語の規則だけで、倒せない語はそのまま残す
+- `js/io/ddl/shared.ts` の `DdlRow` は `datatype` を文字列に潰すので**そのままでは流用できない**
+  （ORM 生成器は型 id と `kind` が要る）。ORM 用の別ビルダを作るか `DdlRow` を広げるかの判断が要る
+- golden は `tests/golden/orm/<target>/<fixture>.<ext>` を新設する。**`db/` にディレクトリを
+  作らない**こと —— 作った瞬間 `DB_PROFILES` に入り、パレットの契約を全部背負う
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

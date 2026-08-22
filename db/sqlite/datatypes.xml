@@ -60,16 +60,16 @@
 	</template>
 
 	<group label="Numeric" color="rgb(238,238,170)">
-		<type id="integer" label="Integer" length="0" sql="INTEGER" aka="INT|INT2|INT8|TINYINT|SMALLINT|MEDIUMINT|BIGINT|UNSIGNED BIG INT" quote="" />
-		<type id="real" label="Real" length="0" sql="REAL" aka="FLOAT|DOUBLE|DOUBLE PRECISION" quote="" />
+		<type id="integer" label="Integer" length="0" sql="INTEGER" kind="int64" aka="INT|INT2|INT8|TINYINT|SMALLINT|MEDIUMINT|BIGINT|UNSIGNED BIG INT" quote="" />
+		<type id="real" label="Real" length="0" sql="REAL" kind="float64" aka="FLOAT|DOUBLE|DOUBLE PRECISION" quote="" />
 	</group>
 
 	<group label="Character" color="rgb(255,200,200)">
-		<type id="text" label="Text" length="0" sql="TEXT" aka="CHAR|CHARACTER|VARCHAR|VARYING CHARACTER|NCHAR|NATIVE CHARACTER|NVARCHAR|CLOB" quote="'" />
+		<type id="text" label="Text" length="0" sql="TEXT" kind="string" aka="CHAR|CHARACTER|VARCHAR|VARYING CHARACTER|NCHAR|NATIVE CHARACTER|NVARCHAR|CLOB" quote="'" />
 	</group>
 
 	<group label="Miscellaneous" color="rgb(200,200,255)">
-		<type id="blob" label="Blob" length="0" sql="BLOB" quote="'" />
-		<type id="any" label="Any" length="0" sql="ANY" aka="NUMERIC|DECIMAL|BOOLEAN|DATE|DATETIME|NONE" quote="'" />
+		<type id="blob" label="Blob" length="0" sql="BLOB" kind="binary" quote="'" />
+		<type id="any" label="Any" length="0" sql="ANY" kind="other" aka="NUMERIC|DECIMAL|BOOLEAN|DATE|DATETIME|NONE" quote="'" />
 	</group>
 </datatypes>

@@ -204,6 +204,35 @@ snake_case / 複数形の lint はこの土台の上に載るが、まだ入っ�
 **設計ファイルは 1 バイトも影響を受けていない** —— それが規則 3 の目的そのもので、
 `fk` を label 参照から id 参照に移した 6-2 の下準備がここで効いている。
 
+#### 正規型 `kind`（**段階6-9c で新設**）
+
+各 `<type>` は `kind` を 1 つ持つ。**「その型が何の値か」だけ**を表す 21 語の閉じた語彙で、
+語彙は [`../js/io/palette.ts`](../js/io/palette.ts) の `TYPE_KINDS`:
+
+```
+int8 int16 int32 int64 decimal float32 float64
+string binary boolean
+date time time_tz timestamp timestamp_tz interval
+uuid json xml geometry
+other
+```
+
+**要るのは「プロファイルをまたぐ写像」を持つ仕事が 2 つあるから** —— ORM 出力（6-9d〜）の
+「SQL 型 → 言語型」と、プロファイル変換（6-10）の「PG の設計から MySQL の DDL」。
+`(db, 型 id)` で写像を持つと、**ORM が 4 本になったとき同じ表を 4 回書く**ことになる。
+
+| 決めていること | 例 |
+|---|---|
+| **名前ではなく値の域で決める** | Oracle の `DATE` は時刻を含むので `timestamp`（`date` ではない） |
+| **tz の有無を分ける** | house 標準が `timestamptz` 固定なので、ここが潰れると設計の意味が消える |
+| **生成（identity）は含めない** | `bigint_identity` は `int64`。生成は列の性質（`RowData.ai`）で、型の値の域ではない |
+| **`other` は逃げ道ではなく主張** | 「正規型に写せない」の明示。PG の `inet` / mssql の `hierarchyid` / sqlite の `ANY` |
+
+`kind` は**永続化には現れない** —— 設計 JSON が持つ型キーは `id` のままで、`kind` は
+パレット側の属性。読み手は [`../js/io/palette.ts`](../js/io/palette.ts) の `kindAt` で、
+**語彙の閉じ方を押さえているのは [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts) だけ**
+（実行時に検査すると「知らない値が来たらどうするか」の分岐が増えるので、ファイル規則として持つ）。
+
 #### 初期テーブルテンプレート（**段階6-4 で新設**）
 
 `db/<db>/datatypes.xml` は型パレットに加えて、**新規テーブルの初期列**（HANDOVER §6.2）を持つ。

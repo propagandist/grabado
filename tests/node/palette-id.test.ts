@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { TYPE_KINDS } from "../../js/io/palette.ts";
 import { DB_PROFILES, REPO_ROOT } from "../support/fixtures.ts";
 
 /*
@@ -24,6 +25,8 @@ interface PaletteType {
     readonly fk: string | undefined;
     /** 読み込みで受ける別名（段階6-3 で新設。| 区切り） */
     readonly aka: string | undefined;
+    /** 正規型（段階6-9c で新設。語彙は js/io/palette.ts の TYPE_KINDS） */
+    readonly kind: string | undefined;
 }
 
 /**
@@ -39,6 +42,7 @@ function readTypes(db: string): PaletteType[] {
         sql: /\ssql="([^"]*)"/.exec(tag)?.[1],
         fk: /\sfk="([^"]*)"/.exec(tag)?.[1],
         aka: /\saka="([^"]*)"/.exec(tag)?.[1],
+        kind: /\skind="([^"]*)"/.exec(tag)?.[1],
     }));
 }
 
@@ -223,6 +227,65 @@ describe("型パレットの id 規則（段階4-2b）", () => {
             });
         });
     }
+
+    test("すべての <type> が TYPE_KINDS の kind を 1 つ持つ（段階6-9c）", () => {
+        /*
+         * **正規型はファイル規則。** js/io/palette.ts の kindAt は値を検査しない
+         * （実行時に見ると「知らない値が来たらどうするか」の分岐が増える）ので、
+         * **語彙の閉じ方を押さえているのはこの 1 本だけ**。
+         *
+         * 172 型ぜんぶが対象。ここが赤くなるのは「型を足して kind を書き忘れた」か
+         * 「語彙に無い値を書いた」のどちらかで、どちらも 6-9d 以降の ORM 出力と
+         * 6-10 の変換層が黙って落とす原因になる。
+         */
+        const known: ReadonlySet<string> = new Set(TYPE_KINDS);
+        const bad = DB_PROFILES.flatMap((db) =>
+            readTypes(db)
+                .filter((t) => t.kind === undefined || !known.has(t.kind))
+                .map((t) => `${db}: ${t.id} kind=${t.kind}`),
+        );
+
+        expect(bad).toEqual([]);
+        /* 語彙そのものも固定する（増やすのは変換の意味を増やすことなので、意図して動かす） */
+        expect(TYPE_KINDS.length).toBe(21);
+    });
+
+    test("kind はプロファイルをまたいで同じ意味に使われている（抜き取り）", () => {
+        /*
+         * 全 172 型を並べると表が大きすぎて読めないので、**プロファイルをまたいで
+         * 同じ意味になるべき代表**だけをリテラルで固定する。6-10 の変換層はここが
+         * 揃っていることに依る（PG の timestamptz が oracle の TIMESTAMP WITH TIME ZONE と
+         * 同じ kind でなければ、変換のしようがない）。
+         */
+        const kindOf = (db: string, id: string) =>
+            readTypes(db).find((t) => t.id === id)?.kind;
+
+        /* house 既定の型がプロファイルをまたいで一致する */
+        expect(kindOf("postgresql", "uuid")).toBe("uuid");
+        expect(kindOf("mssql", "uuid")).toBe("uuid");
+        expect(kindOf("mariadb", "uuid")).toBe("uuid");
+        expect(kindOf("postgresql", "timestamp_with_time_zone")).toBe("timestamp_tz");
+        expect(kindOf("oracle", "timestamp_with_time_zone")).toBe("timestamp_tz");
+        expect(kindOf("mssql", "timestamp_with_time_zone")).toBe("timestamp_tz");
+        expect(kindOf("postgresql", "jsonb")).toBe("json");
+        expect(kindOf("oracle", "jsonb")).toBe("json");
+
+        /* MySQL 系で tz を持つのは timestamp だけ（label が "Timestamp (UTC)"） */
+        expect(kindOf("mysql", "timestamp")).toBe("timestamp_tz");
+        expect(kindOf("mysql", "datetime")).toBe("timestamp");
+
+        /*
+         * **Oracle の DATE は日付ではない**（時刻を含む）。名前ではなく値の域で決める、
+         * という正規型の性質がいちばんはっきり出るのがここ。
+         */
+        expect(kindOf("oracle", "date")).toBe("timestamp");
+        expect(kindOf("postgresql", "date")).toBe("date");
+
+        /* 写せない型は other。逃げ道ではなく「写せない」という主張 */
+        expect(kindOf("postgresql", "inet")).toBe("other");
+        expect(kindOf("mssql", "hierarchyid")).toBe("other");
+        expect(kindOf("sqlite", "any")).toBe("other");
+    });
 
     test('8 プロファイルすべてが strict="1" を持つ（ファイル規則。段階6-8d）', () => {
         /*

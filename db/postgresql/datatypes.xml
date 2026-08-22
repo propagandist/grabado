@@ -6,6 +6,10 @@
     id     設計 JSON の型キー。永続化専用。意味が同じなら変えない
     sql    出力する型名。§6 が自由に動かしてよい
     aka    読み込みで受ける別名（| 区切り・大小無視の完全一致）。段階6-3 で新設
+    kind   正規型。**その型が何の値か**だけを表す閉じた語彙（段階6-9c で新設）。
+           語彙は js/io/palette.ts の TYPE_KINDS で、172 型ぜんぶが 1 つ持つ。
+           ORM 出力（6-9d〜）とプロファイル変換（6-10）がこれを介して写す ——
+           (db, 型 id) で写像を持つと ORM が増えるたびに同じ表を書き直すことになる
     fk     この型を親に持つ FK 子行の型。**id 参照**（段階6-2）
     length 1 ならサイズ / 精度を取る型。0 なら取らない
     re     非 strict プロファイル用の正規表現照合。本パレットは 1 つも持たない
@@ -59,38 +63,38 @@
 	</template>
 
 	<group label="Numeric" color="rgb(238,238,170)">
-		<type id="integer" label="Integer" length="0" sql="INTEGER" aka="INT|INT4" quote="" />
-		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" aka="INT2" quote="" />
-		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" aka="INT8" quote="" />
-		<type id="bigint_identity" label="Big Integer (identity)" length="0" sql="BIGINT GENERATED ALWAYS AS IDENTITY" aka="SERIAL|SERIAL4|BIGSERIAL|SERIAL8" fk="bigint" quote="" />
-		<type id="decimal" label="Numeric" length="1" sql="NUMERIC" aka="DECIMAL" quote="" />
-		<type id="float" label="Single precision" length="0" sql="REAL" aka="FLOAT|FLOAT4" quote="" />
-		<type id="double" label="Double precision" length="0" sql="DOUBLE PRECISION" aka="DOUBLE|FLOAT8" quote="" />
+		<type id="integer" label="Integer" length="0" sql="INTEGER" kind="int32" aka="INT|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" kind="int16" aka="INT2" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" kind="int64" aka="INT8" quote="" />
+		<type id="bigint_identity" label="Big Integer (identity)" length="0" sql="BIGINT GENERATED ALWAYS AS IDENTITY" kind="int64" aka="SERIAL|SERIAL4|BIGSERIAL|SERIAL8" fk="bigint" quote="" />
+		<type id="decimal" label="Numeric" length="1" sql="NUMERIC" kind="decimal" aka="DECIMAL" quote="" />
+		<type id="float" label="Single precision" length="0" sql="REAL" kind="float32" aka="FLOAT|FLOAT4" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE PRECISION" kind="float64" aka="DOUBLE|FLOAT8" quote="" />
 	</group>
 
 	<group label="Character" color="rgb(255,200,200)">
-		<type id="varchar" label="Varchar" length="1" sql="VARCHAR" aka="CHARACTER VARYING" quote="'"/>
-		<type id="text" label="Text" length="0" sql="TEXT" aka="CHAR|CHARACTER" quote="'"/>
-		<type id="bytea" label="Binary" length="0" sql="BYTEA" quote="'"/>
-		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" aka="BOOL" quote="'"/>
+		<type id="varchar" label="Varchar" length="1" sql="VARCHAR" kind="string" aka="CHARACTER VARYING" quote="'"/>
+		<type id="text" label="Text" length="0" sql="TEXT" kind="string" aka="CHAR|CHARACTER" quote="'"/>
+		<type id="bytea" label="Binary" length="0" sql="BYTEA" kind="binary" quote="'"/>
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" kind="boolean" aka="BOOL" quote="'"/>
 	</group>
 
 	<group label="Date &amp; Time" color="rgb(200,255,200)">
-		<type id="date" label="Date" length="0" sql="DATE" quote="'" />
-		<type id="time" label="Time" length="1" sql="TIME" quote="'" />
-		<type id="time_with_time_zone" label="Time w/ TZ" length="1" sql="TIME WITH TIME ZONE" aka="TIMETZ" quote="'" />
-		<type id="interval" label="Interval" length="1" sql="INTERVAL" quote="'" />
-		<type id="timestamp_with_time_zone" label="Timestamptz" length="1" sql="TIMESTAMPTZ" aka="TIMESTAMP WITH TIME ZONE|TIMESTAMP|TIMESTAMP WITHOUT TIME ZONE" quote="'" />
+		<type id="date" label="Date" length="0" sql="DATE" kind="date" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" kind="time" quote="'" />
+		<type id="time_with_time_zone" label="Time w/ TZ" length="1" sql="TIME WITH TIME ZONE" kind="time_tz" aka="TIMETZ" quote="'" />
+		<type id="interval" label="Interval" length="1" sql="INTERVAL" kind="interval" quote="'" />
+		<type id="timestamp_with_time_zone" label="Timestamptz" length="1" sql="TIMESTAMPTZ" kind="timestamp_tz" aka="TIMESTAMP WITH TIME ZONE|TIMESTAMP|TIMESTAMP WITHOUT TIME ZONE" quote="'" />
 	</group>
 
 	<group label="Miscellaneous" color="rgb(200,200,255)">
-		<type id="uuid" label="UUID" length="0" sql="UUID" quote="'" />
-		<type id="xml" label="XML" length="0" sql="XML" quote="'" />
-		<type id="bit" label="Bit" length="1" sql="BIT" quote="'" />
-		<type id="varbit" label="Bit Varying" length="1" sql="VARBIT" aka="BIT VARYING" quote="'" />
-		<type id="inet" label="Inet Host Addr" length="0" sql="INET" quote="'" />
-		<type id="cidr" label="Inet CIDR Addr" length="0" sql="CIDR" quote="'" />
-		<type id="geometry" label="Geometry" length="0" sql="GEOMETRY" quote="'" />
-		<type id="jsonb" label="JSONB" length="0" sql="JSONB" aka="JSON" quote="'" />
+		<type id="uuid" label="UUID" length="0" sql="UUID" kind="uuid" quote="'" />
+		<type id="xml" label="XML" length="0" sql="XML" kind="xml" quote="'" />
+		<type id="bit" label="Bit" length="1" sql="BIT" kind="other" quote="'" />
+		<type id="varbit" label="Bit Varying" length="1" sql="VARBIT" kind="other" aka="BIT VARYING" quote="'" />
+		<type id="inet" label="Inet Host Addr" length="0" sql="INET" kind="other" quote="'" />
+		<type id="cidr" label="Inet CIDR Addr" length="0" sql="CIDR" kind="other" quote="'" />
+		<type id="geometry" label="Geometry" length="0" sql="GEOMETRY" kind="geometry" quote="'" />
+		<type id="jsonb" label="JSONB" length="0" sql="JSONB" kind="json" aka="JSON" quote="'" />
 	</group>
 </datatypes>

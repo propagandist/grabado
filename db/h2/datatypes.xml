@@ -44,36 +44,36 @@
 	</template>
 
 	<group label="Numeric" color="rgb(238,238,170)">
-		<type id="integer" label="Integer" length="0" sql="INTEGER" aka="INT|INT4" quote="" />
-		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" aka="INT2" quote="" />
-		<type id="tinyint" label="Tiny Integer" length="0" sql="TINYINT" quote="" />
-		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" aka="INT8" quote="" />
-		<type id="bigint_identity" label="Big Integer (identity)" length="0" sql="BIGINT GENERATED ALWAYS AS IDENTITY" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
-		<type id="decimal" label="Numeric" length="1" sql="NUMERIC" aka="DECIMAL|DEC" quote="" />
-		<type id="float" label="Single precision" length="0" sql="REAL" aka="FLOAT|FLOAT4" quote="" />
-		<type id="double" label="Double precision" length="0" sql="DOUBLE PRECISION" aka="DOUBLE|FLOAT8" quote="" />
-		<type id="decfloat" label="Decimal Floating" length="1" sql="DECFLOAT" quote="" />
+		<type id="integer" label="Integer" length="0" sql="INTEGER" kind="int32" aka="INT|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" kind="int16" aka="INT2" quote="" />
+		<type id="tinyint" label="Tiny Integer" length="0" sql="TINYINT" kind="int8" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" kind="int64" aka="INT8" quote="" />
+		<type id="bigint_identity" label="Big Integer (identity)" length="0" sql="BIGINT GENERATED ALWAYS AS IDENTITY" kind="int64" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
+		<type id="decimal" label="Numeric" length="1" sql="NUMERIC" kind="decimal" aka="DECIMAL|DEC" quote="" />
+		<type id="float" label="Single precision" length="0" sql="REAL" kind="float32" aka="FLOAT|FLOAT4" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE PRECISION" kind="float64" aka="DOUBLE|FLOAT8" quote="" />
+		<type id="decfloat" label="Decimal Floating" length="1" sql="DECFLOAT" kind="decimal" quote="" />
 	</group>
 
 	<group label="Character" color="rgb(255,200,200)">
-		<type id="char" label="Character" length="1" sql="CHARACTER" aka="CHAR" quote="'" />
-		<type id="varchar" label="Varchar" length="1" sql="CHARACTER VARYING" aka="VARCHAR" quote="'" />
-		<type id="text" label="Text (CLOB)" length="0" sql="CHARACTER LARGE OBJECT" aka="CLOB|TEXT|XML" quote="'" />
-		<type id="bytea" label="Binary (BLOB)" length="0" sql="BINARY LARGE OBJECT" aka="BLOB|BYTEA" quote="'" />
-		<type id="varbinary" label="Varbinary" length="1" sql="BINARY VARYING" aka="VARBINARY" quote="'" />
-		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" aka="BOOL" quote="'" />
+		<type id="char" label="Character" length="1" sql="CHARACTER" kind="string" aka="CHAR" quote="'" />
+		<type id="varchar" label="Varchar" length="1" sql="CHARACTER VARYING" kind="string" aka="VARCHAR" quote="'" />
+		<type id="text" label="Text (CLOB)" length="0" sql="CHARACTER LARGE OBJECT" kind="string" aka="CLOB|TEXT|XML" quote="'" />
+		<type id="bytea" label="Binary (BLOB)" length="0" sql="BINARY LARGE OBJECT" kind="binary" aka="BLOB|BYTEA" quote="'" />
+		<type id="varbinary" label="Varbinary" length="1" sql="BINARY VARYING" kind="binary" aka="VARBINARY" quote="'" />
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" kind="boolean" aka="BOOL" quote="'" />
 	</group>
 
 	<group label="Date &amp; Time" color="rgb(200,255,200)">
-		<type id="date" label="Date" length="0" sql="DATE" quote="'" />
-		<type id="time" label="Time" length="1" sql="TIME" quote="'" />
-		<type id="time_with_time_zone" label="Time w/ TZ" length="1" sql="TIME WITH TIME ZONE" aka="TIMETZ" quote="'" />
-		<type id="timestamp_with_time_zone" label="Timestamp w/ TZ" length="1" sql="TIMESTAMP WITH TIME ZONE" aka="TIMESTAMPTZ|TIMESTAMP" quote="'" />
+		<type id="date" label="Date" length="0" sql="DATE" kind="date" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" kind="time" quote="'" />
+		<type id="time_with_time_zone" label="Time w/ TZ" length="1" sql="TIME WITH TIME ZONE" kind="time_tz" aka="TIMETZ" quote="'" />
+		<type id="timestamp_with_time_zone" label="Timestamp w/ TZ" length="1" sql="TIMESTAMP WITH TIME ZONE" kind="timestamp_tz" aka="TIMESTAMPTZ|TIMESTAMP" quote="'" />
 	</group>
 
 	<group label="Miscellaneous" color="rgb(200,200,255)">
-		<type id="uuid" label="UUID" length="0" sql="UUID" quote="'" />
-		<type id="jsonb" label="JSON" length="0" sql="JSON" aka="JSONB" quote="'" />
-		<type id="geometry" label="Geometry" length="0" sql="GEOMETRY" quote="'" />
+		<type id="uuid" label="UUID" length="0" sql="UUID" kind="uuid" quote="'" />
+		<type id="jsonb" label="JSON" length="0" sql="JSON" kind="json" aka="JSONB" quote="'" />
+		<type id="geometry" label="Geometry" length="0" sql="GEOMETRY" kind="geometry" quote="'" />
 	</group>
 </datatypes>

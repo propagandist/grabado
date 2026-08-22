@@ -6647,6 +6647,100 @@ grabado にも 2 つ揃った。
 
 ---
 
+### 2026-08-22 HANDOVER §5「backend」段階5-1c —— 契約表を TS 側にも流し、`check()` の穴を塞ぐ
+
+5-1b が置いた契約表（`tests/contract/backend-cases.json`）を **`tests/node/` の仮想 backend にも
+流した**。これで仮想 backend は「サーバについての手書きの推測」から
+**同じ表で検証された第 2 実装**になる。
+
+5-0 の分割では 5-1b に含めていたが、**5-1b の完了条件（既存 601 本が 1 本も動かない）を純粋に
+保つため**に分けた。本段階はフロントを触る（`js/io.ts` / `locale` / `tests/node/`）。
+
+#### 見つかった穴 1: 仮想 backend は未知の action に **404** を返していた
+
+実測契約は **501**（`ARCHITECTURE.md` §4.3）。404 は php-file の fs 解決に落ちた頃の副産物で、
+**4-6 で仮想 backend を書いたときにそのまま写していた**。同じ表で両側を検証したら即座に出た ——
+契約表を置いた効果がいきなり現れた形。
+
+あわせて仮想 backend を Kotlin 実装に揃えた:
+
+| | 5-1c 以前 | 以後 |
+|---|---|---|
+| 未知 action / `import` / `remove` / 指定なし | 404 | **501** |
+| `list` | **未実装**（404 に落ちる） | 昇順・末尾にも改行・空なら 0 バイト・dotfile を返さない |
+| `load` の応答ヘッダ | 無し | `Content-Type: application/octet-stream` ＋ `X-Content-Type-Options: nosniff` |
+| 空 body | `null` | `""`（実 XHR の `responseText` と同じ形） |
+
+**既存 407 本は 1 本も動かなかった。** 未知 action の 404 に依存しているテストは無く、
+`null` → `""` を見ているテストも無かった。
+
+#### 見つかった穴 2: `check()` が **400 / 405 を知らない**
+
+`js/io.ts` の `check()` は「表示すべき応答」を `switch` で列挙しており、**知らない status は
+`default: return true` に落ちて「成功」に倒れる**。5-1b で Kotlin が 400（`keyword` が空・
+パスを脱出しうる形）と 405（メソッド違い）を返すようになったのに、フロントは**無言で成功扱い**
+していた。
+
+`check()` に 2 つ足し、`locale/*.xml` 21 本に `http400` / `http405` を足した。
+
+**★ この穴を再発不能にするテストを置いた** —— `backend-contract.test.ts` が
+**契約表に出てくる 400 以上の status を集め、`check()` が全部 `false` を返すことを確かめる**。
+さらに `locale/en.xml` に対応するキーがあることも見る（`_()` は未知キーをキー名のまま返すので、
+`check()` だけ足すと textarea に翻訳されない `http400` という文字列が出る）。
+
+これで **5-4 の 412・5-3 の 403 を足すとき、`check()` と locale を忘れたら赤くなる**。
+5-0 の「status を増やす PR では `check()` と locale を同じ PR で広げること」という申し送りが、
+散文から機械に移った。
+
+`type-mapping.test.ts` が `docs/TYPE-MAPPING.md` を実装と 1 セルずつ突き合わせているのと同じ
+イディオム —— **手で書いた表は必ず腐る**ので、腐ったら赤くなる仕掛けを一緒に置く。
+
+#### 決めたこと: 模せない範囲を「表の中で」宣言し続ける
+
+仮想 backend は Map であってファイルシステムではないので、パス解決・dotfile・拡張子の強制は
+模せない。契約表の `virtual: false`（11 ケース）がそれで、TS 側は `virtual: true`（14 ケース）
+だけを流す。**`virtual: false` が 0 件になったら「仮想 backend が実サーバと同等になった」より
+「宣言を書き忘れた」ほうがずっと起こりやすい**ので、両方が 1 件以上あることもテストで見ている。
+
+#### locale の扱い
+
+`http400` = `Bad Request` / `http405` = `Method Not Allowed` を **21 本すべて英語**で足した。
+既存の `http*` は locale ごとにまちまち（`ko.xml` は韓国語訳が入っているが `en` / `ja` は英語）で、
+**`ja.xml` の `http201` も `Saved` のまま**。ここだけ日本語にすると不揃いになるので揃えた。
+**`ja` の `http*` をまとめて訳すのは §6.4（日本語ロケール微調整）の仕事**として送る。
+
+改行コードはファイルごとに保った（`locale/**` は `.gitattributes` で `-text`）。`sed` で挿入すると
+LF 混在になりうるので、既存の `http404` 行からインデントと行末を採って組み立てるスクリプトを使った
+（差分は 21 ファイル × 2 行 ＝ **+42 / -0** で、既存行は 1 バイトも動いていない）。
+
+#### 検証
+
+| | 5-1b | 5-1c |
+|---|---|---|
+| `npm test` | 407 passed | **425 passed**（`backend-contract.test.ts` が 18 本） |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 64 passed | 64 passed |
+
+**増えた 18 本の内訳**: 契約表の `virtual: true` 14 ケース / 表の健全性 2 / `check()` の網羅 1 /
+locale の網羅 1。**既存 407 本は 1 本も動いていない**（425 − 18 = 407）。golden 114 本も無差分。
+
+#### 次段階への入力
+
+- **5-2 で PHP を撤去する。** `backend/` ごと `git rm` ＋ submodule ＋ `.gitmodules`。同じ PR で
+  `.json` 強制（大小無視）・`keyword` 検証の残り（制御文字・Windows 予約名・255 バイト超）・
+  `list` の `*.json` 限定を入れる。**契約表の `list-keeps-non-json` は期待値が変わる**
+  （いまは実測どおり非 `.json` も返す）ので、表を先に直してから実装すること
+- **5-3 / 5-4 で status を足すときは `check()` と locale を同じ PR で。** 忘れたら
+  `backend-contract.test.ts` が赤くする。ただし **412 は `check()` に通さない**と決めてある
+  （フロントが握って confirm に流す）ので、表に 412 を載せるときはこのテストの対象から
+  外す必要がある —— **そのとき「なぜ 412 だけ別扱いか」を表かテストに書くこと**
+- `ja.xml` の `http*` は英語のまま。§6.4 で他の日本語ロケール調整とまとめて訳す
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

@@ -6562,6 +6562,10 @@ kotlin.reflect.jvm.ReflectJvmMapping` で **Bean 生成ごと落ちる**（実�
 - **`server/` を新設**（`backend/` を再利用しない。5-0 の決定どおり）。PHP の撤去は 5-2
 - `.gitattributes` に **`gradlew` は LF / `gradlew.bat` は CRLF / jar は binary** を足した。
   抜けると **Windows で clone した人の `./gradlew` が起動しない**（`.githooks/**` と同じ問題）
+- **`gradlew` の実行ビットを git に記録した**（`git update-index --chmod=+x`）。Windows で
+  `gradle wrapper` を実行すると mode 100644 のままコミットされ、**Linux では
+  `./gradlew: Permission denied`（exit 126）で CI が落ちる**。改行だけ直しても駄目で、
+  これは `.gitattributes` では表現できない別の属性 —— **実際に CI で踏んでから直した**
 - `.gitignore` に `/server/bin/` を足した（VSCode の Kotlin 拡張が作る Eclipse 系の出力）
 - `vite.config.ts` に **dev proxy**（`/backend` → 8080）。**同一オリジンのまま**なので
   `tests/browser/harness.ts` の「オリジン外へのリクエストが出たら失敗」検査に触れない。

@@ -41,39 +41,39 @@
 	</template>
 
 	<group label="Numeric" color="rgb(238,238,170)">
-		<type id="integer" label="Integer" length="0" sql="INT" aka="INTEGER|INT4" quote="" />
-		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" aka="INT2" quote="" />
-		<type id="tinyint" label="Tiny Integer" length="0" sql="TINYINT" quote="" />
-		<type id="mediumint" label="Medium Integer" length="0" sql="MEDIUMINT" quote="" />
-		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" aka="INT8" quote="" />
-		<type id="bigint_identity" label="Big Integer (auto)" length="0" sql="BIGINT AUTO_INCREMENT" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
-		<type id="decimal" label="Decimal" length="1" sql="DECIMAL" aka="NUMERIC|DEC" quote="" />
-		<type id="float" label="Single precision" length="0" sql="FLOAT" aka="REAL" quote="" />
-		<type id="double" label="Double precision" length="0" sql="DOUBLE" aka="DOUBLE PRECISION" quote="" />
+		<type id="integer" label="Integer" length="0" sql="INT" kind="int32" aka="INTEGER|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" kind="int16" aka="INT2" quote="" />
+		<type id="tinyint" label="Tiny Integer" length="0" sql="TINYINT" kind="int8" quote="" />
+		<type id="mediumint" label="Medium Integer" length="0" sql="MEDIUMINT" kind="int32" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" kind="int64" aka="INT8" quote="" />
+		<type id="bigint_identity" label="Big Integer (auto)" length="0" sql="BIGINT AUTO_INCREMENT" kind="int64" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
+		<type id="decimal" label="Decimal" length="1" sql="DECIMAL" kind="decimal" aka="NUMERIC|DEC" quote="" />
+		<type id="float" label="Single precision" length="0" sql="FLOAT" kind="float32" aka="REAL" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE" kind="float64" aka="DOUBLE PRECISION" quote="" />
 	</group>
 
 	<group label="Character" color="rgb(255,200,200)">
-		<type id="char" label="Char" length="1" sql="CHAR" aka="CHARACTER" quote="'" />
-		<type id="varchar" label="Varchar" length="1" sql="VARCHAR" aka="CHARACTER VARYING" quote="'" />
-		<type id="text" label="Text" length="0" sql="LONGTEXT" aka="TEXT|MEDIUMTEXT|CLOB|CHARACTER LARGE OBJECT|XML" quote="'" />
-		<type id="bytea" label="Binary (BLOB)" length="0" sql="LONGBLOB" aka="BLOB|BYTEA|BINARY LARGE OBJECT" quote="'" />
-		<type id="binary" label="Binary (fixed)" length="1" sql="BINARY" quote="'" />
-		<type id="varbinary" label="Varbinary" length="1" sql="VARBINARY" quote="'" />
-		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" aka="BOOL" quote="'" />
+		<type id="char" label="Char" length="1" sql="CHAR" kind="string" aka="CHARACTER" quote="'" />
+		<type id="varchar" label="Varchar" length="1" sql="VARCHAR" kind="string" aka="CHARACTER VARYING" quote="'" />
+		<type id="text" label="Text" length="0" sql="LONGTEXT" kind="string" aka="TEXT|MEDIUMTEXT|CLOB|CHARACTER LARGE OBJECT|XML" quote="'" />
+		<type id="bytea" label="Binary (BLOB)" length="0" sql="LONGBLOB" kind="binary" aka="BLOB|BYTEA|BINARY LARGE OBJECT" quote="'" />
+		<type id="binary" label="Binary (fixed)" length="1" sql="BINARY" kind="binary" quote="'" />
+		<type id="varbinary" label="Varbinary" length="1" sql="VARBINARY" kind="binary" quote="'" />
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" kind="boolean" aka="BOOL" quote="'" />
 	</group>
 
 	<group label="Date &amp; Time" color="rgb(200,255,200)">
-		<type id="date" label="Date" length="0" sql="DATE" quote="'" />
-		<type id="time" label="Time" length="1" sql="TIME" quote="'" />
-		<type id="datetime" label="Datetime" length="1" sql="DATETIME" quote="'" />
-		<type id="timestamp" label="Timestamp (UTC)" length="1" sql="TIMESTAMP" quote="'" />
-		<type id="year" label="Year" length="0" sql="YEAR" quote="" />
+		<type id="date" label="Date" length="0" sql="DATE" kind="date" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" kind="time" quote="'" />
+		<type id="datetime" label="Datetime" length="1" sql="DATETIME" kind="timestamp" quote="'" />
+		<type id="timestamp" label="Timestamp (UTC)" length="1" sql="TIMESTAMP" kind="timestamp_tz" quote="'" />
+		<type id="year" label="Year" length="0" sql="YEAR" kind="other" quote="" />
 	</group>
 
 	<group label="Miscellaneous" color="rgb(200,200,255)">
-		<type id="jsonb" label="JSON" length="0" sql="JSON" aka="JSONB" quote="'" />
-		<type id="enum" label="ENUM" length="1" sql="ENUM" quote="" />
-		<type id="set" label="SET" length="1" sql="SET" quote="" />
-		<type id="bit" label="Bit" length="1" sql="BIT" quote="" />
+		<type id="jsonb" label="JSON" length="0" sql="JSON" kind="json" aka="JSONB" quote="'" />
+		<type id="enum" label="ENUM" length="1" sql="ENUM" kind="other" quote="" />
+		<type id="set" label="SET" length="1" sql="SET" kind="other" quote="" />
+		<type id="bit" label="Bit" length="1" sql="BIT" kind="other" quote="" />
 	</group>
 </datatypes>

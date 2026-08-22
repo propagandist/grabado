@@ -19,6 +19,57 @@
  * どのモジュールにも依存しない（import 0 本）ので、読み込み順に影響しない。
  */
 
+/**
+ * 正規型（段階6-9c）。**「その型が何の値か」だけを表す閉じた語彙。**
+ *
+ * db/<db>/datatypes.xml の各 <type> が kind 属性で 1 つ持つ。172 型ぜんぶに付いている
+ * ことは tests/node/palette-id.test.ts が機械的に見る。
+ *
+ * **要る理由は 2 つ**（どちらも「プロファイルをまたぐ写像」が要る仕事）:
+ *
+ *   ORM 出力（6-9d〜）  uuid -> java.util.UUID のような表を ORM ごとに 1 つで済ませる。
+ *                       (db, 型 id) で持つと、ORM が 4 本になったとき同じ写像を 4 回書く
+ *   プロファイル変換（6-10）「PG で設計して MySQL 用 DDL も出す」。**変換はまさにこの写像**
+ *
+ * **生成（identity / AUTO_INCREMENT）は kind に含めない。** kind は値の域だけを表す ——
+ * bigint_identity は int64。「生成される列か」は列の性質（RowData.ai）と型の sql に
+ * 分かれて既に在り、そこを kind に混ぜると「int64 と int64_identity のどちらに写すか」を
+ * 変換のたびに考えることになる。
+ *
+ * **other は逃げ道ではなく主張**。「正規型に写せない」ことを明示する値で、
+ * 変換も ORM もここで止まれる（PG の inet / mssql の hierarchyid / sqlite の ANY など）。
+ */
+export const TYPE_KINDS = [
+    /* 数値。int8 は 1 バイト（tinyint）、mediumint は int32 に寄せる */
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "decimal",
+    "float32",
+    "float64",
+    /* 文字と bytes。char / varchar / text / clob の別は length 属性と sql が持つ */
+    "string",
+    "binary",
+    "boolean",
+    /* 日付と時刻。**tz の有無を分けるのが要点**（house 標準が timestamptz 固定なので） */
+    "date",
+    "time",
+    "time_tz",
+    "timestamp",
+    "timestamp_tz",
+    "interval",
+    /* 構造を持つ値 */
+    "uuid",
+    "json",
+    "xml",
+    "geometry",
+    /* 正規型に写せない（写せないことを明示する値） */
+    "other",
+] as const;
+
+export type TypeKind = (typeof TYPE_KINDS)[number];
+
 export class TypePalette {
     /*
      * ここはクラスフィールド初期化子を使う。js/ の他クラスが declare ＋ コンストラクタ代入に
@@ -105,6 +156,21 @@ export class TypePalette {
      */
     hasSize(index: number): boolean {
         return this.types()[index]?.getAttribute("length") !== "0";
+    }
+
+    /**
+     * この型の正規型（<type kind="...">）。属性が無ければ null（段階6-9c）。
+     *
+     * null になるのは**旧 XML 同梱の <datatypes>**（段階4-2b 以前の設計ファイル）だけ ——
+     * 同梱の 8 本は全型が kind を持つ（tests/node/palette-id.test.ts が押さえる）。
+     * 読み手は「写せないなら写さない」に倒す（other と同じ扱いでよい）。
+     *
+     * **語彙の検査はここでしない。** 値が TYPE_KINDS に載っているかはファイル規則で、
+     * 実行時に見ると「知らない値が来たらどうするか」という分岐が増える。パレットは
+     * リポジトリが持つファイルなので、テストで固定するほうが確か（strict 属性と同じ立場）。
+     */
+    kindAt(index: number): TypeKind | null {
+        return (this.types()[index]?.getAttribute("kind") as TypeKind | null) ?? null;
     }
 
     /**

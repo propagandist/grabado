@@ -174,6 +174,26 @@ UI の `#textarea` に入る値と一致する。
 3 段だったことの副産物だった。XSLT が TS 生成器になって中間表現ごと不要になり、
 **grabado から XML の書き出しが 1 つ残らず消えている**（読み込みは互換で残る）。
 
+### ORM golden — `tests/golden/orm/<target>/<db>/<fixture>.kt`（§6 段階6-9d で新設）
+
+**14 本。DDL のように 8 × 7 = 56 本にはしていない。** ORM 出力は「型の写像」と
+「構造の組み立て」に分かれ、**構造の側はプロファイルに依らない**（生成器が見るのは
+正規型 `kind` と関係とキーだけで、SQL 型名も識別子の引用も通らない）:
+
+```
+型の写像   8 プロファイル × types-matrix   そのプロファイルの全型が 1 列ずつ入っている
+構造       postgresql × 残り 6 本           複合 PK・自己参照 FK・identity・日本語識別子
+```
+
+母集団の定義は [`../tests/support/fixtures.ts`](../tests/support/fixtures.ts) の
+`ormGoldenCases`。ORM が 4 本（JPA / Prisma / Drizzle / SQLAlchemy）になっても 56 本で、
+DDL の 56 本と同じ桁に収まる。
+
+**`db/` にディレクトリを作っていない**のが要点 —— 作った瞬間 `DB_PROFILES` に入り、
+ORM が型パレットの契約（`strict` / `<template>` / `newrowtype` / 全型網羅）を背負うことになる。
+ORM は下敷きの db プロファイルの上に乗る**別の軸**で、
+**同じ設計から DDL と ORM の両方が出せる**（それを見るテストが `tests/browser/orm.spec.ts` に 1 本ある）。
+
 ### 状態スナップショット golden — `tests/golden/state/<fixture>.json`
 
 **§4 段階4-1b で追加。読み込み方向（`fromXML`）の安全網。** 上の 2 つは `toXML()` の**結果**しか
@@ -254,6 +274,8 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 | [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・**`sqlite` の 3 列**（PK が既定値を持てない側の例） |
 | [`../tests/node/identifier.test.ts`](../tests/node/identifier.test.ts) | [`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts) の識別子検査を直に叩く（ハーネス不要。段階6-9b）。**どの名前が・どのプロファイルで・なぜ使えないか**の 3 つ組。8 本の上限と単位の表（実測と一次資料の別つき）・**囲めば通るものは 1 件も警告しない**こと・known-issue #15 が直っていないこと |
 | [`../tests/browser/identifier.spec.ts`](../tests/browser/identifier.spec.ts) | 実ブラウザ側（段階6-9b）。**警告が画面に届いているか** —— 波線（`class="invalid"`）と理由の tooltip、テーブル名ではコメントと重ねること、**警告が出ても名前はモデルに入る**（止めない）こと |
+| [`../tests/node/orm.test.ts`](../tests/node/orm.test.ts) | ORM 出力（段階6-9d）。golden 14 本を読むほか、**golden から読み取れない規則**を近くで押さえる —— テーブル名 → クラス名（**単数化は英語の規則だけ。倒せない語はそのまま**）・Kotlin 識別子の 3 段（そのまま / バッククォート / `_` 置換）・8 プロファイルの全型が型注釈を持つこと・**逆参照を出さない**こと |
+| [`../tests/browser/orm.spec.ts`](../tests/browser/orm.spec.ts) | ORM golden の権威（段階6-9d）。14 本 ＋ 決定論 ＋ 知らないターゲットが例外になること ＋ **同じ設計から DDL と ORM の両方が出る**こと（「ORM を db プロファイルにしない」判断の実体） |
 
 **段階6-5b で 3 本目を足した。** [`../tests/browser/keys.spec.ts`](../tests/browser/keys.spec.ts) は
 キー管理 UI から `CREATE INDEX` に届く経路（`KeyManager.add()` → avail から列を選んで `←`）。

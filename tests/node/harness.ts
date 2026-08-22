@@ -60,6 +60,8 @@ export interface NodeHarness {
     loadFixture(xml: string): void;
     /** DDL 生成（段階6-5a で toXML() から置き換わった。js/io/ddl/generate.ts） */
     toDdl(): string;
+    /** ORM のモデル定義（段階6-9d） */
+    toOrm(target: string): string;
     /** 設計 JSON の書き出し / 読み込み（段階4-2 で新設。UI への配線は 4-3b） */
     toJson(): string;
     /** 読み込みは alert ではなく例外で落ちる（js/io/json-parser.ts） */
@@ -343,6 +345,9 @@ export async function createHarness(): Promise<NodeHarness> {
         },
         toDdl(): string {
             return designer.toDdl();
+        },
+        toOrm(target: string): string {
+            return designer.toOrm(target);
         },
         toJson(): string {
             return designer.toJson();

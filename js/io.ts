@@ -37,6 +37,7 @@
 
 import { OZ } from "./oz.ts";
 import { CONFIG } from "./config.ts";
+import { ORM_LABELS, ORM_TARGETS } from "./io/orm/generate.ts";
 import { _ } from "./globals.ts";
 import { detectDesignFormat } from "./io/detect.ts";
 import { verdictForSave, type Baseline } from "./io/conflict.ts";
@@ -77,6 +78,9 @@ export interface IoDom {
     clientlocallist: HTMLInputElement;
     clientload: HTMLInputElement;
     clientsql: HTMLInputElement;
+    /** ORM 出力（段階6-9d）。**出力の 2 本目の軸** */
+    clientorm: HTMLInputElement;
+    ormtarget: HTMLSelectElement;
     quicksave: HTMLInputElement;
     serversave: HTMLInputElement;
     serverload: HTMLInputElement;
@@ -127,6 +131,7 @@ export class IO {
             "clientlocallist",
             "clientload",
             "clientsql",
+            "clientorm",
             "quicksave",
             "serversave",
             "serverload",
@@ -158,6 +163,7 @@ export class IO {
 
         this.dom.ta = OZ.$<HTMLTextAreaElement>("textarea");
         this.dom.backend = OZ.$<HTMLSelectElement>("backend");
+        this.dom.ormtarget = OZ.$<HTMLSelectElement>("ormtarget");
 
         this.dom.container.parentNode!.removeChild(this.dom.container);
         this.dom.container.style.visibility = "";
@@ -186,6 +192,7 @@ export class IO {
         );
         OZ.Event.add(this.dom.clientload, "click", this.clientload.bind(this));
         OZ.Event.add(this.dom.clientsql, "click", this.clientsql.bind(this));
+        OZ.Event.add(this.dom.clientorm, "click", this.clientorm.bind(this));
         OZ.Event.add(this.dom.quicksave, "click", this.quicksave.bind(this));
         OZ.Event.add(this.dom.serversave, "click", this.serversave.bind(this));
         OZ.Event.add(this.dom.serverload, "click", this.serverload.bind(this));
@@ -200,6 +207,19 @@ export class IO {
     }
 
     build(): void {
+        /*
+         * grabado: 段階6-9d。ORM ターゲットの select。**表示名は locale を通さない** ——
+         * JPA / Prisma は製品名なので翻訳しない（db プロファイル名を訳さないのと同じ）。
+         */
+        OZ.DOM.clear(this.dom.ormtarget);
+        for (var t = 0; t < ORM_TARGETS.length; t++) {
+            var target = ORM_TARGETS[t]!;
+            var opt = OZ.DOM.elm("option");
+            opt.value = target;
+            opt.innerHTML = ORM_LABELS[target];
+            this.dom.ormtarget.appendChild(opt);
+        }
+
         OZ.DOM.clear(this.dom.backend);
 
         var bs = CONFIG.AVAILABLE_BACKENDS;
@@ -565,6 +585,24 @@ export class IO {
             return;
         }
         this.dom.ta.value = sql;
+    }
+
+    /**
+     * ORM のモデル定義を textarea に出す（段階6-9d）。**clientsql と対で、経路は同じ形**。
+     *
+     * ボタンを分けたのは、既存の「SQL 出力」を 1 ビットも変えないため（6-9a の判断）。
+     * ターゲットは隣の select が持つ。db プロファイルは切り替えない —— ORM は下敷きの
+     * プロファイルの上に乗り、同じ設計から DDL と ORM の両方を出せる。
+     */
+    clientorm(): void {
+        var out = "";
+        try {
+            out = this.owner.toOrm(this.dom.ormtarget.value);
+        } catch (e) {
+            alert(_("xmlerror") + ": " + (e as Error).message);
+            return;
+        }
+        this.dom.ta.value = out;
     }
 
     /**

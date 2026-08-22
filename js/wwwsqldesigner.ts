@@ -41,6 +41,7 @@ import { Window as SqlWindow } from "./window.ts";
 import { TypePalette } from "./io/palette.ts";
 import { extractModel } from "./io/extract.ts";
 import { generateDdl } from "./io/ddl/generate.ts";
+import { generateOrm } from "./io/orm/generate.ts";
 import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
 import { applyDesignModel } from "./io/apply.ts";
 import { serializeDesignJson } from "./io/json-serializer.ts";
@@ -472,6 +473,16 @@ export class Designer extends Visual<DesignerDom> {
      */
     toDdl(): string {
         return generateDdl(extractModel(this), this.palette);
+    }
+
+    /**
+     * ORM のモデル定義（段階6-9d）。**出力の 2 本目の軸**で、toDdl と対になる。
+     *
+     * db プロファイル（型パレット）は変えない —— ORM は下敷きのプロファイルの上に乗り、
+     * 型は正規型（6-9c の kind）を介して写す。同じ設計から DDL と ORM の両方を出せる。
+     */
+    toOrm(target: string): string {
+        return generateOrm(extractModel(this), this.palette, target);
     }
 
     /*

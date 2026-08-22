@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { ORM_EXTENSIONS, ORM_TARGETS } from "../../js/io/orm/generate.ts";
 import { DB_PROFILES, ormGoldenCases, readFixture } from "../support/fixtures.ts";
 import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";
@@ -36,21 +37,28 @@ function generateOrm(page: Page, db: string, target: string): Promise<string> {
     );
 }
 
-test.describe("ORM golden（JPA / Kotlin）", () => {
-    for (const one of ormGoldenCases(DB_PROFILES)) {
-        test(`jpa: ${one.db} / ${one.fixture}`, async () => {
-            await useDatatypes(page, one.db);
-            await loadFixture(page, readFixture(one.db, one.fixture));
+test.describe("ORM golden", () => {
+    for (const target of ORM_TARGETS) {
+        for (const one of ormGoldenCases(DB_PROFILES)) {
+            test(`${target}: ${one.db} / ${one.fixture}`, async () => {
+                await useDatatypes(page, one.db);
+                await loadFixture(page, readFixture(one.db, one.fixture));
 
-            const actual = await generateOrm(page, one.db, "jpa");
-            assertNoCarriageReturn(actual, `orm(jpa/${one.db}/${one.fixture})`);
+                const actual = await generateOrm(page, one.db, target);
+                assertNoCarriageReturn(actual, `orm(${target}/${one.db}/${one.fixture})`);
 
-            const expected = writeOrReadGolden(
-                goldenPath("orm", "jpa", one.db, `${one.fixture}.kt`),
-                actual,
-            );
-            expect(actual).toBe(expected);
-        });
+                const expected = writeOrReadGolden(
+                    goldenPath(
+                        "orm",
+                        target,
+                        one.db,
+                        `${one.fixture}.${ORM_EXTENSIONS[target]}`,
+                    ),
+                    actual,
+                );
+                expect(actual).toBe(expected);
+            });
+        }
     }
 
     test("決定論: 同じ設計から 2 回採ると完全に一致する", async () => {

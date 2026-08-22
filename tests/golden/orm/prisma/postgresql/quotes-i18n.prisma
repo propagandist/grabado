@@ -1,0 +1,30 @@
+// grabado が生成した Prisma のスキーマ。
+//
+// **native type 属性（@db.Uuid / @db.VarChar）は出さない** —— provider ごとに別の表が
+// 要り、正規型 1 段で写すという設計（段階6-9c）と噛み合わないため。uuid は String に、
+// date / time / timestamp は DateTime に丸まる。丸めた列にはその旨のコメントが付く。
+//
+// **Prisma の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で
+// 一意化してある。**元の名前は @@map / @map に必ず残る**。
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+/// 顧客マスタ。'仮登録' の状態も含む
+model m__ {
+  id Int @id
+  /// 姓と名は分けない
+  m__ String @map("氏名")
+  /// 識別子に " が入る場合の属性エスケープ確認
+  say__hi_ String? @map("say \"hi\"")
+  /// 顧客の'愛称'をここに書く
+  m___2 String? @map("メモ")
+
+  @@map("顧客")
+}

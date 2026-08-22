@@ -26,6 +26,7 @@
 
 import type { DdlKey, DdlRow, DdlTable } from "../ddl/shared.ts";
 import type { TypeKind } from "../palette.ts";
+import { camelCase, entityName } from "./naming.ts";
 
 /**
  * 正規型 -> Kotlin の型（段階6-9d）。**ORM ごとにこの表 1 つで済むのが 6-9c の狙い。**
@@ -72,49 +73,16 @@ const TYPE_IMPORTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * テーブル名 -> クラス名（`articles` -> `Article`）。
- *
- * **単数化は英語の規則だけ。** 倒せない語はそのまま残す —— `people` を `person` にする表を
- * 持つと、その表に無い語で黙って間違える。元の名前は `@Table(name = ...)` に必ず残るので、
- * 単数化が外れても**情報は 1 つも失われない**。
- * 非 ASCII（日本語のテーブル名）は 1 文字も触らない。
+ * テーブル名 -> Kotlin のクラス名。単数化と PascalCase は js/io/orm/naming.ts
+ * （**段階6-9e で 2 本目を書く段に括った**）で、ここは Kotlin 識別子にするところだけ。
  */
 export function className(table: string): string {
-    const singular = singularize(table);
-    const pascal = singular
-        .split("_")
-        .filter((part) => part !== "")
-        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-        .join("");
-    return kotlinIdentifier(pascal === "" ? singular : pascal);
+    return kotlinIdentifier(entityName(table));
 }
 
-function singularize(name: string): string {
-    if (/[a-z]ies$/.test(name)) {
-        return name.slice(0, -3) + "y";
-    }
-    if (/(s|x|z|ch|sh)es$/.test(name)) {
-        return name.slice(0, -2);
-    }
-    if (/[a-rt-z]s$/.test(name)) {
-        return name.slice(0, -1);
-    }
-    return name;
-}
-
-/** 列名 -> フィールド名（`created_at` -> `createdAt`）。非 ASCII はそのまま */
+/** 列名 -> Kotlin のフィールド名（`created_at` -> `createdAt`） */
 export function fieldName(column: string): string {
-    const parts = column.split("_").filter((part) => part !== "");
-    if (parts.length === 0) {
-        return kotlinIdentifier(column);
-    }
-    return kotlinIdentifier(
-        parts[0]! +
-            parts
-                .slice(1)
-                .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-                .join(""),
-    );
+    return kotlinIdentifier(camelCase(column));
 }
 
 /**

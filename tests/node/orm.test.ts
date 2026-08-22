@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { className, fieldName, kotlinIdentifier } from "../../js/io/orm/jpa.ts";
-import { ORM_TARGETS, isOrmTarget } from "../../js/io/orm/generate.ts";
+import { ORM_EXTENSIONS, ORM_TARGETS, isOrmTarget } from "../../js/io/orm/generate.ts";
 import { DB_PROFILES, ormGoldenCases, readFixture } from "../support/fixtures.ts";
 import { goldenPath, readGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";
@@ -24,29 +24,40 @@ describe("ORM 出力（Node）", () => {
         h.close();
     });
 
-    for (const one of ormGoldenCases(DB_PROFILES)) {
-        test(`jpa golden: ${one.db} / ${one.fixture}`, () => {
-            h.useDatatypes(one.db);
-            h.loadFixture(readFixture(one.db, one.fixture));
+    for (const target of ORM_TARGETS) {
+        for (const one of ormGoldenCases(DB_PROFILES)) {
+            test(`${target} golden: ${one.db} / ${one.fixture}`, () => {
+                h.useDatatypes(one.db);
+                h.loadFixture(readFixture(one.db, one.fixture));
 
-            const actual = h.toOrm("jpa");
-            assertNoCarriageReturn(actual, `orm(jpa/${one.db}/${one.fixture})`);
+                const actual = h.toOrm(target);
+                assertNoCarriageReturn(actual, `orm(${target}/${one.db}/${one.fixture})`);
 
-            expect(actual).toBe(
-                readGolden(goldenPath("orm", "jpa", one.db, `${one.fixture}.kt`)),
-            );
-        });
+                expect(actual).toBe(
+                    readGolden(
+                        goldenPath(
+                            "orm",
+                            target,
+                            one.db,
+                            `${one.fixture}.${ORM_EXTENSIONS[target]}`,
+                        ),
+                    ),
+                );
+            });
+        }
     }
 
     describe("ターゲットの登録", () => {
-        test("ORM_TARGETS は 1 本（jpa）。増えるのは 6-9e 以降", () => {
-            expect(ORM_TARGETS).toEqual(["jpa"]);
+        test("ORM_TARGETS は 2 本（jpa / prisma）。SQLAlchemy は保留（段階6-9e）", () => {
+            expect(ORM_TARGETS).toEqual(["jpa", "prisma"]);
         });
 
         test("知らないターゲットは受け付けない", () => {
             expect(isOrmTarget("jpa")).toBe(true);
             expect(isOrmTarget("hibernate3")).toBe(false);
-            expect(() => h.toOrm("prisma")).toThrow(/対応していない ORM ターゲット: prisma/);
+            expect(() => h.toOrm("sqlalchemy")).toThrow(
+                /対応していない ORM ターゲット: sqlalchemy/,
+            );
         });
     });
 
@@ -202,9 +213,76 @@ describe("ORM 出力（Node）", () => {
         });
     });
 
+    describe("prisma（段階6-9e）", () => {
+        test("**逆参照を出す** —— 6-9d の判断を Prisma だけ決め直した", () => {
+            /*
+             * Prisma は片側だけの relation をスキーマ検証が拒む（JPA では逆参照が無くても
+             * 有効だった）。**形式が要求するので名前を発明する**が、規則は機械的:
+             * 通常は子テーブル名、同じ子から 2 本以上なら FK 列名を混ぜる。
+             */
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "relations"));
+            const out = h.toOrm("prisma");
+
+            /* 子側（FK を持つ側）はスカラー列 ＋ 関連フィールドの 2 行 */
+            expect(out).toContain("ownerId Int @map(\"owner_id\")");
+            expect(out).toContain("owner Employee @relation(fields: [ownerId], references: [id])");
+            /* 親側に逆参照が生える（JPA では 1 行も出なかった） */
+            expect(out).toContain("projects Project[]");
+            expect(out).toContain("employeeProjects EmployeeProject[]");
+        });
+
+        test("自己参照は 1 本でも名前付き relation（Prisma の規則）", () => {
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "relations"));
+            const out = h.toOrm("prisma");
+
+            expect(out).toContain(
+                'manager Employee? @relation("employees_manager_id", fields: [managerId], references: [id])',
+            );
+            expect(out).toContain('employees Employee[] @relation("employees_manager_id")');
+        });
+
+        test("**識別子は ASCII だけ**。潰れた名前は通し番号で一意化する", () => {
+            /*
+             * Prisma に Kotlin のバッククォートに当たる逃げ道が無い。日本語の列名は
+             * どれも `_` に潰れてぶつかるので、モデル 1 つの中でまとめて一意化する。
+             * **元の名前は @map に必ず残る**。
+             */
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "quotes-i18n"));
+            const out = h.toOrm("prisma");
+
+            expect(out).toContain('m__ String @map("氏名")');
+            expect(out).toContain('m___2 String? @map("メモ")');
+            expect(out).toContain('@@map("顧客")');
+            /* 同じ名前が 2 回出ていない（出ると Prisma が拒む） */
+            const fields = out.split("\n").filter((line) => /^ {2}m__/.test(line));
+            expect(new Set(fields.map((line) => line.trim().split(" ")[0])).size).toBe(
+                fields.length,
+            );
+        });
+
+        test("provider が無いプロファイルでは datasource を出さず理由を言う", () => {
+            /* Prisma に h2 / oracle / sql-standard の provider は無い */
+            h.useDatatypes("oracle");
+            h.loadFixture(readFixture("oracle", "minimal"));
+            const out = h.toOrm("prisma");
+
+            expect(out).not.toContain("datasource db {");
+            expect(out).toContain("oracle に対応する Prisma の provider が無い");
+
+            /* 対応がある側は datasource を出す */
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "minimal"));
+            expect(h.toOrm("prisma")).toContain('provider = "postgresql"');
+        });
+    });
+
     test("テーブルが 0 件なら 1 バイトも出さない（DDL の empty.sql と揃える）", () => {
         h.useDatatypes("postgresql");
         h.loadFixture(readFixture("postgresql", "empty"));
         expect(h.toOrm("jpa")).toBe("");
+        expect(h.toOrm("prisma")).toBe("");
     });
 });

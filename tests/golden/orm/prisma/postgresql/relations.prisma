@@ -1,0 +1,63 @@
+// grabado が生成した Prisma のスキーマ。
+//
+// **native type 属性（@db.Uuid / @db.VarChar）は出さない** —— provider ごとに別の表が
+// 要り、正規型 1 段で写すという設計（段階6-9c）と噛み合わないため。uuid は String に、
+// date / time / timestamp は DateTime に丸まる。丸めた列にはその旨のコメントが付く。
+//
+// **Prisma の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で
+// 一意化してある。**元の名前は @@map / @map に必ず残る**。
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Employee {
+  id Int @id
+  name String
+  /// 直属の上長（自己参照）
+  managerId Int? @map("manager_id")
+  manager Employee? @relation("employees_manager_id", fields: [managerId], references: [id])
+
+  employees Employee[] @relation("employees_manager_id")
+  projects Project[]
+  employeeProjects EmployeeProject[]
+
+  @@map("employees")
+}
+
+model Project {
+  id Int @id
+  title String
+  ownerId Int @map("owner_id")
+  owner Employee @relation(fields: [ownerId], references: [id])
+  teamId Int? @map("team_id")
+  team Team? @relation(fields: [teamId], references: [id])
+
+  employeeProjects EmployeeProject[]
+
+  @@map("projects")
+}
+
+model Team {
+  id Int @id
+  name String
+
+  projects Project[]
+
+  @@map("teams")
+}
+
+model EmployeeProject {
+  employeeId Int @map("employee_id")
+  employee Employee @relation(fields: [employeeId], references: [id])
+  projectId Int @map("project_id")
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@id([employeeId, projectId])
+  @@map("employee_projects")
+}

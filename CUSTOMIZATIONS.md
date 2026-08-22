@@ -5576,6 +5576,99 @@ ORM 出力は「型の写像」と「構造の組み立て」に分かれ、**�
 - JPA の `@GeneratedValue(strategy = IDENTITY)` は下敷きのプロファイルに依らず固定。
   sequence 方式（Oracle / PG）を選べるようにするかは未決
 
+---
+
+### 2026-08-22 HANDOVER §6「機能」段階6-9e —— Prisma を出す（ORM 2 本目）
+
+**ORM の 2 本目。** 6-9d が JPA で敷いた骨格（出力軸・正規型 1 段・golden 14 本）の上に
+乗るが、**Prisma だけは 6-9d の判断を 2 つ決め直している**。
+
+#### 決めたこと 1: **SQLAlchemy は保留にした**（ユーザー判断）
+
+6-0 は「`sqlalchemy` を撤去して §6.3 で作り直す」と書いており、6-9 の順番としては
+SQLAlchemy が先だった。**やめた理由は 3 つ**:
+
+| 理由 | 中身 |
+|---|---|
+| **「復活」の中身が元から動いていなかった** | 撤去した実装は classic mapping（**2.0 で削除済み**）／`sa.Timestamp` / `sa.Binary` は**存在しない綴り**／import を 1 行も出さず**そのままでは走らない**／`nullable=False` を出さず **NOT NULL が黙って消える**／PG の fixture で **27 列中 25 列が先頭型に落ちる**。復活ではなく新規開発 |
+| 目的と合わない | 自社利用は Kotlin/Spring Boot（JPA で足りる）。ブランディングは **TS 圏（Prisma / Drizzle）が grabado 自身の利用者層と重なる**。SQLAlchemy はどちらにも当たらない |
+| 制約に反しない | CLAUDE.md の「対応 DB を絞る判断はしない」は**対応 DB 8 本**の話。ORM ターゲットは 6-9a で足した別の軸で、6-0 自身も「JPA / Prisma / Drizzle の**検討**」と書いている |
+
+**やらないと決めたのではなく後回し**。優先度は Prisma > Drizzle > SQLAlchemy。
+
+#### 決めたこと 2: **Prisma は逆参照を出す**（6-9d の判断を決め直した）
+
+6-9d は「逆参照（`@OneToMany`）は出さない」と決めた —— 設計モデルが親側のコレクション名を
+持たず、発明するしかないため。**JPA ではそれが選べた**（逆参照の無い entity も有効）。
+
+**Prisma では選べない。** 片側だけの relation はスキーマ検証が拒む。形式が要求する以上、
+名前を発明するしかない —— ただし**規則は機械的**にして人の判断を入れない:
+
+| 場面 | 親側のフィールド名 | 名前付き relation |
+|---|---|---|
+| 通常 | 子テーブル名の camelCase（`articles`） | 要らない |
+| 同じ子から 2 本以上 | 子テーブル名 ＋ FK 列名（`projectsOwnerId`） | **要る**（どの対か決まらない） |
+| **自己参照** | 子テーブル名のまま（衝突しない） | **要る**（1 本でも Prisma が要求する） |
+
+**「名前が要るか」と「フィールド名がぶつかるか」は別の条件**で、1 つのフラグに畳むと
+自己参照 1 本のフィールド名が要らない長さになる。実物は `relations` fixture の
+`employees.manager_id`（自己参照）で、`@relation("employees_manager_id")` が両側に出る。
+
+#### 決めたこと 3: **識別子は ASCII だけ。潰れた名前を通し番号で一意化する**
+
+Prisma の識別子は `[A-Za-z][A-Za-z0-9_]*` で、**Kotlin のバッククォートに当たる逃げ道が無い**。
+`quotes-i18n` を流すと `氏名` も `メモ` も `m__` に潰れ、**同じモデルに同名フィールドが 2 つ**
+できた（Prisma が拒む形）。JPA では囲めたので起きなかった問題。
+
+一意化は**モデル 1 つの中でまとめて**やる —— 列・関連フィールド・逆参照が同じ名前空間を
+共有するので、3 つを 1 本の配列にしてから通し番号を振る。別々に振ると衝突が残る。
+モデル名も同じ理由でスキーマ全体で一意化する。**元の名前は `@@map` / `@map` に必ず残る。**
+
+#### 決めたこと 4: native type 属性を出さない ／ provider が無ければ datasource も出さない
+
+`@db.Uuid` / `@db.VarChar(255)` は **provider ごとに別の表**が要る。それは 6-9c が
+「(db, 型 id) の表を ORM ごとに持たない」として避けた形そのものなので出さない ——
+`uuid` は `String` に、`date` / `time` / `timestamp` は `DateTime` に丸まる。丸めたことは
+先頭のコメントに書く。
+
+**Prisma の provider は 8 プロファイル中 5 本にしかない**（h2 / oracle / sql-standard に無い）。
+その 3 本では `datasource` ブロックを出さず、**理由を先頭のコメントで言う** ——
+黙って `postgresql` と書くと、動かないスキーマを動くように見せることになる。
+
+#### 決めたこと 5: 名前の変換を `js/io/orm/naming.ts` に括った
+
+単数化と PascalCase / camelCase を JPA から出した。**2 本目を書く段で括る**のは
+6-7b（`ansi.ts`）や 6-8a（`mysql-style.ts`）と同じ取り方で、重複が実際にできてから動かす。
+**言語ごとの識別子の規則は各生成器が持つ** —— Kotlin は囲める、Prisma は囲めない、という
+違いを 1 本に畳むと、どちらでもない規則になる。
+
+#### 検証
+
+| | 6-9d | 6-9e |
+|---|---|---|
+| `npm test` | 349 passed | **367 passed**（`orm.test.ts` 28 → 46） |
+| `npm run test:browser` | 151 passed | **165 passed**（golden 14 本ぶん） |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**既存の golden（`ddl` 56 / `orm/jpa` 14 / `json` 7 / `state` 8）は 1 バイトも動いていない。**
+増えたのは `tests/golden/orm/prisma/` の 14 本だけ。
+
+**途中で 2 つ直している**（どちらも生成物を読んで気づいたもので、6-9d の
+`var say "hi"` と同じ形）: 自己参照に名前付き relation が要ること、非 ASCII の
+識別子が潰れてぶつかること。**Prisma を実際に走らせてはいない**（Node に prisma CLI を
+入れると依存が増える）ので、そこは 6-8 系の「実物に流す」より弱い検証にとどまる。
+
+#### 次段階への入力 —— 6-9f（Drizzle）
+
+- **Drizzle は逆参照を要求しない**（`relations()` ヘルパは任意で、FK は
+  `references(() => users.id)` が持つ）。**6-9d の「出さない」判断がそのまま通る側**
+- 型は `pgTable` / `mysqlTable` / `sqliteTable` と **dialect ごとに関数が違う** ——
+  Prisma の provider と同じ問題が、より強く出る（8 本中 3 本にしか対応が無い）
+- **Prisma を実物に流す検証は積み残し。** `prisma validate` は devDependency が増えるので、
+  やるなら使い捨てのコンテナで（6-8 系の DB 検証と同じ扱い）
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

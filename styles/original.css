@@ -283,3 +283,14 @@ label, input, select {
     opacity: 0.5;
     visibility: hidden;
 }
+/*
+ * grabado: 識別子の警告（HANDOVER §6 段階6-9b）。
+ *
+ * **止めるのではなく気づかせるための印**なので、赤字にも背景色にもしない ——
+ * 行の背景色は型パレット由来（Row.getColor）で意味を持っており、そこを奪うと
+ * 「型が変わった」ように見える。波線だけを足して、理由は tooltip に置く。
+ */
+.invalid {
+    text-decoration: underline wavy #c00;
+    text-underline-offset: 2px;
+}

@@ -95,4 +95,10 @@
     <string name="xmlerror">Σφάλμα XML</string>
     <string name="docs">Οδηγίες</string>
 
+    <!-- identifier warnings (grabado) -->
+    <string name="identifierempty">Identifier is empty</string>
+    <string name="identifiertoolong">Identifier is too long</string>
+    <string name="identifierforbidden">Character not allowed in identifiers</string>
+    <string name="identifiertruncated">silently truncated</string>
+
 </locale>

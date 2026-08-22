@@ -593,3 +593,8 @@ label, input, select {
     border: 1px solid rgba(0, 0, 0, .26);
     padding: 0px;
 }
+/* grabado: 識別子の警告（段階6-9b）。理由は tooltip。styles/original.css と同じ理由で波線だけ */
+.invalid {
+    text-decoration: underline wavy #d32f2f;
+    text-underline-offset: 2px;
+}

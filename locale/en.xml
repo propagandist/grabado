@@ -112,4 +112,10 @@ Overwrite it?</string>
     <string name="unknownformat">Unrecognized data: expected a design JSON ({...}) or XML (&lt;sql&gt;...).</string>
     <string name="docs">Documentation</string>
 
+    <!-- identifier warnings (grabado) -->
+    <string name="identifierempty">Identifier is empty</string>
+    <string name="identifiertoolong">Identifier is too long</string>
+    <string name="identifierforbidden">Character not allowed in identifiers</string>
+    <string name="identifiertruncated">silently truncated</string>
+
 </locale>

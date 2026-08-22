@@ -139,7 +139,14 @@ FK の参照先まで同じ規則で、`COMMENT ON` だけ別扱いというこ�
 
 house 標準（snake_case・複数形）に従っていれば 1 つも囲まれない。**生成器は識別子を書き換えない**
 ——「snake_case にする」「複数形にする」を出力側でやると設計と DDL が食い違い、introspection の
-往復も壊れる。命名の検査（lint）は 6-9 以降へ送った（CUSTOMIZATIONS.md の段階6-5b）。
+往復も壊れる（CUSTOMIZATIONS.md の段階6-5b）。
+
+**書き換えないかわりに、入力側で気づけるようにした**（段階6-9b）。**そのプロファイルで実際に
+壊れる 3 つ**だけを画面で警告する —— 空文字・長さ超過・Oracle の `"`（known-issue #15）。
+規則は `IdentifierRules` に同居し（[`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts)）、
+**囲めば通るもの（予約語・日本語・記号）は 1 つも警告しない**。**止めない** —— 拒むと、
+PG で作った設計を oracle で開いた瞬間に既存の名前が不正になり直せなくなる。
+snake_case / 複数形の lint はこの土台の上に載るが、まだ入っていない。
 
 ## 決定論と diff フレンドリー（CLAUDE.md 制約3）
 

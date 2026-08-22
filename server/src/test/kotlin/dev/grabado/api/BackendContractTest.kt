@@ -187,6 +187,14 @@ class BackendContractTest {
 
                 else -> error("契約表が未対応の method を使っている: $method")
             }
+            // 条件付き更新（段階5-4）。表に書けるのは固定文字列だけなので、
+            // 「一致する etag を送る」側は BackendBehaviourTest が持つ。
+            if (request.has("ifMatch")) {
+                builder.header("If-Match", request.path("ifMatch").asString())
+            }
+            if (request.has("ifNoneMatch")) {
+                builder.header("If-None-Match", request.path("ifNoneMatch").asString())
+            }
             return http.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray())
         }
     }

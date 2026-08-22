@@ -18,9 +18,14 @@ class ReadOnlyDesignStore(private val delegate: DesignStore) : DesignStore {
 
     override fun list(): List<String> = delegate.list()
 
-    override fun load(name: DesignName): ByteArray? = delegate.load(name)
+    override fun load(name: DesignName): Stored? = delegate.load(name)
 
-    override fun save(name: DesignName, bytes: ByteArray): Nothing = throw ReadOnlyException()
+    override fun save(
+        name: DesignName,
+        bytes: ByteArray,
+        ifMatch: String?,
+        ifNoneMatch: String?,
+    ): Nothing = throw ReadOnlyException()
 }
 
 /**

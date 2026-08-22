@@ -38,7 +38,7 @@ class FileDesignStoreTest {
         val name = DesignName.parse("legacy.json")
         store().save(name, bytes)
 
-        assertThat(store().load(name)).isEqualTo(bytes)
+        assertThat(store().load(name)?.bytes).isEqualTo(bytes)
     }
 
     @Test
@@ -91,7 +91,7 @@ class FileDesignStoreTest {
         s.save(name, "{}".toByteArray())
 
         // 追記でも truncate 忘れでもなく、置換であること。
-        assertThat(s.load(name)).isEqualTo("{}".toByteArray())
+        assertThat(s.load(name)?.bytes).isEqualTo("{}".toByteArray())
     }
 
     @Test

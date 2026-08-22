@@ -605,19 +605,24 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 |---|---|---|---|
 | URL | `backend/<name>/?action=` | 同じ。**`<name>` は受けて捨てる**（ファイルシステムに到達させない）→ 5-5 で `backend/file/` に固定 | 5-1b / 5-5 |
 | `list` | `data/*` 全件・fs 順 | **`*.json` のみ・昇順固定**・空なら 0 バイト。`\n` 区切りは維持 | 5-2 |
-| `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**、`If-Match` 不一致は **412** | 5-2 / 5-4 |
-| `load` | 200 / 404・`text/xml` | 200 / 404 は維持。**`application/octet-stream` ＋ `nosniff` ＋ `attachment`**、**ETag（内容の SHA-256）** | 5-2 / 5-4 |
+| `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**。`If-Match` / `If-None-Match` が満たされなければ **412**、応答には新しい **ETag** が付く | 5-2 / **5-4a（実装済み）** |
+| `load` | 200 / 404・`text/xml` | 200 / 404 は維持。**`application/octet-stream` ＋ `nosniff` ＋ `attachment`**、**ETag（内容の SHA-256 先頭 16 バイト）** | 5-2 / **5-4a（実装済み）** |
 | `import` | XML（`db/<db>/datatypes.xml` 全文を連結） | **中立な introspection JSON**（§7.2）。パレットは連結せず、実行中パレットも差し替えない | 5-7 |
 | 未知 action / 指定なし | 501 | 501 を維持 | 5-1b |
 | `remove` | 501（実装が無い） | **作らない**（501 のまま） | — |
 | HTTP メソッド | 見ていない | **固定**（list / load / import は GET、save は POST）。ミスマッチは 405 | 5-1b |
 | 不正な `keyword` | `basename()` で黙って書き換え | **400 で拒む**（トラバーサル・制御文字・Windows 予約名・255 バイト超）。書き換えると `js/io/conflict.ts` の `Baseline.name` が別ファイルを見張る | 5-2 |
 | 副作用の停止 | 無し | `READONLY` で save を **403**（`list` / `load` は残す）。実現は `DesignStore` の Bean 差し替え —— **禁止を「禁止したいもの」の直上に置く**ので、将来 action が増えても自動的に守られる。introspection が 403 になるのは 5-7（いまは実装が無く 501） | **5-3（実装済み）** |
-| save の往復数 | 2（プリフライト `load` → `save`） | **1**（`If-Match`。衝突したときだけ 2） | 5-4 |
+| save の往復数 | 2（プリフライト `load` → `save`） | **1**（`If-Match`。衝突したときだけ 2）。**backend 側は 5-4a で受けられるようになった**が、フロントが条件ヘッダを送るのは 5-4b —— それまでは 2 往復のまま（条件ヘッダ無しの save は今までどおり上書きできる） | 5-4a / **5-4b** |
 | 能力の問い合わせ | 無し | `?action=capabilities` → `{"readonly":…,"introspection":…,"ai":…}`。**引けなければフロントは「全部できる」に倒す** | 5-5 |
 
-**`js/io.ts` の `check()` は 201 / 404 / 500 / 501 / 503 しか知らない。** 上の表で新しく増える
-**400 / 403 / 412 は、フロント側を同じ PR で広げないと無言で「成功」に倒れる**（`default: return true`）。
+**`js/io.ts` の `check()` は「表示すべき応答」を列挙しており、知らない status は
+`default: return true` に落ちて「成功」に倒れる。** 400 / 403 / 405 は足した（5-1c / 5-3）。
+
+**★ 412 だけは意図的に通さない。** 「衝突したので上書きするか？」は**エラー表示ではなく分岐**で、
+フロントが握って `confirm` に流す（プリフライトの 404 を通さないのと同じ理屈）。
+この「通さないことも契約」は `tests/node/backend-contract.test.ts` が両方向で固定している ——
+**表に出てくる異常系は `check()` が知っていること**と、**412 は拾わないこと**の 2 本。
 
 ### 7.2 introspection JSON
 

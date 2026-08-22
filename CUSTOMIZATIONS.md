@@ -5158,6 +5158,110 @@ strict になる 6-8 まで片側だけ閉じる形になる」と送ってい�
 - SQLite の `CHECK (json_valid(x))` / `WITHOUT ROWID` は**設計モデルが持たない**ので出せない
   （`keys[].columns` は列名の配列で、式も表オプションも表せない）
 
+---
+
+### 2026-08-22 HANDOVER §6「機能」段階6-9a —— 積み残しを片付ける
+
+**6-9 を 4 段階に割った。** 6-8d が「次段階への入力」として積んだ 5 項目は、どれも ORM とは
+独立した DDL 側の宿題で、「6-9」というラベルだけを共有していた。**小さくて実害のあるものを
+先に閉じる**（とくに移行表の欠落は「撤去した型 id を持つ旧い設計 JSON が移行できない」という
+現存の欠陥）。
+
+| 段階 | 内容 |
+|---|---|
+| **6-9a** | **積み残しの片付け**（移行表の欠落・UI の size 欄）。本エントリ |
+| 6-9b | 識別子の検査（known-issue #15 / 63 バイト超 / 空文字）。**警告表示**で出す |
+| 6-9c〜 | ORM 出力の骨格 ＋ JPA（Kotlin）を 1 本目に、以降 Prisma / Drizzle / SQLAlchemy |
+| 6-10 | プロファイル変換層（設計の db と出力の db を別にする） |
+
+#### 決めたこと 1: ORM 出力は **db プロファイルではなく別軸**（ユーザー承認・6-9c の前提）
+
+現状は `db` の 1 文字列が「型パレット」と「生成器」と「設計 JSON の型キーの名前空間」を
+同時に決めている。ORM を `AVAILABLE_DBS` に足す upstream 流のやり方だと:
+
+- **ORM は型パレットではないのに、パレットの契約を全部背負う** —— `strict="1"` /
+  `<template>` / `newrowtype` / `types-matrix` の全型網羅（`tests/node/fixture-set.test.ts` と
+  `palette-id.test.ts` が `db/` のディレクトリ実体を母集団にしているため）
+- **fixture 7 ＋ golden 7 で 1 本あたり 14 ファイル**増える（4 本なら 56 ファイル）
+- 設計 JSON の `db` が `"jpa"` になり、**同じ設計から DDL と ORM の両方を出せない**
+  （`docs/FORMAT.md` の「`db` は型パレット id」という契約と正面衝突）
+
+`js/io/ddl/shared.ts` の `buildDdlModel()` が**型パレットを読む唯一の場所**で、8 本の生成器は
+解決済み文字列しか見ない。`docs/ARCHITECTURE.md` の格子も「形式が増えると形式側だけが増える」
+と書いており、**ORM は形式側の 3 本目**として受けるのが素直。実装は 6-9c。
+
+#### 決めたこと 2: 移行表の欠落を埋めた（**17 型**）
+
+`tools/migrate-design.mjs` の `TYPE_MIGRATIONS` は 6-8d の時点で `postgresql` と `sqlite` しか
+持っていなかった。**6-8a〜6-8c は型 id を撤去したのに表を入れていない** ——
+mysql 3 型 / mssql 10 型 / oracle 1 型ぶん、旧い設計 JSON が移行できない状態だった。
+
+寄せ先の根拠は**各プロファイルの新パレットの `aka`**（旧 sql 名 → 新型）に置いた。
+表と `aka` が同じ判断を指していることを目で確かめられる。判断が割れた 3 件:
+
+| 移行 | 判断 |
+|---|---|
+| `mssql.timestamp` → `rowversion` | **T-SQL の timestamp は日時ではない。** 旧パレットの note が「Locally unique binary number updated as a row gets updated」と書いているとおり `rowversion` の旧称。`datetime2` に寄せると **8 バイトの版数が日時になる**（意味が変わる） |
+| `mssql.money` / `smallmoney` → `decimal` | CLAUDE.md「`numeric`（not `money`）」 |
+| `mssql.text` / `ntext` → `nvarchar` | SQL Server 2005 で非推奨。6-8b が `nvarchar` の `aka` で `TEXT` / `NTEXT` を受けている |
+
+#### 決めたこと 3: **表とパレットの一致を機械で見る検査を足した**（そして 6-8d の漏れが出た）
+
+`tools/migrate-design.mjs` の冒頭は「`dropSize` の判断は `db/<db>/datatypes.xml` の `length` と
+一致していなければならない」と宣言していたが、**検査は golden 経由の間接的なものしか無く、
+表を手で書くたびに漏れうる形**だった。
+
+`tests/node/migrate-design.test.ts` に「表の全件について、寄せ先が `length="0"` なら size が
+落ち、`length="1"` なら残る」を機械で見るテストを足したところ、**6-8d 自身の漏れが 2 件出た**
+（`sqlite` の `numeric` / `none` → `any` に `dropSize` が無く、`ANY(10)` という STRICT が拒む
+DDL を生む設計 JSON を書きうる）。17 件のうち **8 件で `dropSize` が要る**。
+
+**これが 6-9a を先にやった理由そのもの。** 移行表は「意味的判断をリテラルで固定する場所」
+なので、機械で見られる部分は機械に見せておかないと、後の段階が同じ漏れを繰り返す。
+
+#### 決めたこと 4: UI の size 欄を型ごとに閉じた（6-3 が 6-9 へ送った項目）
+
+6-3 が `length` を読む契約にしたのは**読み込み側だけ**で、UI は型と無関係に size を打てる
+ままだった。6-8d が DDL 側を塞いだので出力は壊れないが、**打った値が黙って消える**のは
+UI として不親切。閉じ方は 2 段:
+
+| 層 | やったこと |
+|---|---|
+| モデル | `Row.update()` に「サイズを取らない型は size を持たない」正規化。**`def` の正規化と同じ「ここ 1 箇所だけ」の位置**で、UI・FK の伝播・テンプレート適用の 3 経路を同時に塞ぐ |
+| UI | 編集フォームの size 入力を、選択中の型が `length="0"` なら `disabled` にして値も捨てる（型セレクタの `change` で追随） |
+
+これで**読み込み・DDL 生成・UI の 3 経路が同じ `TypePalette.hasSize` を共有する**。
+属性を持たない旧パレットでは `hasSize` が true を返すので、従来どおり自由に打てる。
+
+#### 検証
+
+| | 6-8d | 6-9a |
+|---|---|---|
+| `npm test` | 305 passed | **307 passed**（migrate-design +2） |
+| `npm run test:browser` | 129 passed | **130 passed**（size 欄の UI テスト +1） |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+
+**golden は 1 バイトも動いていない。** size の正規化を入れても動かないのは、
+**サイズ付きで `length="0"` に解決する列が 8 プロファイル × 7 fixture のどこにも無い**ため
+（唯一の候補だった PG の `CHAR(10)` は、読み込み側が 6-3 から size を捨てている）。
+
+依存は 1 本も増やしていない。CI のワークフローも増やしていない。
+
+#### 次段階への入力 —— 6-9b（識別子の検査）
+
+- **出し方は「警告表示」に決めた**（ユーザー承認）。問題のある識別子を持つ行 / テーブルに
+  印を付け、理由を出す。**入力は拒まない** —— 拒むと、PG で作った設計を oracle で開いた
+  瞬間に既存の名前が不正になり、直せない状態に落ちる
+- 対象は known-issue **#15**（Oracle は識別子に `"` を持てない）／**63 バイト超**（PG）／
+  **空文字**。長さの上限はプロファイルごとに違う（PG 63 / MySQL 64 / mssql 128 / Oracle 128）
+  ので、**`IdentifierRules` に足すのが素直**（`js/io/ddl/naming.ts`）
+- **`docs/FORMAT.md` が 6-9 以降へ送った「命名の検査（snake_case / 複数形）」と同じ土台**に
+  なる。6-5b は「生成器が識別子を書き換えるのは採らない・lint は警告して人が直す性質」と
+  決着させており、その受け皿がここで要る
+- CSS と locale（21 言語）の追加が要る点だけ、これまでの段階と毛色が違う
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

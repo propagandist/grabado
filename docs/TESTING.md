@@ -379,6 +379,28 @@ golden がプロファイル数ぶん増えるため。
 解決先は必ずその名前を `sql` か `aka` に持つ型である」という不変条件テストに裏返してある。
 known-issue #10（`re` の後勝ち）も #4（先頭型フォールバック）も、再発すればこの形を破る。
 
+### AI patch の適用 — golden を 1 本も持たない純関数（§11 段階11-1）
+
+**返るのはバイト列ではなくモデル**なので、golden の出番が無い（同じ性質の
+`convert.test.ts` / `introspect-parser.test.ts` も素の vitest アサーション）。むしろ
+**golden を足さないこと自体が 11-1 の完了判定**だった —— 「既存 114 本が 1 バイトも動かない」が
+そのまま「フロントに 1 行も配線していない」の証明になる。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/apply-patch.test.ts`](../tests/node/apply-patch.test.ts) | [`../js/io/ai/apply-patch.ts`](../js/io/ai/apply-patch.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。**8 op の意味論**（rename の追随先 3 つ・`hasSize` に従う `size` の始末・キー名を空で入れること・FK は `relations` に入ること）・**18 の落ち方が例外ではなく理由になること**（全ケースでモデルが同一参照）・`applyPatches` が配列順の畳み込みで途中の失敗に中断しないこと・**固定の提案 JSON を丸ごと通した結果**が serializer と DDL 生成にそのまま乗ること |
+
+入力は 3 つ —— `tests/fixtures/postgresql/relations.xml`（**rename の巻き込みすぎと取りこぼしが
+両方出る**唯一の fixture。自己参照 FK・複数 FK・多対多）、テスト内で組む小さな設計
+（`VARCHAR(255)` の 1 列・**FK がまだ張られていない** 2 テーブル。どちらも fixture に無い形）、
+そして [`../tests/fixtures/ai/review-response.json`](../tests/fixtures/ai/review-response.json)。
+
+最後の 1 つは **11-2 のモック LLM 応答を兼ねる**ので、形は `docs/ARCHITECTURE.md` §8.3 の提案
+そのものにしてある（8 op すべてと、**`patch` を持たない提案** 1 件を含む）。`tests/fixtures/`
+直下は `db/` のプロファイルと 1 対 1 であることを `fixture-set.test.ts` が機械的に見ているので、
+`ai` は `NON_PROFILE_FIXTURE_DIRS`（`tests/support/fixtures.ts`）に宣言して外している ——
+introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしない**。
+
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 
 **golden はここを 1 ビットも押さえない。** golden 50 本（`ddl` 35 ＋ `json` 7 ＋ `state` 8）は

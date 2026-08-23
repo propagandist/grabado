@@ -7994,6 +7994,144 @@ DesignController の `ai = false` リテラル（「それまで嘘をつかな�
 - **費用の実測は 11-2 で取る。** 1 リクエストあたりのトークンと概算費用を台帳に残す
   （公開デモを READONLY 一択にした判断の裏付けになる）
 
+### 2026-08-23 HANDOVER §11「AI」段階11-1 —— patch 適用の決定論パス
+
+11-0 の分割表の先頭。**AI を呼ぶ前に、承認した提案を設計へ当てる側だけを完成させる。**
+5-6（introspection の変換層だけを先に足した）と同じ形で、先に backend を作ると
+「提案は来るが適用できない」半端な状態が develop に載る。
+
+入ったのは 2 本 —— [`js/io/ai/suggestion.ts`](js/io/ai/suggestion.ts)（提案と patch の型。
+型だけで emit 空）と [`js/io/ai/apply-patch.ts`](js/io/ai/apply-patch.ts)（`DesignModel` →
+`DesignModel` の純関数）。**LLM も HTTP も 1 バイトも関わらない。**
+
+**フロントは 0 行**（`src/app.ts` にも `js/io.ts` にも `locale/` にも触っていない）。
+既存テスト 472 本と golden 114 本が **1 本も動いていない**ことが、そのまま
+「まだ何も配線していない」の証明になる（5-x で効いた「フロント 0 行の帯」）。
+新規は `tests/node/apply-patch.test.ts` の 57 本。
+
+#### 決めたこと 1: 失敗は**例外ではなく Result 型**
+
+`js/io/` のエラー処理は性質で 2 つに割れている —— **正本を読む側は throw**
+（`json-parser.ts` の「壊れた JSON は部分的に読み込まない」）、**1 件の失敗で全体を落とせない
+側は Result ＋ 理由の一覧**（`convert.ts` の `losses` / `introspect-parser.ts` /
+`ddl/naming.ts` の `identifierIssue`）。**AI patch は後者。**
+
+1. **入力が正本ではない。** LLM の出力で、しかも提案が返ってから承認までの間に人が設計を
+   編集しうる。**「対象のテーブルがもう無い」は異常ではなく通常の帰結**
+2. **11-4 は 1 件ずつ承認する UI。** 例外だと「何件目がなぜ落ちたか」が message 文字列に
+   潰れ、呼び手は patch ごとに try/catch を書くことになる
+3. **理由をユーザーに見せる必要がある。** `js/io/` は locale を通せない（ARCHITECTURE §5.6
+   規約3）ので、**訳す側が使えるキーを返すしかない** —— `PatchRejection.kind` がそのまま
+   locale のキーで、6-9b の `IdentifierIssue` が同じ問題を同じ形で解いた前例に揃えた
+
+結果として **well-typed な入力に対して 1 つも例外を投げない**。落ちたときはモデルを
+**入力と同一参照で返す**（部分適用を作らない。`convert.ts` が同じ db を恒等で返すのと同じ）。
+
+#### 決めたこと 2: `add-key` は **FK も運ぶ**（ユーザー判断）
+
+§8.3 は op 名を閉じた 8 種で決めているが、**`add-key` の中身は規定していない**。
+モデルは通常キーを `TableModel.keys`、FK を `RowModel.relations` と**別の場所**に持つので、
+どちらを運ぶのかは実装が決めるしかなかった。
+
+**両方運ぶ**（`keyType: PRIMARY | UNIQUE | INDEX | FOREIGN`）。`category` の 7 語に
+`fk_gap` がある以上、**閉じた 8 op のうち FK を表現できるのは `add-key` だけ**で、
+運ばせないと「AI の指摘のうち 1 カテゴリだけが承認 UI に乗らない」ことになる。
+
+代償は `add-key` だけが 2 つの書き込み先を持つこと。**`FULLTEXT` は入れない** ——
+PG では btree の `CREATE INDEX` に落ちるだけで、AI が提案する意味が無い（UI は 4 種類
+作れるが、ここは「AI に作らせてよいもの」の集合で UI の写しではない）。
+
+#### 決めたこと 3: 型は **SQL 名で受ける**。パレットは 1 つだけ見る
+
+§8.2 が「型は id ではなく解決済みの SQL 名で送る」と決めているので、返ってくる patch も
+SQL 名。解決は既存の `TypePalette.indexOfTypeName()`（`introspect-parser.ts` と同じ扉）。
+
+**一致が無ければ落とす。先頭型には落とさない。** `introspect-parser.ts` が既定型へ倒すのは
+「1 列のせいで import が全滅する」のを避けるためで、こちらは 1 件の提案なので落とせばよい
+（known-issue #4 の「一致が無ければ添字 0」をこの層に持ち込まない）。
+
+サイズは**寄せ先の `length` に従う** —— `CHAR(10)` が `TEXT` に寄ったときに `TEXT(10)` を
+出さない既存の規則で、`xml-parser.ts` / `ddl/shared.ts` / `convert.ts` に続く **4 人目の読み手**。
+
+#### 決めたこと 4: キーと FK の**名前を焼き込まない**
+
+`add-key` が書く `KeyModel.name` は**必ず空**。`docs/FORMAT.md` の「空のときだけ生成器が
+§6.3 の規約で名前を組む」という契約がそのまま効き、`<table>_pkey` / `idx_<table>_<cols>` /
+`fk_<table>_<column>` は `ddl/naming.ts` が組む。**ここで組むと規約が 2 か所に分かれ、
+introspection で読み直しても名前が動かないという 6-5b の保証が壊れる。**
+
+同じ理屈で **UI 経路の副作用を再現しない**。`Table.setTitle()` の関連行リネーム
+（`js/table.ts`）も `rowManager` の FK 型寄せ（`js/rowmanager.ts`）も、読み込み経路
+（`apply.ts`）では 1 度も発火しない UI だけの挙動で、持ち込むと**読み込み経路と patch 経路で
+結果が違う**状態ができる。patch は読み込み経路に揃える。
+
+#### 決めたこと 5: **ランタイムの検証を持たない**
+
+`suggestion.ts` は型だけ（`introspect-model.ts` と同じ立場）。「形が違うものは受け取らない」
+層は backend 側の structured outputs が持つ（11-0 の決めたこと 1）ので、**ここに二重に置くと
+11-2 が持つべき契約が 11-1 に漏れる**。`drop-table` / `drop-column` が無いことも、実行時の
+検査ではなく **`AiPatch` の union に枝が無いこと**で保証される（決めたこと 6 の形式版）。
+
+#### 決めたこと 6: 触っていない枝は**同一参照**で返す（構造共有）
+
+変更が届かなかった `TableModel` / `RowModel` / `KeyModel` はそのまま返す。効用は 2 つ ——
+決定論の証明が「触った枝だけ見ればよい」に縮むこと、**テストが `toBe` で「この patch は
+このテーブルしか触っていない」を機械的に押さえられる**こと（`convert.test.ts` の恒等テストと
+同じ形）。追加はすべて**末尾 append** で、挿入位置を推測しない。
+
+**ここだけオブジェクトの spread を使う。** `convert.ts` / `introspect-parser.ts` が全フィールドを
+明示で書き写しているのは「写し漏らしがそのまま欠落になる」層だからで、**patch は逆** ——
+意味論が「指定した 1 つを変えて残りはそのまま」なので、モデルに将来フィールドが増えても
+「持ち越す」が常に正しい。
+
+#### 決めたこと 7: 破壊は形式で潰す（`add-comment` の空文字を拒む）
+
+`drop-*` を作らないだけでは足りない —— **`add-comment` に `""` を通すと実質の削除になる**。
+op 名が `add-` である以上これは §8.3 の趣旨に反するので `patchemptyvalue` で拒む（上書きは
+許す。コメントは設計そのものではない）。副次的に、`""` を入れると `title=""` 属性が生えて
+状態 golden が動く問題（`apply.ts` の `if (model.comment)`）も同じ判断で避けられる。
+
+`set-default` の `""` は逆に**「既定を外す」として通す** —— モデルに null は無い（4-5）ので
+これが唯一の表現で、既定値は消しても設計は壊れない。**`"NULL"` → `""` の正規化はしない**
+（正規化は `Row.update()` の 1 箇所に置いたままにするのが 4-1b の決めたこと 3。同じ規則を
+2 か所に分けると片方だけ直す事故の余地が残る）。
+
+#### テスト —— 57 本、golden は 0 本
+
+**golden を足さないこと自体が完了判定。** 返るのはバイト列ではなくモデルなので `convert` /
+`introspect-parser` と同じ素のアサーションで書き、`tests/browser/` に spec を 1 本も足さない。
+
+主戦場は `tests/fixtures/postgresql/relations.xml` —— **rename の巻き込みすぎと取りこぼしが
+両方出る**唯一の fixture（自己参照 FK・1 テーブルに複数 FK・多対多）。`employees` を改名すると
+3 テーブル 4 本の参照が追随し、`teams` への参照は 1 バイトも動かない。`employees.id` を改名すると
+`employees_pkey` の part も動くが、**`projects.id` / `teams.id` は同名でも巻き込まない**。
+
+新しい fixture を 1 つ足した ——
+[`tests/fixtures/ai/review-response.json`](tests/fixtures/ai/review-response.json)。
+8 op すべてと **`patch` を持たない提案**を含む 11 件で、**11-2 のモック LLM 応答を兼ねる**。
+`tests/fixtures/` 直下は `db/` と 1 対 1 であることを `fixture-set.test.ts` が見ているので、
+`ai` は `NON_PROFILE_FIXTURE_DIRS` に宣言して外した（5-6 の introspection と同じ扱い）。
+
+**§4 の決定論パスへ合流していることを実測で押さえた** —— 適用後のモデルを
+`serializeDesignJson()` に通して往復バイト一致、`generateDdl()` に通して
+`idx_projects_owner_id` と `fk_employees_team_id` が出ること。**AI が触ったあとのモデルは
+ただの `DesignModel`** で、既存の出力側が何も知らないまま受ける。
+
+#### 申し送り
+
+- **11-2 は `op` の enum 8 語と `keyType` の enum 4 語を `suggestion.ts` と一致させること。**
+  structured outputs のスキーマとこの union が割れると、通る提案が適用できなくなる
+- **`PatchRejection.kind` の locale 追加は 11-4。** `js/io/` は locale を通せないので、
+  訳語は承認 UI 側が持つ。**11 語ある**（`patchnopatch` / `patchtablemissing` /
+  `patchcolumnmissing` / `patchtargetcolumn` / `patchnametaken` / `patchunknowntype` /
+  `patchkeyexists` / `patchrefmissing` / `patchrefexists` / `patchemptyvalue` / `patchmalformed`）
+- **`aiRequestVersion: 1` の構築器（§8.2）は 11-3。** `DesignModel` → 送信 JSON の純関数で、
+  型を SQL 名へ解決するので `palette` を取る。置き場所は `js/io/ai/request.ts` が自然
+- **提案に安定 id を振るかは 11-3 の判断。** structured outputs で一意性を強制できないので、
+  振るならフロント側の採番になる。11-1 の承認単位は配列の添字
+- **`add-column` は autoincrement を受け取らない。** identity 列が要る局面が出たら
+  op を増やすのではなく、まず「house 既定の PK は `uuid DEFAULT uuidv7()`」で足りるかを見る
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

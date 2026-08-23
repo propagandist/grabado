@@ -25,15 +25,16 @@ export const DB_PROFILES: readonly string[] = Object.freeze(
 export const SERIALIZER_DB = "postgresql";
 
 /**
- * `tests/fixtures/` の下にある、**DB プロファイルではない**ディレクトリ（段階5-6）。
+ * `tests/fixtures/` の下にある、**DB プロファイルではない**ディレクトリ（段階5-6 / 11-1）。
  *
  * `tests/fixtures/<db>/` は「DB × 名前」の設計 XML で、`fixture-set.test.ts` が
  * `db/` の実体と 1 対 1 であることを守っている（撤去した DB の残骸を捕まえるため）。
- * introspection の入力はその軸に乗らない別種の fixture なので、**ここに宣言して
- * 検査から外す** —— 除外を暗黙にすると「知らないディレクトリが増えても気づかない」
- * 状態になる。5-1c で契約表に `virtual: false` を宣言したのと同じ流儀。
+ * introspection の入力（段階5-6）と AI の提案 JSON（段階11-1）はどちらもその軸に乗らない
+ * 別種の fixture なので、**ここに宣言して検査から外す** —— 除外を暗黙にすると
+ * 「知らないディレクトリが増えても気づかない」状態になる。5-1c で契約表に
+ * `virtual: false` を宣言したのと同じ流儀。
  */
-export const NON_PROFILE_FIXTURE_DIRS: readonly string[] = Object.freeze(["introspection"]);
+export const NON_PROFILE_FIXTURE_DIRS: readonly string[] = Object.freeze(["ai", "introspection"]);
 
 export interface Fixture {
     /** ファイル名から拡張子を除いたもの。golden のキーになる */

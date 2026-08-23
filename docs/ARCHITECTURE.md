@@ -519,6 +519,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 | [`conflict.ts`](../js/io/conflict.ts) | 保存境界 | 保存前の外部変更検知の判定（純関数。`absent` / `clean` / `exists` / `conflict`） |
 | [`template.ts`](../js/io/template.ts) | 参照 | §6.2 初期テーブルテンプレート（§6 段階6-4 で追加）。`<template>` を読み、新規テーブルの初期列と PRIMARY を作る。`Add row` の既定型（`newrowtype`）も同じ層 |
 | [`convert.ts`](../js/io/convert.ts) | 出・前段 | プロファイル変換（§6 段階6-10a）。`DesignModel` → **別プロファイルの** `DesignModel` ＋ 落ちたものの一覧。純関数で、型は正規型（`kind`）1 段だけを介して写す |
+| [`ai/`](../js/io/ai/) | 格子の外 | AI 提案の適用（§11 段階11-1）。`suggestion.ts` が提案と patch の型（型だけ・emit 空）、`apply-patch.ts` が `DesignModel` → `DesignModel` の純関数。**LLM も HTTP も 1 バイトも知らない** |
 
 **12 本目の [`template.ts`](../js/io/template.ts) は §6 段階6-4 で足した**（§4 の 11 本ではない）。
 **13 本目の [`convert.ts`](../js/io/convert.ts) は §6 段階6-10a。** 格子の「出・形式側」の
@@ -528,6 +529,13 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 分けていない**（読み込み時変換をやらない判断。`js/io/json-parser.ts` の db 照合はそのまま）。
 格子の外にあるのは、入出力ではなく**プロファイルの既定値**を読む層だから —— 位置づけは
 `palette.ts` と同じで、実行時の依存は 0 本（import は型だけ）。
+
+**[`ai/`](../js/io/ai/) は §11 段階11-1。格子の第 3 の軸**で、`extract` / `apply` / `parser` /
+`serializer` のどれにも同居しない —— 入力も出力も `DesignModel` で、バイト列にも
+ライブツリーにも触らないため。いちばん近いのは `convert.ts`（モデル → モデルの純関数）だが、
+あちらが**型パレットを 2 つ**見るのに対しこちらは 1 つで、写すのは型ではなく**構造**
+（名前・キー・参照・コメント）。**LLM も HTTP も 1 バイトも知らない** —— 提案がどこから
+来たかを知らないので、テストは固定の JSON を読むだけで済む（§8.3）。
 
 守る規約は 4 つ。
 
@@ -680,8 +688,10 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 ## 8. AI proxy の契約（到達点）
 
 **決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階11-0 にある。**
-本章は**まだ 1 行も実装されていない** —— 枠だけを予約し、11-2 以降が実測どおりに埋める
-（§7 が 5-0 で予約され 5-1b 以降に埋まったのと同じ形）。
+実装があるのは **§8.3 の適用側だけ**（段階11-1 で [`../js/io/ai/`](../js/io/ai/) が入った）。
+残る 4 節（エンドポイント・リクエスト形式・env・キャッシュ）は**枠の予約**で、11-2 以降が
+実測どおりに埋める（§7 が 5-0 で予約され 5-1b 以降に埋まったのと同じ形）。**backend にも
+フロントの配線にも、まだ 1 行も無い。**
 
 **HANDOVER §11 との差分は 3 つ**（URL 名・構造化出力の手段・プライバシー既定）。
 **HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
@@ -734,6 +744,28 @@ set-nullable / set-default / add-comment
 適用は [`../js/io/ai/apply-patch.ts`](../js/io/ai/apply-patch.ts) の**純関数**
 （`DesignModel` → `DesignModel`）。ライブツリーを触るのは既存の `applyDesignModel()`（§4-1b の経路）。
 **LLM の非決定性は「生成」だけに閉じ込め、「適用」はテスト済みロジックに合流する**（CLAUDE.md 制約7）。
+
+**段階11-1 で入った**（型は [`suggestion.ts`](../js/io/ai/suggestion.ts)、テストは
+[`../tests/node/apply-patch.test.ts`](../tests/node/apply-patch.test.ts) の 57 本）。
+op が何を書き換えるかは次のとおりで、**書き込み先はモデルの形がそのまま決めている**:
+
+| op | 書き換え先 |
+|---|---|
+| `rename-table` | `TableModel.title` ＋ **その名前を指す全テーブルの `relations[].table`** |
+| `rename-column` | `RowModel.title` ＋ 同テーブルの `keys[].parts` ＋ **この列を親とする全テーブルの `relations[].row`** |
+| `change-type` | `RowModel.type`（**SQL 名 → パレットの添字**）。寄せ先が `length="0"` なら `size` を捨てる |
+| `add-column` | `TableModel.rows` の**末尾**。`autoincrement` は patch から受けない |
+| `add-key` | 非 FK は `TableModel.keys` の末尾（**`name` は必ず空**）、**`FOREIGN` は `RowModel.relations`** |
+| `set-nullable` / `set-default` / `add-comment` | `nll` / `def` / `comment` の 1 つだけ |
+
+3 つの決めごと。
+
+- **例外を投げず Result 型で返す。** 提案が返ってから承認までの間に人が設計を編集しうるので
+  「対象がもう無い」は異常ではなく通常の帰結。理由（`PatchRejection.kind`）は
+  **そのまま locale のキー**で、`identifierIssue()`（§6 段階6-9b）と同じ形
+- **キーと FK の名前を焼き込まない。** `name` を空で入れ、`<table>_pkey` / `idx_<table>_<cols>` /
+  `fk_<table>_<column>` は DDL 生成が §6.3 の規約で組む（[`FORMAT.md`](FORMAT.md) の契約）
+- **触っていない枝は同一参照で返す。** 適用できなければモデルは入力そのもの（部分適用を作らない）
 
 ### 8.4 設定（env）
 

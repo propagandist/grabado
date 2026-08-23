@@ -58,7 +58,7 @@ const TABLE: ContractTable = JSON.parse(
 
 /** 実測 URL の形（docs/ARCHITECTURE.md §4.2）。Kotlin 側の send() と同じ組み立て。 */
 function buildUrl(request: ContractRequest): string {
-    const backend = request.backend ?? "php-mysql";
+    const backend = request.backend ?? "file";
     const slash = request.trailingSlash === false ? "" : "/";
     const query: string[] = [];
     if (request.action !== undefined && request.action !== null) {

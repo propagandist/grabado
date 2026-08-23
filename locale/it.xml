@@ -77,7 +77,6 @@
     <string name="clientsave">Salva JSON</string>
     <string name="clientload">Carica JSON</string>
     <string name="clientsql">Genera SQL</string>
-    <string name="backendlabel">Server di backend:</string>
     <string name="serversave">Salva</string>
     <string name="quicksave">Quicksave</string>
     <string name="serverload">Carica</string>

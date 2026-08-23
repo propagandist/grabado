@@ -80,7 +80,6 @@
     <string name="clientlocalload">Browser'a Yükle</string>
     <string name="clientlocallist">Browser'da Listele</string>
     <string name="clientsql">SQL oluştur</string>
-    <string name="backendlabel">Sunucu Kısmı:</string>
     <string name="serversave">Kaydet</string>
     <string name="quicksave">Hızlı Kayıt</string>
     <string name="serverload">Yükle</string>

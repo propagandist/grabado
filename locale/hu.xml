@@ -76,7 +76,6 @@
     <string name="clientsave">JSON mentése</string>
     <string name="clientload">JSON beolvasása</string>
     <string name="clientsql">SQL generálása</string>
-    <string name="backendlabel">Szerver végpont:</string>
     <string name="serversave">Mentés</string>
     <string name="serverload">Betöltés</string>
     <string name="serverlist">Tételek listázása</string>

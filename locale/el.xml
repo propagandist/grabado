@@ -76,7 +76,6 @@
     <string name="clientsave">Αποθήκευση JSON</string>
     <string name="clientload">Άνοιγμα JSON</string>
     <string name="clientsql">Δημιουργία SQL</string>
-    <string name="backendlabel">Διακομιστής:</string>
     <string name="serversave">Αποθήκευση</string>
     <string name="serverload">Άνοιγμα</string>
     <string name="serverlist">Εμφάνιση λίστας</string>

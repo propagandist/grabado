@@ -162,7 +162,7 @@ class BackendContractTest {
          * （`ARCHITECTURE.md` §4.2）。`keyword` は `encodeURIComponent` 相当でエンコードする。
          */
         fun send(request: JsonNode, port: Int): HttpResponse<ByteArray> {
-            val backend = request.path("backend").asString("php-mysql")
+            val backend = request.path("backend").asString("file")
             val slash = if (request.path("trailingSlash").asBoolean(true)) "/" else ""
             val query = buildList {
                 if (request.has("action") && !request.path("action").isNull) {

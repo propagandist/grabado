@@ -75,7 +75,6 @@
     <string name="clientsave">حفظ كنموذح JSON</string>
     <string name="clientload">إستيراد نموذج JSON</string>
     <string name="clientsql">حفظ كنموذج SQL</string>
-    <string name="backendlabel">Server backend:</string>
     <string name="serversave">حفظ</string>
     <string name="serverload">تحميل</string>
     <string name="serverlist">List items</string>

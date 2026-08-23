@@ -79,7 +79,6 @@
     <string name="clientlocalsave">Opslaan in Browser</string>
     <string name="clientlocalload">Laden uit Browser</string>
     <string name="clientsql">Genereer SQL</string>
-    <string name="backendlabel">Server:</string>
     <string name="serversave">Opslaan</string>
     <string name="quicksave">Snel opslaan</string>
     <string name="serverload">Laden</string>

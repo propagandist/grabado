@@ -73,6 +73,18 @@ function jsonKeyword(name: string): string {
 }
 
 /**
+ * backend の URL 接頭辞（段階5-5）。
+ *
+ * upstream は `backend/<選んだ実装名>/` で 12 本の PHP を切り替えていた。grabado の backend は
+ * Kotlin/Spring Boot 1 本なので選ぶものが無く、**セレクタごと撤去して固定した**。
+ * `file` はストアの実体（正本ディレクトリへのファイル I/O）を指す。
+ *
+ * **サーバはこのセグメントを読まない**（`DesignController` が受けて捨てる）ので、
+ * `?backend=` 付きの古いブックマークもそのまま動く。
+ */
+const BACKEND_PATH = "backend/file/";
+
+/**
  * 保存/読込ダイアログの DOM。
  *
  * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン 16 個は
@@ -81,7 +93,6 @@ function jsonKeyword(name: string): string {
 export interface IoDom {
     container: HTMLElement;
     ta: HTMLTextAreaElement;
-    backend: HTMLSelectElement;
     saveload: HTMLInputElement;
     clientlocalsave: HTMLInputElement;
     clientsave: HTMLInputElement;
@@ -171,7 +182,8 @@ export class IO {
 
         this.dom.quicksave.value += " (F2)";
 
-        var ids = ["client", "server", "output", "backendlabel", "outputdblabel"];
+        /* backendlabel は段階5-5 で撤去（select ごと消えた） */
+        var ids = ["client", "server", "output", "outputdblabel"];
         for (var i = 0; i < ids.length; i++) {
             var id = ids[i]!;
             /* grabado: 上のループの elm と型が違う（こちらはラベル要素）ため改名した。
@@ -181,7 +193,6 @@ export class IO {
         }
 
         this.dom.ta = OZ.$<HTMLTextAreaElement>("textarea");
-        this.dom.backend = OZ.$<HTMLSelectElement>("backend");
         this.dom.ormtarget = OZ.$<HTMLSelectElement>("ormtarget");
         this.dom.outputdb = OZ.$<HTMLSelectElement>("outputdb");
 
@@ -264,35 +275,61 @@ export class IO {
             this.dom.outputdb.appendChild(dbOpt);
         }
 
-        OZ.DOM.clear(this.dom.backend);
-
-        var bs = CONFIG.AVAILABLE_BACKENDS;
         /*
-         * grabado: CONFIG.DEFAULT_BACKEND は文字列ではなく配列 ["php-mysql"]（upstream の
-         * 取り違え）。下の bs[i] == be が緩い比較で配列を文字列化するため現行は意図どおり
-         * 動いており、値を直すのは実行コード変更になるので型で受けるだけにした。
-         * 是正は HANDOVER §5 の backend 移植で既定 backend の扱いごと決める（段階3-3b）。
+         * 段階5-5: backend の select はここで組み立てていた（AVAILABLE_BACKENDS の 12 本を
+         * option にし、?backend= で選ばせる）。**選択肢が実質 1 つになったので撤去した。**
+         * `DEFAULT_BACKEND` が配列だった upstream の取り違え（段階3-3b の申し送り）は、
+         * 是正ではなく消滅で決着した。
          */
-        var be: string | string[] = CONFIG.DEFAULT_BACKEND;
-        var r = window.location.search.substring(1).match(/backend=([^&]*)/);
-        if (r) {
-            /* grabado: var 宣言が抜けていた（HANDOVER §3 段階2）。ESM は常に strict なので
-               Vite ビルドではここで ReferenceError になり、?backend= 付き URL で
-               アプリが起動しなかった。 */
-            var req = r[1]!;
-            if (bs.indexOf(req) != -1) {
-                be = req;
-            }
-        }
-        for (var i = 0; i < bs.length; i++) {
-            var o = OZ.DOM.elm("option");
-            o.value = bs[i]!;
-            o.innerHTML = bs[i]!;
-            this.dom.backend.appendChild(o);
-            if (bs[i] == (be as string)) {
-                this.dom.backend.selectedIndex = i;
-            }
-        }
+        this.requestCapabilities();
+    }
+
+    /**
+     * サーバに「何ができるか」を尋ね、できないことのボタンを隠す（段階5-5）。
+     *
+     * ★ **引けなければ何も隠さない。** `npm run dev` 単体（backend を起こしていない）で
+     *   ボタンが消えると、5-5 以前より不便になるだけで誰も得しない —— 引けないのは
+     *   「機能が無い」ではなく「サーバがいない」。
+     */
+    requestCapabilities(): void {
+        var self = this;
+        OZ.Request(
+            this.owner.getOption("xhrpath") + BACKEND_PATH + "?action=capabilities",
+            function (data: unknown, code: number) {
+                if (code !== 200 || typeof data !== "string") {
+                    return;
+                }
+                var caps: unknown;
+                try {
+                    caps = JSON.parse(data);
+                } catch {
+                    /* 壊れた応答は「分からなかった」として扱う（全部できるまま） */
+                    return;
+                }
+                self.applyCapabilities(caps as { readonly?: boolean });
+            },
+            { headers: this.owner.getXhrHeaders() }
+        );
+    }
+
+    /**
+     * capabilities の反映（段階5-5）。純粋に DOM を触るだけなので UI テストから直接呼べる。
+     *
+     * **冪等**（同じ入力なら何度呼んでも同じ状態になる）。片方向にしか効かない実装だと、
+     * 「一度隠したら戻らない」ものが増えていく。
+     *
+     * 「サーバに尋ねられなかった」ときは **[requestCapabilities] がここを呼ばない** ——
+     * 何も隠さないのが正しい（引けないのは「機能が無い」ではなく「サーバがいない」）。
+     */
+    applyCapabilities(caps: { readonly?: boolean }): void {
+        /*
+         * READONLY のデプロイでは保存が 403 になる。**押してから知るのではなく、押せなくする**
+         * —— できることの説明として、そのほうが正確。
+         * load / list は生きているので触らない（READONLY でも読み取りビューアとして成立する）。
+         */
+        var readonly = caps.readonly === true;
+        this.dom.serversave.disabled = readonly;
+        this.dom.quicksave.disabled = readonly;
     }
 
     click(): void {
@@ -739,9 +776,8 @@ export class IO {
         var bp = this.owner.getOption("xhrpath");
         var url =
             bp +
-            "backend/" +
-            this.dom.backend.value +
-            "/?action=save&keyword=" +
+            BACKEND_PATH +
+            "?action=save&keyword=" +
             encodeURIComponent(jsonKeyword(name));
         /*
          * ★ getXhrHeaders() は **Designer が持つオブジェクトをそのまま返す**（共有）。
@@ -788,9 +824,8 @@ export class IO {
         var bp = this.owner.getOption("xhrpath");
         var url =
             bp +
-            "backend/" +
-            this.dom.backend.value +
-            "/?action=load&keyword=" +
+            BACKEND_PATH +
+            "?action=load&keyword=" +
             encodeURIComponent(jsonKeyword(name));
         var h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
@@ -805,7 +840,7 @@ export class IO {
 
     serverlist(e?: Event): void {
         var bp = this.owner.getOption("xhrpath");
-        var url = bp + "backend/" + this.dom.backend.value + "/?action=list";
+        var url = bp + BACKEND_PATH + "?action=list";
         var h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
         OZ.Request(url, this.listresponse, { headers: h });
@@ -826,9 +861,8 @@ export class IO {
         var bp = this.owner.getOption("xhrpath");
         var url =
             bp +
-            "backend/" +
-            this.dom.backend.value +
-            "/?action=import&database=" +
+            BACKEND_PATH +
+            "?action=import&database=" +
             name;
         var h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();

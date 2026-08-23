@@ -330,6 +330,17 @@ export async function createHarness(): Promise<NodeHarness> {
             callback(names.map((name) => name + "\n").join(""), 200, {});
             return;
         }
+        if (action === "capabilities") {
+            /*
+             * 段階5-5。仮想 backend は READONLY を模さない（サーバの起動条件なので）ため、
+             * 常に「全部できる」を返す。READONLY の側は Kotlin の ReadOnlyContractTest が持つ。
+             * キー順は Kotlin の Capabilities（data class のプロパティ順）に合わせる。
+             */
+            callback('{"readonly":false,"introspection":false,"ai":false}', 200, {
+                "Content-Type": "application/json",
+            });
+            return;
+        }
         /*
          * import / remove / 未知の action / action 指定なし。
          *

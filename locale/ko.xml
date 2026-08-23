@@ -80,7 +80,6 @@
     <string name="clientlocalload">브라우저에서 불러오기</string>
     <string name="clientlocallist">브라우저 저장 목록</string>
     <string name="clientsql">SQL 생성</string>
-    <string name="backendlabel">벡엔드 서버:</string>
     <string name="serversave">저장</string>
     <string name="quicksave">빠른저장</string>
     <string name="serverload">불러오기</string>

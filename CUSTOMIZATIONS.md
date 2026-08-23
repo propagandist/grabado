@@ -7107,6 +7107,97 @@ golden は Designer のファサード経由で採るので `js/io.ts` を通ら
 
 ---
 
+### 2026-08-23 HANDOVER §5「backend」段階5-5 —— backend セレクタを撤去し、capabilities を足す
+
+**upstream の「12 本の backend から選ぶ」UI が消えた。** grabado の backend は
+Kotlin/Spring Boot 1 本（CLAUDE.md 制約6）で、その実体は段階5-2 で PHP ごと消えている ——
+**選択肢が実質 1 つの select は情報量ゼロで、公開 OSS では「何を選ぶのか」という誤解を
+生むだけ**だった。
+
+同じ PR で `?action=capabilities` を足し、**READONLY のデプロイでは保存ボタンを押せなくした**。
+
+#### 決めたこと 1: URL は `backend/file/` に固定。サーバは**読まないまま**にする
+
+フロントの `BACKEND_PATH`（`js/io.ts`）1 か所で決まる。`file` はストアの実体
+（正本ディレクトリへのファイル I/O）を指す。
+
+**サーバ側は `{backend}` を読まないままにしてある。** 5-1b で「受けて捨てる」と決めた形を
+そのまま残すので、**`?backend=php-mysql` 付きの古いブックマークも動く**（何を入れても
+同じ正本ディレクトリを見る）。撤去したのは UI であって URL 空間ではない。
+
+将来 store を増やすとしても env（サーバ側）で決める —— **どの store が生きているかは
+サーバしか知らない**ので、ブラウザに選ばせるのは筋が悪い。
+
+#### 決めたこと 2: `DEFAULT_BACKEND` の配列バグは**是正ではなく消滅**で決着した
+
+upstream の `CONFIG.DEFAULT_BACKEND` は文字列ではなく配列 `["php-mysql"]` で、
+`bs[i] == be` の緩い比較が配列を文字列化するため**偶然動いていた**。段階3-3b が
+「§5 の backend 移植で既定 backend の扱いごと決める」と送っていた項目だが、
+**セレクタごと消えたので是正コストが 0 になった**。
+
+一緒に落ちたもの: `AVAILABLE_BACKENDS`（PHP 名 12 本）/ `DEFAULT_BACKEND` / `?backend=` の
+解釈 / `backendlabel`（locale 21 本）/ `index.html` の `<select>` / `IoDom.backend`。
+
+#### 決めたこと 3: capabilities は「**引けなければ全部できる**」に倒す
+
+```json
+{"readonly": false, "introspection": false, "ai": false}
+```
+
+フロントは起動時に 1 回引き、`readonly` なら `serversave` / `quicksave` を `disabled` にする。
+**403 を押してから知るのではなく、押せなくする** —— できることの説明として、そのほうが正確。
+
+★ **引けなければ何も隠さない。** `npm run dev` 単体（backend を起こしていない）でボタンが
+消えると 5-5 以前より不便になるだけで、誰も得しない —— 引けないのは「機能が無い」ではなく
+「サーバがいない」。壊れた JSON が返ったときも同じ扱い。
+
+`introspection` は 5-7、`ai` は §11 まで**常に false**。実装が無いのに true を返さない
+（嘘をつくと、フロントが押せるボタンを出して 501 を踏む）。
+
+**`applyCapabilities()` は冪等**にした。片方向にしか効かない実装だと「一度隠したら戻らない」
+ものが増えていく。DOM を触るだけの関数なので UI テストから直接呼べる。
+
+#### 5-2 と同じ手順（表を先に直す）
+
+`tests/contract/backend-cases.json` の `backend` 既定を `file` にし、capabilities の 2 ケース
+（通常 / READONLY）を足してから実装した。テストの URL リテラルも同じ PR で動く ——
+**この 4 本が「フロントが投げる URL」の正**なので、期待値を後から合わせる形にしない。
+
+`backend-segment-is-ignored` のケースは **`php-mysql` を指定したまま残した**（古い URL が
+動き続けることの証明になる）。
+
+#### 検証
+
+| | 5-4b | 5-5 |
+|---|---|---|
+| `npm test` | 437 passed | **442 passed** |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 101 passed | **103 passed** |
+
+golden 114 本は無差分（**セレクタを消しても golden は動かない** —— golden は Designer の
+ファサード経由で採るので `js/io.ts` を通らない）。
+
+増えた 5 本（TS）: 契約表の capabilities 1 ケース ＋ UI 反映 4 本（READONLY で隠す・
+そうでなければ隠さない・`readonly` が無ければ「できる」・冪等）。
+増えた 2 本（Kotlin）: capabilities の通常 / READONLY。
+
+#### 次段階への入力
+
+- **5-6: introspection の変換層を先に足す（フロントの純関数だけ）。**
+  `js/io/introspect-parser.ts`（introspection JSON ＋ `TypePalette` → `DesignModel`）と
+  fixture ＋ テスト。**UI に配線しない・backend も触らない**ので、既存テストは 1 本も動かない
+- **★ 5-6 の fixture には必ず配列型（`text[]`）と enum（`USER-DEFINED`）を入れる。**
+  どちらもパレットに存在せず `indexOfTypeName` が -1 を返す。落とし先が無いと
+  **import ごと throw で全滅する**（5-0 の記録）
+- 5-7 で introspection が入ったら **capabilities の `introspection` を true にする**
+  （接続先が 1 つも設定されていなければ false のまま）。フロントは
+  `serverimport` ボタンをそれで隠す —— **`applyCapabilities()` に分岐を足すだけ**
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

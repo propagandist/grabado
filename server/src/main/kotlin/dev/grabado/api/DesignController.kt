@@ -1,5 +1,6 @@
 package dev.grabado.api
 
+import dev.grabado.config.GrabadoProperties
 import dev.grabado.design.DesignName
 import dev.grabado.design.DesignStore
 import jakarta.servlet.http.HttpServletRequest
@@ -45,7 +46,10 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 @RequestMapping(path = ["/backend/{backend}/", "/backend/{backend}"])
-class DesignController(private val store: DesignStore) {
+class DesignController(
+    private val store: DesignStore,
+    private val properties: GrabadoProperties,
+) {
 
     /** 名前を `\n` 区切りで返す。**末尾にも改行**（実測）。空なら 0 バイト。 */
     @GetMapping(params = ["action=list"])
@@ -105,6 +109,26 @@ class DesignController(private val store: DesignStore) {
     }
 
     /**
+     * このデプロイで何ができるか（段階5-5）。
+     *
+     * フロントは起動時に 1 回引いて、できないことのボタンを隠す。**引けなければ
+     * 「全部できる」に倒す**ので、backend を起こしていない `npm run dev` 単体でも
+     * 5-5 以前と同じ画面になる。
+     */
+    @GetMapping(params = ["action=capabilities"])
+    fun capabilities(): ResponseEntity<Capabilities> =
+        ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(
+                Capabilities(
+                    readonly = properties.readonly,
+                    /* 実装が入るのは 5-7（introspection）と §11（AI）。それまで嘘をつかない */
+                    introspection = false,
+                    ai = false,
+                ),
+            )
+
+    /**
      * `params` 条件に当たらなかったリクエスト。
      *
      * - 既知の action に**違う HTTP メソッド**で来た → **405**（PHP は method を見ていなかった
@@ -117,7 +141,7 @@ class DesignController(private val store: DesignStore) {
     @RequestMapping
     fun fallback(@RequestParam(required = false) action: String?): ResponseEntity<Void> =
         when (action) {
-            "list", "load", "save" -> ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build()
+            "list", "load", "save", "capabilities" -> ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build()
             else -> ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build()
         }
 }

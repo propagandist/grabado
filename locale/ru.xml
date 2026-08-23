@@ -80,7 +80,6 @@
     <string name="clientlocalload">Загрузить из браузера</string>
     <string name="clientlocallist">Получить список схем из браузера</string>
     <string name="clientsql">Генерировать SQL</string>
-    <string name="backendlabel">Серверные технологии:</string>
     <string name="serversave">Сохранить</string>
     <string name="quicksave">Быстрое сохранение</string>
     <string name="serverload">Загрузить</string>

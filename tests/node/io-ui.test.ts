@@ -56,7 +56,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(reqs).toHaveLength(1);
             const req = reqs[0]!;
             expect(req.url).toBe(
-                "backend/php-mysql/?action=save&keyword=orders.json",
+                "backend/file/?action=save&keyword=orders.json",
             );
             expect(req.method).toBe("post");
             expect(req.contentType).toBe("application/json");
@@ -111,7 +111,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             const reqs = h.takeRequests();
             expect(reqs).toHaveLength(1);
             expect(reqs[0]!.url).toBe(
-                "backend/php-mysql/?action=save&keyword=orders.json",
+                "backend/file/?action=save&keyword=orders.json",
             );
         });
 
@@ -298,6 +298,46 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
         });
     });
 
+    /*
+     * capabilities（段階5-5）。サーバに「何ができるか」を尋ね、できないことのボタンを隠す。
+     * ★ 引けなければ**何も隠さない** —— backend を起こしていない `npm run dev` 単体で
+     *   ボタンが消えると、5-5 以前より不便になるだけ。
+     */
+    describe("capabilities（段階5-5）", () => {
+        test("READONLY なら保存ボタンを押せなくする", () => {
+            h.io.applyCapabilities({ readonly: true });
+
+            expect(h.io.dom.serversave.disabled).toBe(true);
+            expect(h.io.dom.quicksave.disabled).toBe(true);
+            /* 読み取りは生きている（READONLY でも「読んで・描いて・DDL を出す」は成立する） */
+            expect(h.io.dom.serverload.disabled).toBe(false);
+            expect(h.io.dom.serverlist.disabled).toBe(false);
+        });
+
+        test("READONLY でなければ何も隠さない", () => {
+            h.io.applyCapabilities({ readonly: false });
+
+            expect(h.io.dom.serversave.disabled).toBe(false);
+            expect(h.io.dom.quicksave.disabled).toBe(false);
+        });
+
+        test("readonly が無い応答は「できる」に倒す", () => {
+            h.io.applyCapabilities({});
+
+            expect(h.io.dom.serversave.disabled).toBe(false);
+        });
+
+        test("反映は冪等（同じ入力なら何度呼んでも同じ状態）", () => {
+            h.io.applyCapabilities({ readonly: true });
+            h.io.applyCapabilities({ readonly: true });
+            expect(h.io.dom.serversave.disabled).toBe(true);
+
+            /* 片方向にしか効かないと「一度隠したら戻らない」ものが増えていく */
+            h.io.applyCapabilities({ readonly: false });
+            expect(h.io.dom.serversave.disabled).toBe(false);
+        });
+    });
+
     describe("serverload", () => {
         test("keyword に .json が付き、応答をテキストで受ける", () => {
             h.io.serverload(false, "orders");
@@ -306,7 +346,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(reqs).toHaveLength(1);
             const req = reqs[0]!;
             expect(req.url).toBe(
-                "backend/php-mysql/?action=load&keyword=orders.json",
+                "backend/file/?action=load&keyword=orders.json",
             );
             /*
              * xml: true を外したのが 4-3b の実体。付いたままだと OZ.Request が
@@ -329,7 +369,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             const reqs = h.takeRequests();
             expect(reqs).toHaveLength(1);
             const req = reqs[0]!;
-            expect(req.url).toBe("backend/php-mysql/?action=import&database=shop");
+            expect(req.url).toBe("backend/file/?action=import&database=shop");
             expect(req.xml).toBe(true);
         });
     });

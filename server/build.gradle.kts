@@ -55,6 +55,9 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     // @ConfigurationProperties の constructor binding が要求する（libs.versions.toml の注記）。
     implementation(libs.kotlin.reflect)
+    // introspection の唯一の JDBC ドライバ（段階5-7a）。版は Spring Boot の BOM が決める。
+    // starter-jdbc は入れない —— HikariCP が来ると DB レス既定が構造で保証されなくなる。
+    implementation(libs.postgresql)
 
     // JUnit 5 + MockMvc + AssertJ。モックライブラリは足さない
     // （store は @TempDir で実 FS を使う。in-memory の double はテストを空虚にする）。

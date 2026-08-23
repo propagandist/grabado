@@ -11,6 +11,25 @@ grabado:
   # 落ちるのはその 3 つだけで、list / load は生きている（読み取りビューア）。
   readonly: ${GRABADO_READONLY:${READONLY:false}}
 
+  # introspection の接続先（段階5-7a）。**既定は空＝無効。**
+  #
+  # ★ ここに列挙したものしか使えない。`?action=import&database=shop` の `shop` が選ぶのは
+  #   このキーだけで、**ホスト名はクライアントから 1 バイトも渡らない** ——
+  #   SSRF が「対策」ではなく**不可能**になる。
+  #
+  # 設定するときは env 経由で（秘密をイメージに焼かない。CLAUDE.md 制約5）:
+  #
+  #   grabado:
+  #     introspect:
+  #       sources:
+  #         shop:
+  #           url: ${SHOP_JDBC_URL}
+  #           user: ${SHOP_DB_USER}
+  #           password: ${SHOP_DB_PASSWORD}
+  #           schema: public
+  introspect:
+    sources: {}
+
 server:
   tomcat:
     # 日本語の keyword が URL エンコードで往復するのは実測契約（ARCHITECTURE §4.3）。

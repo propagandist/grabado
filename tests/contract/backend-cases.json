@@ -388,14 +388,14 @@
       "virtual": false
     },
     {
-      "id": "import-not-implemented",
-      "note": "php-file は import を持たない（実測 501）。中身が入るのは段階5-7",
+      "id": "import-without-sources-is-not-found",
+      "note": "段階5-7a: introspection の実装は入ったが、接続先は env に列挙したものしか使えない。1 つも設定されていなければ 404 —— 「設定していない」と「その名前が無い」を外から区別させない",
       "request": {
         "method": "GET",
         "action": "import"
       },
       "expect": {
-        "status": 501,
+        "status": 404,
         "body": ""
       },
       "virtual": true
@@ -667,15 +667,16 @@
       "virtual": false
     },
     {
-      "id": "readonly-import-is-still-not-implemented",
-      "note": "introspection は READONLY で無効化する対象（SSRF の踏み台になるため）だが、段階5-3 の時点では実装そのものが無いので 501 のまま。403 に変わるのは 5-7",
+      "id": "readonly-import-is-forbidden",
+      "note": "READONLY では IntrospectionService の Bean ごと存在しない（外部到達性を持つ唯一の経路をまるごと消す）。403",
       "serverMode": "readonly",
       "request": {
         "method": "GET",
         "action": "import"
       },
       "expect": {
-        "status": 501
+        "status": 403,
+        "body": ""
       },
       "virtual": false
     },

@@ -7307,6 +7307,137 @@ UI に配線していないので当然だが、それが「安全網を先に�
 
 ---
 
+### 2026-08-23 HANDOVER §5「backend」段階5-7a —— Kotlin introspection（backend 先行）
+
+**`?action=import` が動くようになった。** `docs/ARCHITECTURE.md` §4.6 が記録していた
+**PG18 の 2 不具合を、実 PG18 に対して解けたことを確かめた。**
+
+**フロントは 1 行も触っていない**（`serverimport` は今も XML を期待している）。JSON 化と
+XML 経路の撤去は 5-7b —— 5-4 と同じ 2 段構成で、5-7a は既存 463 本を 1 本も壊さない。
+
+#### 実 PG18 で確かめてから SQL を書いた
+
+`docker run postgres:18` ＋ `docs/samples/introspection-sample-schema.sql` を投入し、
+4 本のクエリを**実行して出力を見てから**実装した。
+
+| | 実測 |
+|---|---|
+| **CHECK の件数** | **16 件**（すべて `<table>_<col>_not_null`）。§4.6-1 が再現した |
+| **index** | 正しい除外条件なら `idx_articles_author_id` と `idx_articles_published_on_title`（2 列）が**全件出る**。§4.6-2 の `break` はここで 1 件も出せなかった |
+| `numeric(12,2)` | `numeric_precision=12` / `numeric_scale=2` |
+| `text[]` | `data_type=ARRAY` / `udt_name=_text` / `element_types.data_type=text` |
+| `timestamptz` | `data_type=timestamp with time zone` —— **パレットの `aka` がこの綴りを持つ理由** |
+
+**5-6 で手で書いた fixture が実測と一致していた**（`ARRAY`/`_text`、`numeric` の 12/2、
+`timestamp with time zone`）。信念が当たっていたわけだが、**当たっていたことを確かめられる
+のは実測だけ**というのが本段階の要点。
+
+#### 決めたこと 1: CHECK は **allowlist** で外す（denylist にしない）
+
+`constraint_type IN ('PRIMARY KEY','UNIQUE')` で引く。現行 PHP は `_not_null` サフィックスの
+**denylist** で除外しようとして、`</key>` を余分に出し **XML が well-formed でなくなった**。
+
+**denylist は必ず漏れる。** 設計モデル（`KeyModel.type`）に CHECK の概念が無い以上、
+最初から読まないのが正しい —— 手続きの途中で「この行は飛ばす」を判断するより、
+**集合として最初から入れない**ほうが壊れにくい。5-6 でフロント側に入れた `toKeys()` の
+allowlist と同じ判断を、SQL の側にも置いた形。
+
+#### 決めたこと 2: index の除外は `NOT EXISTS (pg_constraint.conindid)`
+
+現行 PHP は `indisunique` / `indisprimary` のときに `continue` ではなく **`break`** しており、
+PK の index に当たった時点でループごと抜けて **index が 1 つも出なかった**。
+
+正しいのは「**制約が裏に持つ index を除外する**」で、その条件が `conindid`。
+`break` は「PK の index を出したくない」の失敗形だった。
+
+#### 決めたこと 3: 接続先は **env の名前付き表**（SSRF を不可能にする）
+
+```yaml
+grabado:
+  introspect:
+    sources:
+      shop: { url: "${SHOP_JDBC_URL}", user: "${SHOP_DB_USER}", password: "${SHOP_DB_PASSWORD}" }
+```
+
+`?action=import&database=shop` の `shop` が選ぶのは**表のキーだけ**で、**ホスト名は
+クライアントから 1 バイトも渡らない**。リクエストで JDBC URL を受ける形は完全な SSRF
+プリミティブなので採らない。
+
+- 表に無い名前 / 接続先 0 件 → **404**（「設定していない」と「その名前が無い」を外から区別させない）
+- READONLY → **403**（`IntrospectionService` の Bean ごと存在しない ——
+  **外部到達性を持つ唯一の経路をまるごと消す**のがいちばん確実）
+- 接続や読み取りの失敗 → **503**（`check()` が文言を持つのは 501 / 503 だけ。502 は無反応になる）
+- **例外の中身を body に出さない** —— JDBC の例外メッセージには URL や接続情報が入りうる
+- `IntrospectSource.toString()` を上書きした —— data class の既定は**パスワードを全部出す**
+
+#### 決めたこと 4: コネクションプールを持たない
+
+introspection は人が押したときだけ走る低頻度・一発読み。プールは外部 DB への idle 接続を
+抱え続けることになり、可用性と資格情報の露出時間の両方で損。
+
+副次的に **`spring-boot-starter-jdbc` が要らない** → HikariCP が classpath に無い →
+`spring.datasource.*` の auto-configuration が存在しない → **DB レス既定（制約5）が
+構造で保証される**。同じ論法が 5-1b の「入れなかった依存」にもあり、ここで実際に効いた。
+
+#### テストは 2 層（フィクスチャが作文に堕ちる経路を閉じる）
+
+| テスト | 走る条件 | 見るもの |
+|---|---|---|
+| `IntrospectionMapperTest`（15 本） | **常に**（CI 込み） | フィクスチャ → 応答モデルの写し方 |
+| `PostgresCatalogIntegrationTest`（10 本） | `GRABADO_IT_JDBC_URL` があるとき | **フィクスチャが実 DB と一致するか** ＋ SQL そのもの |
+
+**フィクスチャは実 PG18 から採った**（`GRABADO_IT_WRITE_FIXTURE=1`。golden の
+`UPDATE_GOLDEN=1` と同じイディオム）。手で書くと「PG18 はこう返すはずだ」という信念を
+符号化しただけになり、**信念が間違っていても緑になる** —— §4.6 の 2 不具合が 10 年以上
+残っていたのはその形。**採り直し以外の方法でフィクスチャが生まれない。**
+
+Testcontainers は入れない。`ARCHITECTURE.md` §4.1 に `docker run … postgres:18` のレシピが
+既にあり、CI では GitHub Actions の `services:` が**追加依存ゼロ**で同じ JDBC URL を供給できる。
+
+**env が無ければ丸ごと skip**（`assumeTrue`）—— 「たまたま走らなかった」と「意図して
+走らせていない」を混ぜない。実行結果に skipped=10 として出る。
+
+#### 契約表が 2 ケース動いた
+
+| | 5-6 まで | 5-7a |
+|---|---|---|
+| `import`（接続先なし） | 501（実装が無い） | **404** |
+| `import`（READONLY） | 501 | **403** |
+
+**実装が入ったので期待値が変わった**という素直な変化。仮想 backend も「接続先が 1 つも
+設定されていないサーバ」として 404 を返すよう揃えた（外部 DB に繋がないので、それが正確）。
+
+#### 検証
+
+| | 5-6 | 5-7a |
+|---|---|---|
+| `npm test` | 463 passed | 463 passed（**フロント 0 行**） |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 103 passed | **118 passed ＋ 10 skipped** |
+| 実 PG18 あり | — | **128 passed**（統合テスト 10 本が走る） |
+
+golden 114 本は無差分。Kotlin の増分: `IntrospectionMapperTest` 15 ＋
+`PostgresCatalogIntegrationTest` 10。
+
+#### 次段階への入力
+
+- **5-7b: フロントの JSON 化。** `serverimport` の `xml: true` を外し、`importresponse` を
+  `introspectionToModel()`（5-6 の純関数）→ `applyDesignModel()` へ繋ぎ、**XML 経路を撤去**する。
+  `tests/node/io-ui.test.ts` の「introspection は XML のまま」が**意図的に赤くなる**ので、
+  それが完了判定になる
+- **落ちた型を UI に出す。** `introspectionToModel()` は `TypeLoss` を返す。6-10b の
+  型マッピング表と同じ見せ方で textarea に出す（**黙って落とさない**）
+- **`tests/known-issues/` の #9 は 5-7b で裏返る** —— `README.md` の運用3 に従い、
+  「PG18 の実出力が well-formed でなく index も出ない」から「introspect → 設計 → DDL が
+  入力スキーマを再現する」へ書き換える
+- **CI に統合テストを足すかは §5-9 の判断。** org 規約では「時間で変わる層」と「1 分を
+  大きく超える検査」は週次 `schedule` へ。`services: postgres:18` は追加依存ゼロで置ける
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

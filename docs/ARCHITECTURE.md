@@ -610,7 +610,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | `list` | `data/*` 全件・fs 順 | **`*.json` のみ・昇順固定**・空なら 0 バイト。`\n` 区切りは維持 | 5-2 |
 | `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**。`If-Match` / `If-None-Match` が満たされなければ **412**、応答には新しい **ETag** が付く | 5-2 / **5-4a（実装済み）** |
 | `load` | 200 / 404・`text/xml` | 200 / 404 は維持。**`application/octet-stream` ＋ `nosniff` ＋ `attachment`**、**ETag（内容の SHA-256 先頭 16 バイト）** | 5-2 / **5-4a（実装済み）** |
-| `import` | XML（`db/<db>/datatypes.xml` 全文を連結） | **中立な introspection JSON**（§7.2）。パレットは連結せず、実行中パレットも差し替えない | 5-7 |
+| `import` | XML（`db/<db>/datatypes.xml` 全文を連結） | **中立な introspection JSON**（§7.2）。パレットは連結せず、実行中パレットも差し替えない。接続先は **env に列挙した名前だけ**（表に無ければ 404、READONLY は 403、接続失敗は 503）。**§4.6 の 2 不具合は再現しない** | **5-7a（backend 実装済み）／ フロントの JSON 化は 5-7b** |
 | 未知 action / 指定なし | 501 | 501 を維持 | 5-1b |
 | `remove` | 501（実装が無い） | **作らない**（501 のまま） | — |
 | HTTP メソッド | 見ていない | **固定**（list / load / import は GET、save は POST）。ミスマッチは 405 | 5-1b |
@@ -628,9 +628,23 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 
 ### 7.2 introspection JSON
 
-段階5-7 で確定する。スキーマ案と「設計 JSON v2 を返さない」理由は CUSTOMIZATIONS の段階5-0
-「決めたこと 3」。要点は **backend は生の SQL 型情報を返し、型 id / `kind` への解決はフロントの
-`TypePalette` が持つ**こと（`x` / `y` は `importresponse` の `alignTables()` が埋める）。
+**形の正は [`../server/src/main/kotlin/dev/grabado/introspect/IntrospectionModel.kt`](../server/src/main/kotlin/dev/grabado/introspect/IntrospectionModel.kt)**
+（TypeScript 側の受け皿は [`../js/io/introspect-model.ts`](../js/io/introspect-model.ts)）。
+「設計 JSON v2 を返さない」理由は [`FORMAT.md`](FORMAT.md) の最終節 —— 要点は **backend は生の
+SQL 型情報を返し、型 id への解決はフロントの `TypePalette` が持つ**こと（`x` / `y` は
+`importresponse` の `alignTables()` が埋める）。
+
+**§4.6 の 2 不具合は再現しない**（段階5-7a で実 PG18 に対して確かめた）:
+
+| | 現行 PHP | Kotlin |
+|---|---|---|
+| NOT NULL の CHECK | `_not_null` の **denylist** で除外しようとして `</key>` が余る | `constraint_type IN ('PRIMARY KEY','UNIQUE')` の **allowlist**。実測で PG18 は CHECK を **16 件**出すが 1 件も読まない |
+| index | `break` で**1 件も出ない** | `NOT EXISTS (pg_constraint.conindid)` で制約の index だけ除外し、**全件出す** |
+| `numeric(12,2)` | 精度・スケール落ち | `numeric_precision` / `numeric_scale` を保つ |
+| `text[]` | 要素型落ち | `information_schema.element_types` から要素型を引く |
+
+複合 FK は `pg_constraint` の `conkey` / `confkey` を `unnest ... WITH ORDINALITY` で引く
+（`constraint_column_usage` は対応順を保証しない）。
 
 ### 7.3 設定（env）
 

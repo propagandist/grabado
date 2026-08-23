@@ -22,6 +22,13 @@ npm run typecheck     # js/ src/ tests/ と *.config.ts（strict / noUncheckedIn
 npm run migrate:design -- <ファイル>  # 設計 JSON の移行（§4 段階4-2b の形式 ＋ §6 段階6-3 の型 id）
 ```
 
+実 HTTP の E2E（段階5-9）。**要 JDK 21。** ブラウザ（実 XHR）→ Vite dev proxy → Kotlin →
+ファイルシステムを通しで動かす、唯一の系統。
+
+```bash
+npm run test:server   # server/ の jar を作ってから Playwright を回す
+```
+
 backend（`server/`。段階5-1b で入った Kotlin / Spring Boot）は Gradle 側にある。**要 JDK 21。**
 
 ```bash
@@ -574,6 +581,7 @@ tests/
   known-issues/  既知の不具合（golden を持たない）
   dist/          build 成果物のスモーク（golden は読むだけ）
   contract/      backend の HTTP 契約（言語非依存の表。§5 段階5-1b）
+  server/        実 HTTP の E2E（§5 段階5-9）。**要 JDK 21**。ブラウザ → proxy → Kotlin → fs
 
 server/src/test/kotlin/dev/grabado/
   api/BackendContractTest.kt    tests/contract/ の表を実 HTTP に流す

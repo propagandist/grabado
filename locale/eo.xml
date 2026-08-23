@@ -77,7 +77,6 @@
     <string name="clientsave">Konservi JSON</string>
     <string name="clientload">Ŝargi JSON</string>
     <string name="clientsql">Krei SQL</string>
-    <string name="backendlabel">Servila administro:</string>
     <string name="serversave">Konservi</string>
     <string name="quicksave">Quicksave</string>
     <string name="serverload">Ŝargi</string>

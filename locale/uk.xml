@@ -80,7 +80,6 @@
     <string name="clientlocalload">Завантажити з переглядача</string>
     <string name="clientlocallist">Список з переглядача</string>
     <string name="clientsql">Згенерувати SQL</string>
-    <string name="backendlabel">Серверна частина:</string>
     <string name="serversave">Зберегти</string>
     <string name="quicksave">Швидке збереження</string>
     <string name="serverload">Завантажити</string>

@@ -84,7 +84,6 @@
     <string name="clientlocalload">Von Browser laden</string>
     <string name="clientlocallist">Von Browser auflisten</string>
     <string name="clientsql">SQL generieren</string>
-    <string name="backendlabel">Server Basis:</string>
     <string name="serversave">Speichern</string>
     <string name="quicksave">Schnellspeichern</string>
     <string name="serverload">Laden</string>

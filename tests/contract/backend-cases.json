@@ -21,7 +21,8 @@
     "  request.action ?action= の値。null なら action を付けない",
     "  request.keyword ?keyword= の値。null なら付けない（省略時の 400 を試すため）",
     "  request.body   POST の body",
-    "  request.backend パスの <backend名>。省略時は php-mysql（フロントの既定）",
+    "  request.backend パスの <backend名>。省略時は file（段階5-5 でフロントが固定した値）。",
+    "                サーバはこの値を読まないので、何を入れても同じ結果になる",
     "  request.trailingSlash パス末尾の / の有無。省略時 true（実測 URL の形）",
     "  request.ifMatch     If-Match ヘッダ（段階5-4）。値は固定文字列しか書けないので、",
     "                      『一致する etag を送る』側は BackendBehaviourTest が持つ",
@@ -357,6 +358,36 @@
       "virtual": false
     },
     {
+      "id": "capabilities-defaults",
+      "note": "段階5-5: フロントが起動時に 1 回引き、できないことのボタンを隠す。introspection は 5-7、ai は §11 でそれぞれ true になりうる",
+      "request": {
+        "method": "GET",
+        "action": "capabilities"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{\"readonly\":false,\"introspection\":false,\"ai\":false}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "virtual": true
+    },
+    {
+      "id": "readonly-capabilities",
+      "note": "READONLY のデプロイでは readonly:true。フロントはこれを見て保存ボタンを隠す（403 を押してから知るのではなく、押せなくする）",
+      "serverMode": "readonly",
+      "request": {
+        "method": "GET",
+        "action": "capabilities"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{\"readonly\":true,\"introspection\":false,\"ai\":false}"
+      },
+      "virtual": false
+    },
+    {
       "id": "import-not-implemented",
       "note": "php-file は import を持たない（実測 501）。中身が入るのは段階5-7",
       "request": {
@@ -451,14 +482,14 @@
     },
     {
       "id": "backend-segment-is-ignored",
-      "note": "パスの <backend名> は受けて捨てる。**ファイルシステムには絶対に到達させない**。撤去は 5-5",
+      "note": "段階5-5 でセレクタは消えフロントは backend/file/ に固定したが、サーバは <backend名> を読まないままにしてある —— 古い URL（php-mysql 時代のブックマーク）がそのまま動く",
       "seed": {
         "a.json": "{}"
       },
       "request": {
         "method": "GET",
         "action": "list",
-        "backend": "php-file"
+        "backend": "php-mysql"
       },
       "expect": {
         "status": 200,

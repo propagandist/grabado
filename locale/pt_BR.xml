@@ -76,7 +76,6 @@
     <string name="clientsave">Salvar JSON</string>
     <string name="clientload">Carregar JSON</string>
     <string name="clientsql">Gerar SQL</string>
-    <string name="backendlabel"> Parâmetros do Servidor:</string>
     <string name="serversave">Salvar</string>
     <string name="serverload">Carregar</string>
     <string name="serverlist">Listar itens</string>

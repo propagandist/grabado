@@ -84,7 +84,6 @@
     <string name="clientpaste">Paste from Clipboard</string>
     <string name="clientdownload">Download as JSON</string>
     <string name="clientloadfromfile">Load Database from file</string>
-    <string name="backendlabel">Server backend:</string>
     <string name="serversave">Save</string>
     <string name="quicksave">Quicksave</string>
     <string name="serverload">Load</string>

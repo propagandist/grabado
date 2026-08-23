@@ -76,7 +76,6 @@
     <string name="clientsave">Genereaza JSON</string>
     <string name="clientload">Incarca din JSON</string>
     <string name="clientsql">Genereaza SQL</string>
-    <string name="backendlabel">Server backend:</string>
     <string name="serversave">Salveaza</string>
     <string name="serverload">Incarca</string>
     <string name="serverlist">Lista de salvari</string>

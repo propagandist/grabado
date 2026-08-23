@@ -78,7 +78,7 @@ class BackendBehaviourTest {
     @Test
     fun `パスの backend 名はファイルシステムに到達しない`() {
         // <backend名> を変えても同じ正本ディレクトリを見る。ディレクトリも作らない。
-        post("save", "orders.json", "{}", backend = "php-mysql")
+        post("save", "orders.json", "{}", backend = "legacy-name")
         val viaOtherBackend = get("load", "orders.json", backend = "php-file")
 
         assertThat(viaOtherBackend.statusCode()).isEqualTo(200)
@@ -181,14 +181,14 @@ class BackendBehaviourTest {
         assertThat(post("save", "orders.json", "{\"v\":2}").statusCode()).isEqualTo(201)
     }
 
-    private fun get(action: String, keyword: String?, backend: String = "php-mysql") =
+    private fun get(action: String, keyword: String?, backend: String = "file") =
         send(HttpRequest.newBuilder(uri(action, keyword, backend)).GET().build())
 
     private fun post(
         action: String,
         keyword: String?,
         body: String,
-        backend: String = "php-mysql",
+        backend: String = "file",
         ifMatch: String? = null,
     ) = send(
         HttpRequest.newBuilder(uri(action, keyword, backend))

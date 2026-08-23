@@ -125,6 +125,8 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 
 - `<xhrpath>` = `CONFIG.XHR_PATH || ""`（[`../js/config.ts`](../js/config.ts) の実値は **空文字**）。cookie `wwwsqldesigner` で上書き可。
 - `<backend名>` は画面の backend セレクタの値（`CONFIG.AVAILABLE_BACKENDS`、既定 `php-mysql`）。URL クエリ `?backend=<name>` でも選択できる。
+  → **段階5-5 でセレクタごと撤去し、フロントは `backend/file/` に固定した**（§7.1）。サーバは
+  このセグメントを読まないままなので、`?backend=` 付きの古い URL も動く。
 - `keyword` は `encodeURIComponent` 済み。**段階4-3b から `.json` が付く**（`save` / `load` の
   両方。`jsonKeyword()` が二重付与を防ぐ）。backend は body を解釈せず `basename($keyword)` で
   ファイル名を作るだけなので、フロントが付けるだけで `data/<name>.json` ができる。
@@ -603,7 +605,8 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 
 | 項目 | 旧 PHP（§4） | Kotlin | 入る段階 |
 |---|---|---|---|
-| URL | `backend/<name>/?action=` | 同じ。**`<name>` は受けて捨てる**（ファイルシステムに到達させない）→ 5-5 で `backend/file/` に固定 | 5-1b / 5-5 |
+| URL | `backend/<name>/?action=` | **`backend/file/?action=`** に固定（フロントの `BACKEND_PATH`）。サーバは `<name>` を**読まないままにしてある**ので、`?backend=` 付きの古い URL もそのまま動く | 5-1b / **5-5（実装済み）** |
+| 能力の問い合わせ | 無し | **`?action=capabilities`** → `{"readonly":…,"introspection":…,"ai":…}`。フロントは起動時に 1 回引き、READONLY なら保存ボタンを `disabled` にする。**引けなければ「全部できる」に倒す** | **5-5（実装済み）** |
 | `list` | `data/*` 全件・fs 順 | **`*.json` のみ・昇順固定**・空なら 0 バイト。`\n` 区切りは維持 | 5-2 |
 | `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**。`If-Match` / `If-None-Match` が満たされなければ **412**、応答には新しい **ETag** が付く | 5-2 / **5-4a（実装済み）** |
 | `load` | 200 / 404・`text/xml` | 200 / 404 は維持。**`application/octet-stream` ＋ `nosniff` ＋ `attachment`**、**ETag（内容の SHA-256 先頭 16 バイト）** | 5-2 / **5-4a（実装済み）** |
@@ -614,7 +617,6 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | 不正な `keyword` | `basename()` で黙って書き換え | **400 で拒む**（トラバーサル・制御文字・Windows 予約名・255 バイト超）。書き換えると `js/io/conflict.ts` の `Baseline.name` が別ファイルを見張る | 5-2 |
 | 副作用の停止 | 無し | `READONLY` で save を **403**（`list` / `load` は残す）。実現は `DesignStore` の Bean 差し替え —— **禁止を「禁止したいもの」の直上に置く**ので、将来 action が増えても自動的に守られる。introspection が 403 になるのは 5-7（いまは実装が無く 501） | **5-3（実装済み）** |
 | save の往復数 | 2（プリフライト `load` → `save`） | **1**（`If-Match` / `If-None-Match: *`）。衝突したときだけ 412 → confirm → `If-Match: *` で 2 往復。**プリフライトの `load` は無くなった** | **5-4a / 5-4b（実装済み）** |
-| 能力の問い合わせ | 無し | `?action=capabilities` → `{"readonly":…,"introspection":…,"ai":…}`。**引けなければフロントは「全部できる」に倒す** | 5-5 |
 
 **`js/io.ts` の `check()` は「表示すべき応答」を列挙しており、知らない status は
 `default: return true` に落ちて「成功」に倒れる。** 400 / 403 / 405 は足した（5-1c / 5-3）。

@@ -80,7 +80,6 @@
     <string name="clientlocalload">Charger depuis le navigateur</string>
     <string name="clientlocallist">Lister depuis le navigateur</string>
     <string name="clientsql">Génerer SQL</string>
-    <string name="backendlabel">Méthode du serveur :</string>
     <string name="serversave">Enregistrer</string>
     <string name="quicksave">Enregistrer rapidement</string>
     <string name="serverload">Charger</string>

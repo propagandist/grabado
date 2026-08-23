@@ -80,7 +80,6 @@
     <string name="clientlocalload">Cargar desde el Navegador</string>
     <string name="clientlocallist">Listar desde el Navegador</string>
     <string name="clientsql">Generar SQL</string>
-    <string name="backendlabel">Servidor de fondo:</string>
     <string name="serversave">Guardar</string>
     <string name="quicksave">Guardar rápido</string>
     <string name="serverload">Cargar</string>

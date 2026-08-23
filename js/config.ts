@@ -55,21 +55,20 @@ export const CONFIG = {
     ],
     DEFAULT_LOCALE: "en",
 
-    AVAILABLE_BACKENDS: [
-        "php-mysql",
-        "php-s3",
-        "php-blank",
-        "php-file",
-        "php-sqlite",
-        "php-mysql+file",
-        "php-postgresql",
-        "php-pdo",
-        "perl-file",
-        "php-cubrid",
-        "asp-file",
-        "web2py",
-    ],
-    DEFAULT_BACKEND: ["php-mysql"],
+    /*
+     * grabado: AVAILABLE_BACKENDS / DEFAULT_BACKEND は段階5-5 で撤去した。
+     *
+     * upstream は backend 実装を 12 本並べて画面から選ばせていたが、grabado の backend は
+     * Kotlin/Spring Boot **1 本**（CLAUDE.md 制約6）で、その実体は段階5-2 で PHP ごと消えている。
+     * 選択肢が実質 1 つの select は情報量ゼロで、公開 OSS では「何を選ぶのか」という誤解を
+     * 生むだけだった。URL は `backend/file/` に固定（`js/io.ts` の BACKEND_PATH）。
+     *
+     * `DEFAULT_BACKEND` が文字列ではなく配列 `["php-mysql"]` だった upstream の取り違えは、
+     * **是正ではなく消滅で決着した**（段階3-3b が「§5 の backend 移植で決める」と送っていた項目）。
+     *
+     * 将来 store を増やすとしても env（サーバ側）で決める —— **どの store が生きているかは
+     * サーバしか知らない**ので、ブラウザに選ばせるのは筋が悪い。
+     */
 
     RELATION_THICKNESS: 2,
     RELATION_SPACING: 15,

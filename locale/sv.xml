@@ -75,7 +75,6 @@
     <string name="clientsave">Spara JSON</string>
     <string name="clientload">Ladda JSON</string>
     <string name="clientsql">Generera SQL</string>
-    <string name="backendlabel">Server backend:</string>
     <string name="serversave">Spara</string>
     <string name="serverload">Ladda</string>
     <string name="serverlist">Lista innehåll</string>

@@ -78,7 +78,6 @@
     <string name="clientsave">保存为JSON</string>
     <string name="clientload">载入JSON</string>
     <string name="clientsql">传化为数据库脚本</string>
-    <string name="backendlabel">服务后台:</string>
     <string name="serversave">保存</string>
     <string name="serverload">载入</string>
     <string name="serverlist">显示清单</string>

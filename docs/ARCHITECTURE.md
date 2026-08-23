@@ -676,3 +676,81 @@ npm run dev                                                            # 4173（
 backend を起こしていなければ ECONNREFUSED になるだけで、5-1b 以前と同じ体験。
 
 テストの層は [`TESTING.md`](TESTING.md) に集約してある。
+
+## 8. AI proxy の契約（到達点）
+
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階11-0 にある。**
+本章は**まだ 1 行も実装されていない** —— 枠だけを予約し、11-2 以降が実測どおりに埋める
+（§7 が 5-0 で予約され 5-1b 以降に埋まったのと同じ形）。
+
+**HANDOVER §11 との差分は 3 つ**（URL 名・構造化出力の手段・プライバシー既定）。
+**HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
+
+### 8.1 エンドポイント
+
+| | |
+|---|---|
+| URL | **`POST /api/ai/review`**（`/backend/<name>/?action=` は使わない。`/api/` は §11 が始める） |
+| 入力 | **`aiRequestVersion: 1`**（§8.2）。**設計 JSON v2 ではない** —— 座標を持たず、型は SQL 名 |
+| 出力 | 提案の配列。**structured outputs（`output_config.format` の `json_schema`）でスキーマを強制**し、自由テキストをパースしない |
+| 403 | READONLY / `ANTHROPIC_API_KEY` 未設定 / `GRABADO_AI_MODEL` 未設定 |
+| 400 | 入力が壊れている・大きすぎる |
+| 429 | 自分のレート制限、または上流の 429 |
+| 503 | 上流の失敗・タイムアウト |
+
+`js/io.ts` の `check()` に **`case 429`** と `locale` の `http429` を足す（11-3）。
+**`check()` が知らない status は「成功」に倒れる**ので、status を足す段で必ず対にする
+（5-1c / 5-3 / 5-4a で 3 回効いた規律）。
+
+### 8.2 リクエスト形式（`aiRequestVersion: 1`）
+
+**設計ファイルでもなく introspection JSON でもない、3 つ目の形式。** 送るのは判定に要るものだけ:
+
+- `dialect` —— ルーブリックの選択に使う（`postgresql` は house 規約でフル判定、
+  他 7 本は DB 非依存の指摘に絞る）
+- `tables[].name` / `.comment` / `.columns[]` / `.keys[]`
+- `columns[]` は `name` / `sqlType`（**型 id ではなく解決済みの SQL 名**）/ `nullable` /
+  `default` / `comment` / `references[]`
+
+**送らないもの**: `x` / `y`（判定に無関係でトークンだけ食う）、`formatVersion`、`db`。
+
+**送信前に、このバイト列をそのままユーザーに見せる**（プレビュー）。匿名化は既定にしない ——
+判定基準の中心が名前そのものなので、仮名化すると §6.3 由来の指摘がまるごと死ぬ。
+
+### 8.3 提案と patch
+
+提案 1 件は `category` / `severity` / `target` / `rationale`（人間向け）/ `patch`（機械可読・optional）。
+
+`patch.op` は**閉じた集合**で、`enum` としてスキーマに書く —— **モデルは列挙の外を書けない**:
+
+```
+rename-table / rename-column / change-type / add-column / add-key
+set-nullable / set-default / add-comment
+```
+
+**`drop-table` / `drop-column` は存在しない。** 承認 UI の誤操作 1 回で設計が消える形を作らない。
+消したい列の指摘は `patch` を持たない提案（`rationale` だけ）として出す。
+
+適用は [`../js/io/ai/apply-patch.ts`](../js/io/ai/apply-patch.ts) の**純関数**
+（`DesignModel` → `DesignModel`）。ライブツリーを触るのは既存の `applyDesignModel()`（§4-1b の経路）。
+**LLM の非決定性は「生成」だけに閉じ込め、「適用」はテスト済みロジックに合流する**（CLAUDE.md 制約7）。
+
+### 8.4 設定（env）
+
+| env | 既定 | 用途 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | 空（＝ AI 無効） | 各自のコンテナ env（実質 BYOK）。**localStorage には置かない** |
+| `GRABADO_AI_MODEL` | **無し（必須）** | 未設定なら AI 無効。**既定を焼き込まない** —— 書いた瞬間に古くなる。選び方は[モデル一覧](https://platform.claude.com/docs/en/about-claude/models/overview)から引く |
+| `GRABADO_READONLY` | `false` | AI サービスの Bean を**そもそも登録しない**（5-3 と同じ形） |
+| タイムアウト / 上限 / レート制限 / effort | 11-2 で確定 | **費用が自社負担**なので上限はサーバが持つ |
+
+`?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」。
+**実装があっても使えないなら false**（5-7a と同じ）。
+
+### 8.5 キャッシュ
+
+- **prompt caching（API 側）** —— ルーブリックは固定なので system の最後のブロックに
+  `cache_control` を置く。プレフィックス一致なので**ルーブリックを動的に組み立てない**
+- **結果キャッシュ（自前）** —— 送るバイト列の SHA-256 → 提案 JSON。**プロセス内メモリのみ**
+  （DB レス既定）。**成立するのは serializer が決定論だから**（制約3。§4 の決定論が効く 2 つ目の場所で、
+  1 つ目は 5-4 の ETag）

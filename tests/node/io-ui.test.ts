@@ -36,12 +36,12 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
         /* 段階4-6: 仮想 backend・派生元の記録・confirm の答えを初期化する */
         h.clearServerFiles();
         h.io.baseline = null;
-        h.io.pendingBaseline = null;
+        h.io.pendingSave = null;
         h.setConfirm(false);
         h.takeConfirms();
     });
 
-    /** save 本体だけを取り出す（段階4-6 でプリフライトの load が前に付いた） */
+    /** save 本体だけを取り出す（段階5-4b で 1 往復になったが、衝突時は 2 本になる） */
     function saveRequests(reqs: { url: string }[]) {
         return reqs.filter((r) => r.url.indexOf("action=save") !== -1);
     }
@@ -51,10 +51,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             const expected = h.toJson();
             h.io.serversave(undefined, "orders");
 
-            /* 段階4-6: 1 本目はプリフライトの load。契約を見るのは 2 本目の save */
+            /* 段階5-4b: プリフライトが消えて 1 往復になった */
             const reqs = h.takeRequests();
-            expect(reqs).toHaveLength(2);
-            const req = reqs[1]!;
+            expect(reqs).toHaveLength(1);
+            const req = reqs[0]!;
             expect(req.url).toBe(
                 "backend/php-mysql/?action=save&keyword=orders.json",
             );
@@ -69,7 +69,6 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
                それをそのまま prompt に貼っても壊れないことが jsonKeyword() の要件 */
             h.io.serversave(undefined, "orders.json");
 
-            /* プリフライトと save の両方が同じファイル名を指す */
             for (const req of h.takeRequests()) {
                 expect(req.url).toContain("keyword=orders.json");
                 expect(req.url).not.toContain("orders.json.json");
@@ -94,23 +93,46 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
     });
 
     /*
-     * 外部変更検知（段階4-6）。保存は read-before-write —— save の前に同じ keyword で
-     * load を投げ、返ったバイト列を「自分が最後に観測した版」と比べる。判定そのものは
-     * tests/node/conflict.test.ts が表で押さえるので、ここが見るのは
-     * **通信が起きたか／confirm が出たか／サーバ上のファイルが変わったか**。
+     * 外部変更検知（段階4-6 → 5-4b で条件付き更新へ）。
+     *
+     * 保存は **1 往復**。派生元の有無から条件ヘッダを決めて save を 1 回投げ、
+     * 衝突していればサーバが **412** を返す。そこで初めて confirm が出て、承諾したら
+     * `If-Match: *` で再送する（＝衝突したときだけ 2 往復）。
+     *
+     * 4-6 の read-before-write（プリフライトの load）は消えた。**判定の主体が
+     * クライアントからサーバへ移り、TOCTOU の窓が閉じた**のが本段階の主眼。
+     * 規則そのものは tests/node/conflict.test.ts が表で押さえるので、ここが見るのは
+     * **通信が何本起きたか／confirm が出たか／サーバ上のファイルが変わったか**。
      */
-    describe("外部変更検知（段階4-6）", () => {
-        test("save の前にプリフライトの load を投げる", () => {
+    describe("条件付き更新（段階5-4b）", () => {
+        test("保存は 1 往復で、プリフライトの load を投げない", () => {
             h.io.serversave(undefined, "orders");
 
             const reqs = h.takeRequests();
-            expect(reqs).toHaveLength(2);
+            expect(reqs).toHaveLength(1);
             expect(reqs[0]!.url).toBe(
-                "backend/php-mysql/?action=load&keyword=orders.json",
+                "backend/php-mysql/?action=save&keyword=orders.json",
             );
-            /* 応答はテキストで受ける（xml: true だと JSON が読めない。段階4-3b と同じ理由） */
-            expect(reqs[0]!.xml).toBeFalsy();
-            expect(reqs[1]!.url).toContain("action=save");
+        });
+
+        test("派生元が無ければ「新規のつもり」で送る（If-None-Match: *）", () => {
+            h.io.serversave(undefined, "orders");
+
+            const req = h.takeRequests()[0]!;
+            expect(req.headers?.["If-None-Match"]).toBe("*");
+            expect(req.headers?.["If-Match"]).toBeUndefined();
+        });
+
+        test("読み込んだ後は観測した ETag を If-Match に載せる", () => {
+            h.setServerFile("orders.json", h.toJson());
+            h.io.serverload(false, "orders");
+            h.takeRequests();
+
+            h.io.serversave(undefined, "orders");
+
+            const req = h.takeRequests()[0]!;
+            expect(req.headers?.["If-Match"]).toMatch(/^"[0-9a-f]{32}"$/);
+            expect(req.headers?.["If-None-Match"]).toBeUndefined();
         });
 
         test("サーバに無ければ確認を出さずに保存する", () => {
@@ -135,7 +157,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(saveRequests(h.takeRequests())).toHaveLength(1);
         });
 
-        test("外部で変わっていたら確認を出し、断れば save を投げない", () => {
+        test("外部で変わっていたら確認を出し、断れば save をもう一度投げない", () => {
             const mine = h.toJson();
             h.setServerFile("orders.json", mine);
             h.io.serverload(false, "orders");
@@ -152,12 +174,12 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(confirms).toHaveLength(1);
             /* どのファイルの話かが出る */
             expect(confirms[0]).toContain("orders.json");
-            /* 断ったら 1 バイトも書かない */
-            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+            /* 1 本目（412 になった save）だけで止まる。断ったら 1 バイトも書かない */
+            expect(saveRequests(h.takeRequests())).toHaveLength(1);
             expect(h.getServerFile("orders.json")).toBe(theirs);
         });
 
-        test("外部で変わっていても、承諾すれば上書きする", () => {
+        test("外部で変わっていても、承諾すれば上書きする（衝突時だけ 2 往復）", () => {
             const mine = h.toJson();
             h.setServerFile("orders.json", mine);
             h.io.serverload(false, "orders");
@@ -168,7 +190,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toHaveLength(1);
-            expect(saveRequests(h.takeRequests())).toHaveLength(1);
+            const saves = saveRequests(h.takeRequests());
+            expect(saves).toHaveLength(2);
+            /* 再送は「存在すれば無条件で上書き」 */
+            expect((saves[1] as { headers?: Record<string, string> }).headers?.["If-Match"]).toBe("*");
             expect(h.getServerFile("orders.json")).toBe(mine);
         });
 
@@ -179,20 +204,35 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toHaveLength(1);
-            expect(saveRequests(h.takeRequests())).toHaveLength(0);
             /* 他人のファイルは無傷のまま */
             expect(h.getServerFile("orders.json")).toBe('{"formatVersion": 2}\n');
         });
 
-        test("保存に成功した内容が次の派生元になる", () => {
+        test("412 は textarea に文言を出さない（confirm と二重にしない）", () => {
+            h.setServerFile("orders.json", '{"formatVersion": 2}\n');
+            h.io.dom.ta.value = "";
+
+            h.setConfirm(false);
+            h.io.serversave(undefined, "orders");
+
+            /* check() に通していたら httpresponse の文言が出る */
+            expect(h.io.dom.ta.value).toBe("");
+        });
+
+        test("保存に成功した内容が次の派生元になる（save の ETag をそのまま使う）", () => {
             h.io.serversave(undefined, "orders");
             h.takeRequests();
 
-            /* 2 回目は「自分が書いた版」と一致するので確認が出ない */
+            /* 2 回目は「自分が書いた版」と一致するので確認が出ない。
+               load し直していないのに If-Match が載るのは、save の応答に ETag が来るから */
             h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toEqual([]);
-            expect(saveRequests(h.takeRequests())).toHaveLength(1);
+            const reqs = saveRequests(h.takeRequests());
+            expect(reqs).toHaveLength(1);
+            expect((reqs[0] as { headers?: Record<string, string> }).headers?.["If-Match"]).toMatch(
+                /^"[0-9a-f]{32}"$/,
+            );
         });
 
         test("別名へ保存すると派生元が移る", () => {
@@ -201,28 +241,24 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.takeRequests();
             h.takeConfirms();
 
-            /* invoices が派生元になったので、orders へ戻ると確認が出る */
+            /* invoices が派生元になったので、orders へ戻ると「新規のつもり」で送って 412 */
+            h.setConfirm(false);
             h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toHaveLength(1);
-            expect(saveRequests(h.takeRequests())).toHaveLength(0);
         });
 
-        test("プリフライトが 500 なら保存しない", () => {
-            h.setServerFile("orders.json", '{"formatVersion": 2}\n');
-            h.failNextLoad(500);
-
+        test("save が 500 なら派生元を更新しない", () => {
+            /* 書けていないのに「書けた版」として記録すると、次の保存で他人の版を黙って踏む */
             h.io.serversave(undefined, "orders");
+            h.takeRequests();
+            const before = h.io.baseline;
 
-            /* 読めなかったので「上書きしますか」も聞かない（聞く材料が無い） */
-            expect(h.takeConfirms()).toEqual([]);
-            expect(saveRequests(h.takeRequests())).toHaveLength(0);
-            /* 現行どおり check() が textarea に出す（locale/en.xml の http500） */
-            expect(h.io.dom.ta.value).toContain("Internal Server Error");
+            expect(before).not.toBeNull();
+            expect(before!.name).toBe("orders.json");
         });
 
-        test("プリフライトの 404 を「読み込み失敗」として表示しない", () => {
-            /* 新規保存は正常系。Not Found が出ると保存に失敗したように見える */
+        test("新規保存で 404 の文言が出ない（プリフライトが無いので原理的に起きない）", () => {
             h.io.dom.ta.value = "";
 
             h.io.serversave(undefined, "orders");
@@ -233,7 +269,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
         });
 
         test("quicksave（F2）も同じ経路を通る", () => {
-            /* 無言で上書きしていた経路を塞ぐのが本段階の主眼の 1 つ */
+            /* 無言で上書きしていた経路を塞ぐのが 4-6 からの主眼の 1 つ */
             h.setServerFile("orders.json", '{"formatVersion": 2}\n');
             h.io._name = "orders";
 
@@ -241,10 +277,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.io.quicksave();
 
             expect(h.takeConfirms()).toHaveLength(1);
-            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+            expect(h.getServerFile("orders.json")).toBe('{"formatVersion": 2}\n');
         });
 
-        test("書き出せない設計ではプリフライトすら投げない", () => {
+        test("書き出せない設計では save すら投げない", () => {
             /* serializer が落ちる状態（型パレット未取得）。通信の前に止まる */
             const palette = (h.io as unknown as {
                 owner: { palette: { setRoot(e: unknown): void; element(): unknown } };

@@ -613,7 +613,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | HTTP メソッド | 見ていない | **固定**（list / load / import は GET、save は POST）。ミスマッチは 405 | 5-1b |
 | 不正な `keyword` | `basename()` で黙って書き換え | **400 で拒む**（トラバーサル・制御文字・Windows 予約名・255 バイト超）。書き換えると `js/io/conflict.ts` の `Baseline.name` が別ファイルを見張る | 5-2 |
 | 副作用の停止 | 無し | `READONLY` で save を **403**（`list` / `load` は残す）。実現は `DesignStore` の Bean 差し替え —— **禁止を「禁止したいもの」の直上に置く**ので、将来 action が増えても自動的に守られる。introspection が 403 になるのは 5-7（いまは実装が無く 501） | **5-3（実装済み）** |
-| save の往復数 | 2（プリフライト `load` → `save`） | **1**（`If-Match`。衝突したときだけ 2）。**backend 側は 5-4a で受けられるようになった**が、フロントが条件ヘッダを送るのは 5-4b —— それまでは 2 往復のまま（条件ヘッダ無しの save は今までどおり上書きできる） | 5-4a / **5-4b** |
+| save の往復数 | 2（プリフライト `load` → `save`） | **1**（`If-Match` / `If-None-Match: *`）。衝突したときだけ 412 → confirm → `If-Match: *` で 2 往復。**プリフライトの `load` は無くなった** | **5-4a / 5-4b（実装済み）** |
 | 能力の問い合わせ | 無し | `?action=capabilities` → `{"readonly":…,"introspection":…,"ai":…}`。**引けなければフロントは「全部できる」に倒す** | 5-5 |
 
 **`js/io.ts` の `check()` は「表示すべき応答」を列挙しており、知らない status は

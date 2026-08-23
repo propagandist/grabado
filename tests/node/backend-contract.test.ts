@@ -27,6 +27,9 @@ interface ContractRequest {
     readonly body?: string;
     readonly backend?: string;
     readonly trailingSlash?: boolean;
+    /** 条件付き更新（段階5-4）。仮想 backend も Kotlin と同じ規則で評価する */
+    readonly ifMatch?: string;
+    readonly ifNoneMatch?: string;
 }
 
 interface ContractCase {
@@ -97,9 +100,17 @@ describe("backend の契約（仮想 backend / 段階5-1c）", () => {
             }
 
             const method = one.request.method ?? "GET";
+            const headers: Record<string, string> = {};
+            if (one.request.ifMatch !== undefined) {
+                headers["If-Match"] = one.request.ifMatch;
+            }
+            if (one.request.ifNoneMatch !== undefined) {
+                headers["If-None-Match"] = one.request.ifNoneMatch;
+            }
             const response = h.callBackend(buildUrl(one.request), {
                 method: method,
                 data: method === "POST" ? (one.request.body ?? "") : undefined,
+                headers: headers,
             });
 
             expect(response.status, `${one.id}: status（${one.note ?? ""}）`).toBe(one.expect.status);

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM, VirtualConsole } from "jsdom";
@@ -45,6 +46,8 @@ export interface RequestRecord {
     readonly xml: boolean | undefined;
     readonly contentType: string | undefined;
     readonly data: string | undefined;
+    /** 送ったリクエストヘッダ（段階5-4b の If-Match / If-None-Match を見るため） */
+    readonly headers: Record<string, string> | undefined;
 }
 
 /** 仮想 backend の 1 応答（段階5-1c）。`OZ.Request` のコールバック 3 引数をそのまま持つ。 */
@@ -233,6 +236,17 @@ export async function createHarness(): Promise<NodeHarness> {
     const serverFiles = new Map<string, string>();
     let nextLoadStatus: number | null = null;
 
+    /**
+     * Kotlin 実装（`server/src/main/kotlin/dev/grabado/design/ETags.kt`）と**同じ計算**。
+     * 内容の SHA-256 を先頭 16 バイトだけ hex にして引用符で囲む。
+     *
+     * 同じ規則にしておかないと、契約表の ETag まわりが「両側で検証された」と言えなくなる。
+     */
+    function etagOf(text: string): string {
+        const hex = createHash("sha256").update(text, "utf8").digest("hex");
+        return `"${hex.slice(0, 32)}"`;
+    }
+
     function respondAsBackend(
         url: string,
         callback: OzRequestCallback,
@@ -242,12 +256,41 @@ export async function createHarness(): Promise<NodeHarness> {
         const keyword = queryParam(url, "keyword") ?? "";
 
         if (action === "save") {
-            serverFiles.set(
-                keyword,
-                typeof options?.data === "string" ? options.data : "",
-            );
-            /* save 成功は 201 + 空 body（docs/ARCHITECTURE.md §4.3 の実測。§7.1 でも維持） */
-            callback("", 201, {});
+            const body = typeof options?.data === "string" ? options.data : "";
+            const current = serverFiles.get(keyword);
+            const currentTag = current === undefined ? null : etagOf(current);
+            const ifMatch = options?.headers?.["If-Match"];
+            const ifNoneMatch = options?.headers?.["If-None-Match"];
+
+            /*
+             * 条件付き更新（段階5-4）。Kotlin 実装（server/ の ETags）と同じ規則:
+             *   If-Match: "<etag>" … 一致すれば通す。違えば / 不在なら 412
+             *   If-Match: *        … 存在すれば無条件で通す。不在なら 412
+             *   If-None-Match: *   … 不在なら通す。実在すれば 412
+             */
+            if (ifMatch !== undefined) {
+                const satisfied =
+                    ifMatch === "*" ? currentTag !== null : currentTag !== null && ifMatch === currentTag;
+                if (!satisfied) {
+                    callback("", 412, {});
+                    return;
+                }
+            }
+            if (ifNoneMatch !== undefined) {
+                const satisfied = ifNoneMatch === "*" ? currentTag === null : ifNoneMatch !== currentTag;
+                if (!satisfied) {
+                    callback("", 412, {});
+                    return;
+                }
+            }
+
+            serverFiles.set(keyword, body);
+            /*
+             * save 成功は 201 + 空 body（docs/ARCHITECTURE.md §4.3 の実測。§7.1 でも維持）。
+             * 段階5-4 から**新しい ETag も返す** —— フロントは load し直さずに baseline を
+             * 更新できる。
+             */
+            callback("", 201, { ETag: etagOf(body) });
             return;
         }
         if (action === "load") {
@@ -270,6 +313,7 @@ export async function createHarness(): Promise<NodeHarness> {
             callback(text, 200, {
                 "Content-Type": "application/octet-stream",
                 "X-Content-Type-Options": "nosniff",
+                ETag: etagOf(text),
             });
             return;
         }
@@ -310,6 +354,7 @@ export async function createHarness(): Promise<NodeHarness> {
             xml: options?.xml,
             contentType: options?.headers?.["Content-type"],
             data: typeof options?.data === "string" ? options.data : undefined,
+            headers: options?.headers,
         });
         if (!callback) {
             return false;

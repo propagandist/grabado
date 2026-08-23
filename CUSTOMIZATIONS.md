@@ -7013,6 +7013,100 @@ golden 114 本は無差分。`js/` `src/` `db/` `locale/` `index.html` の diff 
 
 ---
 
+### 2026-08-23 HANDOVER §5「backend」段階5-4b —— プリフライトを撤去し、保存を 1 往復にする
+
+**段階4-6 から残っていた TOCTOU の窓が閉じた。** 保存は 1 往復になり、衝突したときだけ
+412 → confirm → 再送の 2 往復になる。
+
+| | 4-6（read-before-write） | 5-4b（条件付き更新） |
+|---|---|---|
+| 通常の保存 | **2 往復**（`load` → `save`） | **1 往復** |
+| 衝突時 | 2 往復（プリフライトで気づく） | 2 往復（412 で気づく） |
+| 判定の主体 | クライアント（バイト列を比較） | **サーバ**（`If-Match` の評価） |
+| TOCTOU | **窓が残る**（load と save の間に他者が書くと勝つ） | **閉じた**（サーバが 1 つのロックで読んで比べて書く） |
+| `Baseline` が持つもの | 設計 1 件ぶんの**バイト列** | **ETag 1 個** |
+
+#### 決めたこと 1: 条件ヘッダは「派生元の有無」で決まる
+
+| 状況 | 送るもの | サーバ |
+|---|---|---|
+| 観測済み（baseline あり・同名） | `If-Match: "<etag>"` | 一致 → 201 ／ 不一致 → **412** |
+| 新規のつもり（baseline なし・別名） | `If-None-Match: *` | 不在 → 201 ／ 実在 → **412** |
+| 412 を受けて confirm した後 | `If-Match: *` | 存在すれば無条件で上書き |
+
+**`save` の応答にも ETag が付く**ので、書いた直後に load し直さずに baseline を更新できる。
+
+#### 決めたこと 2: 412 は `check()` に通さず、confirm に流す
+
+5-4a で決めたとおり。`saveresponse` が 412 を見たら `verdictAfterConflict()` で
+`conflict` / `exists` を決め、locale の文言を出して confirm する。承諾したら
+**同じ内容を `If-Match: *` で再送**する。
+
+「412 は textarea に文言を出さない」ことをテストで固定した —— `check()` に通すと
+confirm と二重になり、ユーザーには「失敗した」と「上書きするか」が同時に見える。
+
+#### 決めたこと 3: `verdictForSave()` は消え、規則が小さくなった
+
+段階4-6 の `verdictForSave()`（プリフライトの応答とバイト列を比べる。テスト 9 本）は
+**`verdictAfterConflict()`（2 行）に縮んだ**。`absent` / `clean` が消えたのは、
+**それらが 412 にならない**から —— サーバが 201 で応え、そもそもクライアントの分岐に来ない。
+
+`tests/node/conflict.test.ts` は 9 本 → 10 本。**カバレッジが落ちたのではなく、守るべき規則
+そのものが小さくなった**（比較の主体がサーバへ移ったぶん、クライアントに残るのは
+「412 を受けたときに何と言うか」と「次の save に何を載せるか」の 2 つだけ）。
+
+#### 踏んだバグ: `getXhrHeaders()` は**共有オブジェクト**を返す
+
+`js/wwwsqldesigner.ts` の `getXhrHeaders()` は Designer が持つオブジェクトを**そのまま**返す。
+`sendSave` が直に `h["If-Match"] = ...` と書いていたため、**前回の保存で載せた条件ヘッダが
+次の保存にも残り**、`If-Match` と `If-None-Match` が両方立った状態で送られていた（テスト 7 本が
+一斉に落ちて発覚）。
+
+段階4-3b 以降 `Content-type` は同じ書き方で足していたが、**毎回同じ値だったので露見しなかった**。
+条件ヘッダは排他なので初めて表に出た。`sendSave` の中で 1 回ぶんのコピーを作るようにした。
+
+#### 仮想 backend も条件付き更新を実装した
+
+`tests/node/harness.ts` に **Kotlin と同じ ETag 計算**（`node:crypto` の SHA-256 先頭 16 バイト）と
+`If-Match` / `If-None-Match` の評価を入れた。おかげで契約表の ETag ケース 5 本を
+**`virtual: false` → `true`** に変えられた ——「両側で検証された第 2 実装」の範囲が広がった。
+
+`RequestRecord` に `headers` を足した（送った条件ヘッダを検査するため）。
+
+#### 検証
+
+| | 5-4a | 5-4b |
+|---|---|---|
+| `npm test` | 428 passed | **437 passed** |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 101 passed | 101 passed |
+
+golden 114 本は無差分（**save の往復数を変えても golden は 1 バイトも動かない** ——
+golden は Designer のファサード経由で採るので `js/io.ts` を通らない。4-3b が
+「golden はここを 1 ビットも押さえない」と書いたとおりの形）。
+
+ファイル別の増減: `conflict.test.ts` 9 → **10**（規則が小さくなった）/ `io-ui.test.ts` 27 → **30**
+（条件ヘッダと 412 の経路が増えた）/ `backend-contract.test.ts` 21 → **26**（ETag ケースが
+`virtual: true` になった）。
+
+#### 次段階への入力
+
+- **5-5: backend セレクタを撤去し、URL を確定する。** `AVAILABLE_BACKENDS` /
+  `DEFAULT_BACKEND`（配列バグごと）/ `?backend=` / `backendlabel`（21 言語）/ `<select>` が
+  一緒に落ちる。URL は `backend/file/` に固定。あわせて `?action=capabilities` を足し、
+  READONLY のときに保存ボタンを隠す（**引けなければ「全部できる」に倒す** —— `npm run dev`
+  単体で backend が無いときに現行と同じ挙動になる）
+- **契約表の URL リテラルが動く。** `tests/node/io-ui.test.ts` と
+  `tests/contract/backend-cases.json` の `backend` フィールドが `php-mysql` から `file` へ。
+  **表を先に直してから実装すること**（5-2 と同じ手順）
+- 「未指定 ＋ 既存あり」を **428** に締めるかは 5-5 以降で判断する。**いまは締めない** ——
+  条件ヘッダを送らない外部クライアント（curl での手作業）が壊れるため
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

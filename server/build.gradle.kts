@@ -58,6 +58,10 @@ dependencies {
     // introspection の唯一の JDBC ドライバ（段階5-7a）。版は Spring Boot の BOM が決める。
     // starter-jdbc は入れない —— HikariCP が来ると DB レス既定が構造で保証されなくなる。
     implementation(libs.postgresql)
+    // MySQL / MariaDB（段階5-8a）。MariaDB はプロトコルとカタログが互換なので
+    // このドライバ 1 本で両方に繋がる —— **ドライバを 2 本にしない**（イメージサイズと
+    // CVE 面積が増えるだけ）。
+    implementation(libs.mysql)
 
     // JUnit 5 + MockMvc + AssertJ。モックライブラリは足さない
     // （store は @TempDir で実 FS を使う。in-memory の double はテストを空虚にする）。

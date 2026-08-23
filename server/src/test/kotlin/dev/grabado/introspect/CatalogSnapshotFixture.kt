@@ -27,25 +27,29 @@ object CatalogSnapshotFixture {
     private val mapper = JsonMapper.builder().build()
 
     /** `server/src/test/resources/` ではなく repo 側に置く（人が差分を読む対象なので） */
-    private fun path(): Path {
+    /** 既定は PostgreSQL。段階5-8a から方言ごとに 1 本ずつ持つ。 */
+    const val POSTGRESQL = "postgresql-catalog.json"
+
+    private fun path(name: String): Path {
         val repoRoot = Path.of(
             System.getProperty("grabado.repoRoot")
                 ?: error("grabado.repoRoot が未設定（build.gradle.kts の test タスク）"),
         )
-        return repoRoot.resolve("tests").resolve("fixtures").resolve("introspection")
-            .resolve("postgresql-catalog.json")
+        return repoRoot.resolve("tests").resolve("fixtures").resolve("introspection").resolve(name)
     }
 
     /** 決定論のため、書き出しは pretty print（改行は LF）で固定する。 */
     fun toJson(snapshot: CatalogSnapshot): String =
         mapper.writerWithDefaultPrettyPrinter().writeValueAsString(snapshot).replace("\r\n", "\n") + "\n"
 
-    fun read(): String = Files.readString(path(), StandardCharsets.UTF_8).replace("\r\n", "\n")
+    fun read(name: String = POSTGRESQL): String =
+        Files.readString(path(name), StandardCharsets.UTF_8).replace("\r\n", "\n")
 
-    fun write(json: String) {
-        Files.createDirectories(path().parent)
-        Files.writeString(path(), json, StandardCharsets.UTF_8)
+    fun write(json: String, name: String = POSTGRESQL) {
+        Files.createDirectories(path(name).parent)
+        Files.writeString(path(name), json, StandardCharsets.UTF_8)
     }
 
-    fun load(): CatalogSnapshot = mapper.readValue(read(), CatalogSnapshot::class.java)
+    fun load(name: String = POSTGRESQL): CatalogSnapshot =
+        mapper.readValue(read(name), CatalogSnapshot::class.java)
 }

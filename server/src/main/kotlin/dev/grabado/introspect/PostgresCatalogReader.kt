@@ -1,9 +1,8 @@
 package dev.grabado.introspect
 
+import dev.grabado.introspect.JdbcSupport.intOrNull
 import java.sql.Connection
-import java.sql.DriverManager
 import java.sql.ResultSet
-import java.util.Properties
 
 /**
  * PostgreSQL のカタログを読む（段階5-7a）。**分岐を持たない** ——
@@ -31,13 +30,17 @@ import java.util.Properties
  * - **FK は `pg_constraint` の `conkey` / `confkey` を `unnest ... WITH ORDINALITY`** で引く。
  *   `information_schema.constraint_column_usage` は複合 FK の対応順を保証しない
  */
-class JdbcCatalogReader {
+class PostgresCatalogReader : CatalogReader {
 
-    fun read(source: IntrospectSource): CatalogSnapshot =
-        connect(source).use { connection ->
-            connection.isReadOnly = true
+    override val dialect: String = "postgresql"
+
+    override fun supports(url: String): Boolean = url.startsWith("jdbc:postgresql:")
+
+
+    override fun read(source: IntrospectSource): CatalogSnapshot =
+        JdbcSupport.connect(source, mapOf("options" to "-c statement_timeout=30000")).use { connection ->
             CatalogSnapshot(
-                dialect = "postgresql",
+                dialect = dialect,
                 schema = source.schema,
                 tables = readTables(connection, source.schema),
                 columns = readColumns(connection, source.schema),
@@ -47,19 +50,8 @@ class JdbcCatalogReader {
             )
         }
 
-    private fun connect(source: IntrospectSource): Connection {
-        val props = Properties()
-        props.setProperty("user", source.user)
-        props.setProperty("password", source.password)
-        /* 相手 DB が固まったときに Tomcat のスレッドを永久に握らせない */
-        props.setProperty("connectTimeout", "5")
-        props.setProperty("socketTimeout", "30")
-        props.setProperty("options", "-c statement_timeout=30000")
-        return DriverManager.getConnection(source.url, props)
-    }
-
     private fun readTables(connection: Connection, schema: String): List<CatalogTable> =
-        query(
+        JdbcSupport.query(
             connection,
             """
             SELECT c.relname AS table_name,
@@ -73,7 +65,7 @@ class JdbcCatalogReader {
         ) { rs -> CatalogTable(rs.getString("table_name"), rs.getString("table_comment")) }
 
     private fun readColumns(connection: Connection, schema: String): List<CatalogColumn> =
-        query(
+        JdbcSupport.query(
             connection,
             """
             SELECT c.table_name, c.column_name, c.ordinal_position,
@@ -113,7 +105,7 @@ class JdbcCatalogReader {
         }
 
     private fun readConstraints(connection: Connection, schema: String): List<CatalogConstraintColumn> =
-        query(
+        JdbcSupport.query(
             connection,
             """
             SELECT tc.table_name, tc.constraint_name, tc.constraint_type,
@@ -139,7 +131,7 @@ class JdbcCatalogReader {
         }
 
     private fun readForeignKeys(connection: Connection, schema: String): List<CatalogForeignKey> =
-        query(
+        JdbcSupport.query(
             connection,
             """
             SELECT c.relname AS table_name,
@@ -169,7 +161,7 @@ class JdbcCatalogReader {
         }
 
     private fun readIndexes(connection: Connection, schema: String): List<CatalogIndexColumn> =
-        query(
+        JdbcSupport.query(
             connection,
             """
             SELECT c.relname AS table_name,
@@ -198,25 +190,5 @@ class JdbcCatalogReader {
             )
         }
 
-    private fun <T> query(
-        connection: Connection,
-        sql: String,
-        schema: String,
-        row: (ResultSet) -> T,
-    ): List<T> = connection.prepareStatement(sql).use { statement ->
-        statement.setString(1, schema)
-        statement.executeQuery().use { rs ->
-            buildList {
-                while (rs.next()) {
-                    add(row(rs))
-                }
-            }
-        }
-    }
 }
 
-/** `getInt` は NULL を 0 で返すので、`wasNull` を見て潰す。 */
-private fun ResultSet.intOrNull(column: String): Int? {
-    val value = getInt(column)
-    return if (wasNull()) null else value
-}

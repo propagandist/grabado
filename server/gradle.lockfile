@@ -8,6 +8,7 @@ ch.qos.logback:logback-core:1.5.38=compileClasspath,productionRuntimeClasspath,r
 com.fasterxml.jackson.core:jackson-annotations:2.21=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.google.errorprone:error_prone_annotations:2.38.0=compileClasspath,testCompileClasspath
 com.jayway.jsonpath:json-path:2.10.0=testCompileClasspath,testRuntimeClasspath
+com.mysql:mysql-connector-j:9.7.0=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 com.vaadin.external.google:android-json:0.0.20131108.vaadin1=testCompileClasspath,testRuntimeClasspath
 commons-logging:commons-logging:1.3.6=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 io.micrometer:micrometer-commons:1.17.1=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath

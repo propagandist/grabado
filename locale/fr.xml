@@ -88,6 +88,7 @@
     <string name="serverloadprompt">Saisir le mot-clé de votre schéma :</string>
     <string name="serversaveprompt">Saisir un mot-clé pour sauvegarder votre schéma :</string>
     <string name="serverimportprompt">Saisir le nom de la base de données à importer :</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Réponse du serveur</string>
     <string name="http201">Sauvegardé</string>
     <string name="http400">Bad Request</string>

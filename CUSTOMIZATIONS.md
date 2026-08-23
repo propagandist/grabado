@@ -7438,6 +7438,94 @@ golden 114 本は無差分。Kotlin の増分: `IntrospectionMapperTest` 15 ＋
 
 ---
 
+### 2026-08-23 HANDOVER §5「backend」段階5-7b —— introspection を JSON 化し、known-issue #9 を閉じる
+
+**`serverimport` が JSON を受けるようになり、XML 経路が消えた。**
+**known-issues が 2 本から 1 本になった** —— #9（PG18 の実出力が well-formed でなく
+index も出ない）が §5 で直った。
+
+#### XML を受ける経路は「保存された設計の読み込み」1 つだけになった
+
+段階6-5a で XML の**書き出し**が 1 つ残らず消え、ここで introspection の**読み込み**も
+JSON になった。残る XML は「4-3b 以前に保存した設計を読む」互換経路だけ。
+
+`importresponse` の流れは **parse → 設計モデルへ写す → 適用 → 並べ直す → 落ちた型を伝える**。
+型解決は 5-6 で置いた `introspectionToModel()` が引き受ける —— **backend はパレットを知らない**。
+
+`alignTables()` を呼ぶのは XML 経路と同じ。introspection の応答は座標を持たないので、
+**ブラウザ実測の幅で並べ直すのはここでしかできない**。
+
+#### 落ちた型を textarea で伝える（黙って捨てない）
+
+`importNotice()` を足した。DDL の変換注記（6-10a の `conversionNotice`）と同じ立場で、
+**1 列 1 行**にまとめる（同じ列に理由が 2 つ付きうるので、素直に並べると読みにくい）。
+
+```
+grabado: 1 列の型がそのままでは写せなかった。
+流す前に型を確かめること（既定型に落としてある）。
+
+  users.status: USER-DEFINED -> TEXT（パレットに無いので既定型に落とした）
+```
+
+落ちた列が無ければ「すべて写っている」と書く —— **沈黙は「落ちなかった」の証明にならない**。
+
+#### known-issue #9 は「直したもの」へ移した
+
+README の運用3（**黙って消さない**）に従った。2 つの原因はどちらも**構造的に起こらない形**に
+置き換わっている:
+
+| 原因 | 現行 PHP | Kotlin |
+|---|---|---|
+| 余分な `</key>` | NOT NULL の CHECK を **denylist** で除外しようとしていた | `constraint_type IN (...)` の **allowlist**。CHECK がそもそも集合に入らない |
+| index が出ない | `continue` ではなく **`break`** | `NOT EXISTS (pg_constraint.conindid)` で**制約の index だけ**除外 |
+
+「直った後の挙動」のアサートは `IntrospectionMapperTest`・`introspect-parser.test.ts`・
+`PostgresCatalogIntegrationTest`（実 PG18 で CHECK が 16 件出るが 1 件も読まない）にある。
+
+**残る known-issue は #15（Oracle の制約）1 本だけ**になった。
+
+#### capabilities に introspection の分岐を足した（5-5 の予告どおり 1 行）
+
+接続先が env に列挙されていなければ押しても 404 なので、**押せなくする**。
+
+★ **明示的に false のときだけ隠す。** キーが無い応答（古いサーバ・壊れた JSON）は
+「分からなかった」であって「できない」ではない —— capabilities を引けなかったときに何も
+隠さないのと同じ理屈で、**分からないものを勝手に閉じない**。
+
+#### そのほか
+
+- `database` を **URL エンコード**するようにした。5-7a まで素の連結で、`ARCHITECTURE.md` §4.2 が
+  「`keyword` と違って未エンコード」と記録していた箇所（実害は接続名に記号を使ったときだけ）
+- `locale` 21 本に `importerror` を足した（読み取りに失敗したときの alert）
+- 仮想 backend に `setIntrospection()` を足し、**フロント側の往復**（parse → 型解決 → 適用 →
+  並べ直し）を Node から試せるようにした。実際のカタログ読み取りは Kotlin の統合テストが見る
+
+#### 検証
+
+| | 5-7a | 5-7b |
+|---|---|---|
+| `npm test` | 463 passed | **472 passed** |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | **1 passed**（#9 が閉じた） |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 118 passed ＋ 10 skipped | 同じ（**backend 0 行**） |
+
+golden 114 本は無差分。
+
+#### 次段階への入力
+
+- **5-8: introspection を MySQL / MariaDB / H2 へ広げる。** `JdbcCatalogReader` が
+  PostgreSQL 専用なので、方言ごとにカタログの引き方を分ける（`information_schema` の
+  共通部分は多いが、index と FK の引き方が違う）。**ドライバを 1 本足すごとに
+  イメージサイズと CVE 面積が増える**ので、根拠を台帳に残すこと
+- **`docs/samples/introspection-postgresql.xml` は旧 PHP の実出力**として残してある
+  （§4.5 が参照する歴史的資料）。**現在の実装は JSON を返す**ので、読むときは §7.2 を見ること
+- **5-9 で E2E を張るとき、introspection は実 PG18 が要る。** CI に置くなら
+  `services: postgres:18`（追加依存ゼロ）で、org 規約に従って**週次**へ
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

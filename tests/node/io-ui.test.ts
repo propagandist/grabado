@@ -327,6 +327,29 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.io.dom.serversave.disabled).toBe(false);
         });
 
+        test("introspection が false なら import ボタンを押せなくする", () => {
+            /* 接続先が env に列挙されていなければ押しても 404（段階5-7a） */
+            h.io.applyCapabilities({ readonly: false, introspection: false });
+
+            expect(h.io.dom.serverimport.disabled).toBe(true);
+        });
+
+        test("introspection が true なら押せる", () => {
+            h.io.applyCapabilities({ readonly: false, introspection: true });
+
+            expect(h.io.dom.serverimport.disabled).toBe(false);
+        });
+
+        test("introspection のキーが無ければ隠さない（分からないものを勝手に閉じない）", () => {
+            /*
+             * 古いサーバや壊れた JSON は「分からなかった」であって「できない」ではない ——
+             * 引けなかったときに何も隠さないのと同じ理屈。
+             */
+            h.io.applyCapabilities({ readonly: false });
+
+            expect(h.io.dom.serverimport.disabled).toBe(false);
+        });
+
         test("反映は冪等（同じ入力なら何度呼んでも同じ状態）", () => {
             h.io.applyCapabilities({ readonly: true });
             h.io.applyCapabilities({ readonly: true });
@@ -356,13 +379,15 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
         });
     });
 
-    describe("serverimport（据え置き）", () => {
-        test("introspection は XML のままで、keyword の .json も付かない", () => {
-            /*
-             * ここが受けるのは「保存した設計」ではなく backend が information_schema から
-             * 組み立てた XML。JSON 化は backend を Kotlin に移す HANDOVER §5.2 の仕事で、
-             * フロントだけ先に JSON を期待させると現行 backend との契約が切れる。
-             */
+    /*
+     * introspection（段階5-7b で JSON 化）。
+     *
+     * 受けるのは「保存した設計」ではなく backend が information_schema から組み立てたもので、
+     * **設計 JSON とも別の形式**（座標を持たず、型は SQL の生の情報）。型解決は
+     * `introspectionToModel()` が引き受ける —— backend はパレットを知らない。
+     */
+    describe("serverimport（段階5-7b）", () => {
+        test("応答をテキストで受ける（xml: true を外した）", () => {
             h.window.prompt = () => "shop";
             h.io.serverimport();
 
@@ -370,7 +395,106 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(reqs).toHaveLength(1);
             const req = reqs[0]!;
             expect(req.url).toBe("backend/file/?action=import&database=shop");
-            expect(req.xml).toBe(true);
+            /* JSON を XML として parse すると Null document になる（4-3b と同じ理由） */
+            expect(req.xml).toBeFalsy();
+        });
+
+        test("keyword の .json は付かない（設計ファイルの名前ではない）", () => {
+            h.window.prompt = () => "shop";
+            h.io.serverimport();
+
+            expect(h.takeRequests()[0]!.url).not.toContain(".json");
+        });
+
+        test("接続名は URL エンコードされる", () => {
+            /* env に列挙された接続の名前。段階5-7a までエンコードしていなかった */
+            h.window.prompt = () => "受注 db";
+            h.io.serverimport();
+
+            expect(h.takeRequests()[0]!.url).toContain("database=%E5%8F%97%E6%B3%A8%20db");
+        });
+
+        test("壊れた応答は alert で伝え、開いている設計を壊さない", () => {
+            const before = h.captureState();
+            h.window.prompt = () => "shop";
+            h.setIntrospection("{ これは JSON ではない");
+            h.io.serverimport();
+
+            expect(h.takeAlerts()).toHaveLength(1);
+            expect(h.captureState()).toBe(before);
+            h.setIntrospection(null);
+        });
+
+        test("読み込んだ結果が設計に入る（parse -> 型解決 -> 適用）", () => {
+            h.window.prompt = () => "shop";
+            h.setIntrospection(
+                JSON.stringify({
+                    introspectionVersion: 1,
+                    dialect: "postgresql",
+                    tables: [
+                        {
+                            name: "users",
+                            comment: "ユーザー",
+                            columns: [
+                                { name: "id", sqlType: "uuid", nullable: false, default: "uuidv7()" },
+                                { name: "email", sqlType: "text", nullable: false },
+                            ],
+                            keys: [{ type: "PRIMARY", name: "users_pkey", columns: ["id"] }],
+                        },
+                    ],
+                }),
+            );
+
+            h.io.serverimport();
+
+            expect(h.takeAlerts()).toEqual([]);
+            const state = h.captureState();
+            expect(state).toContain("users");
+            expect(state).toContain("email");
+            h.setIntrospection(null);
+        });
+
+        test("落ちた型を textarea で伝える（黙って捨てない）", () => {
+            h.window.prompt = () => "shop";
+            h.setIntrospection(
+                JSON.stringify({
+                    introspectionVersion: 1,
+                    dialect: "postgresql",
+                    tables: [
+                        {
+                            name: "t",
+                            columns: [
+                                /* enum はパレットに無いので既定型へ落ちる */
+                                { name: "status", sqlType: "USER-DEFINED", udtName: "user_status", nullable: false },
+                            ],
+                        },
+                    ],
+                }),
+            );
+
+            h.io.serverimport();
+
+            expect(h.io.dom.ta.value).toContain("t.status");
+            expect(h.io.dom.ta.value).toContain("USER-DEFINED");
+            h.setIntrospection(null);
+        });
+
+        test("落ちた列が無ければその旨を出す", () => {
+            h.window.prompt = () => "shop";
+            h.setIntrospection(
+                JSON.stringify({
+                    introspectionVersion: 1,
+                    dialect: "postgresql",
+                    tables: [
+                        { name: "t", columns: [{ name: "id", sqlType: "uuid", nullable: false }] },
+                    ],
+                }),
+            );
+
+            h.io.serverimport();
+
+            expect(h.io.dom.ta.value).toContain("落ちた列は無い");
+            h.setIntrospection(null);
         });
     });
 

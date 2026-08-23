@@ -21,8 +21,12 @@
  * **段階6-5a で XML の書き出しが 1 つ残らず消えた。** 4-3b の時点で残っていたのは
  * clientsql() の DDL 生成だけで（output.xsl の入力に XML が要った）、その XSLT が
  * TS 生成器になったので中間 XML ごと落ちている（js/io/ddl-xml.ts の撤去）。
- * 読み込みが JSON と XML の両方なのは変わらない。introspection（serverimport）も
- * XML のままで、こちらは §5.2。
+ * 読み込みが JSON と XML の両方なのは変わらない（4-3b 以前に保存した設計を読むため）。
+ *
+ * **introspection も段階5-7b で JSON になった。** backend が Kotlin に移り、
+ * `information_schema` から組み立てたものを**設計 JSON とも別の形式**で返す
+ * （js/io/introspect-model.ts）。**これで XML を受ける経路は「保存された設計の読み込み」
+ * 1 つだけ**になった。
  *
  * ## 段階4-6（外部変更検知）→ 段階5-4b（条件付き更新）
  *
@@ -45,6 +49,9 @@ import { CONFIG } from "./config.ts";
 import { ORM_LABELS, ORM_TARGETS } from "./io/orm/generate.ts";
 import { _ } from "./globals.ts";
 import { detectDesignFormat } from "./io/detect.ts";
+import { importNotice, introspectionToModel } from "./io/introspect-parser.ts";
+import type { IntrospectionResult } from "./io/introspect-model.ts";
+import { applyDesignModel } from "./io/apply.ts";
 import {
     etagFromHeaders,
     preconditionFor,
@@ -321,7 +328,7 @@ export class IO {
      * 「サーバに尋ねられなかった」ときは **[requestCapabilities] がここを呼ばない** ——
      * 何も隠さないのが正しい（引けないのは「機能が無い」ではなく「サーバがいない」）。
      */
-    applyCapabilities(caps: { readonly?: boolean }): void {
+    applyCapabilities(caps: { readonly?: boolean; introspection?: boolean }): void {
         /*
          * READONLY のデプロイでは保存が 403 になる。**押してから知るのではなく、押せなくする**
          * —— できることの説明として、そのほうが正確。
@@ -330,6 +337,15 @@ export class IO {
         var readonly = caps.readonly === true;
         this.dom.serversave.disabled = readonly;
         this.dom.quicksave.disabled = readonly;
+        /*
+         * introspection は**接続先が env に列挙されていなければ使えない**（段階5-7a）。
+         * 押しても 404 なので、押せなくする。READONLY のときもサーバが false を返す。
+         *
+         * ★ **明示的に false のときだけ隠す。** キーが無い応答（古いサーバ・壊れた JSON）は
+         *   「分からなかった」であって「できない」ではない —— 引けなかったときに何も隠さない
+         *   のと同じ理屈で、**分からないものを勝手に閉じない**。
+         */
+        this.dom.serverimport.disabled = caps.introspection === false;
     }
 
     click(): void {
@@ -847,11 +863,13 @@ export class IO {
     }
 
     /*
-     * grabado: introspection は段階4-3b でも XML のまま据え置く（xml: true と
-     * importresponse の fromXML）。ここが受けるのは「保存した設計」ではなく
-     * **backend が information_schema から組み立てた XML** で、JSON 化は backend を
-     * Kotlin に移す HANDOVER §5.2 の仕事。フロントだけ先に JSON を期待させると
-     * 現行 backend との契約が切れる。
+     * grabado: introspection は段階5-7b で **JSON になった**（それまでは XML のまま据え置き）。
+     *
+     * 受けるのは「保存した設計」ではなく **backend が information_schema から組み立てたもの**で、
+     * **設計 JSON とも別の形式**（`js/io/introspect-model.ts`）。座標を持たず、型はパレットの
+     * id ではなく SQL の生の情報 —— 解決はこちらの `TypePalette` が引き受ける。
+     *
+     * `database` は **env に列挙された接続の名前**（段階5-7a）。ホスト名はここから渡らない。
      */
     serverimport(e?: Event): void {
         var name = prompt(_("serverimportprompt"), "");
@@ -863,10 +881,11 @@ export class IO {
             bp +
             BACKEND_PATH +
             "?action=import&database=" +
-            name;
+            encodeURIComponent(name);
         var h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
-        OZ.Request(url, this.importresponse, { xml: true, headers: h });
+        /* 応答はテキストで受けて JSON.parse する（段階5-7b で xml: true を外した） */
+        OZ.Request(url, this.importresponse, { headers: h });
     }
 
     /**
@@ -968,14 +987,52 @@ export class IO {
         this.dom.ta.value = data as string;
     }
 
+    /**
+     * introspection の応答（段階5-7b で JSON 化）。
+     *
+     * 流れは **parse → 設計モデルへ写す → 適用 → 並べ直す → 落ちた型を伝える**。
+     * 型解決を担うのは `introspectionToModel()`（`js/io/introspect-parser.ts`）で、
+     * **backend はパレットを知らない**。
+     *
+     * `alignTables()` を呼ぶのは XML 経路と同じ —— introspection の応答は座標を持たないので、
+     * **ブラウザ実測の幅で並べ直すのはここでしかできない**。
+     */
     importresponse(data: unknown, code: number): void {
         this.owner.window.hideThrobber();
         if (!this.check(code)) {
             return;
         }
-        if (this.fromXML(data as Document | null)) {
-            this.owner.alignTables();
+        if (typeof data !== "string" || !data) {
+            alert(_("empty"));
+            return;
         }
+
+        var result: IntrospectionResult;
+        try {
+            result = JSON.parse(data) as IntrospectionResult;
+        } catch (e) {
+            alert(_("importerror") + "\n\n" + String(e));
+            return;
+        }
+
+        var converted;
+        try {
+            converted = introspectionToModel(result, this.owner.palette);
+        } catch (e) {
+            /* パレットが読めていない等。開いている設計は壊さない（XML 経路と同じ流儀） */
+            alert(_("importerror") + "\n\n" + String(e));
+            return;
+        }
+
+        this.owner.clearTables();
+        applyDesignModel(this.owner, converted.model);
+        this.owner.alignTables();
+        this.owner.window.close();
+        /*
+         * 落ちた型を**黙って捨てない**（段階6-9d / 6-10a と同じ流儀）。textarea に出すのは
+         * DDL / ORM の変換注記と同じ場所で、ユーザーが「何が起きたか」を 1 か所で読めるため。
+         */
+        this.dom.ta.value = importNotice(converted.losses);
     }
 
     press(e: KeyboardEvent): void {

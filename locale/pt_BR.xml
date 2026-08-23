@@ -83,6 +83,7 @@
     <string name="serverloadprompt">Digite o nome o qual seu design foi salvo:</string>
     <string name="serversaveprompt">Digite o nome com qual seu design será salvo:</string>
     <string name="serverimportprompt">Digite o nome da base de dados à ser importada:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse"> Resposta do servidor</string>
     <string name="http201">Salvo</string>
     <string name="http400">Bad Request</string>

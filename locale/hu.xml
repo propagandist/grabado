@@ -83,6 +83,7 @@
     <string name="serverloadprompt">Írja be a kulcsszót, amely alapján a tervet elmentette:</string>
     <string name="serversaveprompt">Írja be a kulcsszót, amely alapján a tervet el szeretné menteni:</string>
     <string name="serverimportprompt">Írja be az importálandó adatbázis nevét:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">A szerver válasza</string>
     <string name="http201">Elmentve</string>
     <string name="http400">Bad Request</string>

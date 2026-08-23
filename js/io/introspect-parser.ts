@@ -51,6 +51,61 @@ export interface IntrospectResult {
 }
 
 /**
+ * 読み込んだ結果を人が読む 1 枚にする（段階5-7b）。
+ *
+ * **落ちた型を黙って捨てない。** DDL の変換注記（6-10a の `conversionNotice`）と同じ立場で、
+ * 「何が起きたか」を textarea の 1 か所で読めるようにする。
+ *
+ * 1 列 1 行にまとめる —— 同じ列に理由が 2 つ付きうるので、素直に並べると読みにくい。
+ */
+export function importNotice(losses: readonly TypeLoss[]): string {
+    if (losses.length === 0) {
+        return "grabado: 読み込んだ型はすべてパレットに写っている（落ちた列は無い）。";
+    }
+
+    const order: string[] = [];
+    const byColumn = new Map<string, TypeLoss[]>();
+    for (const loss of losses) {
+        const key = loss.table + "." + loss.column;
+        const found = byColumn.get(key);
+        if (found) {
+            found.push(loss);
+        } else {
+            order.push(key);
+            byColumn.set(key, [loss]);
+        }
+    }
+
+    const out = [
+        `grabado: ${order.length} 列の型がそのままでは写せなかった。`,
+        "流す前に型を確かめること（既定型に落としてある）。",
+        "",
+    ];
+    for (const key of order) {
+        const group = byColumn.get(key)!;
+        const first = group[0]!;
+        const reasons = group.map((one) => reasonText(one)).join(" / ");
+        out.push(`  ${key}: ${first.from} -> ${first.to}（${reasons}）`);
+    }
+    return out.join("\n") + "\n";
+}
+
+function reasonText(loss: TypeLoss): string {
+    switch (loss.reason) {
+        case "unmappable":
+            return "パレットに無いので既定型に落とした";
+        case "kind-widened":
+            return "別の型に寄せた";
+        case "size-dropped":
+            return "サイズを捨てた";
+        case "size-required":
+            return "寄せ先がサイズを要求する";
+        default:
+            return loss.reason;
+    }
+}
+
+/**
  * introspection の結果を設計モデルへ写す。
  *
  * @param result backend の `?action=import` の応答

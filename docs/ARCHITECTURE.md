@@ -610,7 +610,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | `list` | `data/*` 全件・fs 順 | **`*.json` のみ・昇順固定**・空なら 0 バイト。`\n` 区切りは維持 | 5-2 |
 | `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**。`If-Match` / `If-None-Match` が満たされなければ **412**、応答には新しい **ETag** が付く | 5-2 / **5-4a（実装済み）** |
 | `load` | 200 / 404・`text/xml` | 200 / 404 は維持。**`application/octet-stream` ＋ `nosniff` ＋ `attachment`**、**ETag（内容の SHA-256 先頭 16 バイト）** | 5-2 / **5-4a（実装済み）** |
-| `import` | XML（`db/<db>/datatypes.xml` 全文を連結） | **中立な introspection JSON**（§7.2）。パレットは連結せず、実行中パレットも差し替えない。接続先は **env に列挙した名前だけ**（表に無ければ 404、READONLY は 403、接続失敗は 503）。**§4.6 の 2 不具合は再現しない** | **5-7a（backend 実装済み）／ フロントの JSON 化は 5-7b** |
+| `import` | XML（`db/<db>/datatypes.xml` 全文を連結） | **中立な introspection JSON**（§7.2）。パレットは連結せず、実行中パレットも差し替えない。接続先は **env に列挙した名前だけ**（表に無ければ 404、READONLY は 403、接続失敗は 503）。**§4.6 の 2 不具合は再現しない** | **5-7a / 5-7b（実装済み）** |
 | 未知 action / 指定なし | 501 | 501 を維持 | 5-1b |
 | `remove` | 501（実装が無い） | **作らない**（501 のまま） | — |
 | HTTP メソッド | 見ていない | **固定**（list / load / import は GET、save は POST）。ミスマッチは 405 | 5-1b |

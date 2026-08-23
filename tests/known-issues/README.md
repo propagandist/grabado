@@ -26,7 +26,6 @@ npm run known-issues     # ここだけを走らせる（npm test / npm run test
 
 | # | 現象 | 原因 | 経路 | 直る予定 |
 |---|---|---|---|---|
-| 9 | introspection サンプル（PG18 実出力）が well-formed でなく index も出ない | 余分な `</key>` と index 収集ループの `break`。詳細は [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §4.6 | introspection | §5.2 |
 | 15 | `oracle`: 識別子に `"` を含むと実行できない DDL になる（ORA-25716）。**grabado の欠陥ではなく Oracle の制約**だが出力は実行できない | 他の 7 本と同じ `""` エスケープで出す。**Oracle だけが識別子内の `"` を許さない** | DDL 生成 | **根治は無い**（Oracle の制約）。**6-9b で緩和** —— 画面で波線と理由が出るので DDL を出す前に気づける |
 
 **#15 は §6 段階6-8c で新設した。** 生成した DDL を Oracle 23ai に流して見つけたもので、
@@ -48,9 +47,24 @@ fixture を実型で書き直す過程で見つかった upstream からの粗�
 6-8a（mysql）と 6-8b（mssql）でさらに 2 本が出た。**6-8c で #10 は実例が尽き、
 6-8d で #4 / #10 / #13 がまとめて出た**（§6 のパレット現代化が 8 本とも終わった）。
 
-**残るのは 2 本** —— #15 は Oracle の制約、#9 は introspection で §5.2。
-**どちらも §6 の型パレット / DDL 生成の話ではない**ので、この表は §6 の残りを
-もう 1 つも指していない。
+**#9 は §5 段階5-7 で直った。** introspection が PHP から Kotlin に移り、
+**XML そのものが無くなった**（JSON を返す）ので「well-formed でない」現象は消えた。
+2 つの原因はどちらも**構造的に起こらない形**に置き換わっている:
+
+- 余分な `</key>` —— NOT NULL の CHECK を **denylist で除外しようとして**いたのが原因。
+  Kotlin は `constraint_type IN ('PRIMARY KEY','UNIQUE')` の **allowlist** で引くので、
+  そもそも CHECK が集合に入らない（**denylist は必ず漏れる**）
+- index が出ない —— `continue` ではなく `break` していたのが原因。Kotlin は
+  `NOT EXISTS (pg_constraint.conindid)` で**制約が裏に持つ index だけ**を除外する
+
+「直った後の挙動」のアサートは **`server/.../IntrospectionMapperTest`**（CHECK が 1 件も
+出てこない／index が出る／複合 index の並び）と **`tests/node/introspect-parser.test.ts`**
+（CHECK を最初から読まない）にある。**実 PG18 に対しては
+`PostgresCatalogIntegrationTest` が確かめている** —— サンプルスキーマで CHECK は実際に
+**16 件**出るが、1 件も読まない。
+
+**残るのは 1 本** —— #15（Oracle の制約）だけ。**§6 の型パレット / DDL 生成の話ではない**ので、
+この表は §6 の残りをもう 1 つも指していない。
 
 **#15 は 6-9b で「緩和」された。** 直ったのではなく、**出す前に気づける**ようになっただけ
 （画面の波線と tooltip）。根治は Oracle 側の制約なので存在しない ——「直ったもの」へは

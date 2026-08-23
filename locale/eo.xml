@@ -85,6 +85,7 @@
     <string name="serverloadprompt">Entajpi ŝlosilvorton per kiu via fasonado estis konservita:</string>
     <string name="serversaveprompt">Entajpi ŝlosilvorton per kiu via fasonado estos konservita:</string>
     <string name="serverimportprompt">Entajpi la nomon de datumbazo importenda:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Respondo de servilo</string>
     <string name="http201">Konservita</string>
     <string name="http400">Bad Request</string>

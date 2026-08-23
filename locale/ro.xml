@@ -83,6 +83,7 @@
     <string name="serverloadprompt">Introduceti numele sub care a fost salvat design-ul:</string>
     <string name="serversaveprompt">Introduceti numele sub care va fi salvat design-ul:</string>
     <string name="serverimportprompt">Introduceti numele bazei de date care va fi importata:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Server response</string>
     <string name="http201">Salvare efectuata</string>
     <string name="http400">Bad Request</string>

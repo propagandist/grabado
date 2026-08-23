@@ -88,6 +88,7 @@
     <string name="serverloadprompt">Ingrese la palabra clave bajo la cual tu diseño fue guardado:</string>
     <string name="serversaveprompt">Ingrese una palabra clave bajo la cual tu diseño será guardado:</string>
     <string name="serverimportprompt">Ingresa el nombre de la base de datos a ser importada:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Respuesta del servidor</string>
     <string name="http201">Guardado</string>
     <string name="http400">Bad Request</string>

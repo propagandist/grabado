@@ -82,6 +82,7 @@
     <string name="serverloadprompt">Ange vilket nyckelord din design sparades under:</string>
     <string name="serversaveprompt">Ange vilket nyckelord din design ska sparas under:</string>
     <string name="serverimportprompt">Ange namnet på databasen som ska importeras:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Serversvar</string>
     <string name="http201">Sparad</string>
     <string name="http400">Bad Request</string>

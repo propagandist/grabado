@@ -87,6 +87,7 @@
     <string name="serverloadprompt">読み込む設計名を入力してください:</string>
     <string name="serversaveprompt">保存する設計名を入力してください:</string>
     <string name="serverimportprompt">インポートするDB名を入力してください:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">サーバレスポンス</string>
     <string name="http201">Saved</string>
     <string name="http400">Bad Request</string>

@@ -86,6 +86,7 @@
     <string name="serverloadprompt">输入你所保存的名字:</string>
     <string name="serversaveprompt">输入所要保存的名字:</string>
     <string name="serverimportprompt">输入所要导入的数据库名称:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">服务器反馈</string>
     <string name="http201">已存</string>
     <string name="http400">Bad Request</string>

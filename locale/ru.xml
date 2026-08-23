@@ -88,6 +88,7 @@
     <string name="serverloadprompt">Введите ключевое слово под которым сохранена ваша схема:</string>
     <string name="serversaveprompt">Введите ключевое слово под которым будет сохранена ваша схема:</string>
     <string name="serverimportprompt">Введите имя импортируемой базы данных:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Ответ сервера</string>
     <string name="http201">Сохранено</string>
     <string name="http400">Bad Request</string>

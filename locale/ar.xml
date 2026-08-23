@@ -82,6 +82,7 @@
     <string name="serverloadprompt">Enter keyword under which your design was saved:</string>
     <string name="serversaveprompt">Enter keyword under which your design will be saved:</string>
     <string name="serverimportprompt">أدخل إسم قاعدة البيانات التي تريد إستيرادها:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">رد الخادم</string>
     <string name="http201">تم الحفظ بنجاح</string>
     <string name="http400">Bad Request</string>

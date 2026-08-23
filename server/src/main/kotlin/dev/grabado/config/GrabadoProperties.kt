@@ -53,6 +53,12 @@ data class GrabadoProperties(
  *   ここを増やしても速くならず費用の山だけが立つ
  * @property cacheEntries 結果キャッシュの上限件数。**プロセス内メモリのみ**（DB レス既定）
  * @property cacheTtl 結果キャッシュの寿命。**設計を直して測り直す**間隔より短くする
+ * @property timeout 上流 1 回あたりの制限時間（段階11-2b）。**SDK の既定は 10 分**で、
+ *   公開プロダクトのリクエストとしては長すぎる。**120 秒**は 11-2b の実測から
+ *   （`CUSTOMIZATIONS.md` の段階11-2b に測った値がある）
+ * @property effort 思考の深さ（`low` / `medium` / `high` / `xhigh` / `max`。段階11-2b）。
+ *   **コストの主要な変数。** 空なら上流の既定に任せる。値が不正なら**起動時に落とす**
+ *   —— 黙って別の深さで走らせると、費用が理由なく動く
  */
 data class AiProperties(
     val apiKey: String = "",
@@ -63,6 +69,8 @@ data class AiProperties(
     val maxConcurrent: Int = 2,
     val cacheEntries: Int = 64,
     val cacheTtl: Duration = Duration.ofHours(1),
+    val timeout: Duration = Duration.ofSeconds(120),
+    val effort: String = "",
 ) {
     /** キーとモデル名が両方そろっているか。**片方だけなら無効**（決めたこと 7）。 */
     fun hasCredentials(): Boolean = apiKey.isNotBlank() && model.isNotBlank()

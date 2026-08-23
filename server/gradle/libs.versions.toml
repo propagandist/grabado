@@ -7,6 +7,9 @@
 [versions]
 kotlin = "2.4.10"
 springBoot = "4.1.1"
+# Anthropic の公式 Java SDK（段階11-2b）。**BOM の管理外**なので版をここに書く。
+# Kotlin は Java SDK を使う（専用の Kotlin SDK は無い）。
+anthropic = "2.34.0"
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
@@ -26,3 +29,6 @@ spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-star
 postgresql = { module = "org.postgresql:postgresql" }
 mysql = { module = "com.mysql:mysql-connector-j" }
 h2 = { module = "com.h2database:h2" }
+# AI proxy が上流を叩く唯一の依存（段階11-2b）。HTTP を直接組まないのは、
+# structured outputs / prompt caching / エラーの型が SDK 側で保たれるため。
+anthropic = { module = "com.anthropic:anthropic-java", version.ref = "anthropic" }

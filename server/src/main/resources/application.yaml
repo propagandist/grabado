@@ -48,6 +48,11 @@ grabado:
     max-concurrent: ${GRABADO_AI_MAX_CONCURRENT:2}
     cache-entries: ${GRABADO_AI_CACHE_ENTRIES:64}
     cache-ttl: ${GRABADO_AI_CACHE_TTL:1h}
+    # 上流 1 回あたりの制限時間（段階11-2b）。**SDK 既定の 10 分は長すぎる。**
+    timeout: ${GRABADO_AI_TIMEOUT:120s}
+    # 思考の深さ（low / medium / high / xhigh / max）。**コストの主要な変数。**
+    # 空なら上流の既定に任せる。既定値をここに置かないのはモデル名と同じ理由。
+    effort: ${GRABADO_AI_EFFORT:}
 
 server:
   tomcat:

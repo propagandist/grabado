@@ -689,10 +689,10 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 
 **決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階11-0 にある。**
 
-実装は 2 段階ぶん入っている —— **適用側**（11-1。[`../js/io/ai/`](../js/io/ai/)）と
-**proxy の契約**（11-2a。[`../server/src/main/kotlin/dev/grabado/ai/`](../server/src/main/kotlin/dev/grabado/ai/)）。
-**まだ無いのは上流を実際に叩く部分だけ**で、それが 11-2b —— structured outputs のスキーマ・
-prompt caching・タイムアウト・`effort`・費用の実測が入る。**フロントの配線（11-3 以降）は 0 行。**
+**本章はすべて実装済み**（11-1 で適用側、11-2a で proxy の契約、**11-2b で上流を叩く実装**）。
+入口は [`../js/io/ai/`](../js/io/ai/) と
+[`../server/src/main/kotlin/dev/grabado/ai/`](../server/src/main/kotlin/dev/grabado/ai/)。
+**残るのはフロントの配線だけ**（11-3 以降。`js/` はまだ 1 行も AI を知らない）。
 
 **HANDOVER §11 との差分は 3 つ**（URL 名・構造化出力の手段・プライバシー既定）。
 **HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
@@ -788,7 +788,8 @@ op が何を書き換えるかは次のとおりで、**書き込み先はモデ
 | `GRABADO_AI_RATE_PER_MINUTE` | `10` | 1 分あたりの受付数。超えたら **429** |
 | `GRABADO_AI_MAX_CONCURRENT` | `2` | 同時に上流へ流す数。超えたら **429**（**待たせない**） |
 | `GRABADO_AI_CACHE_ENTRIES` / `GRABADO_AI_CACHE_TTL` | `64` / `1h` | 結果キャッシュ（§8.5） |
-| タイムアウト / `effort` | **11-2b で確定** | 実測が要る 2 つ。上流を叩いてから決める |
+| `GRABADO_AI_TIMEOUT` | `120s` | 上流 1 回あたり。**SDK 既定の 10 分は長すぎる**。実測は 18〜35 秒（§8.5） |
+| `GRABADO_AI_EFFORT` | **空**（上流の既定に任せる） | `low` / `medium` / `high` / `xhigh` / `max`。**コストの主要な変数**。値が不正なら**起動時に落ちる** |
 
 **上限の既定値は実測ではなく判断**で、根拠は
 [`AiProperties`](../server/src/main/kotlin/dev/grabado/config/GrabadoProperties.kt) の KDoc にある。
@@ -803,7 +804,11 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 ### 8.5 キャッシュ
 
 - **prompt caching（API 側）** —— ルーブリックは固定なので system の最後のブロックに
-  `cache_control` を置く。プレフィックス一致なので**ルーブリックを動的に組み立てない**
+  `cache_control` を置く。プレフィックス一致なので**ルーブリックを動的に組み立てない**。
+  **11-2b の実測（2026-08-24 / `claude-opus-5`）で 4741 トークンが乗った** —— レンダリング順が
+  `tools` → `system` → `messages` なので、**system だけでなく structured outputs のスキーマも
+  同じ prefix に入る**。2 回目以降は `cacheRead` が立ち、**入力側の費用が 84% 減る**
+  （ただし全体では 3 割減 —— **費用の 92% は出力側**）
 - **結果キャッシュ（自前）** —— 送るバイト列の SHA-256 → 提案 JSON。**プロセス内メモリのみ**
   （DB レス既定）。**成立するのは serializer が決定論だから**（制約3。§4 の決定論が効く 2 つ目の場所で、
   1 つ目は 5-4 の ETag）。11-2a で入った

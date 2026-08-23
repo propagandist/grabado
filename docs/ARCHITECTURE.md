@@ -688,10 +688,11 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 ## 8. AI proxy の契約（到達点）
 
 **決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階11-0 にある。**
-実装があるのは **§8.3 の適用側だけ**（段階11-1 で [`../js/io/ai/`](../js/io/ai/) が入った）。
-残る 4 節（エンドポイント・リクエスト形式・env・キャッシュ）は**枠の予約**で、11-2 以降が
-実測どおりに埋める（§7 が 5-0 で予約され 5-1b 以降に埋まったのと同じ形）。**backend にも
-フロントの配線にも、まだ 1 行も無い。**
+
+実装は 2 段階ぶん入っている —— **適用側**（11-1。[`../js/io/ai/`](../js/io/ai/)）と
+**proxy の契約**（11-2a。[`../server/src/main/kotlin/dev/grabado/ai/`](../server/src/main/kotlin/dev/grabado/ai/)）。
+**まだ無いのは上流を実際に叩く部分だけ**で、それが 11-2b —— structured outputs のスキーマ・
+prompt caching・タイムアウト・`effort`・費用の実測が入る。**フロントの配線（11-3 以降）は 0 行。**
 
 **HANDOVER §11 との差分は 3 つ**（URL 名・構造化出力の手段・プライバシー既定）。
 **HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
@@ -711,6 +712,14 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 `js/io.ts` の `check()` に **`case 429`** と `locale` の `http429` を足す（11-3）。
 **`check()` が知らない status は「成功」に倒れる**ので、status を足す段で必ず対にする
 （5-1c / 5-3 / 5-4a で 3 回効いた規律）。
+
+**11-2a はこの規律を意図的に外して 429 を先に足した** —— フロントがこの URL を 1 度も
+呼ばないので、**429 が `check()` に届く経路が存在しない**（5-1b で 400 を足したときと同じ形）。
+到達しない status は無言で成功扱いにならない。配線と同時に広げるのが 11-3。
+
+status の写像は [`ApiExceptionHandler`](../server/src/main/kotlin/dev/grabado/api/ApiExceptionHandler.kt)
+の 1 つの表にある（例外 → status を 2 か所に書かない）。**403 は理由を区別しない** ——
+READONLY / キー未設定 / モデル名未設定 / 実装が無い のどれも「このデプロイでは禁止されている」。
 
 ### 8.2 リクエスト形式（`aiRequestVersion: 1`）
 
@@ -774,10 +783,22 @@ op が何を書き換えるかは次のとおりで、**書き込み先はモデ
 | `ANTHROPIC_API_KEY` | 空（＝ AI 無効） | 各自のコンテナ env（実質 BYOK）。**localStorage には置かない** |
 | `GRABADO_AI_MODEL` | **無し（必須）** | 未設定なら AI 無効。**既定を焼き込まない** —— 書いた瞬間に古くなる。選び方は[モデル一覧](https://platform.claude.com/docs/en/about-claude/models/overview)から引く |
 | `GRABADO_READONLY` | `false` | AI サービスの Bean を**そもそも登録しない**（5-3 と同じ形） |
-| タイムアウト / 上限 / レート制限 / effort | 11-2 で確定 | **費用が自社負担**なので上限はサーバが持つ |
+| `GRABADO_AI_MAX_TABLES` | `100` | 1 リクエストのテーブル数。超えたら **400** |
+| `GRABADO_AI_MAX_REQUEST_BYTES` | `262144`（256 KiB） | body の大きさ。超えたら **400**（**パースの前に見る**） |
+| `GRABADO_AI_RATE_PER_MINUTE` | `10` | 1 分あたりの受付数。超えたら **429** |
+| `GRABADO_AI_MAX_CONCURRENT` | `2` | 同時に上流へ流す数。超えたら **429**（**待たせない**） |
+| `GRABADO_AI_CACHE_ENTRIES` / `GRABADO_AI_CACHE_TTL` | `64` / `1h` | 結果キャッシュ（§8.5） |
+| タイムアウト / `effort` | **11-2b で確定** | 実測が要る 2 つ。上流を叩いてから決める |
 
-`?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」。
-**実装があっても使えないなら false**（5-7a と同じ）。
+**上限の既定値は実測ではなく判断**で、根拠は
+[`AiProperties`](../server/src/main/kotlin/dev/grabado/config/GrabadoProperties.kt) の KDoc にある。
+**費用が自社負担**なので上限はサーバが持ち、クライアントの自己申告を上限にしない。
+
+`?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」**∧ 実装がある**。
+**実装があっても使えないなら false**（5-7a と同じ）で、11-2a の時点では
+[`SuggestionSource`](../server/src/main/kotlin/dev/grabado/ai/SuggestionSource.kt) の実装が
+main に 1 つも無いので**実運用ではまだ常に false** —— 固定応答を返すスタブを本番に置かない
+（置くと「AI が動いているように見えて実は固定」が載る）。
 
 ### 8.5 キャッシュ
 
@@ -785,4 +806,13 @@ op が何を書き換えるかは次のとおりで、**書き込み先はモデ
   `cache_control` を置く。プレフィックス一致なので**ルーブリックを動的に組み立てない**
 - **結果キャッシュ（自前）** —— 送るバイト列の SHA-256 → 提案 JSON。**プロセス内メモリのみ**
   （DB レス既定）。**成立するのは serializer が決定論だから**（制約3。§4 の決定論が効く 2 つ目の場所で、
-  1 つ目は 5-4 の ETag）
+  1 つ目は 5-4 の ETag）。11-2a で入った
+  （[`SuggestionCache`](../server/src/main/kotlin/dev/grabado/ai/SuggestionCache.kt)。LRU ＋ TTL）
+
+結果キャッシュの規則が 2 つ:
+
+- **鍵は生バイトのハッシュで、正規化しない。** 「同じ意味だがバイト列が違う入力」は当たらない
+  —— 正規化規則がフロントの構築器（11-3）とずれた瞬間に**別の設計へ別の提案を返す**ことになり、
+  それは外から見て AI が壊れたのと区別がつかない。**当たらない方に倒す**
+- **キャッシュに当たった呼び出しはレート制限を消費しない。** 費用が発生しない呼び出しを
+  費用の上限で止める理由が無い

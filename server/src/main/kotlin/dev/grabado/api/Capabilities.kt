@@ -16,7 +16,9 @@ package dev.grabado.api
  *
  * @property readonly 保存が 403 になる（段階5-3）
  * @property introspection `?action=import` が使える。**段階5-7 まで常に false**
- * @property ai AI proxy が使える。**§11 まで常に false**
+ * @property ai AI proxy が使える（段階11-2a から実際の状態）。**キー設定済み ∧ モデル設定済み
+ *   ∧ 実装がある ∧ `!READONLY`** —— 11-2a の時点では main に `SuggestionSource` の実装が
+ *   無いので、実運用ではまだ常に false（実装が入るのは 11-2b）
  */
 data class Capabilities(
     val readonly: Boolean,

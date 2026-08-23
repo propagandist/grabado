@@ -1,5 +1,6 @@
 package dev.grabado.api
 
+import dev.grabado.ai.AiReviewService
 import dev.grabado.config.GrabadoProperties
 import dev.grabado.design.DesignName
 import dev.grabado.design.DesignStore
@@ -57,6 +58,11 @@ class DesignController(
      * （`IntrospectionService` の `ConditionalOnProperty`）ので、null なら 403 を返す。
      */
     private val introspection: IntrospectionService? = null,
+    /**
+     * AI proxy（段階11-2a）。**同じ形** —— READONLY のときは Bean ごと存在せず、
+     * 実装（`SuggestionSource`）が無ければ `isConfigured()` が false になる。
+     */
+    private val aiReview: AiReviewService? = null,
 ) {
 
     /** 名前を `\n` 区切りで返す。**末尾にも改行**（実測）。空なら 0 バイト。 */
@@ -137,8 +143,13 @@ class DesignController(
                      * 踏ませない。
                      */
                     introspection = introspection?.isConfigured() == true,
-                    /* AI は §11。それまで嘘をつかない */
-                    ai = false,
+                    /*
+                     * キー設定済み ∧ モデル設定済み ∧ 実装がある（段階11-2a）。READONLY の
+                     * ときは Bean ごと存在しないので、そちらでも false になる。
+                     * **11-2a の時点では main に SuggestionSource の実装が無いので常に false**
+                     * —— 実装が入るのは 11-2b（`SuggestionSource` の KDoc）。
+                     */
+                    ai = aiReview?.isConfigured() == true,
                 ),
             )
 

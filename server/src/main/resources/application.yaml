@@ -30,6 +30,25 @@ grabado:
   introspect:
     sources: {}
 
+  # AI proxy（段階11-2a）。**既定は空＝無効。**
+  #
+  # ★ キーとモデル名が両方そろって初めて有効になる。**モデル名に既定値を置かない** ——
+  #   置けばそれが事実上の焼き込みで、書いた日から古くなる（段階11-0 の決めたこと 7）。
+  #   選び方は docs/ARCHITECTURE.md §8.4 のリンクから引く。
+  #
+  # ★ 上限はサーバが持つ。API の費用が自社負担なので、クライアントの自己申告を上限にしない。
+  #   既定値の根拠は GrabadoProperties の AiProperties に書いてある。
+  #   **タイムアウトと effort はここに無い** —— 実測が要るので上流を実際に叩く 11-2b が決める。
+  ai:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${GRABADO_AI_MODEL:}
+    max-tables: ${GRABADO_AI_MAX_TABLES:100}
+    max-request-bytes: ${GRABADO_AI_MAX_REQUEST_BYTES:262144}
+    rate-per-minute: ${GRABADO_AI_RATE_PER_MINUTE:10}
+    max-concurrent: ${GRABADO_AI_MAX_CONCURRENT:2}
+    cache-entries: ${GRABADO_AI_CACHE_ENTRIES:64}
+    cache-ttl: ${GRABADO_AI_CACHE_TTL:1h}
+
 server:
   tomcat:
     # 日本語の keyword が URL エンコードで往復するのは実測契約（ARCHITECTURE §4.3）。

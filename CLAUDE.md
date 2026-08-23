@@ -55,6 +55,11 @@ GitHub Actions の無料枠 2,000 分/月は **org 全体で共有**。枯らす
 
 `gh api repos/propagandist/.github/contents/docs/ci-strategy.md --jq .content | base64 -d`
 
+**作業の型**（プランを起票で止める／起票の作法／着手前／本文／マージ）は同
+`docs/work-conventions.md`（**軸が違う。CI の有無と関係なく効く**）。
+**値**（既定ブランチ・ブランチ名・コミット規約・ラベル・merge 方式）は**このリポジトリが持つ**
+——下の `## 作業の型` に書く。org 正本には値が 1 つも無い。
+
 ## セキュリティ
 
 このリポジトリは**分類 B**（ブラウザで完結。ビルドして配る）。**出力・依存・配信を変える前に**
@@ -63,3 +68,20 @@ org の基準を読むこと。読むのは **§2 ／ §3 の [B] ／ §4.2〜4.
 `gh api repos/propagandist/.github/contents/docs/security-baseline.md --jq .content | base64 -d`
 
 確かめ方は同 `docs/security-verification.md`（手元／既存ジョブ／週次の 3 層）。
+
+## 作業の型
+
+**規律の正本は org の `docs/work-conventions.md`**（起票で止める／起票の作法／着手前／本文／マージ）:
+
+`gh api repos/propagandist/.github/contents/docs/work-conventions.md --jq .content | base64 -d`
+
+**規約の中身をここへ写さない。** ここが持つのは**このリポジトリの値**だけ:
+
+- **★ 作業は `develop`。GitHub 上の既定ブランチは `main` だが、実体は upstream ＋ house docs で、
+  `develop` が 64 コミット先行している**（**2026-08-23 実測**）。**PR は `develop` へ出す**
+- ブランチ名は `feature/` ＋ 内容（英小文字ケバブ。**issue 番号は入れない**）
+- **コミットの subject は日本語で `段階N-M: 〜` 型**（`CUSTOMIZATIONS.md` の段階番号と対応させる。
+  **2026-08-23 実測**）。org 由来の変更のように段階に属さないものは、その限りではない
+- **merge 方式は squash**（`(#N)` が付く。**2026-08-23 実測**）
+- **ラベルは既定の 9 種だけ。マイルストーンは運用していない。issue はまだ 1 本も無い**
+  （**2026-08-23 実測**）——**決定の記録先は `CUSTOMIZATIONS.md`** で、issue とは別系統（上の `## 迷ったら`）

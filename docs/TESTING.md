@@ -25,9 +25,37 @@ npm run migrate:design -- <ファイル>  # 設計 JSON の移行（§4 段階4-
 backend（`server/`。段階5-1b で入った Kotlin / Spring Boot）は Gradle 側にある。**要 JDK 21。**
 
 ```bash
-cd server && ./gradlew test    # 64 本。Node/Playwright とは独立に回る
+cd server && ./gradlew test    # Node/Playwright とは独立に回る
 cd server && ./gradlew build   # test ＋ bootJar
 ```
+
+**introspection の統合テストは opt-in**（段階5-7a）。`GRABADO_IT_JDBC_URL` が無ければ
+丸ごと skip する ——「たまたま走らなかった」ではなく「意図して走らせていない」ことが
+テスト結果に出る。
+
+```bash
+docker run -d --name grabado-pg -e POSTGRES_PASSWORD=grabado \
+  -e POSTGRES_DB=grabado_survey -p 55432:5432 postgres:18
+docker exec -i grabado-pg psql -U postgres -d grabado_survey \
+  < docs/samples/introspection-sample-schema.sql
+
+cd server && GRABADO_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:55432/grabado_survey \
+  GRABADO_IT_USER=postgres GRABADO_IT_PASSWORD=grabado ./gradlew test
+
+# フィクスチャを採り直す（実 DB の出力が正）
+... GRABADO_IT_WRITE_FIXTURE=1 ./gradlew test --tests '*PostgresCatalogIntegrationTest*'
+```
+
+**なぜ 2 層なのか** —— 純粋なフィクスチャだけで写像を試すと速くて依存も 0 だが、
+**フィクスチャは「PG18 はこう返すはずだ」という信念を符号化したもの**でしかない。
+信念が間違っていればテストは緑のまま本番が壊れる（`ARCHITECTURE.md` §4.6 の 2 不具合が
+まさにその形で 10 年以上残っていた）。**採り直し以外の方法でフィクスチャが生まれない**
+ようにしてあるので、この経路が閉じる。
+
+| テスト | 走る条件 | 見るもの |
+|---|---|---|
+| `IntrospectionMapperTest` | **常に**（CI 込み） | フィクスチャ → 応答モデルの写し方 |
+| `PostgresCatalogIntegrationTest` | `GRABADO_IT_JDBC_URL` があるとき | **フィクスチャが実 DB と一致するか** ＋ SQL そのもの |
 
 `npm test` 系と `./gradlew test` は**互いに依存しない**。フロントのテストは仮想 backend
 （[`../tests/node/harness.ts`](../tests/node/harness.ts)）を使うので、Kotlin を起動しない。

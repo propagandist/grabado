@@ -330,6 +330,15 @@ export async function createHarness(): Promise<NodeHarness> {
             callback(names.map((name) => name + "\n").join(""), 200, {});
             return;
         }
+        if (action === "import") {
+            /*
+             * 段階5-7a。仮想 backend は外部 DB に繋がない（繋げない）ので、
+             * **接続先が 1 つも設定されていないサーバ**として振る舞う —— 404。
+             * 実際の introspection は Kotlin の統合テスト（実 PG18）が見る。
+             */
+            callback("", 404, {});
+            return;
+        }
         if (action === "capabilities") {
             /*
              * 段階5-5。仮想 backend は READONLY を模さない（サーバの起動条件なので）ため、

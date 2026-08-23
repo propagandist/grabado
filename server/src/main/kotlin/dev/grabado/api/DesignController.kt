@@ -3,6 +3,9 @@ package dev.grabado.api
 import dev.grabado.config.GrabadoProperties
 import dev.grabado.design.DesignName
 import dev.grabado.design.DesignStore
+import dev.grabado.design.ReadOnlyException
+import dev.grabado.introspect.IntrospectionModel
+import dev.grabado.introspect.IntrospectionService
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
@@ -49,6 +52,11 @@ import org.springframework.web.bind.annotation.RestController
 class DesignController(
     private val store: DesignStore,
     private val properties: GrabadoProperties,
+    /**
+     * introspection（段階5-7a）。**READONLY のときは Bean ごと存在しない**
+     * （`IntrospectionService` の `ConditionalOnProperty`）ので、null なら 403 を返す。
+     */
+    private val introspection: IntrospectionService? = null,
 ) {
 
     /** 名前を `\n` 区切りで返す。**末尾にも改行**（実測）。空なら 0 バイト。 */
@@ -122,26 +130,54 @@ class DesignController(
             .body(
                 Capabilities(
                     readonly = properties.readonly,
-                    /* 実装が入るのは 5-7（introspection）と §11（AI）。それまで嘘をつかない */
-                    introspection = false,
+                    /*
+                     * 接続先が 1 つも設定されていなければ false（段階5-7a）。READONLY のときは
+                     * Bean ごと存在しないので、そちらでも false になる。
+                     * **実装があっても使えないなら false** —— 押せるボタンを出して 404 を
+                     * 踏ませない。
+                     */
+                    introspection = introspection?.isConfigured() == true,
+                    /* AI は §11。それまで嘘をつかない */
                     ai = false,
                 ),
             )
+
+    /**
+     * 既存 DB を読んで設計にする（段階5-7a）。
+     *
+     * `?action=import&database=<name>` の `<name>` は **env に列挙した接続名**で、
+     * ホスト名はクライアントから渡らない（SSRF を不可能にする）。
+     *
+     * - READONLY → **403**（[IntrospectionService] の Bean が存在しない）
+     * - 表に無い名前 / 接続先が 0 件 → **404**
+     * - 接続や読み取りの失敗 → **503**（`check()` が文言を持つのは 501 / 503 だけ）
+     *
+     * 返すのは**設計 JSON ではない** —— 座標を持たず、型は SQL の生の情報。
+     * 解決はフロントの `TypePalette` が引き受ける（`docs/FORMAT.md` の最終節）。
+     */
+    @GetMapping(params = ["action=import"])
+    fun import(@RequestParam(required = false) database: String?): ResponseEntity<IntrospectionModel> {
+        val service = introspection ?: throw ReadOnlyException()
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(service.read(database))
+    }
 
     /**
      * `params` 条件に当たらなかったリクエスト。
      *
      * - 既知の action に**違う HTTP メソッド**で来た → **405**（PHP は method を見ていなかった
      *   ので、これは強化＝意図した挙動変更）
-     * - `import`・未知の action・action 指定なし → **501**（実測どおり。`php-file` は
-     *   `import` を持たないので今も 501。中身が入るのは 5-7）
+     * - 未知の action・action 指定なし → **501**（実測どおり）
      *
      * `remove` もここに落ちて 501。**作らない**と決めてある（実在せず、フロントに削除 UI も無い）。
      */
     @RequestMapping
     fun fallback(@RequestParam(required = false) action: String?): ResponseEntity<Void> =
         when (action) {
-            "list", "load", "save", "capabilities" -> ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build()
+            "list", "load", "save", "capabilities", "import" ->
+                ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).build()
+
             else -> ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build()
         }
 }

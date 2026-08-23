@@ -3,6 +3,8 @@ package dev.grabado.api
 import dev.grabado.design.InvalidDesignNameException
 import dev.grabado.design.PreconditionFailedException
 import dev.grabado.design.ReadOnlyException
+import dev.grabado.introspect.IntrospectionFailedException
+import dev.grabado.introspect.UnknownSourceException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -48,4 +50,27 @@ class ApiExceptionHandler {
     @ExceptionHandler(PreconditionFailedException::class)
     fun preconditionFailed(): ResponseEntity<Void> =
         ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).build()
+
+    /**
+     * `?action=import&database=<name>` の名前が env の表に無い（段階5-7a）。
+     *
+     * **404**（「そのデータベースはここに無い」）。接続先が 1 つも設定されていない場合も同じ ——
+     * 「設定していない」と「その名前が無い」を外から区別させない。
+     */
+    @ExceptionHandler(UnknownSourceException::class)
+    fun unknownSource(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.NOT_FOUND).build()
+
+    /**
+     * introspection の接続や読み取りに失敗（段階5-7a）。
+     *
+     * **503**。意味論では 502 が近いが、`js/io.ts` の `check()` が文言を持つのは 501 / 503 だけで
+     * **502 は素通しして無反応になる**。現行 PHP の実測も 503 だった。
+     *
+     * ★ **例外の中身を body に出さない。** JDBC の例外メッセージには URL や接続情報が入りうる
+     * （org security-baseline §4.5）。
+     */
+    @ExceptionHandler(IntrospectionFailedException::class)
+    fun introspectionFailed(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build()
 }

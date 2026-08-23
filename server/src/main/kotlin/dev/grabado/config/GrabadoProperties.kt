@@ -24,4 +24,26 @@ import java.nio.file.Path
 data class GrabadoProperties(
     val schemaDir: Path,
     val readonly: Boolean = false,
+    val introspect: IntrospectProperties = IntrospectProperties(),
+)
+
+/**
+ * introspection の接続先（段階5-7a）。**env に列挙したものしか使えない。**
+ *
+ * ```yaml
+ * grabado:
+ *   introspect:
+ *     sources:
+ *       shop: { url: "jdbc:postgresql://db:5432/app", user: ro, password: "…", schema: public }
+ * ```
+ *
+ * `?action=import&database=shop` の `shop` が選ぶのは**このキーだけ**で、
+ * **ホスト名はクライアントから 1 バイトも渡らない** —— SSRF が「対策」ではなく
+ * **不可能**になる（[dev.grabado.introspect.IntrospectSource] の KDoc）。
+ *
+ * 空（既定）なら introspection は無効。`capabilities` の `introspection` が false になり、
+ * フロントはボタンを隠す。
+ */
+data class IntrospectProperties(
+    val sources: Map<String, dev.grabado.introspect.IntrospectSource> = emptyMap(),
 )

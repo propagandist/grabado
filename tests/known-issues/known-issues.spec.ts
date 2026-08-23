@@ -81,24 +81,15 @@ test.afterAll(async () => {
  * アサートは tests/browser/serialize.spec.ts に移してある（README の運用 3）。
  */
 
-test("#9 introspection サンプル（PG18 実出力）が well-formed でなく index も出ない", async () => {
-    const sample = readFileSync(
-        join(REPO_ROOT, "docs", "samples", "introspection-postgresql.xml"),
-        "utf8",
-    );
-
-    const parseFailed = await page.evaluate((source) => {
-        const doc = new DOMParser().parseFromString(source, "text/xml");
-        return doc.getElementsByTagName("parsererror").length > 0;
-    }, sample);
-
-    // docs/ARCHITECTURE.md §4.6 / CUSTOMIZATIONS.md の実測記録どおり。
-    // 余分な </key> でパースが落ち、PG18 相手の import はフロントでも読み込めない。
-    expect(parseFailed).toBe(true);
-    // index 収集ループが break するため、実在する index が 1 つも出ていない
-    expect(sample).not.toContain("idx_articles_author_id");
-    expect(sample).not.toContain("idx_articles_published_on_title");
-});
+/*
+ * #9（introspection の XML が well-formed でなく index も出ない）は §5 段階5-7 で消えた。
+ * introspection が PHP から Kotlin に移り、**XML そのものが無くなった**（JSON を返す）。
+ * 2 つの原因はどちらも構造的に起こらない形に置き換わっている（README の運用3）——
+ * CHECK は allowlist で引き、index は NOT EXISTS (pg_constraint.conindid) で除外する。
+ * 「直った後の挙動」は server/.../IntrospectionMapperTest と
+ * tests/node/introspect-parser.test.ts、実 PG18 に対しては
+ * PostgresCatalogIntegrationTest が持つ。
+ */
 
 /*
  * #11（既定値を quote で囲むとき値の中の ' がエスケープされない）は §6 段階6-5b で

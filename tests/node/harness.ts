@@ -96,6 +96,12 @@ export interface NodeHarness {
     clearServerFiles(): void;
     /** 次に load が返す HTTP ステータスを 1 回だけ差し替える（500 系の経路用） */
     failNextLoad(status: number): void;
+    /**
+     * introspection の応答を差し込む（段階5-7b）。`null` に戻すと 404（接続先が無いサーバ）。
+     * 実際のカタログ読み取りは Kotlin の統合テスト（実 PG18）が見るので、ここで試すのは
+     * **フロント側の往復**（parse -> 型解決 -> 適用 -> 並べ直し）だけ。
+     */
+    setIntrospection(json: string | null): void;
     /** confirm の答えを固定する（jsdom の confirm は常に false を返すため。段階4-6） */
     setConfirm(answer: boolean): void;
     /** confirm に渡された文言を取り出して空にする */
@@ -235,6 +241,8 @@ export async function createHarness(): Promise<NodeHarness> {
      */
     const serverFiles = new Map<string, string>();
     let nextLoadStatus: number | null = null;
+    /** introspection の応答（段階5-7b）。null なら「接続先が無い」＝ 404 */
+    let introspectionResponse: string | null = null;
 
     /**
      * Kotlin 実装（`server/src/main/kotlin/dev/grabado/design/ETags.kt`）と**同じ計算**。
@@ -332,11 +340,18 @@ export async function createHarness(): Promise<NodeHarness> {
         }
         if (action === "import") {
             /*
-             * 段階5-7a。仮想 backend は外部 DB に繋がない（繋げない）ので、
+             * 段階5-7a/b。仮想 backend は外部 DB に繋がない（繋げない）ので、既定では
              * **接続先が 1 つも設定されていないサーバ**として振る舞う —— 404。
-             * 実際の introspection は Kotlin の統合テスト（実 PG18）が見る。
+             * 実際のカタログ読み取りは Kotlin の統合テスト（実 PG18）が見る。
+             *
+             * `setIntrospection()` で応答を差し込めば、フロント側の往復
+             * （parse -> 型解決 -> 適用 -> 並べ直し）を試せる。
              */
-            callback("", 404, {});
+            if (introspectionResponse === null) {
+                callback("", 404, {});
+                return;
+            }
+            callback(introspectionResponse, 200, { "Content-Type": "application/json" });
             return;
         }
         if (action === "capabilities") {
@@ -505,6 +520,9 @@ export async function createHarness(): Promise<NodeHarness> {
         },
         failNextLoad(status: number): void {
             nextLoadStatus = status;
+        },
+        setIntrospection(json: string | null): void {
+            introspectionResponse = json;
         },
         setConfirm(answer: boolean): void {
             confirmAnswer = answer;

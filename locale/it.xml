@@ -85,6 +85,7 @@
     <string name="serverloadprompt">Inserisci la parola chiave con cui è stato salvato il progetto:</string>
     <string name="serversaveprompt">Inserisci la parola chiave con cui salvare il progetto:</string>
     <string name="serverimportprompt">Inserisci il nome del database da importare</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Risposta del server</string>
     <string name="http201">Salvato</string>
     <string name="http400">Bad Request</string>

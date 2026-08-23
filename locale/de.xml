@@ -92,6 +92,7 @@
     <string name="serverloadprompt">Geben Sie das Stichwort ihres Diagramms ein, unter dem es gespeichert wurde:</string>
     <string name="serversaveprompt">Geben Sie das Stichwort ihres Diagramms ein, unter dem es gespeichert werden soll:</string>
     <string name="serverimportprompt">Geben Sie den Namen der zu importierenden Datenbank ein:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Server Antwort</string>
     <string name="http201">gespeichert</string>
     <string name="http400">Bad Request</string>

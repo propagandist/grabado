@@ -85,6 +85,7 @@
     <string name="serverloadprompt">Wpisz słowo kluczowe pod którym twój projekt został zapisany:</string>
     <string name="serversaveprompt">Wpisz słowo kluczowe pod którym twój projekt ma zostać zapisany:</string>
     <string name="serverimportprompt">Wpisz nazwę bazy danych do zaimportowania:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Odpowiedź serwera</string>
     <string name="http201">Zapisano</string>
     <string name="http400">Bad Request</string>

@@ -92,6 +92,7 @@
     <string name="serverloadprompt">Enter keyword under which your design was saved:</string>
     <string name="serversaveprompt">Enter keyword under which your design will be saved:</string>
     <string name="serverimportprompt">Enter name of database to be imported:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Server response</string>
     <string name="http201">Saved</string>
     <string name="http400">Bad Request</string>

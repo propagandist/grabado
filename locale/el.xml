@@ -83,6 +83,7 @@
     <string name="serverloadprompt">Πληκτρολογήστε το τίτλο του αποθηκευμένου σχεδιαγράμματος:</string>
     <string name="serversaveprompt">Πληκτρολογήστε το τίτλο για την αποθήκευση του σχεδιαγράμματος:</string>
     <string name="serverimportprompt">Δώστς όνομα βάσης δεδομένων για εισαγωγή:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Απάντηση διακομιστή</string>
     <string name="http201">Αποθηκεύθηκε</string>
     <string name="http400">Bad Request</string>

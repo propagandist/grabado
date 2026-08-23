@@ -88,6 +88,7 @@
     <string name="serverloadprompt">Ввести ключове слово, під яким був збережений Ваш дизайн:</string>
     <string name="serversaveprompt">Ввести ключове слово, під яким Ваш дизайн буде збережений:</string>
     <string name="serverimportprompt">Ввести назву БД, яка імпортуватиметься:</string>
+    <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Відповідь від сервера</string>
     <string name="http201">Збережено</string>
     <string name="http400">Bad Request</string>

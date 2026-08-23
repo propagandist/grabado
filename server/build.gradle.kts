@@ -62,6 +62,10 @@ dependencies {
     // このドライバ 1 本で両方に繋がる —— **ドライバを 2 本にしない**（イメージサイズと
     // CVE 面積が増えるだけ）。
     implementation(libs.mysql)
+    // H2（段階5-8b）。**組み込みで動く**ので統合テストが Docker 無しで常に走る。
+    // ★ H2 Console（Web UI）は使わない —— 過去の RCE（CVE-2021-42392 など）はすべて
+    //   Console 経由で、JDBC ドライバとして使う限り到達しない。
+    implementation(libs.h2)
 
     // JUnit 5 + MockMvc + AssertJ。モックライブラリは足さない
     // （store は @TempDir で実 FS を使う。in-memory の double はテストを空虚にする）。

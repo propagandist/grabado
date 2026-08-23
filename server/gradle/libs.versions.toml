@@ -25,3 +25,4 @@ spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-start
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 postgresql = { module = "org.postgresql:postgresql" }
 mysql = { module = "com.mysql:mysql-connector-j" }
+h2 = { module = "com.h2database:h2" }

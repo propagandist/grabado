@@ -31,7 +31,12 @@ export default defineConfig({
         // backend を起こしていなければ ECONNREFUSED になるだけで、これは
         // 段階5-1b 以前（PHP が実行されず 404 になっていた）と同じ体験。既存テストは
         // /backend を叩かないので影響もゼロ。
-        proxy: { "/backend": `http://127.0.0.1:${SERVER_PORT}` },
+        proxy: {
+            "/backend": {
+                target: `http://127.0.0.1:${SERVER_PORT}`,
+                changeOrigin: true,
+            },
+        },
     },
     preview: { host: "127.0.0.1", port: PREVIEW_PORT, strictPort: true },
     build: {

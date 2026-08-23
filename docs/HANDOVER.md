@@ -104,6 +104,12 @@ ENTRYPOINT ["java","-jar","app.jar"]
 
 ## 5. backend（Kotlin / Spring Boot）— ファイル I/O 中心
 
+> **実装済み（2026-08-23）。** 段階5-0 〜 5-9 で完了し、実体は [`../server/`](../server/)。
+> **契約の正は [`ARCHITECTURE.md`](ARCHITECTURE.md) §7**（機械可読な表は
+> [`../tests/contract/backend-cases.json`](../tests/contract/backend-cases.json)）で、
+> 決定と根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階5-0 以降にある。
+> 以下は着手時の要件で、**到達点との差分は §7 の表**を見ること。
+
 ### 5.1 保存/読込/一覧（PG CRUD → ファイル I/O）
 - `/data/schema` を正本ディレクトリとして扱う。
   - `list` → `schema/*.json` 列挙。
@@ -115,6 +121,11 @@ ENTRYPOINT ["java","-jar","app.jar"]
 ### 5.2 introspection（`import`）
 - 既存 DB を読んでスキーマ化する機能は据え置き。`information_schema` を読む Kotlin 実装で **JSON を返す**（現行 XML から置換）。外部 DB への到達性が要る唯一の経路。
 - `READONLY=true`（Railway ビューア）では無効化。
+
+> **実装済み。対応は 4 本**（postgresql / mysql / mariadb / h2）。段階5-8b で閉じた ——
+> mssql / oracle は JDBC ドライバのライセンス確認が要り、sqlite はサーバ接続の概念が無い。
+> **接続先は env に列挙した名前だけ**が使える（ホスト名はクライアントから渡らないので
+> SSRF が不可能）。§4.6 の 2 不具合は**再現しない**（構造的に起こらない形にしてある）。
 
 ---
 

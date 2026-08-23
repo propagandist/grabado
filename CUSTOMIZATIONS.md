@@ -7198,6 +7198,115 @@ golden 114 本は無差分（**セレクタを消しても golden は動かな�
 
 ---
 
+### 2026-08-23 HANDOVER §5「backend」段階5-6 —— introspection の変換層（純関数だけ）
+
+**introspection JSON を設計モデルへ写す純関数を先に置いた。UI にも backend にも配線しない。**
+`serverimport` は今も XML を受けており、JSON 化は 5-7（Kotlin 実装と同じ PR）。
+
+4-2（形式側を先に足して安全網 → 4-3 で UI）と同じ形。おかげで**既存 442 本は 1 本も動かない**。
+
+#### 決めたこと 1: introspection JSON は**設計 JSON ではない**（形式を分けた）
+
+| | 設計 JSON | introspection JSON |
+|---|---|---|
+| 座標 | `x` / `y` は**必須**（欠けると parser が throw） | **持たない** |
+| 型 | パレットの**安定 id** | **SQL の生の情報** |
+| `db` | 実行中パレットと**違えば throw** | `dialect` を情報として持つだけ |
+
+設計 JSON を返す形にすると **backend が 0 を詰めてフロントが直後に `alignTables()` で
+上書きする**無意味な往復になり、型 id を返すには **backend がパレット XML を読む**ことに
+なる（＝現行 PHP の `<datatypes>` 全文連結と同じ構造）。
+
+**解決はフロントが引き受ける。** `db/postgresql/datatypes.xml` の冒頭が
+「`aka` に入れる基準の 2 番目は **introspection の実出力**（`TIMESTAMP WITH TIME ZONE`）」と
+明記しているとおり、**パレットはこの入力を受けるように作られている** ——
+`tests/node/type-resolution.test.ts` が 8 プロファイル全候補名の全数掃きで守っているのも
+同じ経路。Kotlin 側に写像を作らないのはこのため。
+
+#### 決めたこと 2: 解決できない型で **throw しない**
+
+段階6-8d で `indexOfTypeName()` は strict 一本になり、一致しなければ **-1**。
+PG の `text[]` は `data_type = ARRAY`、enum は `USER-DEFINED` で、**どちらもパレットに無い**。
+素直に throw すると **1 列のせいで import が全滅する**。
+
+解決は 3 段（上ほど正確）:
+
+1. `sqlType` をパレットの `sql` / `aka` に当てる
+2. **`ARRAY` / `USER-DEFINED` の逃げ道** —— `data_type` が実際の型を隠しているので、
+   要素型（`text[]` の `text`）や `udtName` で引き直す。**配列であることは落ちるが型は保たれる**
+3. 落とし先（`fallbackIndex`。サイズを取らない文字列型）へ落とす
+
+落ちた分は `TypeLoss`（6-10a の語彙を再利用）で返す。**黙って落とさない**のが要点で、
+6-9d / 6-9e の ORM 出力・6-10a の変換層と同じ流儀。
+
+#### 決めたこと 3: **CHECK を最初から読まない**
+
+`toKeys()` は `PRIMARY` / `UNIQUE` / `INDEX` の **allowlist**。
+
+これが「PG18 が NOT NULL を `table_constraints` に CHECK として出す」問題
+（`ARCHITECTURE.md` §4.6-1）を**構造的に不可能**にしている —— 現行 PHP は `_not_null`
+サフィックスの **denylist** で除外しようとして `</key>` を余分に出し、**XML が
+well-formed でなくなった**。**denylist は必ず漏れる。** 設計モデル（`KeyModel.type`）に
+CHECK の概念が無い以上、最初から読まないのが正しい。
+
+fixture に `users_id_not_null` という CHECK を入れて、写らないことをテストで固定した。
+
+#### 現行 PHP が落としていた情報を拾った
+
+| 現行 | 5-6 |
+|---|---|
+| `numeric(12,2)` → `NUMERIC`（精度・スケール落ち） | `12,2` が `size` に入る |
+| `text[]` → `ARRAY`（要素型落ち） | 要素型 `text` で引き直し、`kind-widened` として残す |
+| `autoincrement` は常に 0 | **今も写さない**（下記） |
+
+**自動採番は写さない。** `information_schema` の identity / serial は方言ごとに表れ方が違い
+（PG は `column_default` の nextval、MySQL は `extra`）、現行の XML 経路も常に 0 だった。
+拾うなら **backend 側で方言ごとに判定してから渡す** —— 5-7 以降の判断として送る。
+
+#### fixture の置き場を宣言した
+
+`tests/fixtures/introspection/postgresql.json` を足したら
+`fixture-set.test.ts` の「fixture のディレクトリは `db/` のプロファイルと 1 対 1」が落ちた
+（**撤去した DB の残骸を捕まえる**検査で、正しく機能した）。
+
+除外を暗黙にせず、`NON_PROFILE_FIXTURE_DIRS` として**明示的に宣言**した ——
+5-1c で契約表に `virtual: false` を宣言したのと同じ流儀で、「知らないディレクトリが増えても
+気づかない」状態を作らない。
+
+fixture は**手で書いた形**で、実 PG18 から採ったものではない（実採取は 5-7 の統合テストの
+仕事）。ここで見たいのは「パレットへの写し方」であって「PG がどう返すか」ではない。
+
+#### 検証
+
+| | 5-5 | 5-6 |
+|---|---|---|
+| `npm test` | 442 passed | **463 passed** |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 2 passed | 2 passed |
+| `npm run test:dist` | 3 passed | 3 passed |
+| `npm run typecheck` | 緑 | 緑 |
+| `cd server && ./gradlew test` | 103 passed | 103 passed（触っていない） |
+
+golden 114 本は無差分。**既存 442 本は 1 本も動いていない**（463 − 21 = 442）——
+UI に配線していないので当然だが、それが「安全網を先に置いた」ことの証明になる。
+
+#### 次段階への入力
+
+- **5-7: Kotlin introspection（PostgreSQL）と `serverimport` の JSON 化。**
+  JDBC ＋ env の名前付きソース表（allowlist）、PG18 の 2 不具合を再現しない、
+  型情報を落とさない（`udt_name` / `numeric_precision` / `numeric_scale`）、XML 経路の撤去
+- **★ fixture を手で書き始めない。** 実 PG18 から採る（`ARCHITECTURE.md` §4.1 に
+  `docker run … postgres:18` のレシピがある）。手で書くと §4.6 と同じ罠に自分で落ちる ——
+  「PG18 はこう返すはずだ」という信念を符号化したフィクスチャは、信念が間違っていても緑になる。
+  **本段階の fixture は「写し方」を見るためのもので、実採取の代わりにはならない**
+- `capabilities` の `introspection` を true にする（接続先が 1 つも設定されていなければ false）。
+  フロントは `applyCapabilities()` に分岐を 1 つ足して `serverimport` ボタンを隠す
+- **`tests/known-issues/` の #9**（PG18 の実出力が well-formed でなく index も出ない）は
+  5-7 で**裏返る** —— `tests/known-issues/README.md` の運用3 に従い、
+  「introspect → 設計 → DDL が入力スキーマを再現する」という主張へ書き換える
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

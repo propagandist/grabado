@@ -5,6 +5,7 @@ import {
     DB_PROFILES,
     FIXTURES,
     FIXTURE_DIR,
+    NON_PROFILE_FIXTURE_DIRS,
     REPO_ROOT,
     fixtureDir,
     readFixture,
@@ -51,14 +52,20 @@ describe("fixture の母集団（DB × 名前）", () => {
         expect(strays).toEqual([]);
     });
 
-    /* db/ に無いプロファイルの fixture は誰も読まない（撤去した DB の残骸を捕まえる） */
-    test("fixture のディレクトリは db/ のプロファイルと 1 対 1", () => {
+    /*
+     * db/ に無いプロファイルの fixture は誰も読まない（撤去した DB の残骸を捕まえる）。
+     *
+     * DB プロファイル以外の fixture（段階5-6 の introspection）は
+     * NON_PROFILE_FIXTURE_DIRS に**明示的に宣言**する —— 除外を暗黙にすると
+     * 「知らないディレクトリが増えても気づかない」状態になる。
+     */
+    test("fixture のディレクトリは db/ のプロファイル ＋ 宣言済みの非プロファイルだけ", () => {
         const dirs = readdirSync(FIXTURE_DIR, { withFileTypes: true })
             .filter((e) => e.isDirectory())
             .map((e) => e.name)
             .sort();
 
-        expect(dirs).toEqual([...DB_PROFILES].sort());
+        expect(dirs).toEqual([...DB_PROFILES, ...NON_PROFILE_FIXTURE_DIRS].sort());
     });
 });
 

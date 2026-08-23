@@ -1,0 +1,153 @@
+{
+  "_comment": [
+    "introspection の入力 fixture（段階5-6）。backend が ?action=import で返す形。",
+    "",
+    "★ 配列型（text[] -> data_type=ARRAY）と enum（USER-DEFINED）を必ず入れてある。",
+    "  どちらも PG palette に存在せず indexOfTypeName が -1 を返すので、落とし先が",
+    "  無いと import ごと throw で全滅する（段階5-0 の申し送り）。",
+    "",
+    "★ numeric(12,2) と varchar(64) は「現行 PHP が落としていた情報」の再現。",
+    "  ARCHITECTURE §4.5 が精度・スケール落ちと要素型落ちを既知の欠落として記録している。",
+    "",
+    "実 PG18 から採ったものではなく手で書いた形（実採取は 5-7 の統合テストの仕事）。",
+    "ここで見たいのは『パレットへの写し方』であって『PG がどう返すか』ではない。"
+  ],
+  "introspectionVersion": 1,
+  "source": "shop",
+  "dialect": "postgresql",
+  "schema": "public",
+  "tables": [
+    {
+      "name": "users",
+      "comment": "ユーザー",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "udtName": "uuid",
+          "nullable": false,
+          "default": "uuidv7()",
+          "comment": null
+        },
+        {
+          "name": "email",
+          "sqlType": "character varying",
+          "udtName": "varchar",
+          "characterMaximumLength": 255,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "profile",
+          "sqlType": "jsonb",
+          "udtName": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
+        },
+        {
+          "name": "tags",
+          "sqlType": "ARRAY",
+          "udtName": "_text",
+          "arrayElementType": "text",
+          "nullable": true,
+          "default": null,
+          "comment": "配列。data_type は ARRAY で、要素型は udt_name にしか無い"
+        },
+        {
+          "name": "status",
+          "sqlType": "USER-DEFINED",
+          "udtName": "user_status",
+          "nullable": false,
+          "default": "'active'::user_status",
+          "comment": "enum。パレットに存在しないので既定型へ落ちる"
+        },
+        {
+          "name": "created_at",
+          "sqlType": "timestamp with time zone",
+          "udtName": "timestamptz",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        { "type": "PRIMARY", "name": "users_pkey", "columns": ["id"] },
+        { "type": "UNIQUE", "name": "users_email_key", "columns": ["email"] },
+        { "type": "CHECK", "name": "users_id_not_null", "columns": ["id"] }
+      ]
+    },
+    {
+      "name": "articles",
+      "comment": "記事",
+      "columns": [
+        {
+          "name": "id",
+          "sqlType": "uuid",
+          "udtName": "uuid",
+          "nullable": false,
+          "default": "uuidv7()"
+        },
+        {
+          "name": "author_id",
+          "sqlType": "uuid",
+          "udtName": "uuid",
+          "nullable": false,
+          "default": null,
+          "comment": "著者",
+          "references": [{ "table": "users", "column": "id" }]
+        },
+        {
+          "name": "price",
+          "sqlType": "numeric",
+          "udtName": "numeric",
+          "numericPrecision": 12,
+          "numericScale": 2,
+          "nullable": true,
+          "default": null,
+          "comment": "現行 PHP は精度もスケールも落として NUMERIC とだけ書いていた"
+        },
+        {
+          "name": "view_count",
+          "sqlType": "integer",
+          "udtName": "int4",
+          "numericPrecision": 32,
+          "numericScale": 0,
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "body",
+          "sqlType": "text",
+          "udtName": "text",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "keys": [
+        { "type": "PRIMARY", "name": "articles_pkey", "columns": ["id"] },
+        { "type": "INDEX", "name": "idx_articles_author_id", "columns": ["author_id"] }
+      ]
+    },
+    {
+      "name": "article_tags",
+      "comment": null,
+      "columns": [
+        {
+          "name": "article_id",
+          "sqlType": "uuid",
+          "udtName": "uuid",
+          "nullable": false,
+          "references": [{ "table": "articles", "column": "id" }]
+        },
+        {
+          "name": "tag",
+          "sqlType": "text",
+          "udtName": "text",
+          "nullable": false
+        }
+      ],
+      "keys": [
+        { "type": "PRIMARY", "name": "article_tags_pkey", "columns": ["article_id", "tag"] }
+      ]
+    }
+  ]
+}

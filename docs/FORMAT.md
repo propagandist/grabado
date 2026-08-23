@@ -494,7 +494,33 @@ XML 経由（`toXML` → `fromXML`）と JSON 経由（`toJson` → `fromJson`�
 ライブツリー＋DOM の状態スナップショットがバイト一致することを 7 fixture すべてで確認している。
 
 形式の外側 2 つは別のテストが見る。判別（`{` / `<` / 空 / それ以外）は
-[`../tests/node/detect.test.ts`](../tests/node/detect.test.ts)、外部変更検知は
-[`../tests/node/conflict.test.ts`](../tests/node/conflict.test.ts)（判定の純関数）と
+[`../tests/node/detect.test.ts`](../tests/node/detect.test.ts)、条件付き更新は
+[`../tests/node/conflict.test.ts`](../tests/node/conflict.test.ts)（規則の純関数）と
 [`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts)（仮想 backend を相手に
-プリフライト → confirm → save の往復を通す）。
+save → 412 → confirm → 再送の往復を通す）。
+
+---
+
+## introspection JSON は**この形式ではない**（§5 段階5-6）
+
+backend が `?action=import` で返すのは設計 JSON **ではなく**、別系列の形式
+（`introspectionVersion`）。正は [`../js/io/introspect-model.ts`](../js/io/introspect-model.ts) の
+型宣言で、写し方は [`../js/io/introspect-parser.ts`](../js/io/introspect-parser.ts)。
+
+分けた理由は 3 つ、どれも**設計 JSON を返すと壊れる**というもの:
+
+| | 設計 JSON | introspection JSON |
+|---|---|---|
+| 座標 | `x` / `y` は**必須**（欠けると parser が throw） | **持たない** —— `information_schema` に無く、`alignTables()` がブラウザ実測の幅で並べ直す |
+| 型 | パレットの**安定 id** | **SQL の生の情報**（`sqlType` / `udtName` / 精度 / スケール / 長さ / 配列の要素型） |
+| `db` | 実行中パレットと**違えば throw** | `dialect` を**情報として**持つだけ（照合しない） |
+
+型を id で持たせると **backend がパレット XML を読む**ことになり、それは現行 PHP が
+`<datatypes>` を全文連結していたのと同じ構造 —— backend と frontend がパレットを二重に持つ。
+**解決はフロントの `TypePalette.indexOfTypeName()` が引き受ける**（`db/postgresql/datatypes.xml`
+の冒頭が「`aka` に入れる基準の 2 番目は introspection の実出力」と明記しているとおり、
+パレットはこの入力を受けるように作られている）。
+
+解決できない型（PG の `ARRAY` / `USER-DEFINED`）は**既定型に落とし、`TypeLoss` で伝える** ——
+**1 列のせいで import が全滅しない**ことが要件（段階6-8d で `indexOfTypeName` は strict 一本に
+なっており、素直に throw すると配列列 1 本でテーブル全体が入らなくなる）。

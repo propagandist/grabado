@@ -24,12 +24,17 @@
  * 読み込みが JSON と XML の両方なのは変わらない。introspection（serverimport）も
  * XML のままで、こちらは §5.2。
  *
- * ## 段階4-6（外部変更検知）
+ * ## 段階4-6（外部変更検知）→ 段階5-4b（条件付き更新）
  *
- * **server への保存は 2 往復になる** —— serversave() が投げるのはまず load（プリフライト）で、
- * 応答を this.baseline（自分が最後に観測したバイト列）と突き合わせてから sendSave() が
- * 本番の save を投げる。判定そのものは js/io/conflict.ts の純粋関数で、ここが持つのは
- * 台帳（baseline）と UI（confirm）だけ。理由と TOCTOU の限界は conflict.ts の冒頭。
+ * 4-6 では **server への保存が 2 往復**だった —— serversave() がまず load（プリフライト）を
+ * 投げ、応答を this.baseline（最後に観測したバイト列）と突き合わせてから本番の save を出す。
+ * **TOCTOU の窓が残っていた**（プリフライトと save の間に他者が書けば、そちらが負ける）。
+ *
+ * **5-4b で 1 往復になった。** backend が ETag を返すようになったので、baseline は
+ * バイト列ではなく ETag を持ち、save は条件ヘッダ（`If-Match` / `If-None-Match: *`）を
+ * 載せて 1 回で出す。衝突していればサーバが **412** を返し、そこで初めて confirm を出す
+ * ——**判定の主体がクライアントからサーバへ移り、窓が閉じた**。
+ * ここが持つのは台帳（baseline）と UI（confirm）だけで、規則は js/io/conflict.ts の純粋関数。
  *
  * 対象は **server 経路だけ**。localStorage / textarea / クリップボード / ファイルは
  * 「app 外で変わる正本」ではないので触らない（introspection も同じ）。
@@ -40,7 +45,13 @@ import { CONFIG } from "./config.ts";
 import { ORM_LABELS, ORM_TARGETS } from "./io/orm/generate.ts";
 import { _ } from "./globals.ts";
 import { detectDesignFormat } from "./io/detect.ts";
-import { verdictForSave, type Baseline } from "./io/conflict.ts";
+import {
+    etagFromHeaders,
+    preconditionFor,
+    verdictAfterConflict,
+    type Baseline,
+    type Precondition,
+} from "./io/conflict.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
 
@@ -107,15 +118,17 @@ export class IO {
     /** serverload が控える名前。loadresponse が setTitle に渡す */
     declare name: string;
     /**
-     * 今の編集セッションの派生元（段階4-6）。server から最後に観測したバイト列で、
-     * 保存前のプリフライトはこれと現物を比べる。まだ一度も load / save していなければ null。
+     * 今の編集セッションの派生元（段階4-6 → 5-4b で ETag へ）。server から最後に観測した版で、
+     * 保存はこれを `If-Match` に載せる。まだ一度も load / save していなければ null。
      */
     declare baseline: Baseline | null;
     /**
-     * 発行中の save が成功したら baseline になる内容（段階4-6）。応答を待つ間だけ埋まる。
-     * saveresponse は「何を書いたか」を知らないので、ここで橋渡しする。
+     * 発行中の save の内容（段階5-4b）。応答を待つ間だけ埋まる。
+     *
+     * 412 を受けたら**同じ内容を無条件で再送する**ので、名前と本文をここで橋渡しする
+     * （saveresponse は「何を書こうとしたか」を知らない）。
      */
-    declare pendingBaseline: Baseline | null;
+    declare pendingSave: { file: string; name: string; json: string } | null;
     declare dom: IoDom;
 
     constructor(owner: Designer) {
@@ -123,7 +136,7 @@ export class IO {
         this._name = ""; /* last used name with server load/save */
         this.lastUsedName = ""; /* last used name with local storage load/save */
         this.baseline = null;
-        this.pendingBaseline = null;
+        this.pendingSave = null;
         /* 型は構築完了後の状態（IoDom）。この行から下の 2 つのループが残りを埋める */
         this.dom = {
             container: OZ.$("io"),
@@ -704,73 +717,25 @@ export class IO {
             return;
         }
         this._name = name;
-        /* const なのは、下のクロージャで string に確定させたままにするため */
         const json = this.toJsonOrAlert();
         if (json === null) {
             return;
         }
-        var bp = this.owner.getOption("xhrpath");
-        var url =
-            bp +
-            "backend/" +
-            this.dom.backend.value +
-            "/?action=load&keyword=" +
-            encodeURIComponent(jsonKeyword(name));
-        var h = this.owner.getXhrHeaders();
-        var self = this;
-        this.owner.window.showThrobber();
-        /* 応答はテキストで受ける（serverload と同じ理由。段階4-3b） */
-        OZ.Request(
-            url,
-            function (data: unknown, code: number) {
-                self.preflightresponse(name!, json, data, code);
-            },
-            { headers: h }
-        );
+        /*
+         * 段階5-4b: **プリフライトの load は投げない。** 派生元の有無から条件ヘッダを決めて、
+         * 保存を 1 往復で出す。衝突していればサーバが 412 を返し、saveresponse() が
+         * confirm に流す（＝衝突したときだけ 2 往復）。
+         */
+        this.sendSave(name, json, preconditionFor(this.baseline, jsonKeyword(name)));
     }
 
     /**
-     * プリフライト（save 前の load）の応答（段階4-6）。
+     * 本番の save。URL / Content-type / body は段階4-3b から 1 バイトも変わらない。
      *
-     * 404 を check() に通さないのは、**プリフライトの 404 が正常系**（＝まだ無いファイルへの
-     * 新規保存）だから。通すと textarea に httpresponse の文言が出て、保存に失敗したように
-     * 見える。逆に 500 / 501 / 503 は check() に通して**中止**する —— backend が壊れている
-     * ときに「読めなかったので上書きします」と進むのは、本機能が防ぎたいことそのもの。
+     * @param precondition 条件ヘッダ（段階5-4b）。412 を受けた後の再送では
+     *   `{ ifMatch: "*" }`（存在すれば無条件で上書き）を渡す。
      */
-    preflightresponse(
-        name: string,
-        json: string,
-        data: unknown,
-        code: number
-    ): void {
-        this.owner.window.hideThrobber();
-        if (code !== 404 && !this.check(code)) {
-            return;
-        }
-
-        var file = jsonKeyword(name);
-        var verdict = verdictForSave(this.baseline, file, {
-            status: code,
-            text: typeof data === "string" ? data : null,
-        });
-        switch (verdict) {
-            case "conflict":
-                if (!confirm(file + "\n\n" + _("saveconflict"))) {
-                    return;
-                }
-                break;
-
-            case "exists":
-                if (!confirm(file + "\n\n" + _("saveexists"))) {
-                    return;
-                }
-                break;
-        }
-        this.sendSave(name, json);
-    }
-
-    /** 本番の save。URL / Content-type / body は段階4-3b から 1 バイトも変わらない */
-    sendSave(name: string, json: string): void {
+    sendSave(name: string, json: string, precondition: Precondition): void {
         var bp = this.owner.getOption("xhrpath");
         var url =
             bp +
@@ -778,13 +743,30 @@ export class IO {
             this.dom.backend.value +
             "/?action=save&keyword=" +
             encodeURIComponent(jsonKeyword(name));
-        var h = this.owner.getXhrHeaders();
+        /*
+         * ★ getXhrHeaders() は **Designer が持つオブジェクトをそのまま返す**（共有）。
+         *   条件ヘッダは排他（If-Match と If-None-Match のどちらか一方だけが立つ）なので、
+         *   直に書くと**前回の保存で載せたヘッダが次の保存にも残る**。1 回ぶんのコピーを作る。
+         *   段階5-4b 以前は Content-type しか足しておらず、毎回同じ値だったので露見しなかった。
+         */
+        var h: Record<string, string> = {};
+        var shared = this.owner.getXhrHeaders();
+        for (var key in shared) {
+            h[key] = shared[key]!;
+        }
         h["Content-type"] = "application/json";
+        if (precondition.ifMatch) {
+            h["If-Match"] = precondition.ifMatch;
+        }
+        if (precondition.ifNoneMatch) {
+            h["If-None-Match"] = precondition.ifNoneMatch;
+        }
         this.owner.window.showThrobber();
         /* タイトルは素の名前のまま（.json はファイル名の都合で、設計の名前ではない） */
         this.owner.setTitle(name);
-        this.pendingBaseline = { name: jsonKeyword(name), text: json };
-        /* xml: true は**応答**の解釈指定（backend は XML を返す）。送る body とは無関係 */
+        /* 412 を受けたら同じ内容を再送するので、名前と本文を控えておく */
+        this.pendingSave = { file: jsonKeyword(name), name: name, json: json };
+        /* xml: true は**応答**の解釈指定。送る body とは無関係 */
         OZ.Request(url, this.saveresponse, {
             xml: true,
             method: "post",
@@ -888,33 +870,57 @@ export class IO {
         }
     }
 
-    saveresponse(data: unknown, code: number): void {
+    saveresponse(data: unknown, code: number, headers?: Record<string, string>): void {
         this.owner.window.hideThrobber();
+        var pending = this.pendingSave;
+        this.pendingSave = null;
+
+        /*
+         * 段階5-4b: **412 は check() に通さない。** 「衝突したので上書きするか？」は
+         * エラー表示ではなく**分岐**で、textarea に文言を出すと confirm と二重になる
+         * （プリフライトの 404 を通さなかったのと同じ理屈）。
+         */
+        if (code === 412) {
+            if (!pending) {
+                return;
+            }
+            var verdict = verdictAfterConflict(this.baseline, pending.file);
+            var message = verdict === "conflict" ? "saveconflict" : "saveexists";
+            if (!confirm(pending.file + "\n\n" + _(message))) {
+                return;
+            }
+            /* 上書きすると答えた。存在すれば無条件で置き換える */
+            this.sendSave(pending.name, pending.json, { ifMatch: "*" });
+            return;
+        }
+
         /* 現行どおり戻り値は使わない（201 も「表示すべき応答」なので save 成功でも文言が出る） */
         this.check(code);
         /*
-         * 書けた版だけを派生元にする（段階4-6）。php backend の save 成功は **201**
+         * 書けた版だけを派生元にする（段階4-6）。save 成功は **201**
          * （docs/ARCHITECTURE.md §4.3 の実測）で、200 は移植先の実装を見越して受けてある。
+         *
+         * 段階5-4b から、記録するのは**応答の ETag**。save の応答にも付いてくるので、
+         * 書いた直後に load し直す必要が無い。
          */
-        if (this.pendingBaseline && (code === 200 || code === 201)) {
-            this.baseline = this.pendingBaseline;
+        if (pending && (code === 200 || code === 201)) {
+            var etag = etagFromHeaders(headers);
+            this.baseline = etag ? { name: pending.file, etag: etag } : null;
         }
-        this.pendingBaseline = null;
     }
 
-    loadresponse(data: unknown, code: number): void {
+    loadresponse(data: unknown, code: number, headers?: Record<string, string>): void {
         this.owner.window.hideThrobber();
         if (!this.check(code)) {
             return;
         }
         /*
-         * 観測したバイト列を派生元にする（段階4-6）。**読めたかどうかとは独立** ——
-         * 壊れた JSON でも「サーバ上の版はこれ」は事実で、次の保存でそれを黙って
+         * 観測した版を派生元にする（段階4-6 → 5-4b で ETag へ）。**読めたかどうかとは独立**
+         * —— 壊れた JSON でも「サーバ上の版はこれ」は事実で、次の保存でそれを黙って
          * 上書きしないための記録。loadDesignText() の戻り値契約（void）は触らない。
          */
-        if (typeof data === "string") {
-            this.baseline = { name: jsonKeyword(this.name), text: data };
-        }
+        var etag = etagFromHeaders(headers);
+        this.baseline = etag ? { name: jsonKeyword(this.name), etag: etag } : null;
         /* 読めなくても setTitle するのは現行どおり（fromXML の false も無視していた） */
         this.loadDesignText(data as string);
         this.owner.setTitle(this.name);

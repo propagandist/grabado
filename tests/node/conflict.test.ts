@@ -1,83 +1,82 @@
 import { describe, expect, test } from "vitest";
-import { verdictForSave, type Baseline } from "../../js/io/conflict.ts";
+import {
+    etagFromHeaders,
+    preconditionFor,
+    verdictAfterConflict,
+    type Baseline,
+} from "../../js/io/conflict.ts";
 
 /*
- * 保存前の判定の検査（HANDOVER §4 段階4-6）。
+ * 条件付き更新の規則（HANDOVER §4 段階4-6 → §5 段階5-4b）。
  *
- * ハーネスを使わない —— verdictForSave() は js/ のどこにも依存しない純関数（tests/node/ では
- * detect.test.ts と同じ立場）。UI（confirm を出すか）と通信（プリフライトを投げるか）は
+ * ハーネスを使わない —— どれも js/ のどこにも依存しない純関数（tests/node/ では
+ * detect.test.ts と同じ立場）。UI（confirm を出すか）と通信（ヘッダを載せるか）は
  * js/io.ts の仕事で、ここが押さえるのは**どちらに倒すかの決定**だけ。
+ *
+ * ★ 段階4-6 の verdictForSave()（プリフライトの応答とバイト列を比べる 9 本）は消えた。
+ *   **判定の主体がクライアントからサーバへ移った**ため —— 一致 / 不一致を決めるのは
+ *   backend の If-Match 評価で、クライアントに残るのは「412 を受けたときに何と言うか」
+ *   と「次の save に何を載せるか」の 2 つだけ。テストが減ったのはカバレッジが落ちたのではなく、
+ *   **守るべき規則そのものが小さくなった**から（TOCTOU の窓も同時に閉じている）。
  */
 
-const BASE: Baseline = { name: "orders.json", text: '{"formatVersion": 2}\n' };
+const BASE: Baseline = { name: "orders.json", etag: '"abc123"' };
 
-describe("保存前の判定（段階4-6）", () => {
-    test("サーバに無ければ absent（新規保存。失うものが無い）", () => {
-        expect(
-            verdictForSave(null, "orders.json", { status: 404, text: null }),
-        ).toBe("absent");
-    });
-
-    test("派生元があってもサーバから消えていれば absent", () => {
-        /* 外部で削除された場合。save し直すのは復元であって上書きではない */
-        expect(
-            verdictForSave(BASE, "orders.json", { status: 404, text: null }),
-        ).toBe("absent");
-    });
-
-    test("観測した版と一致すれば clean", () => {
-        expect(
-            verdictForSave(BASE, "orders.json", { status: 200, text: BASE.text }),
-        ).toBe("clean");
-    });
-
-    test("観測した後に変わっていれば conflict（本機能の主眼）", () => {
-        expect(
-            verdictForSave(BASE, "orders.json", {
-                status: 200,
-                text: '{"formatVersion": 2, "tables": []}\n',
-            }),
-        ).toBe("conflict");
-    });
-
-    test("末尾の改行 1 つの違いでも conflict（バイト列で比べる）", () => {
-        expect(
-            verdictForSave(BASE, "orders.json", {
-                status: 200,
-                text: BASE.text.trimEnd(),
-            }),
-        ).toBe("conflict");
+describe("412 を受けたときの分岐（段階5-4b）", () => {
+    test("観測した版があれば conflict（本機能の主眼）", () => {
+        expect(verdictAfterConflict(BASE, "orders.json")).toBe("conflict");
     });
 
     test("派生元が無いのに実体があれば exists", () => {
-        expect(
-            verdictForSave(null, "orders.json", { status: 200, text: BASE.text }),
-        ).toBe("exists");
+        expect(verdictAfterConflict(null, "orders.json")).toBe("exists");
     });
 
-    test("別名へ保存するなら中身が同じでも exists", () => {
+    test("別名へ保存するなら exists", () => {
         /* baseline は「今開いているファイル」の記録で、別の名前について何も言っていない */
-        expect(
-            verdictForSave(BASE, "invoices.json", { status: 200, text: BASE.text }),
-        ).toBe("exists");
+        expect(verdictAfterConflict(BASE, "invoices.json")).toBe("exists");
+    });
+});
+
+describe("保存に載せる条件ヘッダ（段階5-4b）", () => {
+    test("観測した版があれば If-Match にその ETag を載せる", () => {
+        expect(preconditionFor(BASE, "orders.json")).toEqual({ ifMatch: '"abc123"' });
     });
 
-    test("200 で本文が無ければ空文字として比べる", () => {
-        expect(
-            verdictForSave({ name: "orders.json", text: "" }, "orders.json", {
-                status: 200,
-                text: null,
-            }),
-        ).toBe("clean");
+    test("派生元が無ければ「新規のつもり」＝ If-None-Match: *", () => {
+        expect(preconditionFor(null, "orders.json")).toEqual({ ifNoneMatch: "*" });
     });
 
-    test("404 以外は「実体あり」に倒す（安全側）", () => {
+    test("別名へ保存するときも「新規のつもり」", () => {
+        /* 実在すればサーバが 412 を返し、exists の confirm に流れる */
+        expect(preconditionFor(BASE, "invoices.json")).toEqual({ ifNoneMatch: "*" });
+    });
+
+    test("どちらか一方だけが立つ（両方載せると意味が衝突する）", () => {
+        for (const precondition of [preconditionFor(BASE, "orders.json"), preconditionFor(null, "x.json")]) {
+            const keys = Object.keys(precondition);
+            expect(keys).toHaveLength(1);
+        }
+    });
+});
+
+describe("応答ヘッダからの ETag 取り出し（段階5-4b）", () => {
+    test("大小を無視して読む", () => {
         /*
-         * 500 / 501 / 503 は js/io.ts が check() で先に落とす契約なのでここには来ないが、
-         * 来たときに「無いものとして上書き」へ倒れないことを固定しておく。
+         * XMLHttpRequest.getAllResponseHeaders() はヘッダ名を小文字化して返す（仕様）。
+         * テストの仮想 backend や将来の実装が元の大小のまま渡すこともあるので、どちらでも読む。
          */
-        expect(
-            verdictForSave(BASE, "orders.json", { status: 500, text: null }),
-        ).toBe("conflict");
+        expect(etagFromHeaders({ etag: '"a"' })).toBe('"a"');
+        expect(etagFromHeaders({ ETag: '"a"' })).toBe('"a"');
+        expect(etagFromHeaders({ "ETAG": '"a"' })).toBe('"a"');
+    });
+
+    test("無ければ null", () => {
+        expect(etagFromHeaders({ "content-type": "application/json" })).toBeNull();
+        expect(etagFromHeaders({})).toBeNull();
+        expect(etagFromHeaders(undefined)).toBeNull();
+    });
+
+    test("空文字は null に倒す（条件ヘッダに載せられない値なので）", () => {
+        expect(etagFromHeaders({ etag: "" })).toBeNull();
     });
 });

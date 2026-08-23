@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service
 @ConditionalOnProperty(name = ["grabado.readonly"], havingValue = "false", matchIfMissing = true)
 class IntrospectionService(
     private val properties: GrabadoProperties,
-    private val readers: List<CatalogReader> = listOf(PostgresCatalogReader(), MySqlCatalogReader()),
+    private val readers: List<CatalogReader> = listOf(PostgresCatalogReader(), MySqlCatalogReader(), H2CatalogReader()),
 ) {
 
     /** env に列挙された接続先が 1 つでもあるか（capabilities が読む）。 */

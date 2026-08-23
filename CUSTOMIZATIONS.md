@@ -7601,6 +7601,88 @@ golden 114 本は無差分。
 
 ---
 
+### 2026-08-23 HANDOVER §5「backend」段階5-8b —— introspection を H2 へ広げる
+
+**introspection の対応が 4 本になった**（postgresql / mysql / mariadb / h2）。
+5-0 でユーザーが選んだ「PG → MySQL/MariaDB/H2 と段階的に」が揃った。
+
+**フロントは 1 行も触っていない。**
+
+#### 決めたこと 1: **`IS_GENERATED` で除外する**（名前で弾かない）
+
+H2 は PK / UNIQUE の裏 index に加えて **FK にも自動で index を作る**
+（`FK_ARTICLES_AUTHOR_ID_INDEX_E` のような名前）。MySQL のように「制約名と index 名が
+一致する」前提は使えない —— H2 は `PRIMARY_KEY_E` / `USERS_EMAIL_KEY_INDEX_4` のような
+**自動名**を付けるため。
+
+**名前で弾こうとすると denylist になって必ず漏れる**（§4.6-1 で PHP が踏んだのと同じ形）。
+探索したら `information_schema.indexes` に **`IS_GENERATED` 列**があったので、それを使った ——
+**H2 自身が「生成したもの」と印を付けてくれる**のがいちばん確実。
+
+| | 除外の条件 |
+|---|---|
+| PostgreSQL | `NOT EXISTS (pg_constraint.conindid)` |
+| MySQL | 制約名と index 名の一致 |
+| **H2** | **`is_generated = FALSE`** |
+
+方言ごとに条件は違うが、**「制約や DB が作ったものを除き、人が作ったものだけを出す」**という
+意図は 3 本とも同じ。
+
+#### 決めたこと 2: H2 の統合テストは **opt-in にしない**（常に走る）
+
+PG / MySQL は `docker run` が要るので `assumeTrue` で skip しているが、**H2 は組み込みで
+起こせる**（`jdbc:h2:mem:`）。つまり **「実 DB に対して確かめる」を CI に載せられる
+唯一の方言**で、フィクスチャと実 DB の一致を毎回検証できる。
+
+探索も `docker exec ... psql` ではなく**テストの中で完結した**（一時的な `H2ExplorationTest` を
+書いて `information_schema` を覗き、実装が固まった時点で消した）。
+
+#### 実測で分かったこと: **識別子の大小で並びが逆転する**
+
+H2 は引用符なしの識別子を**大文字化**する。並びは `String.compareTo`（UTF-16 コード単位）
+なので:
+
+- 小文字（PG / MySQL）: `_`(0x5F) < `s`(0x73) なので **`article_tags` < `articles`**
+- 大文字（H2）: `S`(0x53) < `_`(0x5F) なので **`ARTICLES` < `ARTICLE_TAGS`**
+
+**決定論であることに変わりはない**（同じ DB からは必ず同じ並び）が、方言をまたぐと
+順序が変わる。`Collator` を使わない判断（ロケール依存＝非決定論）は変えていない。
+
+#### ドライバを足す根拠（1 本ごとに残す方針）
+
+| | 判断 |
+|---|---|
+| ライセンス | Apache 2.0 / EPL 1.0 のデュアル。**再配布可** |
+| サイズ | 約 2.5MB |
+| CVE 面積 | H2 の既知の RCE（CVE-2021-42392 など）は**すべて H2 Console（Web UI）経由**。
+grabado は **JDBC ドライバとしてしか使わない**ので到達しない。判断を `build.gradle.kts` の
+コメントにも書いた（誰かが Console を有効にする経路を先に塞ぐ） |
+| 利用場面 | H2 は既に **DDL 出力の対象**（6-7b で追加）。サーバモードで動いている H2 の
+スキーマを読んで ER 図にする経路が揃う |
+
+#### 検証
+
+| | 5-8a | 5-8b |
+|---|---|---|
+| `npm test` | 472 passed | 472 passed（**フロント 0 行**） |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `cd server && ./gradlew test` | 126 ＋ 21 skip | **135 passed ＋ 21 skipped** |
+| 実 PG18 ＋ 実 MySQL あり | 147 passed | **156 passed** |
+
+golden 114 本は無差分。増えた 9 本は**すべて実 H2 に対する検証**（組み込みなので常に走る）。
+
+#### 次段階への入力
+
+- **mssql / oracle は JDBC ドライバのライセンスと再配布可否を確認してから**（5-0 の決定）。
+  `sqlite` はサーバ接続の概念が無いので対象外。**対応 4 本で §5 の introspection は閉じる**
+- **5-9: 実 HTTP の E2E と §5 のクローズ。** `playwright.server.config.ts` を新設して
+  Kotlin サーバを起こし、save / load / list を通す。CI に統合テストを置くなら
+  `services: postgres:18` / `services: mysql:8.4` で**週次**へ（org 規約）
+- **§5 完了時に分類の見直しを org に上げる**（5-0 の申し送り）。§3.1 / §3.3 / §3.11 が
+  効くようになったので、`security-baseline.md` §6 の更新契機に該当する
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

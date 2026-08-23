@@ -168,7 +168,7 @@ class PostgresCatalogIntegrationTest {
             .isEqualTo(CatalogSnapshotFixture.read())
     }
 
-    private fun read(): CatalogSnapshot = JdbcCatalogReader().read(source!!)
+    private fun read(): CatalogSnapshot = PostgresCatalogReader().read(source!!)
 
     companion object {
         private var source: IntrospectSource? = null

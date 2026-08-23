@@ -1,0 +1,325 @@
+{
+  "dialect" : "mysql",
+  "schema" : "grabado_survey",
+  "tables" : [ {
+    "name" : "article_tags",
+    "comment" : "記事とタグの対応"
+  }, {
+    "name" : "articles",
+    "comment" : "記事"
+  }, {
+    "name" : "users",
+    "comment" : "ユーザー"
+  } ],
+  "columns" : [ {
+    "table" : "article_tags",
+    "name" : "article_id",
+    "position" : 1,
+    "dataType" : "char",
+    "udtName" : "char(36)",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 36,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "article_tags",
+    "name" : "tag",
+    "position" : 2,
+    "dataType" : "varchar",
+    "udtName" : "varchar(64)",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 64,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "article_tags",
+    "name" : "created_at",
+    "position" : 3,
+    "dataType" : "timestamp",
+    "udtName" : "timestamp",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : "CURRENT_TIMESTAMP",
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "id",
+    "position" : 1,
+    "dataType" : "char",
+    "udtName" : "char(36)",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 36,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "author_id",
+    "position" : 2,
+    "dataType" : "char",
+    "udtName" : "char(36)",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 36,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : "著者"
+  }, {
+    "table" : "articles",
+    "name" : "title",
+    "position" : 3,
+    "dataType" : "varchar",
+    "udtName" : "varchar(255)",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 255,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "body",
+    "position" : 4,
+    "dataType" : "text",
+    "udtName" : "text",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 65535,
+    "elementType" : null,
+    "nullable" : true,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "tags",
+    "position" : 5,
+    "dataType" : "json",
+    "udtName" : "json",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : true,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "view_count",
+    "position" : 6,
+    "dataType" : "int",
+    "udtName" : "int",
+    "numericPrecision" : 10,
+    "numericScale" : 0,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : "0",
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "price",
+    "position" : 7,
+    "dataType" : "decimal",
+    "udtName" : "decimal(12,2)",
+    "numericPrecision" : 12,
+    "numericScale" : 2,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : true,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "published_on",
+    "position" : 8,
+    "dataType" : "date",
+    "udtName" : "date",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : true,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "articles",
+    "name" : "created_at",
+    "position" : 9,
+    "dataType" : "timestamp",
+    "udtName" : "timestamp",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : "CURRENT_TIMESTAMP",
+    "comment" : null
+  }, {
+    "table" : "users",
+    "name" : "id",
+    "position" : 1,
+    "dataType" : "char",
+    "udtName" : "char(36)",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 36,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "users",
+    "name" : "email",
+    "position" : 2,
+    "dataType" : "varchar",
+    "udtName" : "varchar(255)",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 255,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : "ログイン用メールアドレス"
+  }, {
+    "table" : "users",
+    "name" : "display_name",
+    "position" : 3,
+    "dataType" : "text",
+    "udtName" : "text",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : 65535,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : null
+  }, {
+    "table" : "users",
+    "name" : "is_active",
+    "position" : 4,
+    "dataType" : "tinyint",
+    "udtName" : "tinyint(1)",
+    "numericPrecision" : 3,
+    "numericScale" : 0,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : "1",
+    "comment" : null
+  }, {
+    "table" : "users",
+    "name" : "preferences",
+    "position" : 5,
+    "dataType" : "json",
+    "udtName" : "json",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : null,
+    "comment" : "UI 設定などの任意項目"
+  }, {
+    "table" : "users",
+    "name" : "created_at",
+    "position" : 6,
+    "dataType" : "timestamp",
+    "udtName" : "timestamp",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : "CURRENT_TIMESTAMP",
+    "comment" : null
+  }, {
+    "table" : "users",
+    "name" : "updated_at",
+    "position" : 7,
+    "dataType" : "timestamp",
+    "udtName" : "timestamp",
+    "numericPrecision" : null,
+    "numericScale" : null,
+    "characterMaximumLength" : null,
+    "elementType" : null,
+    "nullable" : false,
+    "default" : "CURRENT_TIMESTAMP",
+    "comment" : null
+  } ],
+  "constraints" : [ {
+    "table" : "article_tags",
+    "name" : "PRIMARY",
+    "type" : "PRIMARY",
+    "column" : "article_id",
+    "position" : 1
+  }, {
+    "table" : "article_tags",
+    "name" : "PRIMARY",
+    "type" : "PRIMARY",
+    "column" : "tag",
+    "position" : 2
+  }, {
+    "table" : "articles",
+    "name" : "PRIMARY",
+    "type" : "PRIMARY",
+    "column" : "id",
+    "position" : 1
+  }, {
+    "table" : "users",
+    "name" : "PRIMARY",
+    "type" : "PRIMARY",
+    "column" : "id",
+    "position" : 1
+  }, {
+    "table" : "users",
+    "name" : "users_email_key",
+    "type" : "UNIQUE",
+    "column" : "email",
+    "position" : 1
+  } ],
+  "foreignKeys" : [ {
+    "table" : "article_tags",
+    "column" : "article_id",
+    "referencedTable" : "articles",
+    "referencedColumn" : "id",
+    "position" : 1
+  }, {
+    "table" : "articles",
+    "column" : "author_id",
+    "referencedTable" : "users",
+    "referencedColumn" : "id",
+    "position" : 1
+  } ],
+  "indexes" : [ {
+    "table" : "articles",
+    "name" : "idx_articles_author_id",
+    "unique" : false,
+    "column" : "author_id",
+    "position" : 1
+  }, {
+    "table" : "articles",
+    "name" : "idx_articles_published_on_title",
+    "unique" : false,
+    "column" : "published_on",
+    "position" : 1
+  }, {
+    "table" : "articles",
+    "name" : "idx_articles_published_on_title",
+    "unique" : false,
+    "column" : "title",
+    "position" : 2
+  } ]
+}

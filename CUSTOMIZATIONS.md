@@ -7526,6 +7526,81 @@ golden 114 本は無差分。
 
 ---
 
+### 2026-08-23 HANDOVER §5「backend」段階5-8a —— introspection を MySQL / MariaDB へ広げる
+
+**対応 DB 8 本のうち 3 本（postgresql / mysql / mariadb）が introspection で読めるようになった。**
+
+**フロントは 1 行も触っていない**（方言差は backend の Reader に閉じている）。
+
+#### 実 MySQL 8.4 で確かめた。PG との差は 4 つだけだった
+
+| | PostgreSQL 18 | MySQL 8.4 |
+|---|---|---|
+| **NOT NULL の CHECK** | **16 件出る** | **0 件** —— §4.6-1 は**PG 固有の挙動**だった |
+| index | `pg_index` ＋ `pg_constraint.conindid` で除外 | `information_schema.statistics`。**PK / UNIQUE も出る**ので制約名で除外 |
+| FK | `pg_constraint` の `conkey` / `confkey` | `key_column_usage.referenced_table_name` |
+| 配列の要素型 | `information_schema.element_types` | **配列型が無い** |
+
+**構造は同じまま広がった** —— どちらも「allowlist で制約を引き、制約が持つ index を除外する」。
+5-7a で `break` を捨てて**集合として扱う**形にしたのが、方言が増えても効いている。
+
+`CatalogReader` を interface にし、`JdbcCatalogReader` → `PostgresCatalogReader` に改名して
+`MySqlCatalogReader` を足した。JDBC の共通処理（接続・タイムアウト・`getInt` の NULL 潰し）は
+`JdbcSupport` に切り出した。**`IntrospectionMapper` から先は方言を知らない。**
+
+#### 決めたこと: MariaDB に**専用のドライバも実装も足さない**
+
+MariaDB は MySQL のプロトコルとカタログに互換で、`information_schema` の該当ビューは
+どちらも同じ形。**MySQL Connector/J で繋がる**ので、`supports()` が `jdbc:mariadb:` も
+受けるようにしただけ。
+
+**ドライバを 2 本にしない**のは、1 本足すごとに**イメージサイズと CVE 面積が増える**から
+（5-0 で「introspection の本数は運用側の話」として切り分けた判断の実行）。
+MariaDB 固有の挙動で不都合が出たら、そのとき初めて分ける。
+
+#### 踏んだこと: `docker exec` の既定文字セットでコメントが化ける
+
+`docker exec -i mysql ... < schema.sql` で流すと、**クライアントの既定文字セットが
+utf8mb4 でないため日本語コメントが化けて DB に入る**（テストが「ユーザー」を期待して
+`ãƒ¦ãƒ¼ã‚¶ãƒ¼` を受け取って発覚）。
+
+接続側ではなく**投入側**の問題だったので、`--default-character-set=utf8mb4` を付けて
+DB ごと作り直した。**`docs/TESTING.md` の手順にこの注意を書いた** —— 同じ罠を次に踏まない
+ようにするのは、実測を記録するのと同じ理由。
+
+#### テストは PG と同じ 2 層
+
+| テスト | 走る条件 | 見るもの |
+|---|---|---|
+| `MySqlMapperTest`（8 本） | **常に**（CI 込み） | フィクスチャ → 応答モデル。**方言差が Reader に閉じていること** |
+| `MySqlCatalogIntegrationTest`（11 本） | `GRABADO_IT_MYSQL_URL` があるとき | **フィクスチャが実 DB と一致するか** ＋ SQL そのもの |
+
+`CatalogSnapshotFixture` を方言ごとに 1 本持てるようにした（既定は PostgreSQL）。
+
+#### 検証
+
+| | 5-7b | 5-8a |
+|---|---|---|
+| `npm test` | 472 passed | 472 passed（**フロント 0 行**） |
+| `npm run test:browser` | 189 passed | 189 passed |
+| `npm run known-issues` | 1 passed | 1 passed |
+| `cd server && ./gradlew test` | 118 ＋ 10 skip | **126 passed ＋ 21 skipped** |
+| 実 PG18 ＋ 実 MySQL あり | — | **147 passed** |
+
+golden 114 本は無差分。
+
+#### 次段階への入力
+
+- **H2 は 5-8b で判断する。** 組み込み DB なので「サーバモードで動いているものを読む」形に
+  なり、**利用場面が PG / MySQL とは違う**。ドライバを足す前に「誰がいつ使うか」を
+  台帳に書くこと（1 本足すごとに根拠を残す方針）
+- **mssql / oracle は JDBC ドライバのライセンスと再配布可否を確認してから**（5-0 の決定）。
+  `sqlite` はサーバ接続の概念が無いので対象外
+- **5-9 で E2E と §5 のクローズ。** CI に統合テストを置くなら
+  `services: postgres:18` / `services: mysql:8.4`（追加依存ゼロ）で、org 規約に従って**週次**へ
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

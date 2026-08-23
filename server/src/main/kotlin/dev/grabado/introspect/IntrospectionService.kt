@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service
 @ConditionalOnProperty(name = ["grabado.readonly"], havingValue = "false", matchIfMissing = true)
 class IntrospectionService(
     private val properties: GrabadoProperties,
-    private val reader: JdbcCatalogReader = JdbcCatalogReader(),
+    private val readers: List<CatalogReader> = listOf(PostgresCatalogReader(), MySqlCatalogReader()),
 ) {
 
     /** env に列挙された接続先が 1 つでもあるか（capabilities が読む）。 */
@@ -33,7 +33,7 @@ class IntrospectionService(
         val key = name?.trim().orEmpty()
         val source = properties.introspect.sources[key] ?: throw UnknownSourceException()
         val snapshot = try {
-            reader.read(source)
+            CatalogReader.forUrl(source.url, readers).read(source)
         } catch (e: Exception) {
             /*
              * ★ 例外の中身を外に出さない。JDBC の例外メッセージには **URL と、実装によっては

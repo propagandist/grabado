@@ -34,16 +34,28 @@ cd server && ./gradlew build   # test ＋ bootJar
 テスト結果に出る。
 
 ```bash
+# PostgreSQL 18
 docker run -d --name grabado-pg -e POSTGRES_PASSWORD=grabado \
   -e POSTGRES_DB=grabado_survey -p 55432:5432 postgres:18
 docker exec -i grabado-pg psql -U postgres -d grabado_survey \
   < docs/samples/introspection-sample-schema.sql
 
-cd server && GRABADO_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:55432/grabado_survey \
-  GRABADO_IT_USER=postgres GRABADO_IT_PASSWORD=grabado ./gradlew test
+# MySQL 8.4（段階5-8a）。★ --default-character-set=utf8mb4 を忘れると
+#   コメントが化けて DB に入る（実際に踏んだ）
+docker run -d --name grabado-mysql -e MYSQL_ROOT_PASSWORD=grabado \
+  -e MYSQL_DATABASE=grabado_survey -p 33066:3306 mysql:8.4
+docker exec -i grabado-mysql mysql -uroot -pgrabado --default-character-set=utf8mb4 \
+  grabado_survey < docs/samples/introspection-sample-schema-mysql.sql
+
+cd server && \
+  GRABADO_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:55432/grabado_survey \
+  GRABADO_IT_USER=postgres GRABADO_IT_PASSWORD=grabado \
+  GRABADO_IT_MYSQL_URL=jdbc:mysql://127.0.0.1:33066/grabado_survey \
+  GRABADO_IT_MYSQL_USER=root GRABADO_IT_MYSQL_PASSWORD=grabado \
+  ./gradlew test
 
 # フィクスチャを採り直す（実 DB の出力が正）
-... GRABADO_IT_WRITE_FIXTURE=1 ./gradlew test --tests '*PostgresCatalogIntegrationTest*'
+... GRABADO_IT_WRITE_FIXTURE=1 ./gradlew test --tests '*CatalogIntegrationTest*'
 ```
 
 **なぜ 2 層なのか** —— 純粋なフィクスチャだけで写像を試すと速くて依存も 0 だが、
@@ -54,8 +66,9 @@ cd server && GRABADO_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:55432/grabado_surve
 
 | テスト | 走る条件 | 見るもの |
 |---|---|---|
-| `IntrospectionMapperTest` | **常に**（CI 込み） | フィクスチャ → 応答モデルの写し方 |
+| `IntrospectionMapperTest` / `MySqlMapperTest` | **常に**（CI 込み） | フィクスチャ → 応答モデルの写し方 |
 | `PostgresCatalogIntegrationTest` | `GRABADO_IT_JDBC_URL` があるとき | **フィクスチャが実 DB と一致するか** ＋ SQL そのもの |
+| `MySqlCatalogIntegrationTest` | `GRABADO_IT_MYSQL_URL` があるとき | 同上（MySQL / MariaDB） |
 
 `npm test` 系と `./gradlew test` は**互いに依存しない**。フロントのテストは仮想 backend
 （[`../tests/node/harness.ts`](../tests/node/harness.ts)）を使うので、Kotlin を起動しない。

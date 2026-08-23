@@ -27,7 +27,10 @@
     "  request.ifMatch     If-Match ヘッダ（段階5-4）。値は固定文字列しか書けないので、",
     "                      『一致する etag を送る』側は BackendBehaviourTest が持つ",
     "  request.ifNoneMatch If-None-Match ヘッダ（段階5-4）。* だけを使う",
-    "  serverMode    'readonly' なら GRABADO_READONLY=true で起動したサーバに流す。省略時は通常",
+    "  request.path   /api/ 系の絶対パス（段階11-2a）。**あれば <backend名>/?action= を組まずにこれを使う**。",
+    "                request.action / keyword / backend / trailingSlash は無視される",
+    "  serverMode    'readonly' なら GRABADO_READONLY=true、'ai' なら AI を有効にして起動したサーバに",
+    "                流す（段階11-2a。キーとモデル名の env ＋ テスト用の SuggestionSource が入る）。省略時は通常",
     "  expect.status  必須",
     "  expect.body    省略時は検査しない。\"\" は空 body を要求する",
     "  expect.headers 省略時は検査しない"
@@ -694,6 +697,98 @@
       "expect": {
         "status": 200,
         "body": "a.json\n"
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-disabled",
+      "note": "キーもモデル名も env に無い通常起動。403（このデプロイでは禁止）であって 501 でも 503 でもない",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"employees\",\"columns\":[{\"name\":\"id\",\"sqlType\":\"INTEGER\",\"nullable\":false,\"default\":\"\"}],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 403,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-readonly",
+      "note": "READONLY では AiReviewService の Bean ごと存在しない。落ちる副作用の 3 つ目（保存・introspection・AI）",
+      "serverMode": "readonly",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"employees\",\"columns\":[{\"name\":\"id\",\"sqlType\":\"INTEGER\",\"nullable\":false,\"default\":\"\"}],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 403,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-review-ok",
+      "note": "提案の配列がそのまま返る。backend は中身を 1 フィールドも解釈しないので、スタブの応答がバイト列で通る",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"employees\",\"columns\":[{\"name\":\"id\",\"sqlType\":\"INTEGER\",\"nullable\":false,\"default\":\"\"}],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 200,
+        "body": "[{\"category\":\"missing_pk\",\"severity\":\"error\",\"target\":{\"table\":\"employees\"},\"rationale\":\"テスト用の固定応答（段階11-2a）\"}]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-bad-version",
+      "note": "aiRequestVersion が 1 でない。400（壊れている）で、403（禁止）とは別物",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":2,\"dialect\":\"postgresql\",\"tables\":[]}"
+      },
+      "expect": {
+        "status": 400,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-not-json",
+      "note": "JSON として読めない。message は body に出さない（入力の断片が載りうる）",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "not json"
+      },
+      "expect": {
+        "status": 400,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-too-many-tables",
+      "note": "テーブル数の上限超。AiContractTest は max-tables=2 で起動するので 3 件で落ちる。413 ではなく 400（check() は 413 を持たない）",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"a\"},{\"name\":\"b\"},{\"name\":\"c\"}]}"
+      },
+      "expect": {
+        "status": 400,
+        "body": ""
       },
       "virtual": false
     }

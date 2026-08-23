@@ -1,5 +1,9 @@
 package dev.grabado.api
 
+import dev.grabado.ai.AiBadRequestException
+import dev.grabado.ai.AiRateLimitedException
+import dev.grabado.ai.AiUnavailableException
+import dev.grabado.ai.AiUpstreamException
 import dev.grabado.design.InvalidDesignNameException
 import dev.grabado.design.PreconditionFailedException
 import dev.grabado.design.ReadOnlyException
@@ -72,5 +76,49 @@ class ApiExceptionHandler {
      */
     @ExceptionHandler(IntrospectionFailedException::class)
     fun introspectionFailed(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build()
+
+    /**
+     * AI が使えないデプロイで `POST /api/ai/review` を呼ばれた（段階11-2a）。
+     *
+     * **403**。READONLY / キー未設定 / モデル名未設定 / 実装が無い を**区別させない** ——
+     * どれも「このデプロイでは禁止されている」で、5-3 と同じ扱い。
+     */
+    @ExceptionHandler(AiUnavailableException::class)
+    fun aiUnavailable(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.FORBIDDEN).build()
+
+    /**
+     * AI への入力が壊れている・大きすぎる（段階11-2a）。
+     *
+     * **400**（413 ではない —— `check()` が 413 を持たないので 5-1c で足した 400 に寄せる）。
+     * ★ **message を body に出さない。** 入力の断片が載りうる。
+     */
+    @ExceptionHandler(AiBadRequestException::class)
+    fun aiBadRequest(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.BAD_REQUEST).build()
+
+    /**
+     * AI の受付上限に当たった（段階11-2a）。
+     *
+     * ★ **429 は `js/io.ts` の `check()` に無い status。** 増やす PR で `check()` と `locale` を
+     * 同じ PR で広げるのが上の規律だが、**11-2a はフロントが `/api/ai/review` を 1 度も
+     * 呼ばないので、この status がフロントに届く経路が無い**（5-1b で 400 を足したときと同じ形）。
+     * 配線と同時に広げるのが 11-3 で、そこが `case 429` と `http429` を持つ。
+     *
+     * **503 に倒さない** —— 待てば通るものを故障に見せない。
+     */
+    @ExceptionHandler(AiRateLimitedException::class)
+    fun aiRateLimited(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build()
+
+    /**
+     * 上流の AI 呼び出しが失敗した（段階11-2a）。
+     *
+     * **503**。[IntrospectionFailedException] と同じ扱いで、★ **例外の中身を body に出さない**
+     * —— API キーやリクエスト内容が上流のエラーに載りうる。
+     */
+    @ExceptionHandler(AiUpstreamException::class)
+    fun aiUpstream(): ResponseEntity<Void> =
         ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build()
 }

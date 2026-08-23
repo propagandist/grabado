@@ -160,6 +160,11 @@ class BackendContractTest {
          *
          * URL の形は実測どおり `<xhrpath>backend/<backend名>/?action=...`
          * （`ARCHITECTURE.md` §4.2）。`keyword` は `encodeURIComponent` 相当でエンコードする。
+         *
+         * ★ **`path` があればそれを使う**（段階11-2a）。`/api/ai/review` は
+         *   `/backend/<name>/?action=` の形を取らない —— `/api/` は §11 が始める名前空間で、
+         *   upstream の語彙に乗せない（5-0 の決定）。表の側で URL の組み立て方が 2 通りに
+         *   なるが、**どちらなのかはデータで分かる**（`request.path` の有無）。
          */
         fun send(request: JsonNode, port: Int): HttpResponse<ByteArray> {
             val backend = request.path("backend").asString("file")
@@ -173,9 +178,13 @@ class BackendContractTest {
                 }
             }.joinToString("&")
 
-            val uri = URI.create(
-                "http://127.0.0.1:$port/backend/$backend$slash" + if (query.isEmpty()) "" else "?$query",
-            )
+            val uri = if (request.has("path")) {
+                URI.create("http://127.0.0.1:$port" + request.path("path").asString())
+            } else {
+                URI.create(
+                    "http://127.0.0.1:$port/backend/$backend$slash" + if (query.isEmpty()) "" else "?$query",
+                )
+            }
             val builder = HttpRequest.newBuilder(uri)
             when (val method = request.path("method").asString("GET")) {
                 "GET" -> builder.GET()

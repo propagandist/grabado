@@ -608,6 +608,9 @@ tests/
 server/src/test/kotlin/dev/grabado/
   api/BackendContractTest.kt    tests/contract/ の表を実 HTTP に流す
   api/BackendBehaviourTest.kt   表で書けないもの（往復・副作用の不在）
+  api/ReadOnlyContractTest.kt   同じ表の serverMode: readonly（§5 段階5-3）
+  ai/AiContractTest.kt          同じ表の serverMode: ai（§11 段階11-2a）
+  ai/AiReviewServiceTest.kt     上限・キャッシュ・レート制限を HTTP なしで
   design/DesignNameTest.kt      keyword の検証規則（純粋な表テスト）
   design/FileDesignStoreTest.kt 実 FS への I/O（@TempDir）
 ```
@@ -615,7 +618,7 @@ server/src/test/kotlin/dev/grabado/
 ## backend の契約は 1 つの表に置く（§5 段階5-1b）
 
 [`../tests/contract/backend-cases.json`](../tests/contract/backend-cases.json) が
-「1 リクエスト → 1 レスポンス」を 25 ケース持つ。読み手は 2 つ:
+「1 リクエスト → 1 レスポンス」を持つ。読み手は 2 つ:
 
 1. **Kotlin** — `BackendContractTest` が `@ParameterizedTest` で全ケースを実サーバに流す
 2. **TypeScript** — 仮想 backend（`tests/node/harness.ts`）に `virtual: true` のケースを流す（**段階5-1c で配線**）
@@ -632,6 +635,30 @@ harness がどこまでサーバなのかが文書ではなくデータになる
 **Kotlin 側は MockMvc ではなく実サーバ（`RANDOM_PORT`）を使う。** 契約には日本語 keyword の
 URL 往復と `%2F` の扱いが含まれ、どちらもサーブレットコンテナのデコード層の話で
 **MockMvc はそこを素通りする**。JDK 標準の `HttpClient` を使うので依存も増えない。
+
+### 起動条件ごとに流す側を分ける（§5 段階5-3 / §11 段階11-2a）
+
+**表は 1 つのまま、流す側が 3 つある。** READONLY も AI の有効化も**サーバの起動条件**なので、
+同じインスタンスでは試せない。`serverMode` がその宣言で、省略が通常起動。
+
+| 流す側 | `serverMode` | 起動条件 |
+|---|---|---|
+| `BackendContractTest` | （なし） | 通常 |
+| `ReadOnlyContractTest` | `readonly` | `GRABADO_READONLY=true` |
+| `AiContractTest` | `ai` | AI の env ＋ **テスト用の `SuggestionSource`** |
+
+**AI の URL は `/backend/<name>/?action=` の形を取らない**（`/api/ai/review`）。表の
+`request.path` がそれで、**あればそちらを使う**——URL の組み立て方が 2 通りになるが、
+どちらなのかは文書ではなくデータで分かる。
+
+★ **`SuggestionSource` の実装は main に 1 つも無い**（段階11-2a）。固定応答を返すコードを
+本番に置くと「AI が動いているように見えて実は固定」が載るので、**スタブはテスト側にだけ置く**。
+実装が無ければ Bean が組めず `capabilities.ai` は false のまま——**実装が無いなら使えない**を
+構造で保証している。上流を叩く実装が入るのは 11-2b。
+
+時間に依存するもの（結果キャッシュの TTL・レート制限のウィンドウ）は `Clock` を渡して
+その場で進める（`AiReviewServiceTest`）。**`Thread.sleep` で待たない**——遅くなるうえに
+落ちる日が来る。
 
 ## 配布物のスモーク（`npm run test:dist`）
 

@@ -206,18 +206,24 @@ test.describe("撤去したものが戻っていない", () => {
 
         /* locale から引けていれば id そのままの文字列にはならない */
         expect(label).toBe("AI review");
+
+        const applyLabel = await page.evaluate(() => {
+            const button = window.d!.io.dom.container.querySelector<HTMLInputElement>("#aiapply");
+            return button === null ? null : button.value;
+        });
+        expect(applyLabel).toBe("Apply AI suggestions");
     });
 
     test("capabilities の ai で押せる・押せないが切り替わる（段階11-3）", async () => {
         const states = await page.evaluate(() => {
             const io = window.d!.io;
             io.applyCapabilities({ ai: false });
-            const off = io.dom.aireview.disabled;
+            const off = io.dom.aireview.disabled && io.dom.aiapply.disabled;
             io.applyCapabilities({ ai: true });
-            const on = io.dom.aireview.disabled;
+            const on = io.dom.aireview.disabled || io.dom.aiapply.disabled;
             /* 引けなかったとき（キーが無い応答）は閉じない */
             io.applyCapabilities({});
-            const unknown = io.dom.aireview.disabled;
+            const unknown = io.dom.aireview.disabled || io.dom.aiapply.disabled;
             return { off, on, unknown };
         });
 

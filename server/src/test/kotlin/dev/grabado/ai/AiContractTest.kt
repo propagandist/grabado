@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Primary
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import tools.jackson.databind.JsonNode
@@ -152,9 +153,18 @@ class AiContractTest {
         }
     }
 
+    /**
+     * スタブを**本物より優先する**（段階11-2b で `AnthropicSuggestionSource` が main に入り、
+     * `SuggestionSource` の Bean が 2 つになった）。`@Primary` が無いと
+     * `NoUniqueBeanDefinitionException` で文脈ごと起動しない。
+     *
+     * **本物を除外する形は採らない** —— 除外すると「本物が居ても契約が保たれる」ことが
+     * 試されなくなる。ここは**居るうえで、上流に出ない方を選んでいる**。
+     */
     @TestConfiguration
     class StubConfiguration {
         @Bean
+        @Primary
         fun suggestionSource(): SuggestionSource = stub
     }
 

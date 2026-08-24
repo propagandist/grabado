@@ -611,6 +611,8 @@ server/src/test/kotlin/dev/grabado/
   api/ReadOnlyContractTest.kt   同じ表の serverMode: readonly（§5 段階5-3）
   ai/AiContractTest.kt          同じ表の serverMode: ai（§11 段階11-2a）
   ai/AiReviewServiceTest.kt     上限・キャッシュ・レート制限を HTTP なしで
+  ai/ReviewSchemaTest.kt        スキーマと js/io/ai/suggestion.ts の語彙を突き合わせる
+  ai/AnthropicIntegrationTest.kt 実キーで 1 往復（opt-in。§11 段階11-2b）
   design/DesignNameTest.kt      keyword の検証規則（純粋な表テスト）
   design/FileDesignStoreTest.kt 実 FS への I/O（@TempDir）
 ```
@@ -651,10 +653,29 @@ URL 往復と `%2F` の扱いが含まれ、どちらもサーブレットコン
 `request.path` がそれで、**あればそちらを使う**——URL の組み立て方が 2 通りになるが、
 どちらなのかは文書ではなくデータで分かる。
 
-★ **`SuggestionSource` の実装は main に 1 つも無い**（段階11-2a）。固定応答を返すコードを
-本番に置くと「AI が動いているように見えて実は固定」が載るので、**スタブはテスト側にだけ置く**。
-実装が無ければ Bean が組めず `capabilities.ai` は false のまま——**実装が無いなら使えない**を
-構造で保証している。上流を叩く実装が入るのは 11-2b。
+★ **段階11-2b で `AnthropicSuggestionSource` が main に入り、`SuggestionSource` の Bean が
+2 つになった。** `AiContractTest` のスタブは `@Primary` で本物より優先する ——
+**本物を除外する形は採らない**（除外すると「本物が居ても契約が保たれる」ことが試されなくなる）。
+
+### 上流を実際に叩く 2 本（§11 段階11-2b）
+
+| ファイル | 走る条件 | 担当 |
+|---|---|---|
+| `ai/ReviewSchemaTest.kt` | **既定で走る** | structured outputs のスキーマが [`../js/io/ai/suggestion.ts`](../js/io/ai/suggestion.ts) と**同じ語彙**であること（`op` 8 語 / `keyType` 4 語 / `category` 7 語 / `severity` 3 語）＋ **スキーマ自身が Claude のサブセットに収まっていること**（全オブジェクトの `additionalProperties: false`・数値/文字列長の制約を使っていない・再帰していない） |
+| `ai/AnthropicIntegrationTest.kt` | **opt-in**（`ANTHROPIC_API_KEY` ＋ `GRABADO_IT_AI_MODEL`） | 実キーで 1 往復。house 既定から外れた設計に**実際の指摘が返る**こと・返った提案が enum の内側にあること・知らない `dialect` でも落ちないこと |
+
+**なぜ両方要るか。** スキーマ側だけだと「Claude はこのスキーマを受け付けるはずだ」という
+**我々の信念を符号化したもの**でしかなく、信念が間違っていれば全部緑のまま本番が 400 になる
+（`PostgresCatalogIntegrationTest` が書いている構図と同じ）。逆に実 API 側だけだと CI で回せない。
+
+```bash
+set -a; . ./.env; set +a
+GRABADO_IT_AI_MODEL=claude-opus-5 server/gradlew -p server test   --tests '*AnthropicIntegrationTest*' --info | grep 'ai review:'
+```
+
+使った量は `AnthropicSuggestionSource` が INFO で出す（`input=… cacheRead=…`）。
+**返ってきた提案そのものも `--info` で読める** —— 形はアサーションで見られるが、
+**中身が製品として意味のある指摘かは人が読むしかない**。
 
 時間に依存するもの（結果キャッシュの TTL・レート制限のウィンドウ）は `Clock` を渡して
 その場で進める（`AiReviewServiceTest`）。**`Thread.sleep` で待たない**——遅くなるうえに

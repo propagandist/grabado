@@ -67,6 +67,11 @@ dependencies {
     //   Console 経由で、JDBC ドライバとして使う限り到達しない。
     implementation(libs.h2)
 
+    // AI proxy（段階11-2b）。**外部ホストへ出る唯一の依存**で、org security-baseline §5.2
+    // （AI を組み込むとき）が分類にかかわらず掛かる。HTTP を直接組まないのは、
+    // structured outputs のスキーマ強制・prompt caching・エラーの型が SDK 側で保たれるため。
+    implementation(libs.anthropic)
+
     // JUnit 5 + MockMvc + AssertJ。モックライブラリは足さない
     // （store は @TempDir で実 FS を使う。in-memory の double はテストを空虚にする）。
     testImplementation(libs.spring.boot.starter.test)

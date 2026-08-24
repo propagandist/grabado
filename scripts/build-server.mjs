@@ -30,7 +30,7 @@ const result = spawnSync(`"${wrapper}"`, ["bootJar"], {
 });
 
 if (result.error) {
-    console.error(`gradle wrapper を起動できなかった（Java 21 が要る）: ${result.error.message}`);
+    console.error(`gradle wrapper を起動できなかった（Java 25 が要る）: ${result.error.message}`);
     process.exit(1);
 }
 process.exit(result.status ?? 1);

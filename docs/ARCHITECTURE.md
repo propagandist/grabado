@@ -846,9 +846,9 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 ## 9. 配布とイメージ（到達点）
 
-**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 にある。**
-本章は**まだ 1 行も実装されていない** —— 枠だけを予約し、2-1 以降が実測どおりに埋める
-（§8 が 11-0 で予約され 11-2 以降に埋まったのと同じ形）。
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 と 2-1 にある。**
+**段階2-1 でイメージが動くようになった**（3 ステージ・digest ピン・非 root。実測は §9.1）。
+**まだ埋まっていないのは §9.3〜§9.5** —— CSP は 2-2、env と走らせ方は 2-3。
 
 **HANDOVER §2 との差分は 1 つ**（配置。§2.2 の骨格は `frontend/` / `backend/` を前提にしているが、
 実在は**リポジトリルート**と **`server/`**）。**HANDOVER が触れていない論点が 1 つ** ——
@@ -868,10 +868,34 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
   `./gradlew bootJar` が Node のビルドを要求し、開発時の 2 プロセスと `npm run test:server` が壊れる。
   代償として**手元の jar には static が入らない**ので、**イメージの検証はイメージでやる**（2-4）
 - **ベースイメージは digest でピンする**（org security-baseline §5.1）。**Dependabot の `docker`
-  entry とセット**。版と digest は 2-1 が実測して書く
+  entry とセット**。版と digest は下の実測表と [`../Dockerfile`](../Dockerfile) にある
 - **★ レジストリへは publish しない。** イメージは各自が build する。publish した日に
   **分類 P（実行物を配る）**へ載り §5.3.2 の責務を引き受けることになるので、**したくなった
   時点で別 issue**（段階2-0 の決めたこと 5）
+
+**実測（2026-08-25、段階2-1）。** ベースは 3 本とも digest でピンしてある
+（[`../Dockerfile`](../Dockerfile)。**版のコメントは Dependabot が digest と一緒に書き換える**）。
+
+| ステージ | ベース | 実際に入ったもの |
+|---|---|---|
+| **web** | `node:24-alpine` | Node 24.19.0 / npm 11.17.0 / Alpine 3.24.1 |
+| **api** | `eclipse-temurin:25-jdk-alpine` | Temurin 25（JDK） |
+| **runtime** | `eclipse-temurin:25-jre-alpine` | Temurin 25.0.4+7 / Alpine 3.24.1 |
+
+- **イメージは 284MB / 8 層。** runtime に入るのは `grabado.jar` 1 本だけで、Node も Gradle も
+  JDK も残らない
+- **`COPY . .` が運ぶのは 1.6MB**（`docker history`）—— `npm ci` が作る `node_modules`（175MB）
+  も手元の `.env` も入らない。**`.dockerignore` の許可リストが効いている**
+- **ランタイムは Java 25 LTS**（起動ログ `using Java 25.0.4`）。`jvmToolchain` /
+  `ci-server.yml` の `setup-java` / イメージの 3 つを同じ版に揃えてある
+- **非 root**（`uid=100(grabado)`）で走り、bind mount した `/data/schema` に **save が
+  実ファイルを書けた**（Docker Desktop for Windows で実測。**Linux ホストでの uid の
+  合わせ方は 2-3**）
+- **単一プロセスが両方を配る**ことの確認 —— 起動ログに
+  `Adding welcome page: class path resource [static/index.html]`、`/db/postgresql/datatypes.xml`
+  が 200、`?action=list` が JSON、`?action=capabilities` が
+  `{"readonly":false,"introspection":false,"ai":false}`。`READONLY=true` では
+  `save` / `import` が 403 で `list` は生きている
 
 ### 9.2 配信の分担
 

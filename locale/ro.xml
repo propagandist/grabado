@@ -83,6 +83,9 @@
     <string name="serverloadprompt">Introduceti numele sub care a fost salvat design-ul:</string>
     <string name="serversaveprompt">Introduceti numele sub care va fi salvat design-ul:</string>
     <string name="serverimportprompt">Introduceti numele bazei de date care va fi importata:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Server response</string>
     <string name="http201">Salvare efectuata</string>
@@ -90,6 +93,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Not Found</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">Internal Server Error</string>
     <string name="http501">Not Implemented</string>
     <string name="http503">Service Unavailable</string>

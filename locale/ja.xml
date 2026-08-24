@@ -87,6 +87,9 @@
     <string name="serverloadprompt">読み込む設計名を入力してください:</string>
     <string name="serversaveprompt">保存する設計名を入力してください:</string>
     <string name="serverimportprompt">インポートするDB名を入力してください:</string>
+    <string name="aireview">AI レビュー</string>
+    <string name="aireviewconfirm">これがそのまま AI に送られます。送信しますか？</string>
+    <string name="aireviewbroken">AI の応答を読み取れませんでした。</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">サーバレスポンス</string>
     <string name="http201">Saved</string>
@@ -94,6 +97,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Not Found</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">Internal Server Error</string>
     <string name="http501">Not Implemented</string>
     <string name="http503">Service Unavailable</string>

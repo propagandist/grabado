@@ -87,6 +87,9 @@
     <string name="serverloadprompt">Zadejte označení, pod kterým bylo vaše schéma uloženo:</string>
     <string name="serversaveprompt">Zadejte označení, pod kterým bude vaše schéma uloženo:</string>
     <string name="serverimportprompt">Zadejte název databáze k importu:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Odpověď od serveru</string>
     <string name="http201">Uloženo</string>
@@ -94,6 +97,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Neexistuje</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">Vnitřní chyba serveru</string>
     <string name="http501">Není implementováno</string>
     <string name="http503">Služba není dostupná</string>

@@ -86,6 +86,9 @@
     <string name="serverloadprompt">输入你所保存的名字:</string>
     <string name="serversaveprompt">输入所要保存的名字:</string>
     <string name="serverimportprompt">输入所要导入的数据库名称:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">服务器反馈</string>
     <string name="http201">已存</string>
@@ -93,6 +96,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">找不到</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">网络服务错误</string>
     <string name="http501">未执行</string>
     <string name="http503">服务暂不可用</string>

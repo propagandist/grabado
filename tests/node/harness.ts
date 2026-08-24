@@ -102,6 +102,11 @@ export interface NodeHarness {
      * **フロント側の往復**（parse -> 型解決 -> 適用 -> 並べ直し）だけ。
      */
     setIntrospection(json: string | null): void;
+    /**
+     * AI レビューの応答を差し込む（段階11-3）。**null なら 403**（AI が無効なデプロイ）。
+     * status を渡せば失敗側も試せる（429 の文言など）。
+     */
+    setAiReview(body: string | null, status?: number): void;
     /** confirm の答えを固定する（jsdom の confirm は常に false を返すため。段階4-6） */
     setConfirm(answer: boolean): void;
     /** confirm に渡された文言を取り出して空にする */
@@ -243,6 +248,7 @@ export async function createHarness(): Promise<NodeHarness> {
     let nextLoadStatus: number | null = null;
     /** introspection の応答（段階5-7b）。null なら「接続先が無い」＝ 404 */
     let introspectionResponse: string | null = null;
+    let aiReviewResponse: { body: string; status: number } | null = null;
 
     /**
      * Kotlin 実装（`server/src/main/kotlin/dev/grabado/design/ETags.kt`）と**同じ計算**。
@@ -260,6 +266,22 @@ export async function createHarness(): Promise<NodeHarness> {
         callback: OzRequestCallback,
         options?: OzRequestOptions,
     ): void {
+        /*
+         * AI proxy（段階11-3）。**`?action=` の形を取らない**ので、action を見る前にパスで分ける
+         * （`/api/` は §11 が始める名前空間）。既定は **403** —— キーもモデル名も無いデプロイが
+         * 既定の姿で、`setAiReview()` を呼んだときだけ提案が返る。
+         */
+        if (resolveRequestUrl(url) === "api/ai/review") {
+            if (aiReviewResponse === null) {
+                callback("", 403, {});
+                return;
+            }
+            callback(aiReviewResponse.body, aiReviewResponse.status, {
+                "Content-Type": "application/json",
+            });
+            return;
+        }
+
         const action = queryParam(url, "action");
         const keyword = queryParam(url, "keyword") ?? "";
 
@@ -395,8 +417,11 @@ export async function createHarness(): Promise<NodeHarness> {
             return false;
         }
         const path = resolveRequestUrl(url);
-        /* locale / datatypes は今までどおり fs から読む（output.xsl は段階6-5a で消えた） */
-        if (path.indexOf("backend/") === 0) {
+        /*
+         * locale / datatypes は今までどおり fs から読む（output.xsl は段階6-5a で消えた）。
+         * **`api/` も backend 側**（段階11-3）—— `/api/ai/review` は `?action=` の形を取らない。
+         */
+        if (path.indexOf("backend/") === 0 || path.indexOf("api/") === 0) {
             respondAsBackend(url, callback, options);
             return false;
         }
@@ -520,6 +545,9 @@ export async function createHarness(): Promise<NodeHarness> {
         },
         failNextLoad(status: number): void {
             nextLoadStatus = status;
+        },
+        setAiReview(body: string | null, status = 200): void {
+            aiReviewResponse = body === null ? null : { body: body, status: status };
         },
         setIntrospection(json: string | null): void {
             introspectionResponse = json;

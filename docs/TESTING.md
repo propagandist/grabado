@@ -622,7 +622,8 @@ tests/
   known-issues/  既知の不具合（golden を持たない）
   dist/          build 成果物のスモーク（golden は読むだけ）
   contract/      backend の HTTP 契約（言語非依存の表。§5 段階5-1b）
-  server/        実 HTTP の E2E（§5 段階5-9）。**要 JDK 21**。ブラウザ → proxy → Kotlin → fs
+  server/        実 HTTP の E2E（§5 段階5-9 / §11 段階11-5）。**要 JDK 21**。
+                 ブラウザ → proxy → Kotlin → fs ／ AI は上流まで（opt-in）
 
 server/src/test/kotlin/dev/grabado/
   api/BackendContractTest.kt    tests/contract/ の表を実 HTTP に流す
@@ -686,6 +687,16 @@ URL 往復と `%2F` の扱いが含まれ、どちらもサーブレットコン
 **なぜ両方要るか。** スキーマ側だけだと「Claude はこのスキーマを受け付けるはずだ」という
 **我々の信念を符号化したもの**でしかなく、信念が間違っていれば全部緑のまま本番が 400 になる
 （`PostgresCatalogIntegrationTest` が書いている構図と同じ）。逆に実 API 側だけだと CI で回せない。
+
+**さらにもう 1 層ある** —— `tests/server/ai-e2e.spec.ts`（§11 段階11-5。opt-in）。
+ブラウザ（実 XHR）→ Vite dev proxy → Kotlin → Anthropic を通しで動かす唯一の場所で、
+**単体テストが全部緑のまま残っていた欠陥を 2 つ捕まえた**:
+
+- `vite.config.ts` の proxy が `/backend` しか転送しておらず、`npm run dev` 経由では
+  `/api/ai/review` が backend に届いていなかった（仮想 backend は proxy を通らない）
+- `@RequestBody ByteArray` が**ブラウザの `Content-Type: application/json` に 415 を返した**。
+  契約表のケースはヘッダを送っていなかったので通っていた（再発防止に
+  `ai-review-json-content-type` を足してある）
 
 ```bash
 set -a; . ./.env; set +a

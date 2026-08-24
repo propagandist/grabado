@@ -36,6 +36,16 @@ export default defineConfig({
                 target: `http://127.0.0.1:${SERVER_PORT}`,
                 changeOrigin: true,
             },
+            /*
+             * AI proxy（段階11-3 で配線、11-5 で proxy を足した）。**`/api` は §11 が始めた
+             * 名前空間**で、`/backend/<name>/?action=` の形を取らない —— ここを足すまで
+             * `npm run dev` 経由では `/api/ai/review` が backend に届いていなかった
+             * （**実 HTTP の E2E が捕まえた**。単体テストは全部緑のままだった）。
+             */
+            "/api": {
+                target: `http://127.0.0.1:${SERVER_PORT}`,
+                changeOrigin: true,
+            },
         },
     },
     preview: { host: "127.0.0.1", port: PREVIEW_PORT, strictPort: true },

@@ -58,6 +58,16 @@ export default defineConfig({
              * 遅いうえに終了時のプロセス片付けが読みにくいため。
              */
             command: `java -jar server/build/libs/grabado.jar --grabado.schema-dir=${E2E_SCHEMA_DIR}`,
+            /*
+             * AI の env を透過する（段階11-5）。**コマンド行に `--grabado.ai.api-key=` を
+             * 書かない** —— プロセス一覧に鍵が出る（org security-baseline §5.2）。
+             * 両方そろわなければ backend の `capabilities.ai` が false のままで、
+             * AI の E2E は skip される。
+             */
+            env: {
+                ANTHROPIC_API_KEY: process.env["ANTHROPIC_API_KEY"] ?? "",
+                GRABADO_AI_MODEL: process.env["GRABADO_IT_AI_MODEL"] ?? "",
+            },
             port: SERVER_PORT,
             reuseExistingServer: !process.env["CI"],
             timeout: 120_000,

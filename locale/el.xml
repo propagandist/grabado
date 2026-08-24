@@ -83,6 +83,9 @@
     <string name="serverloadprompt">Πληκτρολογήστε το τίτλο του αποθηκευμένου σχεδιαγράμματος:</string>
     <string name="serversaveprompt">Πληκτρολογήστε το τίτλο για την αποθήκευση του σχεδιαγράμματος:</string>
     <string name="serverimportprompt">Δώστς όνομα βάσης δεδομένων για εισαγωγή:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Απάντηση διακομιστή</string>
     <string name="http201">Αποθηκεύθηκε</string>
@@ -90,6 +93,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Δεν βρέθηκε</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">Εσωτερικό σφάλμα διακομιστή</string>
     <string name="http501">Χωρίς σχεδίαση</string>
     <string name="http503">Μη-διαθέσιμη Παροχή</string>

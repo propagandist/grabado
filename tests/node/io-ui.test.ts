@@ -620,4 +620,103 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             palette.setRoot(loaded);
         });
     });
+
+    /*
+     * AI レビュー（段階11-3）。**送る前に見せる**ことと、**断ったら 1 バイトも送らない**ことが
+     * 契約の中心（段階11-0 の決めたこと 3 —— 匿名化を既定にしない代わりの担保）。
+     */
+    describe("AI レビュー（段階11-3）", () => {
+        beforeEach(() => {
+            h.setAiReview(null);
+            /* 仮想 backend の capabilities は ai:false を返すので、UI テストは自分で有効化する */
+            h.io.applyCapabilities({ ai: true });
+        });
+
+        test("押すと、送る JSON がそのまま textarea に出る", () => {
+            h.setConfirm(false);
+
+            h.io.aireview();
+
+            const shown = h.io.dom.ta.value;
+            expect(shown).toContain('"aiRequestVersion": 1');
+            expect(shown).toContain('"dialect": "postgresql"');
+            /* 座標は 1 つも入らない（§8.2） */
+            expect(shown).not.toContain('"x"');
+        });
+
+        test("**断ったら 1 バイトも送らない**", () => {
+            h.setConfirm(false);
+
+            h.io.aireview();
+
+            expect(h.takeRequests().filter((r) => r.url.indexOf("api/ai/review") !== -1)).toHaveLength(0);
+        });
+
+        test("承諾すると POST が飛び、body は見せたものと 1 バイトも違わない", () => {
+            /* まず断って、送る前に見せたものを取る（承諾すると応答の文言で上書きされる） */
+            h.setConfirm(false);
+            h.io.aireview();
+            const shown = h.io.dom.ta.value;
+            h.takeRequests();
+
+            h.setConfirm(true);
+            h.io.aireview();
+            const req = h.takeRequests().find((r) => r.url.indexOf("api/ai/review") !== -1)!;
+
+            expect(req.method).toBe("post");
+            expect(req.url).toContain("api/ai/review");
+            expect(req.headers?.["Content-type"]).toBe("application/json");
+            expect(req.data).toBe(shown);
+        });
+
+        test("提案が返ると一覧になる（**まだ適用しない**）", () => {
+            h.setConfirm(true);
+            h.setAiReview(
+                JSON.stringify([
+                    {
+                        category: "missing_pk",
+                        severity: "error",
+                        target: { table: "users" },
+                        rationale: "主キーが無い",
+                        patch: { op: "add-key", keyType: "PRIMARY", columns: ["id"] },
+                    },
+                ]),
+            );
+
+            h.io.aireview();
+
+            expect(h.io.dom.ta.value).toContain("1 件");
+            expect(h.io.dom.ta.value).toContain("missing_pk");
+            expect(h.io.dom.ta.value).toContain("まだ 1 件も適用していない");
+        });
+
+        test("429 に文言が出る（段階11-2a が先送りした分の受け皿）", () => {
+            h.setConfirm(true);
+            h.setAiReview("", 429);
+
+            h.io.aireview();
+
+            expect(h.io.dom.ta.value).toContain("Too Many Requests");
+        });
+
+        test("403 は「このデプロイでは禁止」の文言（AI が無効なデプロイ）", () => {
+            h.setConfirm(true);
+
+            h.io.aireview();
+
+            expect(h.io.dom.ta.value).toContain("Forbidden");
+        });
+
+        test("capabilities の ai が false ならボタンが押せない（冪等）", () => {
+            h.io.applyCapabilities({ ai: false });
+            expect(h.io.dom.aireview.disabled).toBe(true);
+
+            h.io.applyCapabilities({ ai: true });
+            expect(h.io.dom.aireview.disabled).toBe(false);
+
+            /* 引けなかったとき（キーが無い応答）は閉じない —— 5-5 の「分からないものを閉じない」 */
+            h.io.applyCapabilities({});
+            expect(h.io.dom.aireview.disabled).toBe(false);
+        });
+    });
 });

@@ -85,6 +85,9 @@
     <string name="serverloadprompt">Entajpi ŝlosilvorton per kiu via fasonado estis konservita:</string>
     <string name="serversaveprompt">Entajpi ŝlosilvorton per kiu via fasonado estos konservita:</string>
     <string name="serverimportprompt">Entajpi la nomon de datumbazo importenda:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Respondo de servilo</string>
     <string name="http201">Konservita</string>
@@ -92,6 +95,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Netrovita</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">Interna Servilo Eraro</string>
     <string name="http501">Ne funkciigata</string>
     <string name="http503">Servo Nedisponebla</string>

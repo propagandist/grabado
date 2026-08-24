@@ -88,6 +88,9 @@
     <string name="serverloadprompt">Tasarımınızın kaydedildiği anahtar kelimeyi girin:</string>
     <string name="serversaveprompt">Tasarımınızın kaydedileceği anahtar kelimeyi girin:</string>
     <string name="serverimportprompt">Yüklenecek veritabanının adını girin:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Sunucu yanıtı</string>
     <string name="http201">Kaydedilmiş</string>
@@ -95,6 +98,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Bulunamadı</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">İç Sunucu Hatası</string>
     <string name="http501">Uygulanmadı</string>
     <string name="http503">Hizmet Kullanılamıyor</string>

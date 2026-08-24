@@ -198,6 +198,32 @@ test.describe("DDL 生成の UI 経路", () => {
 });
 
 test.describe("撤去したものが戻っていない", () => {
+    test("AI レビューのボタンが実在し、ラベルが locale から入る（段階11-3）", async () => {
+        const label = await page.evaluate(() => {
+            const button = window.d!.io.dom.container.querySelector<HTMLInputElement>("#aireview");
+            return button === null ? null : button.value;
+        });
+
+        /* locale から引けていれば id そのままの文字列にはならない */
+        expect(label).toBe("AI review");
+    });
+
+    test("capabilities の ai で押せる・押せないが切り替わる（段階11-3）", async () => {
+        const states = await page.evaluate(() => {
+            const io = window.d!.io;
+            io.applyCapabilities({ ai: false });
+            const off = io.dom.aireview.disabled;
+            io.applyCapabilities({ ai: true });
+            const on = io.dom.aireview.disabled;
+            /* 引けなかったとき（キーが無い応答）は閉じない */
+            io.applyCapabilities({});
+            const unknown = io.dom.aireview.disabled;
+            return { off, on, unknown };
+        });
+
+        expect(states).toEqual({ off: true, on: false, unknown: false });
+    });
+
     test("Dropbox のボタンと XML/TXT ダウンロードが index.html から消えている", async () => {
         /*
          * io の container はコンストラクタで DOM から外れているので getElementById では

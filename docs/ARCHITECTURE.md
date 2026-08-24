@@ -519,7 +519,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 | [`conflict.ts`](../js/io/conflict.ts) | 保存境界 | 保存前の外部変更検知の判定（純関数。`absent` / `clean` / `exists` / `conflict`） |
 | [`template.ts`](../js/io/template.ts) | 参照 | §6.2 初期テーブルテンプレート（§6 段階6-4 で追加）。`<template>` を読み、新規テーブルの初期列と PRIMARY を作る。`Add row` の既定型（`newrowtype`）も同じ層 |
 | [`convert.ts`](../js/io/convert.ts) | 出・前段 | プロファイル変換（§6 段階6-10a）。`DesignModel` → **別プロファイルの** `DesignModel` ＋ 落ちたものの一覧。純関数で、型は正規型（`kind`）1 段だけを介して写す |
-| [`ai/`](../js/io/ai/) | 格子の外 | AI 提案の適用（§11 段階11-1）。`suggestion.ts` が提案と patch の型（型だけ・emit 空）、`apply-patch.ts` が `DesignModel` → `DesignModel` の純関数。**LLM も HTTP も 1 バイトも知らない** |
+| [`ai/`](../js/io/ai/) | 格子の外 | AI との往復（§11）。`suggestion.ts` が提案と patch の型（型だけ・emit 空）、`apply-patch.ts` が `DesignModel` → `DesignModel` の純関数（11-1）、`request.ts` が `DesignModel` → 送信 JSON（11-3）、`notice.ts` が提案 → 人が読む 1 枚（11-3）。**4 本とも LLM も HTTP も 1 バイトも知らない** |
 
 **12 本目の [`template.ts`](../js/io/template.ts) は §6 段階6-4 で足した**（§4 の 11 本ではない）。
 **13 本目の [`convert.ts`](../js/io/convert.ts) は §6 段階6-10a。** 格子の「出・形式側」の
@@ -728,10 +728,20 @@ READONLY / キー未設定 / モデル名未設定 / 実装が無い のどれ�
 - `dialect` —— ルーブリックの選択に使う（`postgresql` は house 規約でフル判定、
   他 7 本は DB 非依存の指摘に絞る）
 - `tables[].name` / `.comment` / `.columns[]` / `.keys[]`
-- `columns[]` は `name` / `sqlType`（**型 id ではなく解決済みの SQL 名**）/ `nullable` /
+- `columns[]` は `name` / `sqlType`（**型 id ではなく解決済みの SQL 名**）/ `size` / `nullable` /
   `default` / `comment` / `references[]`
 
+**`size` は段階11-3 で足した。** 11-2b の実測で `VARCHAR(50)` に対する指摘（「業務上の長さ制約が
+読み取れない」）が返り、**サイズが判定に効く**ことが分かったため。モデルが `size` を別に持つので
+写像も素直（型名に括弧を含めない）。**空なら送らない** —— コメント・既定値・参照も同じで、
+費用が自社負担なので意味を持たないバイトを毎回運ばない。`nullable` だけは false も情報なので常に送る。
+
 **送らないもの**: `x` / `y`（判定に無関係でトークンだけ食う）、`formatVersion`、`db`。
+
+組み立てるのは [`../js/io/ai/request.ts`](../js/io/ai/request.ts) の純関数（段階11-3）。
+**同じモデルからは同じバイト列**が出る —— §8.5 の結果キャッシュの鍵がこのバイト列の SHA-256 なので、
+揺れると当たらなくなる。**整形して送る**のは、送信前プレビューに出すのがこの文字列そのもので、
+**見せているものと送るものを 1 バイトも違わせない**ため（決めたこと 3 の担保）。
 
 **送信前に、このバイト列をそのままユーザーに見せる**（プレビュー）。匿名化は既定にしない ——
 判定基準の中心が名前そのものなので、仮名化すると §6.3 由来の指摘がまるごと死ぬ。

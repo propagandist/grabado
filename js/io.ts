@@ -52,6 +52,10 @@ import { detectDesignFormat } from "./io/detect.ts";
 import { importNotice, introspectionToModel } from "./io/introspect-parser.ts";
 import type { IntrospectionResult } from "./io/introspect-model.ts";
 import { applyDesignModel } from "./io/apply.ts";
+import { extractModel } from "./io/extract.ts";
+import { buildAiRequest, serializeAiRequest } from "./io/ai/request.ts";
+import { reviewNotice } from "./io/ai/notice.ts";
+import type { AiSuggestion } from "./io/ai/suggestion.ts";
 import {
     etagFromHeaders,
     preconditionFor,
@@ -92,6 +96,12 @@ function jsonKeyword(name: string): string {
 const BACKEND_PATH = "backend/file/";
 
 /**
+ * AI proxy（段階11-3）。**`/backend/<name>/?action=` の形を取らない** ——
+ * `/api/` は §11 が始める名前空間（段階11-0 の決めたこと 5）。
+ */
+const AI_REVIEW_PATH = "api/ai/review";
+
+/**
  * 保存/読込ダイアログの DOM。
  *
  * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン 16 個は
@@ -125,6 +135,11 @@ export interface IoDom {
     clientdownload: HTMLInputElement;
     clientloadfromfile: HTMLInputElement;
     serverimport: HTMLInputElement;
+    /**
+     * AI レビュー（段階11-3）。**server 側の fieldset に置く** —— backend proxy 経由で、
+     * `capabilities.ai` が false なら押せない（`applyCapabilities`）。
+     */
+    aireview: HTMLInputElement;
 }
 
 export class IO {
@@ -178,6 +193,7 @@ export class IO {
             "clientdownload",
             "clientloadfromfile",
             "serverimport",
+            "aireview",
         ];
         for (var i = 0; i < ids.length; i++) {
             var id = ids[i]!;
@@ -210,6 +226,7 @@ export class IO {
         this.loadresponse = this.loadresponse.bind(this);
         this.listresponse = this.listresponse.bind(this);
         this.importresponse = this.importresponse.bind(this);
+        this.aireviewresponse = this.aireviewresponse.bind(this);
 
         OZ.Event.add(this.dom.saveload, "click", this.click.bind(this));
         OZ.Event.add(
@@ -237,6 +254,7 @@ export class IO {
         OZ.Event.add(this.dom.serverload, "click", this.serverload.bind(this));
         OZ.Event.add(this.dom.serverlist, "click", this.serverlist.bind(this));
         OZ.Event.add(this.dom.serverimport, "click", this.serverimport.bind(this));
+        OZ.Event.add(this.dom.aireview, "click", this.aireview.bind(this));
         OZ.Event.add(this.dom.clientcopy, "click", this.clientcopy.bind(this));
         OZ.Event.add(this.dom.clientpaste, "click", this.clientpaste.bind(this));
         OZ.Event.add(this.dom.clientdownload, "click", this.clientdownload.bind(this));
@@ -328,7 +346,7 @@ export class IO {
      * 「サーバに尋ねられなかった」ときは **[requestCapabilities] がここを呼ばない** ——
      * 何も隠さないのが正しい（引けないのは「機能が無い」ではなく「サーバがいない」）。
      */
-    applyCapabilities(caps: { readonly?: boolean; introspection?: boolean }): void {
+    applyCapabilities(caps: { readonly?: boolean; introspection?: boolean; ai?: boolean }): void {
         /*
          * READONLY のデプロイでは保存が 403 になる。**押してから知るのではなく、押せなくする**
          * —— できることの説明として、そのほうが正確。
@@ -346,6 +364,12 @@ export class IO {
          *   のと同じ理屈で、**分からないものを勝手に閉じない**。
          */
         this.dom.serverimport.disabled = caps.introspection === false;
+        /*
+         * AI は**キー・モデル名・実装がそろって初めて true**（段階11-2a / 11-2b）。
+         * READONLY のときもサーバが false を返す。**明示的に false のときだけ隠す**のは
+         * introspection と同じ —— 分からないものを勝手に閉じない。
+         */
+        this.dom.aireview.disabled = caps.ai === false;
     }
 
     click(): void {
@@ -903,7 +927,75 @@ export class IO {
      *   禁止されている」と「サーバが壊れている」が同じ画面になる
      * - `412`（If-Match 不一致）は **check() に通さない** —— フロントが握って confirm に流す
      *   （プリフライトの 404 を通さないのと同じ理屈）。入るのは段階5-4
+     * - `429` は段階11-2a の AI proxy（自分のレート制限）。**503 に寄せない** —— 待てば通る
+     *   ものを故障に見せない。**この段階まで到達経路が無かった**ので、11-2a は意図的に
+     *   ここを広げずに済ませていた（配線と同じ PR で足すのがこの規律の要点）
      */
+    /**
+     * AI レビュー（段階11-3。契約は `docs/ARCHITECTURE.md` §8）。
+     *
+     * ★ **送る前に、送るバイト列をそのまま見せる。** 匿名化を既定にしない
+     *   （段階11-0 の決めたこと 3）代わりの担保がこれで、**プレビューと送信バイト列は
+     *   1 バイトも違わない** —— compact を送って整形版を見せると約束が崩れる。
+     *
+     * ★ **まだ 1 件も適用しない。** 承認して当てるのは 11-4（review-first ＝ CLAUDE.md 制約7）。
+     *
+     * 見せ方は textarea 経路で、6-10b（変換注記）/ 5-7b（import 注記）と同じ ——
+     * **新しい UI 語彙を増やさない**。
+     */
+    aireview(e?: Event): void {
+        var json = serializeAiRequest(buildAiRequest(extractModel(this.owner), this.owner.palette));
+        /* 見せてから訊く。断られたら 1 バイトも送らない */
+        this.dom.ta.value = json;
+        if (!confirm(_("aireviewconfirm"))) {
+            return;
+        }
+
+        var h: Record<string, string> = {};
+        var shared = this.owner.getXhrHeaders();
+        for (var key in shared) {
+            h[key] = shared[key]!;
+        }
+        h["Content-type"] = "application/json";
+
+        this.owner.window.showThrobber();
+        OZ.Request(this.owner.getOption("xhrpath") + AI_REVIEW_PATH, this.aireviewresponse, {
+            method: "post",
+            data: json,
+            headers: h,
+        });
+    }
+
+    /**
+     * 提案を受け取って一覧にする（段階11-3）。
+     *
+     * status の文言は [check] が出す（**429 はここで初めて到達経路を持つ**）。
+     * 中身の整形は `js/io/ai/notice.ts` の純関数で、**AI の出力を HTML にしない**
+     * （org security-baseline §5.2。textarea に入れるだけ）。
+     */
+    aireviewresponse(data: unknown, code: number): void {
+        this.owner.window.hideThrobber();
+        if (!this.check(code)) {
+            return;
+        }
+        if (typeof data !== "string") {
+            return;
+        }
+
+        var suggestions: unknown;
+        try {
+            suggestions = JSON.parse(data);
+        } catch {
+            alert(_("aireviewbroken"));
+            return;
+        }
+        if (!Array.isArray(suggestions)) {
+            alert(_("aireviewbroken"));
+            return;
+        }
+        this.dom.ta.value = reviewNotice(suggestions as readonly AiSuggestion[]);
+    }
+
     check(code: number): boolean {
         switch (code) {
             case 201:
@@ -911,6 +1003,7 @@ export class IO {
             case 403:
             case 404:
             case 405:
+            case 429:
             case 500:
             case 501:
             case 503:

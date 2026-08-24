@@ -401,6 +401,20 @@ known-issue #10（`re` の後勝ち）も #4（先頭型フォールバック）
 `ai` は `NON_PROFILE_FIXTURE_DIRS`（`tests/support/fixtures.ts`）に宣言して外している ——
 introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしない**。
 
+### AI レビューの配線 — golden を持たない（§11 段階11-3）
+
+**golden はここを 1 ビットも押さえない**（`toDdl` / `toJson` / `state` はこの経路を通らない）。
+`js/io.ts` に AI が入った段階の完了判定は「**golden 114 本が無差分**」＋下の 2 本。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/ai-request.test.ts`](../tests/node/ai-request.test.ts) | 送る形（`js/io/ai/request.ts`）と見せ方（`notice.ts`）の純関数。**座標・`formatVersion`・`db` を送らない**こと・型が SQL 名に解決されること・**空のものを送らない**こと・**同じモデルから同じバイト列**が出ること（結果キャッシュの鍵が安定する条件）・提案が重い順に並ぶこと |
+| [`../tests/node/io-ui.test.ts`](../tests/node/io-ui.test.ts)（AI の describe） | UI 経路。押すと**送る JSON がそのまま textarea に出る**こと・**断ったら 1 バイトも送らない**こと・**送った body が見せたものと一致する**こと・提案が一覧になること・**429 に文言が出る**こと・`capabilities.ai` で押せる押せないが切り替わること |
+
+仮想 backend（`tests/node/harness.ts`）は `setAiReview(body, status)` で応答を差し込む。
+**既定は 403** —— キーもモデル名も無いデプロイが既定の姿。`/api/ai/review` は `?action=` の形を
+取らないので、**パスの先頭が `api/` なら backend 側**として振り分ける。
+
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 
 **golden はここを 1 ビットも押さえない。** golden 50 本（`ddl` 35 ＋ `json` 7 ＋ `state` 8）は

@@ -88,6 +88,9 @@
     <string name="serverloadprompt">Ввести ключове слово, під яким був збережений Ваш дизайн:</string>
     <string name="serversaveprompt">Ввести ключове слово, під яким Ваш дизайн буде збережений:</string>
     <string name="serverimportprompt">Ввести назву БД, яка імпортуватиметься:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
     <string name="importerror">Could not read the database structure</string>
     <string name="httpresponse">Відповідь від сервера</string>
     <string name="http201">Збережено</string>
@@ -95,6 +98,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Не знайдено</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
     <string name="http500">Внутрішня помилка сервера</string>
     <string name="http501">Не реалізовано</string>
     <string name="http503">Сервіс недоступний</string>

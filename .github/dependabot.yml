@@ -12,13 +12,20 @@
 #   `./gradlew dependencies --write-locks` を回して push すること
 #   （落ちること自体が「ロックを更新し忘れていない」証拠になる）。
 #
+# ★ cooldown は 7 日（段階2-1 で 4 entry すべてに付けた）。**悪意ある版は公開から数時間〜
+#   数日で発見・撤回される**ので、その窓の中でマージしてしまう経路を構造で塞ぐ設定であって、
+#   更新を遅らせるためのものではない。**security updates には効かない**（CVE 修正は即座に来る）。
+#
 # 判断規約: propagandist/.github の docs/ci-strategy.md
+# 供給網の基準: 同 docs/security-baseline.md §5.1
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     groups:
       actions:
@@ -28,6 +35,8 @@ updates:
     directory: /server
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     groups:
       server:
@@ -37,7 +46,25 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 3
     groups:
       frontend:
+        patterns: ['*']
+
+  # 配布イメージのベース（段階2-1）。Dockerfile の 3 本を digest ごと書き換える
+  # ——**ピンは Dependabot とセットで初めて安全**で、凍結したまま放置すると浮動タグより悪い。
+  #
+  # ★ 書き換えたとき、末尾コメントの版表記も一緒に更新される。**消さないこと**
+  #   （消すと、どの版を焼いているか Dockerfile から読めなくなる）。
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      images:
         patterns: ['*']

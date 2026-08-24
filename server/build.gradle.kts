@@ -25,9 +25,15 @@ group = "dev.grabado"
 version = "0.0.0"
 
 kotlin {
-    // ランタイムは eclipse-temurin:21-jre-alpine（HANDOVER §2.2）。開発機の JDK が何であれ
-    // 出力を 21 に固定する＝ビルドを決定論的にする（CLAUDE.md 制約3 の精神をビルドにも効かせる）。
-    jvmToolchain(21)
+    // ランタイムは eclipse-temurin:25-jre-alpine（段階2-1 の Dockerfile）。開発機の JDK が
+    // 何であれ出力を 25 に固定する＝ビルドを決定論的にする（CLAUDE.md 制約3 の精神をビルドにも
+    // 効かせる）。**手元・CI・イメージの 3 つを同じ版に揃える** —— イメージだけ動かすと、
+    // 同じソースから 3 種類のビルドが出る。
+    //
+    // ★ **foojay-resolver は入れない。** JDK が無い環境では Gradle が落ちる（auto-download は
+    //   有効だが、解決プラグインが無いので実際には落とせない）—— **ビルド時に外部から取得する
+    //   ものを増やさない**ため（org security-baseline §5.1）。手元に JDK 25 が要る。
+    jvmToolchain(25)
     compilerOptions {
         // フロントが strict + noUncheckedIndexedAccess なので、backend だけ緩いのは非対称。
         allWarningsAsErrors = true
@@ -88,7 +94,28 @@ tasks.withType<Test>().configureEach {
     }
 }
 
+/*
+ * jar を起こす java の絶対パスを書き出す。読むのは `playwright.server.config.ts`
+ * （`npm run test:server` → `scripts/build-server.mjs` → `bootJar` → ここ、の順）。
+ *
+ * ★ **PATH の java を当てにしない。** 段階2-1 で jvmToolchain を 25 に上げたとき、
+ *   JAVA_HOME が 21 のままの開発機では `java -jar` が UnsupportedClassVersionError
+ *   （class file version 69.0 に対して 65.0 まで）で落ちた —— **Gradle は toolchain を
+ *   自分で見つけるのに、E2E だけ PATH に頼る**のが非対称だった。ビルドに使った launcher を
+ *   そのまま渡せば、開発機の JAVA_HOME が何であれ jar が起きる。
+ */
+val writeJavaLauncher =
+    tasks.register("writeJavaLauncher") {
+        val launcher = javaToolchains.launcherFor(java.toolchain)
+        val target = layout.buildDirectory.file("java-launcher.txt")
+        outputs.file(target)
+        doLast {
+            target.get().asFile.writeText(launcher.get().executablePath.asFile.absolutePath)
+        }
+    }
+
 tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     // Dockerfile の COPY をワイルドカードにしないため名前を固定する（HANDOVER §2.2）。
     archiveFileName = "grabado.jar"
+    finalizedBy(writeJavaLauncher)
 }

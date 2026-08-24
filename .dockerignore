@@ -1,4 +1,37 @@
-Dockerfile
-.dockerignore
-.gitignore
-.git
+# ビルド文脈に何を入れるか。**全部を無視してから、ビルドの入力だけを `!` で戻す**（許可リスト）。
+#
+# ★ 拒否リストにしない。拒否リストだと**秘密を持つファイルが増えるたびにここを直す義務**が
+#   生まれ、直し忘れは静かに起きる（段階2-0 の決めたこと 4）。許可リストなら**足し忘れは
+#   「ビルドが落ちる」という気づける失敗**になる —— 段階11-0 の「形式で潰す」と同型。
+#
+# ★ だから手元の `.env`（Anthropic の実キーが平文で入っている。git 管理外）は
+#   **1 バイトも daemon へ渡らない**。除外を書いたからではなく、**戻していないから**。
+#
+# ★ 足すときは「**これはビルドの入力か**」を先に問うこと。テスト・文書・設定の類は
+#   イメージを作るのに要らない。
+
+*
+
+# --- web ステージ（vite build の入力）---
+# publicDir は使わない設定なので、db/ locale/ images/ は viteStaticCopy が dist へ運ぶ。
+# styles/ は index.html の <link> 経由で Rollup が拾う。
+!index.html
+!package.json
+!package-lock.json
+!tsconfig.json
+!vite.config.ts
+!src
+!js
+!styles
+!db
+!locale
+!images
+
+# --- api ステージ（bootJar の入力）---
+!server
+
+# server/ を丸ごと戻すとビルド出力まで入ってくる。**後勝ち**なので、ここで削り直す。
+server/build
+server/.gradle
+server/.kotlin
+server/bin

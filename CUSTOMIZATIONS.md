@@ -8791,6 +8791,128 @@ Dependabot とセットで初めて安全**で、凍結したまま放置する�
 - **busybox `Dockerfile` は upstream 資産の表にまだ行が無い。** 実際に置き換える 2-1 で、
   他の行と同じ「撤去済み」の形で足す
 
+### 2026-08-25 HANDOVER §2「配布」段階2-1 —— マルチステージ Dockerfile と `.dockerignore`
+
+正本は [issue #86](https://github.com/propagandist/grabado/issues/86)。**フロントは 0 行**
+（2-0 の分割表どおり）。契約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9 で、
+**2-0 が予約した枠を実測で埋めた**。
+
+#### イメージが動くようになった（2026-08-25 実測）
+
+`docker build` が通り、**単一プロセスが 8080 で static と API の両方を配る**。
+
+- 起動ログに `Adding welcome page: class path resource [static/index.html]`
+  —— **フロント dist が jar の classpath に入った**
+- **284MB / 8 層。** runtime に残るのは `grabado.jar` 1 本で、Node も Gradle も JDK も入らない
+- `/` が 200（`text/html`）、`/db/postgresql/datatypes.xml` が 200、`/locale/en.xml` が 200
+  —— `viteStaticCopy` の 3 ディレクトリが dist ごと届いている
+- `?action=list` が JSON、`?action=capabilities` が
+  `{"readonly":false,"introspection":false,"ai":false}`、save が **mount 先に実ファイルを書いた**
+- `READONLY=true` では save / import が **403**、`list` は生きている（読み取りビューアが成立する）
+- **非 root**（`uid=100(grabado)`）
+
+#### 決めたこと 1: ランタイムを **Java 25 LTS** へ上げる（ユーザー判断）
+
+HANDOVER §2.2 が「**版は着手時に最新 LTS 確認**」と書いており、その着手時が今日だった。
+**手元（`jvmToolchain`）/ CI（`setup-java`）/ イメージ（`eclipse-temurin:25-*`）の 3 つを同時に
+動かす** —— イメージだけ動かすと、同じソースから 3 種類のビルドが出る。
+
+- **Kotlin 2.4.10 / Gradle 9.7.1 / Spring Boot 4.1.1 は `allWarningsAsErrors = true` のまま通った。**
+  実装は 1 行も直していない
+- **foojay-resolver は入れない** —— ビルド時に外部から取得するものを増やすのは org
+  security-baseline §5.1 の崩れる変更。手元の Gradle は `~/.gradle/jdks` にあった JDK 25 を
+  auto-detection で拾った
+
+#### 決めたこと 2: `.dockerignore` は**許可リスト**（2-0 の決めたこと 4 の実体）
+
+記法の実測 —— **`*` で全部を無視してから `!` で戻す**。`*` は**ドット始まりにもマッチする**ので
+`.env` も `.git` も落ちる。**`server/` を丸ごと戻すとビルド出力（`build` / `.gradle` / `.kotlin` /
+`bin`）まで入る**ので、後段で削り直す（**後勝ち**）。
+
+効果は層のサイズに出た —— **`COPY . .` が運ぶのは 1.6MB**（`docker history`）。`npm ci` が作る
+`node_modules` の 175MB は**ステージの中で生まれるだけ**でビルド文脈には無い。
+
+**★ 2-0 の記述を訂正する（元の記述は消さない）。** 2-0 は「`COPY . .` すれば手元の `.env` が
+**そのまま層に残る**」と書いたが、**マルチステージでは中間ステージが最終イメージに含まれない**
+ので、配るイメージには残らない。実際に残るのは**ビルド文脈・ビルドキャッシュ・中間層**で、
+漏れるのは `docker save` やキャッシュのエクスポート、あるいは **web ステージから最終へ COPY を
+足した日**。**許可リストが要る理由は変わらないが、理由の書き方が不正確だった。**
+
+#### 決めたこと 3: `RUN sh ./gradlew` と書く
+
+**実行ビットはホストの OS 次第**（git 上は 100755 だが、Windows のチェックアウトでは落ちる）。
+`sh` 経由なら**同じ Dockerfile がどこでビルドされても同じように動く**。
+
+#### 決めたこと 4: 非 root で走らせる
+
+`/data/schema` は **save が書く先**なので、`RUN` で先に作って所有権を渡す。
+**Docker Desktop for Windows の bind mount では書けた**（実測）。**Linux ホストの uid 合わせは
+2-3 の README** —— ここで書くと起動手順の正本が 2 か所になる。
+
+#### 決めたこと 5: `cooldown` を **4 entry すべて**に付けた（ユーザー判断）
+
+2-0 は `docker` entry を足すことしか見ていなかったが、**既存 3 entry（`github-actions` /
+`gradle` / `npm`）が `cooldown` を 1 つも持っていなかった**（2026-08-25 実測）。org
+security-baseline §5.1 は「Dependabot の `cooldown` を外す」を**崩れる変更**に挙げている。
+`default-days: 7` を 4 本とも。**差分は数行**で、`docker` を足す PR の中で閉じられる。
+
+#### ★ 実測で分かったこと: Java を上げると E2E が PATH の java で落ちる
+
+**`npm run test:server` が `UnsupportedClassVersionError`（class file version 69.0 に対して
+65.0 まで）で落ちた。** `playwright.server.config.ts` が `java -jar` を **PATH の java** で
+起こしていて、それが JDK 21 だったため。**Gradle は toolchain 25 を自分で見つけるのに、E2E だけ
+PATH に頼っていた** —— この非対称が、版を上げた日に初めて牙を剥いた。
+
+直し方は**構造で潰す側**を選んだ。`bootJar` の `finalizedBy` で
+`server/build/java-launcher.txt` に**ビルドに使った launcher の絶対パス**を書き、config が
+それを読む（無ければ PATH の `java` に倒す）。**開発機の `JAVA_HOME` が何であれ jar が起きる。**
+
+**手元の全系統を回していなければ気づかなかった** —— `./gradlew build` は緑、フロントの 4 系統も
+緑で、落ちたのは 5 番目（実 HTTP の E2E）だけだった。
+
+#### 却下した案
+
+- **Java 21 のままにする** —— HANDOVER §2.2 が「着手時に最新 LTS 確認」と書いており、確認した
+  結果 25 が LTS。ここで見送ると、次に版を触る契機が §2 の外まで来ない
+- **`jvmToolchain` は 21 のままイメージだけ 25 で走らせる** —— 同じソースから 3 種類のビルドが出る
+- **バイトコードだけ 21 に落として toolchain を 25 にする** —— 「手元・CI・イメージを同じ版に
+  揃える」という理屈と合わない
+- **`JAVA_HOME` を切り替えるよう開発者に求める（文書だけで直す）** —— 踏むたびに時間を溶かす。
+  このリポジトリは**構造で潰す**側を選んできた（許可リスト・8 語の enum・SSRF 不可能化）
+- **foojay-resolver で JDK を自動取得する** —— ビルド時に外部から取得するものを増やす（§5.1）
+- **`COPY` を明示列挙して `.dockerignore` を軽くする** —— **配るものの正本が 2 か所になる**
+- **`.dockerignore` を拒否リストのまま増やす** —— 秘密を持つファイルが増えるたびに直す義務が
+  生まれ、直し忘れは静かに起きる
+- **`cooldown` を `docker` だけに付ける / 4 本まとめて別 issue にする** —— 前者は設定が不揃いの
+  まま残り、後者は §5.1 への追随が先送りになる
+- **HEALTHCHECK・イメージの E2E・`compose.yaml` を入れる** —— 2-4 / 2-3 の担当。**CI に載せる
+  前に手元で通ることを確かめる**順序を崩さない
+- **レジストリへ publish する** —— 2-0 で**決めて外した**（分類 P に載ると §5.3.2 の責務を
+  引き受ける）
+
+#### 申し送り
+
+- **★ 手元に JDK 25 が要るようになった。** `docs/TESTING.md` の「要 JDK」3 か所を 25 にした。
+  **JDK が無い環境では Gradle が落ちる**（auto-download は有効だが、解決プラグインが無いので
+  実際には落とせない）
+- **`server/build/java-launcher.txt` は `build/` の中**なので `.gitignore` 済み。
+  **`bootJar` を走らせない限り生まれない**
+- **CSP はまだ無い**（2-2）。`SecurityHeadersFilter` の宿題は返っていない
+- **`compose.yaml` / `.env.example` / mount と env の説明は 2-3。** README には build と run の
+  3 行だけ入れた
+- **イメージの E2E は 2-4。** いま緑にしたのは**手で叩いた結果**で、自動化されていない ——
+  **この段階のあいだ、イメージが壊れても誰も気づかない**
+- **CI で Docker ビルドは回っていない**（2-5）。`ci-server.yml` の `setup-java` は 25 にしたので、
+  **本 PR の CI が Java 25 の初回実走**になる
+- **Linux ホストの bind mount は未実測**（uid の合わせ方は 2-3）
+- **jar と最終イメージの digest は再現した**（`build.gradle.kts` にタスクを 1 本足しただけの
+  再ビルドで `sha256:9a63bc…` が一致した）。**Spring Boot の `bootJar` がエントリの timestamp を
+  固定している**ためと見られるが、**確かめたのは「一致した」ことまで**。イメージの再現性を
+  当てにするなら 2-4 / 2-5 で測り直すこと
+- **`cooldown` が Dependabot に受理されるかは未実測。** 設定の構文検証は GitHub 側でしか
+  走らない —— マージ後に Insights → Dependency graph → Dependabot でエラーが出ていないか見る
+- **リポジトリはまだ private**（2-0 の申し送りのまま。public 化の判断はどこにも記録されていない）
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
@@ -8804,6 +8926,7 @@ Dependabot とセットで初めて安全**で、凍結したまま放置する�
 | 型パレット `db/<db>/datatypes.xml` | **段階6-7a〜6-7c で新設 3 本（`sql-standard` / `h2` / `mariadb`）が入り、対応 DB 8 本がそろった**（3 本とも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 / MariaDB 11.8.8 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入り、6-7a 〜 6-8d で 8 本すべてが持つようになった** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。**段階6-8d で最後の `sqlite` が strict になり、未現代化が 0 本に**（`re` を読むコードと先頭型フォールバックがリポジトリから消えた） |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
+| ~~`Dockerfile`（busybox httpd 11 行）~~ | **段階2-1 で置き換え**。`COPY . .` でリポジトリをそのまま配る作りで、`index.html` が `/src/main.ts` を読むので**起動しても動かなかった**（README にも「現在このイメージは動かない」と書いてあった）。`.dockerignore` の 4 行の拒否リストも同時に**許可リスト**へ | **完了。**3 ステージ（web / api / runtime）・digest ピン・非 root。契約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9、実測は段階2-1 の記録 |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。
 

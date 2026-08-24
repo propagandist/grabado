@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { defineConfig } from "@playwright/test";
 import { DEV_PORT, SERVER_PORT } from "./vite.config.ts";
 
@@ -9,7 +9,7 @@ import { DEV_PORT, SERVER_PORT } from "./vite.config.ts";
  * 契約を押さえてきたが、どちらも**実際の HTTP を 1 バイトも流していない** ——
  * ブラウザ（実 XHR）→ Vite dev proxy → Kotlin → ファイルシステム、を通しで動かすのはここだけ。
  *
- * ★ **既存 4 系統に混ぜない。** これだけ **Java 21 と bootJar** を要求するので、
+ * ★ **既存 4 系統に混ぜない。** これだけ **Java 25 と bootJar** を要求するので、
  *   `npm test` / `test:browser` の前提（Node だけで回る）を壊さないよう独立させた。
  *   `docs/TESTING.md` に走らせ方と要件を書いてある。
  *
@@ -32,6 +32,22 @@ export const E2E_SCHEMA_DIR = "tests/tmp-schema";
  */
 rmSync(E2E_SCHEMA_DIR, { recursive: true, force: true });
 mkdirSync(E2E_SCHEMA_DIR, { recursive: true });
+
+/*
+ * jar を起こす java。**PATH の java ではなく、`bootJar` が使った toolchain のもの**を読む
+ * （`server/build/java-launcher.txt` は `writeJavaLauncher` が書く。段階2-1）。
+ *
+ * ★ 段階2-1 で jvmToolchain を 25 に上げたとき、JAVA_HOME が 21 のままの開発機で
+ *   `java -jar` が **UnsupportedClassVersionError**（class file version 69.0 に対して
+ *   65.0 まで）になった。**開発機の JAVA_HOME に依存させない。**
+ *
+ * ファイルが無いのは jar を作らずにこの config を読んだときだけなので、その場合は
+ * PATH の `java` に倒す（どのみち jar が無くて起動しない）。
+ */
+const JAVA_LAUNCHER_FILE = "server/build/java-launcher.txt";
+const JAVA = existsSync(JAVA_LAUNCHER_FILE)
+    ? readFileSync(JAVA_LAUNCHER_FILE, "utf8").trim()
+    : "java";
 
 export default defineConfig({
     testDir: "tests/server",
@@ -57,7 +73,7 @@ export default defineConfig({
              * bootJar を呼ぶ）。`gradlew bootRun` を直接起こさないのは、Gradle の起動が
              * 遅いうえに終了時のプロセス片付けが読みにくいため。
              */
-            command: `java -jar server/build/libs/grabado.jar --grabado.schema-dir=${E2E_SCHEMA_DIR}`,
+            command: `"${JAVA}" -jar server/build/libs/grabado.jar --grabado.schema-dir=${E2E_SCHEMA_DIR}`,
             /*
              * AI の env を透過する（段階11-5）。**コマンド行に `--grabado.ai.api-key=` を
              * 書かない** —— プロセス一覧に鍵が出る（org security-baseline §5.2）。

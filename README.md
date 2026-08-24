@@ -29,13 +29,20 @@ If you wish to support this project, <a href='https://www.paypal.com/cgi-bin/web
 
 ## Docker Installation:
 
-> **現在このイメージは動かない。** upstream の `Dockerfile` は busybox httpd でリポジトリを
-> そのまま配る作りで、上記のビルド工程に未追随。マルチステージ化（フロント dist を
-> Spring Boot static に同梱）は HANDOVER §2 の仕事として別途行う。
+**マルチステージ（段階2-1）。** フロントの dist を Spring Boot の classpath `static/` に
+同梱するので、**単一プロセス**が 8080 で静的資産と API の両方を配る。
 
-1. Build `docker build -t wwwsqldesigner .`
-2. Run   `docker run -d -p 8080:8080 wwwsqldesigner`
+1. Build `docker build -t grabado .`
+2. Run   `docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado`
 3. Visit http://127.0.0.1:8080
+
+- `-v` の左側は**設計 JSON を置くホスト側のディレクトリ**（正本は git 管理のファイル）
+- `-e READONLY=true` で保存・introspection・AI が止まる（読み取りビューア。`list` / `load`
+  は生きている）
+- **イメージはレジストリで配らない。各自が build する**
+- **mount と env の全体、`compose.yaml`、`.env.example` は段階2-3 が入れる**
+
+契約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9。
 
 ## Code Style
 Please use the following auto formatters to maintain the code style

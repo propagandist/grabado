@@ -34,3 +34,8 @@ server/gradle/wrapper/*.properties   text eol=lf
 
 # 契約表（段階5-1b）。Kotlin と TS の両方が同じバイト列を読む。
 tests/contract/** text eol=lf
+
+# 配布イメージ（段階2-1）。RUN の行継続に \r が混ざると alpine の sh が壊れるので LF 固定
+# （.githooks/** と scripts/*.sh を LF にしているのと同じ理由）。
+Dockerfile    text eol=lf
+.dockerignore text eol=lf

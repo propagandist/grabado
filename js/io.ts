@@ -54,7 +54,13 @@ import type { IntrospectionResult } from "./io/introspect-model.ts";
 import { applyDesignModel } from "./io/apply.ts";
 import { extractModel } from "./io/extract.ts";
 import { buildAiRequest, serializeAiRequest } from "./io/ai/request.ts";
-import { reviewNotice } from "./io/ai/notice.ts";
+import {
+    applyNotice,
+    orderedSuggestions,
+    parseSelection,
+    reviewNotice,
+} from "./io/ai/notice.ts";
+import { applyPatches } from "./io/ai/apply-patch.ts";
 import type { AiSuggestion } from "./io/ai/suggestion.ts";
 import {
     etagFromHeaders,
@@ -140,6 +146,8 @@ export interface IoDom {
      * `capabilities.ai` が false なら押せない（`applyCapabilities`）。
      */
     aireview: HTMLInputElement;
+    /** 承認した提案を当てる（段階11-4）。**適用は保存ではない** */
+    aiapply: HTMLInputElement;
 }
 
 export class IO {
@@ -155,6 +163,11 @@ export class IO {
      * 保存はこれを `If-Match` に載せる。まだ一度も load / save していなければ null。
      */
     declare baseline: Baseline | null;
+    /**
+     * 直近の AI レビューで返ってきた提案（段階11-4）。**表示のたびに上書きする** ——
+     * 古い提案を当てると、設計が変わったあとの提案を当てることになる。
+     */
+    aiSuggestions: readonly AiSuggestion[] | null = null;
     /**
      * 発行中の save の内容（段階5-4b）。応答を待つ間だけ埋まる。
      *
@@ -194,6 +207,7 @@ export class IO {
             "clientloadfromfile",
             "serverimport",
             "aireview",
+            "aiapply",
         ];
         for (var i = 0; i < ids.length; i++) {
             var id = ids[i]!;
@@ -255,6 +269,7 @@ export class IO {
         OZ.Event.add(this.dom.serverlist, "click", this.serverlist.bind(this));
         OZ.Event.add(this.dom.serverimport, "click", this.serverimport.bind(this));
         OZ.Event.add(this.dom.aireview, "click", this.aireview.bind(this));
+        OZ.Event.add(this.dom.aiapply, "click", this.aiapply.bind(this));
         OZ.Event.add(this.dom.clientcopy, "click", this.clientcopy.bind(this));
         OZ.Event.add(this.dom.clientpaste, "click", this.clientpaste.bind(this));
         OZ.Event.add(this.dom.clientdownload, "click", this.clientdownload.bind(this));
@@ -370,6 +385,7 @@ export class IO {
          * introspection と同じ —— 分からないものを勝手に閉じない。
          */
         this.dom.aireview.disabled = caps.ai === false;
+        this.dom.aiapply.disabled = caps.ai === false;
     }
 
     click(): void {
@@ -993,7 +1009,48 @@ export class IO {
             alert(_("aireviewbroken"));
             return;
         }
-        this.dom.ta.value = reviewNotice(suggestions as readonly AiSuggestion[]);
+        /* ★ 控えるのは 11-4 が当てるため。**表示のたびに上書きする**（古い提案を当てない） */
+        this.aiSuggestions = suggestions as readonly AiSuggestion[];
+        this.dom.ta.value = reviewNotice(this.aiSuggestions);
+    }
+
+    /**
+     * 承認した提案を当てる（段階11-4。review-first ＝ CLAUDE.md 制約7）。
+     *
+     * ★ **適用は保存ではない。** 正本は git 管理のファイルで、`save` するまで 1 バイトも
+     *   変わらない —— grabado に undo は無いが、**気に入らなければ保存せず読み直せば戻る**。
+     *   それを [applyNotice] が毎回書く。
+     *
+     * ★ **当てる順は一覧の順**（severity の重い順）。`applyPatches` は配列順の畳み込みで
+     *   **後の patch は前の結果を見る**ので、`3,1` と打っても一覧の順に当てる ——
+     *   打った順で結果が変わるのは説明できない。
+     *
+     * ★ **`alignTables()` を呼ばない。** 既存の設計を書き換えるだけなので座標は保つ
+     *   （introspection の適用とはそこが違う）。
+     */
+    aiapply(e?: Event): void {
+        var suggestions = this.aiSuggestions;
+        if (suggestions === null || suggestions.length === 0) {
+            alert(_("aiapplynone"));
+            return;
+        }
+
+        var ordered = orderedSuggestions(suggestions);
+        var answer = prompt(_("aiapplyprompt"), "all");
+        if (answer === null) {
+            return;
+        }
+        var chosen = parseSelection(answer, ordered.length).map((index) => ordered[index]!);
+        if (chosen.length === 0) {
+            alert(_("aiapplynone"));
+            return;
+        }
+
+        var result = applyPatches(extractModel(this.owner), chosen, this.owner.palette);
+        this.owner.clearTables();
+        applyDesignModel(this.owner, result.model);
+        /* 落ちた理由は locale の語（js/io/ は locale を通せないので、訳すのはこちら） */
+        this.dom.ta.value = applyNotice(chosen, result.rejections, _);
     }
 
     check(code: number): boolean {

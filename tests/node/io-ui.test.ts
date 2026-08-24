@@ -719,4 +719,96 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.io.dom.aireview.disabled).toBe(false);
         });
     });
+
+    /*
+     * 承認して当てる（段階11-4）。**適用は保存ではない**ことと、**設計が実際に変わる**ことが
+     * 契約の中心。落ちた提案の理由が locale の語で出ることも見る。
+     */
+    describe("AI 提案の適用（段階11-4）", () => {
+        /** relations の設計に対して当てられる提案（テーブル名の単数形を直す） */
+        const rename = {
+            category: "naming",
+            severity: "warn",
+            target: { table: "users" },
+            rationale: "単数形",
+            patch: { op: "rename-table", name: "user_accounts" },
+        };
+        const missing = {
+            category: "naming",
+            severity: "error",
+            target: { table: "gone" },
+            rationale: "居ないテーブル",
+            patch: { op: "rename-table", name: "gone2" },
+        };
+
+        function review(suggestions: unknown[]): void {
+            h.setConfirm(true);
+            h.setAiReview(JSON.stringify(suggestions));
+            h.io.applyCapabilities({ ai: true });
+            h.io.aireview();
+            h.takeRequests();
+        }
+
+        test("提案が無ければ当てない（alert で言う）", () => {
+            h.io.aiSuggestions = null;
+
+            h.io.aiapply();
+
+            expect(h.takeAlerts()).toHaveLength(1);
+        });
+
+        test("all で当てると**設計が実際に変わる**", () => {
+            review([rename]);
+            h.window.prompt = () => "all";
+
+            h.io.aiapply();
+
+            const json = h.toJson();
+            expect(json).toContain('"name": "user_accounts"');
+            expect(json).not.toContain('"name": "users"');
+        });
+
+        test("**適用は保存ではない**（1 度も save が飛ばない）", () => {
+            review([rename]);
+            h.window.prompt = () => "all";
+
+            h.io.aiapply();
+
+            expect(saveRequests(h.takeRequests())).toHaveLength(0);
+            expect(h.io.dom.ta.value).toContain("まだ保存していない");
+        });
+
+        test("落ちた提案は理由が locale の語で出る（他の適用は止めない）", () => {
+            review([missing, rename]);
+            h.window.prompt = () => "all";
+
+            h.io.aiapply();
+
+            const shown = h.io.dom.ta.value;
+            expect(shown).toContain("2 件のうち 1 件を適用した");
+            /* ハーネスの locale は既定の en。キーそのままではなく訳が出ることを見る */
+            expect(shown).toContain("that table is not in the design");
+            expect(h.toJson()).toContain('"name": "user_accounts"');
+        });
+
+        test("番号で選ぶと、選んだものだけ当たる", () => {
+            review([missing, rename]);
+            /* 一覧は重い順（error が 1 番）。2 番だけ選ぶ */
+            h.window.prompt = () => "2";
+
+            h.io.aiapply();
+
+            expect(h.io.dom.ta.value).toContain("1 件のうち 1 件を適用した");
+            expect(h.toJson()).toContain('"name": "user_accounts"');
+        });
+
+        test("prompt を断ったら設計に触らない", () => {
+            review([rename]);
+            h.window.prompt = () => null;
+
+            h.io.aiapply();
+
+            expect(h.toJson()).toContain('"name": "users"');
+        });
+    });
 });

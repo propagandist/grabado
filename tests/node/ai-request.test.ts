@@ -3,7 +3,13 @@ import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
 import { buildAiRequest, serializeAiRequest } from "../../js/io/ai/request.ts";
-import { reviewNotice } from "../../js/io/ai/notice.ts";
+import {
+    applyNotice,
+    orderedSuggestions,
+    parseSelection,
+    reviewNotice,
+} from "../../js/io/ai/notice.ts";
+import type { PatchRejection } from "../../js/io/ai/apply-patch.ts";
 import type { AiSuggestion } from "../../js/io/ai/suggestion.ts";
 import type { DesignModel } from "../../js/io/model.ts";
 import { TypePalette } from "../../js/io/palette.ts";
@@ -163,5 +169,96 @@ describe("返ってきた提案の見せ方", () => {
 
     test("**まだ適用していない**ことを明示する（review-first）", () => {
         expect(reviewNotice([suggestion("warn", "a", true)])).toContain("まだ 1 件も適用していない");
+    });
+});
+
+describe("承認の選択（段階11-4）", () => {
+    test("all はすべて", () => {
+        expect(parseSelection("all", 3)).toEqual([0, 1, 2]);
+        expect(parseSelection("  ALL ", 2)).toEqual([0, 1]);
+    });
+
+    test("番号は 1 始まりで、カンマでも空白でも区切れる", () => {
+        expect(parseSelection("1,3", 5)).toEqual([0, 2]);
+        expect(parseSelection("1 3", 5)).toEqual([0, 2]);
+        expect(parseSelection(" 2, 4 ", 5)).toEqual([1, 3]);
+    });
+
+    test("**入力順ではなく一覧の順**に並べ直す（後の patch は前の結果を見るため）", () => {
+        expect(parseSelection("3,1", 5)).toEqual([0, 2]);
+    });
+
+    test("範囲外と重複と壊れた語は黙って捨てる", () => {
+        expect(parseSelection("0,1,1,9,x,-2", 3)).toEqual([0]);
+        expect(parseSelection("", 3)).toEqual([]);
+        expect(parseSelection("none", 3)).toEqual([]);
+    });
+});
+
+describe("適用結果の見せ方（段階11-4）", () => {
+    const one = (table: string): AiSuggestion => ({
+        category: "naming",
+        severity: "warn",
+        target: { table: table },
+        rationale: "理由",
+        patch: { op: "rename-table", name: table + "s" },
+    });
+
+    /** locale を通さない層なので、テストは恒等関数を渡す */
+    const asIs = (key: string): string => key;
+
+    test("件数と、当てたもの・見送ったものが 1 件ずつ出る", () => {
+        const rejections: (PatchRejection | null)[] = [
+            null,
+            { kind: "patchtablemissing", table: "gone" },
+        ];
+
+        const notice = applyNotice([one("a"), one("gone")], rejections, asIs);
+
+        expect(notice).toContain("2 件のうち 1 件を適用した");
+        expect(notice).toContain("適用: a（rename-table）");
+        expect(notice).toContain("見送り: gone（rename-table） —— patchtablemissing");
+    });
+
+    test("**保存していないことを必ず書く**（undo が無い代わり）", () => {
+        const notice = applyNotice([one("a")], [null], asIs);
+
+        expect(notice).toContain("まだ保存していない");
+        expect(notice).toContain("読み直せば元に戻る");
+    });
+
+    test("落ちた理由は kind をそのまま渡す（訳すのは呼び手）", () => {
+        const notice = applyNotice(
+            [one("a")],
+            [{ kind: "patchnametaken", name: "as" }],
+            (key) => "訳:" + key,
+        );
+
+        expect(notice).toContain("訳:patchnametaken");
+    });
+});
+
+describe("一覧の番号（段階11-4）", () => {
+    const at = (severity: "info" | "warn" | "error", table: string): AiSuggestion => ({
+        category: "naming",
+        severity: severity,
+        target: { table: table },
+        rationale: "理由",
+    });
+
+    test("番号は 1 始まりで、重い順に振られる", () => {
+        const notice = reviewNotice([at("info", "light"), at("error", "heavy")]);
+
+        expect(notice).toContain("1. [error] naming / heavy");
+        expect(notice).toContain("2. [info] naming / light");
+    });
+
+    test("**適用の順と一覧の順が同じ**（番号がそのまま承認の単位になる）", () => {
+        const suggestions = [at("info", "light"), at("error", "heavy")];
+
+        expect(orderedSuggestions(suggestions).map((s) => s.target.table)).toEqual([
+            "heavy",
+            "light",
+        ]);
     });
 });

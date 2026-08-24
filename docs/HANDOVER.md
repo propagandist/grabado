@@ -198,6 +198,17 @@ enum: 参照テーブル/CHECK 既定、native enum は例外。
 
 ## 11. AI リファクタ提案機能
 
+> **実装済み**（段階11-0 〜 11-5。2026-08-24）。**到達点は [`ARCHITECTURE.md`](ARCHITECTURE.md) §8**、
+> 決定と根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階11-x が持つ。
+> 本節は**着手時の要件**のまま残してある（§5 と同じ形で、**HANDOVER = 入口 /
+> CUSTOMIZATIONS = 正**）。実装との差分は 4 つ:
+>
+> - **URL は `POST /api/ai/review`**（§11.2 の `/api/refactor/suggest` から改名。11-0）
+> - **構造化出力は structured outputs**（§11.3 の tool use から。手段であって目的ではない）
+> - **プライバシーは素のまま送る＋送信前プレビュー**（§11.5 が「着手時に確定」としていた点。
+>   匿名化すると判定基準の中心＝名前そのものが死ぬ）
+> - **`patch.op` は閉じた 8 種で、`drop-table` / `drop-column` を作らない**（§11.4 の補強）
+
 ### 11.1 位置づけ
 - **入力＝スキーマの JSON モデル**（§4 serializer 出力をそのまま利用）。
 - **判定基準＝§6 の house 規約**（型 avoid リスト・複数形・uuidv7・監査列）をシステムプロンプトのルーブリックに落とし込み、「自社標準からの逸脱」を指摘させる。汎用リファクタ提案に留めない。

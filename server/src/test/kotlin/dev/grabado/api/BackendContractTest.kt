@@ -198,6 +198,10 @@ class BackendContractTest {
             }
             // 条件付き更新（段階5-4）。表に書けるのは固定文字列だけなので、
             // 「一致する etag を送る」側は BackendBehaviourTest が持つ。
+            /* Content-Type（段階11-5）。ブラウザが送るヘッダで 415 にならないことを固定する */
+            if (request.has("contentType")) {
+                builder.header("Content-Type", request.path("contentType").asString())
+            }
             if (request.has("ifMatch")) {
                 builder.header("If-Match", request.path("ifMatch").asString())
             }

@@ -1,9 +1,9 @@
 package dev.grabado.ai
 
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import tools.jackson.databind.JsonNode
@@ -19,6 +19,13 @@ import tools.jackson.databind.JsonNode
  *   （§8.5）なので、data class に写した時点で鍵の材料が失われる。`Content-Type` を要求しない
  *   のも同じ理由 —— 自前でパースするので見る必要が無く、**宣言だけして検査しないヘッダを
  *   増やさない**。
+ *
+ * ★ **`@RequestBody ByteArray` では受けられない**（段階11-5 で踏んだ）。ブラウザが送る
+ *   `Content-Type: application/json` に対して **415 が返る** —— メッセージコンバータの
+ *   選択がヘッダに依存するため。契約表のケースは Content-Type を送っていなかったので通り、
+ *   **実 HTTP の E2E で初めて出た**。`HttpServletRequest` から直に読めば、宣言した契約
+ *   （生バイトをそのまま受ける）と実装が一致する。再発防止として、契約表に
+ *   `contentType` つきのケースを足してある。
  *
  * ★ **status を増やしたが `js/io.ts` の `check()` は広げていない。** 429 は §5 の語彙に無い
  *   新しい status で、`ApiExceptionHandler` の KDoc は「status を増やす PR では `check()` と
@@ -45,8 +52,9 @@ class AiController(
      * （[SuggestionSource] の KDoc）。適用は `js/io/ai/apply-patch.ts` の純関数。
      */
     @PostMapping("/review")
-    fun review(@RequestBody body: ByteArray): ResponseEntity<List<JsonNode>> {
+    fun review(request: HttpServletRequest): ResponseEntity<List<JsonNode>> {
         val upstream = service ?: throw AiUnavailableException()
+        val body = request.inputStream.use { it.readAllBytes() }
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_JSON)
             .body(upstream.review(body))

@@ -27,6 +27,8 @@
     "  request.ifMatch     If-Match ヘッダ（段階5-4）。値は固定文字列しか書けないので、",
     "                      『一致する etag を送る』側は BackendBehaviourTest が持つ",
     "  request.ifNoneMatch If-None-Match ヘッダ（段階5-4）。* だけを使う",
+    "  request.contentType Content-Type ヘッダ（段階11-5）。**ブラウザが送る application/json で",
+    "                415 にならないことを固定する** —— 実 HTTP の E2E で踏んだ",
     "  request.path   /api/ 系の絶対パス（段階11-2a）。**あれば <backend名>/?action= を組まずにこれを使う**。",
     "                request.action / keyword / backend / trailingSlash は無視される",
     "  serverMode    'readonly' なら GRABADO_READONLY=true、'ai' なら AI を有効にして起動したサーバに",
@@ -789,6 +791,21 @@
       "expect": {
         "status": 400,
         "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-review-json-content-type",
+      "note": "ブラウザは Content-Type: application/json を送る。415 にしない（段階11-5 の E2E で踏んだ）",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "contentType": "application/json",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"ct\",\"columns\":[],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 200
       },
       "virtual": false
     }

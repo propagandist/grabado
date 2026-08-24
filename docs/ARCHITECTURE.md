@@ -843,3 +843,69 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
   それは外から見て AI が壊れたのと区別がつかない。**当たらない方に倒す**
 - **キャッシュに当たった呼び出しはレート制限を消費しない。** 費用が発生しない呼び出しを
   費用の上限で止める理由が無い
+
+## 9. 配布とイメージ（到達点）
+
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 にある。**
+本章は**まだ 1 行も実装されていない** —— 枠だけを予約し、2-1 以降が実測どおりに埋める
+（§8 が 11-0 で予約され 11-2 以降に埋まったのと同じ形）。
+
+**HANDOVER §2 との差分は 1 つ**（配置。§2.2 の骨格は `frontend/` / `backend/` を前提にしているが、
+実在は**リポジトリルート**と **`server/`**）。**HANDOVER が触れていない論点が 1 つ** ——
+**イメージをレジストリで配るかどうか**で、これは §9.1 の最後に書いた。
+**HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
+
+### 9.1 イメージの構成（3 ステージ）
+
+| ステージ | 何をする | 入力 | 出力 |
+|---|---|---|---|
+| **web** | `npm ci` → `npm run build` | リポジトリルート（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/` と設定ファイル） | `dist/` |
+| **api** | `./gradlew bootJar` | `server/` ＋ web の `dist/` を `src/main/resources/static/` へ COPY | `grabado.jar` |
+| **runtime** | thin JRE で jar を起こす | `grabado.jar` | 8080 で待つ**単一プロセス** |
+
+- **`frontend/` は無い。** フロントのビルド文脈は**リポジトリルート**（集約は 2-6）
+- **dist を static へ入れるのは COPY で、Gradle タスクにしない** —— タスクにすると手元の
+  `./gradlew bootJar` が Node のビルドを要求し、開発時の 2 プロセスと `npm run test:server` が壊れる。
+  代償として**手元の jar には static が入らない**ので、**イメージの検証はイメージでやる**（2-4）
+- **ベースイメージは digest でピンする**（org security-baseline §5.1）。**Dependabot の `docker`
+  entry とセット**。版と digest は 2-1 が実測して書く
+- **★ レジストリへは publish しない。** イメージは各自が build する。publish した日に
+  **分類 P（実行物を配る）**へ載り §5.3.2 の責務を引き受けることになるので、**したくなった
+  時点で別 issue**（段階2-0 の決めたこと 5）
+
+### 9.2 配信の分担
+
+| | 誰が配るか | 静的資産 | `/backend/*` `/api/*` |
+|---|---|---|---|
+| **コンテナ**（配布物） | **単一プロセス**（Spring Boot） | classpath の `static/` | 同じプロセス |
+| **開発**（2 プロセス） | Vite dev server ＋ `bootRun` | Vite（root＝リポジトリルート） | dev proxy が 8080 へ回す |
+
+**この差を吸うのが `vite.config.ts` の proxy**（走らせ方は §7.4）。**URL 空間はどちらでも同じ**
+なので、**フロントは自分がどちらで配られているかを知らない**。
+
+### 9.3 env
+
+**外向きの名前は HANDOVER §2.4 のもの。表は §7.3 が持つ**（ここに写さない）。
+mount と `READONLY` を配布の観点で書き足すのは 2-3。
+
+### 9.4 CSP と配信ヘッダ
+
+**2-2 が埋める。** 現在入っているのは
+[`SecurityHeadersFilter`](../server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt)
+の 3 本（`X-Content-Type-Options` / `Referrer-Policy` / `X-Frame-Options`）だけで、
+**CSP はまだ無い**。
+
+前倒しの実測（2026-08-24）:
+
+- `index.html` のインラインスクリプトは **0 本**（`<script type="module" src="/src/main.ts">` の
+  1 行のみ）
+- `style` 属性が **2 か所**（`width: 60%` / `width: 40%`）。CSS へ移せば `style-src` に
+  `'unsafe-inline'` が要らなくなる
+- **Vite ビルド後の inline 資産は未実測** —— そこは 2-2 が測る
+
+**HSTS はここに入れない** —— 公開デモの外側（[issue #84](https://github.com/propagandist/grabado/issues/84)）。
+**ローカルは `http://localhost:8080`** で動くので、壊してはいけない。
+
+### 9.5 走らせ方
+
+**2-3 が埋める**（`docker run` の `-v` / `-e` と `compose.yaml`）。開発時の 2 プロセスは §7.4。

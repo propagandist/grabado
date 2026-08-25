@@ -253,6 +253,15 @@ body {
     height: 200px;
 }
 
+/* grabado: 段階2-2。理由と対のルールは styles/material-inspired.css の同じ 2 本 */
+#io .io-client {
+    width: 60%;
+}
+
+#io .io-server {
+    width: 40%;
+}
+
 #opts {
     width: 700px;
 }

@@ -846,9 +846,10 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 ## 9. 配布とイメージ（到達点）
 
-**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 と 2-1 にある。**
-**段階2-1 でイメージが動くようになった**（3 ステージ・digest ピン・非 root。実測は §9.1）。
-**まだ埋まっていないのは §9.3〜§9.5** —— CSP は 2-2、env と走らせ方は 2-3。
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 にある。**
+**段階2-1 でイメージが動くようになり**（3 ステージ・digest ピン・非 root。実測は §9.1）、
+**段階2-2 で CSP が付いた**（§9.4）。**まだ埋まっていないのは §9.3 と §9.5** —— env と
+走らせ方で、どちらも 2-3。
 
 **HANDOVER §2 との差分は 1 つ**（配置。§2.2 の骨格は `frontend/` / `backend/` を前提にしているが、
 実在は**リポジトリルート**と **`server/`**）。**HANDOVER が触れていない論点が 1 つ** ——
@@ -914,18 +915,37 @@ mount と `READONLY` を配布の観点で書き足すのは 2-3。
 
 ### 9.4 CSP と配信ヘッダ
 
-**2-2 が埋める。** 現在入っているのは
+**全応答に 5 本付く**（段階2-2）。**単一プロセスが static も API も配る**ので、
 [`SecurityHeadersFilter`](../server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt)
-の 3 本（`X-Content-Type-Options` / `Referrer-Policy` / `X-Frame-Options`）だけで、
-**CSP はまだ無い**。
+1 本で両方に掛かる。**値と、その値である理由の正本はそこ**（ここに写さない）。
 
-前倒しの実測（2026-08-24）:
+出るのは `X-Content-Type-Options` / `Referrer-Policy` / `X-Frame-Options` /
+**`Content-Security-Policy`** / **`Permissions-Policy`**。CSP は **`script-src` を
+1 つも緩めていない**（`'unsafe-inline'` も `'unsafe-eval'` も無い）。
 
-- `index.html` のインラインスクリプトは **0 本**（`<script type="module" src="/src/main.ts">` の
-  1 行のみ）
-- `style` 属性が **2 か所**（`width: 60%` / `width: 40%`）。CSS へ移せば `style-src` に
-  `'unsafe-inline'` が要らなくなる
-- **Vite ビルド後の inline 資産は未実測** —— そこは 2-2 が測る
+**実測（2026-08-25、イメージに `curl -sSI`）—— 4 経路とも 5 本そろっていた。**
+
+| 経路 | 応答 |
+|---|---|
+| `/` | 200 `text/html`（classpath の `static/index.html`） |
+| 存在しないパス | **404** `application/json`。本文は `timestamp` / `status` / `error` / `path` だけで、**stacktrace も message も無い**（Spring Boot の既定。org security-baseline §4.1） |
+| `/backend/file/?action=list` | 200 |
+| `/assets/index-*.js` | 200 |
+
+**CSP を成立させるために動かしたもの**（フロント側。詳細は CUSTOMIZATIONS の段階2-2）:
+
+- **cookie の読み取りから eval を撤去**（[`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts)）
+  —— これが無いと `script-src 'unsafe-eval'` が要る
+- **`assetsInlineLimit: 0`**（[`../vite.config.ts`](../vite.config.ts)）—— `styles/print.css` が
+  `data:text/css` の `<link>` へ inline 化されるのを止め、`style-src` を `'self'` のまま保つ
+- **`style` 属性 2 か所を CSS へ**（`#io` の列幅。**両テーマに書いた**）
+
+**残した `data:` は `img-src` だけ** —— throbber（`index.html` にベタ書き）と
+material-inspired の svg（CSS ソースに元からある）。
+
+**手元で確かめる口は `vite preview`** —— [`../vite.config.ts`](../vite.config.ts) の
+`preview.headers` が**同じ値の写し**を出し、[`../tests/node/csp.test.ts`](../tests/node/csp.test.ts)
+がずれを赤くする。**dev server には出さない**（HMR が inline script を使う）。
 
 **HSTS はここに入れない** —— 公開デモの外側（[issue #84](https://github.com/propagandist/grabado/issues/84)）。
 **ローカルは `http://localhost:8080`** で動くので、壊してはいけない。

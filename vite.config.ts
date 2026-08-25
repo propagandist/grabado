@@ -48,10 +48,42 @@ export default defineConfig({
             },
         },
     },
-    preview: { host: "127.0.0.1", port: PREVIEW_PORT, strictPort: true },
+    /*
+     * build 成果物を**配布時と同じヘッダ**で配る（段階2-2）。手元のブラウザで CSP 下の
+     * 動作を確かめられるようにするためで、これが無いと確認できるのはイメージ E2E（2-4）
+     * まで来ない ＝ 壊れても誰も気づかない期間ができる。
+     *
+     * ★ **dev server には出さない。** HMR が inline script を使うので 'unsafe-inline' が
+     *   要り、「本番と同じヘッダ」でなくなる。
+     *
+     * ★ **値の正本は server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt。**
+     *   ここはその写しで、tests/node/csp.test.ts が両者のずれを赤くする。
+     */
+    preview: {
+        host: "127.0.0.1",
+        port: PREVIEW_PORT,
+        strictPort: true,
+        headers: {
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "no-referrer",
+            "X-Frame-Options": "DENY",
+            "Content-Security-Policy":
+                "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            "Permissions-Policy": "geolocation=(), camera=(), microphone=(), payment=(), usb=()",
+        },
+    },
     build: {
         outDir: "dist",
         emptyOutDir: true,
+        /*
+         * 段階2-2: **資産を data: URI へ inline 化しない。**
+         *
+         * 既定（4KB 未満）だと styles/print.css が
+         * <link rel="stylesheet" href="data:text/css;base64,…"> になり、CSP の style-src に
+         * data: が要る（2026-08-25 実測）。style-src を 'self' のまま保つために 0 にする
+         * —— 「小さいものだけ静かに inline される」形を**構造で**潰す（issue #89）。
+         */
+        assetsInlineLimit: 0,
     },
     plugins: [
         viteStaticCopy({

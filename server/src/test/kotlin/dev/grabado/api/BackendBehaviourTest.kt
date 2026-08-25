@@ -1,5 +1,6 @@
 package dev.grabado.api
 
+import dev.grabado.config.SecurityHeadersFilter
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeEach
@@ -161,11 +162,40 @@ class BackendBehaviourTest {
 
     @Test
     fun `セキュリティヘッダが全応答に付く`() {
-        val response = get("list", null)
+        assertSecurityHeaders(get("list", null))
+    }
 
-        assertThat(response.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff")
-        assertThat(response.headers().firstValue("Referrer-Policy")).hasValue("no-referrer")
-        assertThat(response.headers().firstValue("X-Frame-Options")).hasValue("DENY")
+    /*
+     * org security-verification §1.2 の★:「**ヘッダが落ちるのは、たいてい正常系ではない
+     * 経路**（エラー・リダイレクト・静的配信・別の location）。200 だけ見ても、落ちている
+     * 場所は見つからない」。**だから 404 でも見る。**
+     */
+    @Test
+    fun `セキュリティヘッダはエラー応答にも付く`() {
+        val missing = get("load", "does-not-exist.json")
+
+        assertThat(missing.statusCode()).isEqualTo(404)
+        assertSecurityHeaders(missing)
+    }
+
+    /*
+     * CSP の中身そのものは tests/node/csp.test.ts が見る（正本と vite preview の写しを
+     * 突き合わせる側）。ここで 1 本だけ重ねるのは、**フロントの検査が無くても backend
+     * 単独で守る値が残る**ようにするため —— org security-baseline §3.9 の値。
+     */
+    @Test
+    fun `CSP が frame-ancestors を閉じている`() {
+        assertThat(get("list", null).headers().firstValue("Content-Security-Policy"))
+            .hasValueSatisfying { assertThat(it).contains("frame-ancestors 'none'") }
+    }
+
+    /** 正本（SecurityHeadersFilter.HEADERS）の 5 本が、この応答に 1 本残らず付いていること */
+    private fun assertSecurityHeaders(response: HttpResponse<ByteArray>) {
+        SecurityHeadersFilter.HEADERS.forEach { (name, value) ->
+            assertThat(response.headers().firstValue(name))
+                .describedAs("%s が %d の応答に付いていない", name, response.statusCode())
+                .hasValue(value)
+        }
     }
 
     @Test

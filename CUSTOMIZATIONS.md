@@ -8915,6 +8915,142 @@ PATH に頼っていた** —— この非対称が、版を上げた日に初�
 
 ---
 
+### 2026-08-25 HANDOVER §2「配布」段階2-2 —— CSP と配信ヘッダ
+
+正本は [issue #89](https://github.com/propagandist/grabado/issues/89)。契約は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9.4 で、**2-0 が予約し 2-1 が残した最後の枠**を
+実測で埋めた。**フロントも動いた**（2-0 の分割表は「`style` 属性 2 か所のみ」と見込んでいたが、
+着手前の実測で `eval` が 1 か所見つかった。下の★）。
+
+#### CSP が付いた（2026-08-25 実測）
+
+イメージに `curl -sSI` を向け、**4 経路すべてに 5 本そろっていた** —— `/`（200 `text/html`）、
+存在しないパス（**404**）、`/backend/file/?action=list`（200）、`/assets/index-*.js`（200）。
+
+- **`script-src` を 1 つも緩めていない。** `'unsafe-inline'` も `'unsafe-eval'` も無い
+- **404 の本文に内部情報が無い** —— `timestamp` / `status` / `error` / `path` だけで、
+  stacktrace も message も出ない（Spring Boot の既定。org security-baseline §4.1）
+- **エラー応答でも落ちない**ことを Kotlin 側のテストにも入れた（org security-verification
+  §1.2 の★「ヘッダが落ちるのは、たいてい正常系ではない経路」）
+- **golden 114 本は 1 バイトも動いていない**
+
+#### 決めたこと 1: `eval` は JSON へ移して撤去する（ユーザー判断）
+
+`setCookie` は `encodeURIComponent(JSON.stringify(obj))` で書き、`getCookie` は
+**`JSON.parse` を試し、失敗したら旧 `{k:'v'}` パーサに倒す**。呼び出し側（`getOption` /
+`setOption`）は 1 行も触っていない。
+
+- **既存の cookie を読める。** 旧書式パーサは**読むだけ**で、次の保存で JSON になる
+- **値のエスケープの弱さが同時に消える** —— 旧書式は `p + ":'" + v + "'"` の生連結で、
+  `pattern` オプション（ユーザーがテキスト入力できる）に `'` や `,` を入れると読み戻しが
+  壊れていた。**eval を消すだけの置き換えでは、この弱さは残る**
+
+#### 決めたこと 2: cookie に `SameSite=Lax` を付けた（ユーザー判断）
+
+**#89 の対象範囲には無かった** —— 書き換える同じ 1 行で済み、org security-baseline §3.6 /
+§4.3 の観点に沿う。認証には使っていない cookie なので**挙動は変わらない**。
+
+#### 決めたこと 3: CSP の骨格は `default-src 'none'` から開ける（ユーザー判断）
+
+org の実測例（cartera）は `default-src 'self'` だが、こちらは**使う先だけを明示で開ける**形にした。
+
+- **worker / manifest / media / frame は 1 つも使っていない。** 増えた日に「違反として
+  気づける失敗」になる —— **11-0 の「形式で潰す」・2-1 の許可リストと同型**
+- 開けたのは `script-src` / `style-src` / `img-src` / `connect-src` の 4 つと、`default-src` に
+  落ちない 3 つ（`base-uri` / `form-action` / `frame-ancestors`）
+
+#### 決めたこと 4: CSP の正本は Kotlin、`vite preview` はその写し
+
+`vite.config.ts` の `preview.headers` が同じ値を持ち、`tests/node/csp.test.ts` が Kotlin ソースを
+読んで**ずれを赤くする**（既存イディオムは `type-mapping.test.ts` と `workarounds.test.ts`）。
+
+**写しを許す理由**は、Spring だけが出す形にすると CSP 下の動作をブラウザで確かめる手段が
+**イメージ E2E（2-4）まで無い**こと —— 2-1 の申し送りが挙げた「壊れても誰も気づかない期間」が
+そのまま空く。**dev server には出さない**（HMR が inline script を使う）。
+
+#### 決めたこと 5: `img-src` の `data:` は許可し、`style-src` の `data:` は構造で潰す
+
+`assetsInlineLimit: 0` で `styles/print.css` の inline 化（`data:text/css` の `<link>`）を止めた。
+残る `data:` は `img-src` だけ —— throbber（`index.html` にベタ書き）と material-inspired の svg
+（CSS ソースに元からある）で、**外すには upstream 資産を 2 つ作り替える**ことになる。
+**奪取の経路は大半が `script-src` 側**（org security-baseline §3.5）なので防御は成立する。
+
+#### ★ 実測で分かったこと 1: 2-0 の見込みが 1 つ外れていた（`eval` が残っていた）
+
+`js/wwwsqldesigner.ts` の cookie 読み取りに `eval` が 1 か所。コメントは
+「**§4 の IO 移植で消える**」と書いていたが、**§4 は 4-6 まで終わったのに消えなかった** ——
+設計データの経路ではなく**設定の永続化**だったので、IO の移植では通らなかった。
+
+**「あとで消える」と書いたものは、消える段階の担当範囲に入っていない限り消えない。**
+
+#### ★ 実測で分かったこと 2: CSP 違反の検出が本物か確かめた
+
+`tests/dist/smoke.spec.ts` の console 監視は「**常に緑**」でも同じ見た目になる。
+`img-src` から `data:` を一時的に外して回したところ、**6 本中 5 本が赤くなった**
+（material-inspired の svg が違反になり、`afterEach` が拾った）。**戻して緑に戻ることも確認した。**
+
+#### ★ 実測で分かったこと 3: 目視の受け入れ基準 2 つを機械に落とせた
+
+#89 は「DevTools を開いたまま主要画面を一巡」「旧形式の cookie を仕込んで開く」を
+**目視でしか確かめられないもの**として挙げていたが、どちらも書けた。
+
+- `tests/dist/smoke.spec.ts` に**一巡**（テーブル追加 → 行 → キー → テーマ切り替え → DDL 出力 →
+  ダウンロード → localStorage の保存/読込）。経路の入口は既存テストから借りている
+- `tests/node/options-cookie.test.ts` に**旧書式の読み取り**と、記号を含む値の往復
+
+**残る目視は「人の目で見て壊れていないか」だけ**になった（機械は違反の有無しか見ない）。
+
+#### ★ 実測で分かったこと 4: 「書いてはいけない形」はコメントにも書けない
+
+`tests/node/forbidden-api.test.ts` は**コメントの中も数える**。除外規則（コメントを剥がす）を
+持たないほうが壊れないと判断したので、`js/wwwsqldesigner.ts` の説明コメントのほうを
+**その形を書かずに説明する**書き方へ直した。**縛りが文章の書き方に及ぶ**のは想定内。
+
+#### 却下した案
+
+- **`eval` を残し `script-src 'unsafe-eval'` を付ける** —— org security-baseline §3.5 が
+  名指しする「実質的な無効化」。入れる意味が無い
+- **`eval` を旧書式パーサへ置き換えるだけ（書式は不変）** —— 差分は最小だが、**値の
+  エスケープの弱さが残る**
+- **cookie をやめて localStorage へ移す** —— 編集ストアの話（制約2 の DB レス）とは別軸で、
+  2-2 が背負う理由が無い
+- **CSP の正本を中立ファイル（`server/src/main/resources/security-headers.json`）にする**
+  —— 正本は 1 つになるが、`vite.config.ts` が `server/` の中を読む越境と、Kotlin 側に
+  起動時読み込みの失敗モードが増える。突き合わせは既存イディオムで書ける
+- **Spring だけが CSP を出す（`vite preview` には出さない）** —— 手元のブラウザで確かめられず、
+  2-2〜2-4 のあいだ CSP 下で壊れても誰も気づかない
+- **`img-src` から `data:` を外す** —— upstream 資産の作り替えが CSP の PR に混ざる
+- **dev server にも CSP を出す** —— HMR が inline script を使うので `'unsafe-inline'` が要り、
+  「本番と同じヘッダ」でなくなる
+- **`innerHTML` の棚卸しまで含める** —— 24 か所前後あり、CSP の PR が膨らむ
+- **`forbidden-api.test.ts` でコメントを除外する** —— 除外規則を持った瞬間、**規則の穴が
+  縛りの穴**になる。書かずに説明するほうが安い
+- **`Cache-Control` を 2-2 に入れる** —— 「配信ヘッダ」ではあるが**守る値の話ではない**。
+  2-4 でヘッダを E2E に固定するときに比較対象が増えるだけ（下の申し送り）
+- **HSTS を入れる** —— 公開デモの外側（#84）。ローカルは `http://localhost:8080` で動く
+- **イメージ E2E の自動化をここでやる** —— 2-4 の担当。**CI に載せる前に手元で通ることを
+  確かめる**順序を崩さない
+
+#### 申し送り
+
+- **★ `innerHTML` は 24 か所残っている**（2026-08-25 実測）。多くは locale の `_()` 展開だが、
+  **テーブル名・行名・キー名を通す経路がある**（`js/keymanager.ts` / `js/row.ts`）。
+  CSP はこれを直接は防がない（inline event handler の実行は止まる）。棚卸しは別段階
+- **`Cache-Control` は 1 つも出していない**（2026-08-25 実測）。ハッシュ付き `assets/` は
+  immutable、`index.html` は no-cache が素直だが、**ローカルのコンテナでは実害が薄い**ので
+  入れていない。入れるなら 2-4 のイメージ E2E と同じ PR が自然
+- **イメージのヘッダを見たのは手で叩いた `curl` だけ。** 自動化は 2-4 ——
+  **この段階のあいだ、イメージのヘッダが落ちても誰も気づかない**（機械が見ているのは
+  `vite preview` と Spring のテストまで）
+- **`SameSite` は機械で見ていない。** `document.cookie` から属性は読めず、jsdom でも同じ
+  （org security-verification §2.2 が `Secure` について書いているのと同じ型の穴）
+- **リポジトリはまだ private**（2-0 / 2-1 の申し送りのまま。public 化の判断はどこにも
+  記録されていない）
+- **`throbber.gif` と `print.css` が dist で実ファイルになった**（`assetsInlineLimit: 0` の
+  副作用）。**リクエストが 2 本増える**が、同一プロセスが配るので影響は測っていない
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

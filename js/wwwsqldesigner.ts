@@ -47,6 +47,60 @@ import { applyDesignModel } from "./io/apply.ts";
 import { serializeDesignJson } from "./io/json-serializer.ts";
 import { parseDesignJson } from "./io/json-parser.ts";
 
+/*
+ * cookie に入れる設定（locale / db / style / pattern など）の読み書き。**eval を使わない。**
+ *
+ * grabado: 段階2-2 で eval を撤去した。旧実装は `{k:'v'}` という JSON でない書式を
+ * eval で読み戻していて、CSP の `script-src` に `'unsafe-eval'` を足さない限り動かない
+ * —— それは org security-baseline §3.5 が「実質的な無効化」と名指しする形（判断は
+ * issue #89）。**この 2 語を書いた形で残さない**のは、tests/node/forbidden-api.test.ts が
+ * コメントごと 0 件で縛っているため。
+ *
+ * 書式は **JSON を encodeURIComponent で包んだもの**。旧書式は値をエスケープして
+ * いなかったので、`'` や `,` を含む pattern オプションで読み戻しが壊れていた
+ * —— JSON 化でその弱さも同時に消える。
+ */
+function parseCookieValue(raw: string): Record<string, string> {
+    var text = raw;
+    try {
+        text = decodeURIComponent(raw);
+    } catch {
+        /* 旧書式は生で書いていたので、値に裸の % があると decode が投げる。生のまま読む */
+    }
+    try {
+        var parsed: unknown = JSON.parse(text);
+        if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+            var source = parsed as Record<string, unknown>;
+            var obj: Record<string, string> = {};
+            for (var key in source) {
+                obj[key] = String(source[key]);
+            }
+            return obj;
+        }
+    } catch {
+        /* JSON ではない ＝ 旧書式。下へ倒す */
+    }
+    return parseLegacyCookieValue(text);
+}
+
+/**
+ * 段階2-2 以前の書式 `{k:'v',k2:'v2'}` を読む。**読むだけで、書き出しはもう無い**
+ * ——既存の cookie を持つブラウザで設定が失われないための互換で、次の保存で JSON になる。
+ */
+function parseLegacyCookieValue(text: string): Record<string, string> {
+    var obj: Record<string, string> = {};
+    var body = text.match(/^{(.*)}$/);
+    if (!body) {
+        return obj;
+    }
+    var pair = /([^{},:]+):'([^']*)'/g;
+    var r: RegExpExecArray | null;
+    while ((r = pair.exec(body[1]!)) !== null) {
+        obj[r[1]!] = r[2]!;
+    }
+    return obj;
+}
+
 /** 基底の VisualDom に svg が増える（vector が真のときだけ生える。§5.4 の形態 (i)） */
 export interface DesignerDom extends VisualDom {
     svg: SVGSVGElement;
@@ -361,22 +415,18 @@ export class Designer extends Visual<DesignerDom> {
         var parts = c.split(";");
         for (var i = 0; i < parts.length; i++) {
             var part = parts[i]!;
-            var r = part.match(/wwwsqldesigner=({.*?})/);
+            var r = part.match(/wwwsqldesigner=([^;]*)/);
             if (r) {
-                /* 形式が {k:'v'} で JSON ではないため eval のまま（§4 の IO 移植で消える） */
-                obj = eval("(" + r[1] + ")");
+                obj = parseCookieValue(r[1]!);
             }
         }
         return obj;
     }
 
     setCookie(obj: Record<string, string>): void {
-        var arr: string[] = [];
-        for (var p in obj) {
-            arr.push(p + ":'" + obj[p] + "'");
-        }
-        var str = "{" + arr.join(",") + "}";
-        document.cookie = "wwwsqldesigner=" + str + "; path=/";
+        /* SameSite=Lax: 認証には使っていないが、勝手に横断で送られる理由も無い */
+        var value = encodeURIComponent(JSON.stringify(obj));
+        document.cookie = "wwwsqldesigner=" + value + "; path=/; SameSite=Lax";
     }
 
     /*

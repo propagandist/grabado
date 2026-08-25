@@ -711,15 +711,41 @@ GRABADO_IT_AI_MODEL=claude-opus-5 server/gradlew -p server test   --tests '*Anth
 その場で進める（`AiReviewServiceTest`）。**`Thread.sleep` で待たない**——遅くなるうえに
 落ちる日が来る。
 
+## セキュリティヘッダと CSP の前提（§2 段階2-2）
+
+配布イメージは**単一プロセスが static と API の両方を配る**（段階2-1）ので、ヘッダは
+[`SecurityHeadersFilter`](../server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt)
+1 本で全応答に付く。**値の正本はそこ**で、[`../vite.config.ts`](../vite.config.ts) の
+`preview.headers` はその写し —— 手元の `vite preview` を**配布時と同じヘッダ**で回すために置いている。
+
+| テスト | 何を見るか |
+|---|---|
+| [`tests/node/csp.test.ts`](../tests/node/csp.test.ts) | 正本と写しが 1 バイトも違わないこと。CSP が `script-src` を緩めていないこと・`frame-ancestors 'none'` があること・`default-src 'none'` から始まること |
+| [`tests/node/forbidden-api.test.ts`](../tests/node/forbidden-api.test.ts) | `js/` `src/` に動的評価が **0 件**（CSP の前提。org security-verification §2.1 の「書いてはいけない形」の型） |
+| [`tests/node/options-cookie.test.ts`](../tests/node/options-cookie.test.ts) | オプション cookie の往復。**段階2-2 以前の書式 `{k:'v'}` を読めること**（撤去の互換）と、記号を含む値が壊れないこと |
+| `BackendBehaviourTest`（Gradle 側） | 5 本が実際の応答に付くこと。**404 でも付くこと** —— ヘッダが落ちるのは、たいてい正常系ではない経路（同 §1.2） |
+
+**★ `innerHTML` は縛っていない**（2026-08-25 実測で 24 か所）。棚卸しは別段階 ——
+**0 を 1 にする変更が赤くなればよい**のであって、既存を読み直す作業ではない。
+
+**★ `curl` はヘッダの有無しか見ない。** 「違反が出ないこと」と「機能が壊れていないこと」は
+ブラウザにしか出ない（同 §1.2）ので、下のスモークが console を拾う。
+
 ## 配布物のスモーク（`npm run test:dist`）
 
 dev server で緑でも `dist/` が壊れていては配布できないので、
 [`../playwright.dist.config.ts`](../playwright.dist.config.ts) が `vite build` → `vite preview`
-（127.0.0.1:4174）を起こし、[`../tests/dist/smoke.spec.ts`](../tests/dist/smoke.spec.ts) が 3 点だけ確認する。
+（127.0.0.1:4174）を起こし、[`../tests/dist/smoke.spec.ts`](../tests/dist/smoke.spec.ts) が確認する。
 
 - バンドルされた `index.html` から `SQL.Designer` が初期化される
 - `db/*/datatypes.xml` / `locale/*.xml` / `images/*` が dist に実在する
   （いずれも Rollup の依存グラフに乗らず、`vite-plugin-static-copy` が運んでいる）
 - `postgresql` / `house-defaults` の DDL が既存 golden と一致する
+- **配布時と同じセキュリティヘッダで配られる**（段階2-2）
+- **CSP 下で** blob: のダウンロードが通り、主要操作（テーブル追加 → 行 → キー → テーマ切り替え →
+  DDL 出力 → localStorage の保存/読込）が一巡する
+
+**★ CSP 違反は `afterEach` が拾う。** ブラウザの console に出たものを毎テスト引き取って
+空を確かめるので、**どのテストで出たか**が分かる（違反が 1 本でもあれば赤）。
 
 **golden は読むだけ**で、ここからは絶対に採り直さない（権威は `tests/browser/`）。

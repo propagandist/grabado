@@ -18,7 +18,9 @@
 # ★ paths は「この検査の入力」だけを列挙する
 #   テストが `tests/` の外を読む面は実際に確かめた —— `tools/`（migrate-design.test.ts が
 #   import）、`scripts/`（`npm test` のラッパ）、`db/` `locale/` `index.html`（harness が読む
-#   静的資産）、`docs/TYPE-MAPPING.md`（type-mapping.test.ts が実装と 1 セルずつ突き合わせる）。
+#   静的資産）、`docs/TYPE-MAPPING.md`（type-mapping.test.ts が実装と 1 セルずつ突き合わせる）、
+#   `SecurityHeadersFilter.kt`（csp.test.ts が**ヘッダの正本**と vite.config.ts の写しを
+#   突き合わせる。段階2-2）。
 #   **`docs/` をまるごとは入れない** —— 文書だけの PR（段階5-0 のような）で数分使うのは、
 #   「入力が変わらなければ出力も変わらない」に反する。
 #   **テストが読む repo ルートのファイルを増やしたら、ここに足すこと。**
@@ -41,6 +43,7 @@ on:
       - 'tools/**'
       - 'index.html'
       - 'docs/TYPE-MAPPING.md'
+      - 'server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'

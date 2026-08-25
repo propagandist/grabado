@@ -473,6 +473,21 @@ label, input, select {
     width: 100%;
 }
 
+/*
+ * grabado: 段階2-2 で index.html の style 属性 2 か所をここへ移した
+ * （CSP の style-src に 'unsafe-inline' を要らなくするため。issue #89）。
+ *
+ * ★ **両テーマに書く。** テーマは alternate stylesheet の title 切り替えなので、
+ *   片方にしか無いと、そのテーマで列幅が変わる（styles/original.css にも同じ 2 本がある）。
+ */
+#io .io-client {
+    width: 60%;
+}
+
+#io .io-server {
+    width: 40%;
+}
+
 #io input[type=button] {
     box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
 }

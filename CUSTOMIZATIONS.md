@@ -9049,6 +9049,122 @@ org の実測例（cartera）は `default-src 'self'` だが、こちらは**使
 - **`throbber.gif` と `print.css` が dist で実ファイルになった**（`assetsInlineLimit: 0` の
   副作用）。**リクエストが 2 本増える**が、同一プロセスが配るので影響は測っていない
 
+### 2026-08-26 HANDOVER §2「配布」段階2-3 —— compose と env
+
+正本は [issue #91](https://github.com/propagandist/grabado/issues/91)。契約は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9.3 / §9.5 で、**2-0 が予約した最後の 2 枠**を
+実測で埋めた。**フロントは 0 行**（分割表どおり）。
+
+#### compose で起きた（2026-08-26 実測）
+
+`docker compose up -d --build` の 1 行で起き、healthcheck が **51 秒で `healthy`**。
+
+| 確かめたこと | 結果 |
+|---|---|
+| `/` | 200 ＋ **ヘッダ 5 本**（2-2 の回帰） |
+| `?action=list` / `?action=capabilities` | 200 ／ `{"readonly":false,"introspection":false,"ai":false}` |
+| `?action=save` | **201。ホストの `schema/` に実ファイルが出た** |
+| `GRABADO_READONLY=true` | `save` / `import` が **403**、`list` / `load` は 200。**この条件でも `healthy`** |
+| コンテナに渡った env | **`.env` が持つ 1 本だけ**（未設定の 11 本は渡らない） |
+
+**READONLY でも healthy** なのは判定先に `capabilities` を選んだから —— **副作用が無く、
+止めている条件でも 200 が返る唯一の口**。公開デモは READONLY 一択なので、ここを取り違えると
+**公開デモだけが unhealthy になる**。
+
+#### ★ 実測 1: 空文字の env は既定に倒れず、起動を落とす
+
+`-e GRABADO_READONLY=` で **`APPLICATION FAILED TO START`** ——
+`Failed to bind properties under 'grabado.readonly' to boolean` /
+`A null value cannot be assigned to a primitive type`。
+
+**これが起票時の判断を 1 つ差し替えた。** #91 は「**空が既定の env だけ**を `${VAR:-}` で
+列挙する（4 本）」と書いていたが、**その 4 本に `GRABADO_READONLY` が入っていた** ——
+書いたとおりに作れば、**素の `docker compose up` が起動しない**ものができていた。
+
+#### 決めたこと 1: env は「キーだけ」のリスト形式で渡す（実測 1 を受けて）
+
+`environment:` に `- GRABADO_READONLY` と**名前だけ**書く。**未設定なら `null` ＝
+コンテナに渡らず**、`.env` に値があればその値が渡る（`docker compose config` と実起動の
+両方で確認）。
+
+- **空文字の事故が構造的に消える** —— 渡さないものは渡らない
+- **既定値を compose へ写さずに済む** —— 正本は `application.yaml` の 1 か所のまま
+- **12 本すべてを列挙できる** —— `${VAR:-}` だと Int / Duration の 8 本が空文字で落ちるので
+  4 本しか書けなかった。**「`.env` に書けば効く」が全部の env で成り立つ**ようになった
+
+#### 決めたこと 2: `env_file:` を使わない
+
+手元の `.env` が持つキーは 3 本で、**2 本は grabado と無関係**（`GEMINI_API_KEY` /
+`FONTAWESOME_NPM_AUTH_TOKEN`。2026-08-26 実測。値は見ていない）。`env_file` は
+**ファイルの中身を丸ごとコンテナへ入れる**ので、無関係な秘密が同居する。
+
+`.env` は **compose の変数展開にだけ**使われる —— この区別を `compose.yaml`・`.env.example`・
+README の 3 か所に書いた。**「`.env` に書いたのに効かない」も「余計なものが入る」も、
+どちらも起きない形**が要る。
+
+#### 決めたこと 3: `schema/` をリポジトリに実在させる（ユーザー判断）
+
+`.gitkeep` を置き、compose の既定 mount を `./schema:/data/schema` にした。
+**無いと compose が root 所有で作り、非 root（uid=100）のコンテナが書けない。**
+`README.md` と `Dockerfile` のコメントは前から `$PWD/schema` と書いていたので、
+**書いてあるとおりに動く**ようになった。
+
+#### 決めたこと 4: healthcheck は compose にだけ置く（ユーザー判断）
+
+判定は busybox の `wget`（**イメージに `curl` は無い**。2026-08-26 実測）。
+`start_period` は 60s —— **起動に 18 秒かかった**（同日実測・Docker Desktop for Windows）ので、
+その 3 倍強を猶予にした。**actuator は入れない**（1 つの判定のために依存を増やさない）。
+
+**Dockerfile の `HEALTHCHECK` は置いていない** —— 2-4 が E2E の待ち合わせに使うときに、
+判定間隔と猶予を実測して決める。
+
+#### 決めたこと 5: introspection の接続先は `.env.example` に載せない
+
+**env の名前そのものが表のキーを持つ** —— `GRABADO_INTROSPECT_SOURCES_<名前>_URL` /
+`_USER` / `_PASSWORD` / `_SCHEMA`。**relaxed binding が効くことを実測した**（`…_SHOP_URL` などを
+渡すと `?action=capabilities` の `introspection` が `true` になった）。
+
+**キーが設計ごとに違う**ので一覧には載せられない（載せれば env-contract テストが
+「`application.yaml` に無い」と正しく赤くなる）。書式と例は `ARCHITECTURE.md` §7.3 に置き、
+`.env.example` はそこを指すだけにした。
+
+#### 3 つのファイルのずれをテストが赤くする
+
+[`tests/node/env-contract.test.ts`](tests/node/env-contract.test.ts)（8 本）。正本は
+`application.yaml`、写しは `.env.example` と `compose.yaml`。**見るのは名前の集合だけで、
+値は見ない**（値の正本は `application.yaml` と docs）。
+
+**検出が本物か確かめた**（2-2 で CSP にやったのと同じ手順）—— **4 通りにずらしてすべて赤くなり**、
+戻して緑に戻った: `.env.example` から 1 行消す ／ compose の `environment` から 1 本消す ／
+mount の右辺を変える ／ `${VAR:-}` 形式に戻す。
+
+**CI の `paths` に 3 つ足した**（`application.yaml` / `compose.yaml` / `.env.example`）——
+`ci-frontend.yml` の冒頭が「**テストが読む repo ルートのファイルを増やしたら、ここに足す
+こと**」と書いているとおり。**足さなければ「`compose.yaml` だけを直した PR」で 1 本も
+走らない** —— 「入力が変わらなければ出力も変わらない」で絞るには、**入力を漏らさない**ことが
+要る（org `ci-strategy.md` §3 ①）。2-2 が `SecurityHeadersFilter.kt` を足したのと同じ判断。
+
+#### ★ 実測 2: `curl` の `save` は `Content-Type` が要る
+
+付けずに叩くと curl は `application/x-www-form-urlencoded` を送り、**Tomcat が
+パラメータ解析で body を読み尽くす** —— **201 が返るのに 0 バイトのファイルが書かれた。**
+フロントは [`js/io.ts`](js/io.ts) が `application/json` を明示しているので実運用では起きない。
+**2-4 の E2E はこれを踏む。**
+
+#### 申し送り
+
+- **★ リポジトリはまだ private**（2-0 / 2-1 / 2-2 から続く）。**public 化は 2-4 の後・2-5 の前に
+  独立の issue で決める**（ユーザー判断）—— public の標準ランナーは org の枠を消費しないので、
+  **2-5 の CI 設計の前提が変わる**
+- **Linux ホストの bind mount は 2-3 でも実測していない。** 手元が Docker Desktop for Windows の
+  まま。README には**条件つきの予約**として書き、`ARCHITECTURE.md` §9.1 の「合わせ方は 2-3」には
+  **訂正を追記した**（元の記述は消していない）
+- **compose の起動を機械が見ていない。** 上の実測はすべて手で叩いたもので、**この段階のあいだ、
+  compose が起動しなくなっても誰も気づかない**（2-4）
+- **`Cache-Control` はまだ 1 つも出していない**（2-2 の申し送りのまま。入れるなら 2-4）
+- **確かめたのは Docker 29.5.3 / Docker Compose v5.1.4**（2026-08-26 実測）。
+  **古い `docker-compose` v1 では試していない**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

@@ -3,7 +3,8 @@
 #   docker build -t grabado .
 #   docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado
 #
-# mount と env の全体、compose.yaml、README の起動手順は 2-3。CSP は 2-2。
+# **compose で起こすなら compose.yaml**（mount と env の口はそこ。一覧は .env.example、
+# 起動手順は README）。CSP と配信ヘッダは段階2-2。
 #
 # ★ 3 ステージ。**runtime に残るのは jar 1 本だけ**で、Node も Gradle も JDK も入らない。
 #
@@ -65,7 +66,8 @@ FROM eclipse-temurin:25-jre-alpine@sha256:3137541deb3cac6626b5d9a4a2187bc0d6a343
 
 # ★ 非 root で走らせる。`/data/schema` は **save が書く先**（正本は git 管理のファイル。
 #   CLAUDE.md 制約2）なので、先に作って所有権を渡す。**bind mount で uid が合わないと
-#   書けない** —— ホスト側の合わせ方は 2-3 の README。
+#   書けない** —— compose は ./schema を mount する（リポジトリに実在させてある）。
+#   **Linux ホストは未実測**で、注意は README。
 RUN addgroup -S grabado && adduser -S -G grabado grabado \
  && mkdir -p /data/schema && chown grabado:grabado /data/schema
 

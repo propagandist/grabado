@@ -731,6 +731,25 @@ GRABADO_IT_AI_MODEL=claude-opus-5 server/gradlew -p server test   --tests '*Anth
 **★ `curl` はヘッダの有無しか見ない。** 「違反が出ないこと」と「機能が壊れていないこと」は
 ブラウザにしか出ない（同 §1.2）ので、下のスモークが console を拾う。
 
+## compose と env の一致（§2 段階2-3）
+
+**env の正本は
+[`../server/src/main/resources/application.yaml`](../server/src/main/resources/application.yaml)**
+（実際に読むのがそこだから）。[`../.env.example`](../.env.example) は利用者向けの写しで、
+[`../compose.yaml`](../compose.yaml) の `environment:` は**コンテナへ渡す口**。3 つがずれると
+「**`.env` に書いたのに効かない**」が黙って起きる —— 外から見て壊れているのと区別がつかない。
+
+| テスト | 何を見るか |
+|---|---|
+| [`tests/node/env-contract.test.ts`](../tests/node/env-contract.test.ts) | 3 つのファイルが**同じ 12 本**を持つこと。**裸の互換名（`SCHEMA_DIR` / `READONLY`）を外向きの一覧に出さない**こと。mount 先が application.yaml の既定と一致すること。**`env_file:` を使わない**・**`environment:` に `${...}` を書かない**・**`image:` を指さない**という段階2-3 の判断 3 つ |
+
+**見るのは名前の集合だけで、値は見ない** —— 既定値は application.yaml と
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §7.3 / §8.4 が持ち、写せば正本が 2 か所になる。
+
+**★ イメージを起こす検証はここに無い。** compose が実際に起動し、save がホストへ書け、
+`READONLY` で 403 になることは**手で確かめた**（実測は [`ARCHITECTURE.md`](ARCHITECTURE.md) §9.5）。
+**自動化は 2-4** —— 5-9 / 11-5 と同じ形で E2E を張る。
+
 ## 配布物のスモーク（`npm run test:dist`）
 
 dev server で緑でも `dist/` が壊れていては配布できないので、

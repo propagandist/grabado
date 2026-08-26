@@ -846,10 +846,10 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 ## 9. 配布とイメージ（到達点）
 
-**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 にある。**
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 / 2-3 にある。**
 **段階2-1 でイメージが動くようになり**（3 ステージ・digest ピン・非 root。実測は §9.1）、
-**段階2-2 で CSP が付いた**（§9.4）。**まだ埋まっていないのは §9.3 と §9.5** —— env と
-走らせ方で、どちらも 2-3。
+**段階2-2 で CSP が付き**（§9.4）、**段階2-3 で compose と env が入った**（§9.3 / §9.5）。
+**残っているのは 2-4 以降** —— イメージの E2E・CI・`frontend/` 集約。
 
 **HANDOVER §2 との差分は 1 つ**（配置。§2.2 の骨格は `frontend/` / `backend/` を前提にしているが、
 実在は**リポジトリルート**と **`server/`**）。**HANDOVER が触れていない論点が 1 つ** ——
@@ -891,7 +891,8 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
   `ci-server.yml` の `setup-java` / イメージの 3 つを同じ版に揃えてある
 - **非 root**（`uid=100(grabado)`）で走り、bind mount した `/data/schema` に **save が
   実ファイルを書けた**（Docker Desktop for Windows で実測。**Linux ホストでの uid の
-  合わせ方は 2-3**）
+  合わせ方は 2-3**）—— **★ 訂正（2026-08-26 / 段階2-3）: 2-3 でも実測していない。**
+  手元が Docker Desktop for Windows のままなので、README には**条件つきの予約**として置いた
 - **単一プロセスが両方を配る**ことの確認 —— 起動ログに
   `Adding welcome page: class path resource [static/index.html]`、`/db/postgresql/datatypes.xml`
   が 200、`?action=list` が JSON、`?action=capabilities` が
@@ -910,8 +911,36 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 ### 9.3 env
 
-**外向きの名前は HANDOVER §2.4 のもの。表は §7.3 が持つ**（ここに写さない）。
-mount と `READONLY` を配布の観点で書き足すのは 2-3。
+**外向きの名前は HANDOVER §2.4 のもの。表は §7.3（backend）と §8.4（AI）が持つ**
+（ここに写さない）。配布の観点で足すのは 3 つ。
+
+**渡す口は [`../compose.yaml`](../compose.yaml) の `environment:`。** `.env` は
+**compose の変数展開にだけ**使われ、**コンテナには入らない**（`env_file:` を使っていない）
+—— 手元の `.env` が grabado 専用とは限らないため（**2026-08-26 実測**で、このリポジトリの
+`.env` は 3 本のうち 2 本が無関係な秘密だった）。列挙は [`../.env.example`](../.env.example) と
+**1 本ずつ対応**し、ずれると
+[`../tests/node/env-contract.test.ts`](../tests/node/env-contract.test.ts) が赤くなる。
+案内するのは `GRABADO_` 前綴りと `ANTHROPIC_API_KEY` の **12 本**で、
+**裸の互換名（`SCHEMA_DIR` / `READONLY`）は外向きの一覧に出さない**（互換で読むことは変えない）。
+
+**★ 空文字は既定に倒れない。** `${VAR:-}` 形式で未設定の env を渡すと空文字が入り、
+**起動が落ちる**（**2026-08-26 実測**: `GRABADO_READONLY=` で
+`Failed to bind properties under 'grabado.readonly' to boolean`）。だから compose は
+**キーだけのリスト形式**で書く —— 未設定なら**そもそも渡らない**ので application.yaml の
+既定がそのまま効き、**既定値を compose へ写さずに済む**。同じ理由で、`.env` にも
+**「`=` の右が空の行」を残さない**。
+
+**mount は `./schema:/data/schema`。** 左（ホスト側）が設計 JSON の正本で、git で管理する
+（CLAUDE.md 制約2）。`schema/` は**リポジトリに実在させてある**（`.gitkeep`）—— 無いと
+compose が root 所有で作り、**非 root（uid=100）のコンテナが書けない**。
+`GRABADO_SCHEMA_DIR` は**コンテナ内のパス**なので、これだけ変えても mount 先は動かない
+（ずれれば起動時の検証で落ちる —— 黙って別の場所へ書くことはない）。
+
+**introspection の接続先は、env の名前そのものが表のキーを持つ** ——
+`GRABADO_INTROSPECT_SOURCES_<名前>_URL` / `_USER` / `_PASSWORD` / `_SCHEMA`（Spring の
+relaxed binding。**2026-08-26 実測**で `…_SHOP_URL` などを渡すと `?action=capabilities` の
+`introspection` が `true` になった）。**キーが設計ごとに違う**ので `.env.example` には
+載せられない —— 使うなら `compose.yaml` の `environment:` に同じ名前を足す。
 
 ### 9.4 CSP と配信ヘッダ
 
@@ -952,4 +981,36 @@ material-inspired の svg（CSS ソースに元からある）。
 
 ### 9.5 走らせ方
 
-**2-3 が埋める**（`docker run` の `-v` / `-e` と `compose.yaml`）。開発時の 2 プロセスは §7.4。
+**配布物（コンテナ）。** 開発時の 2 プロセスは §7.4。
+
+```bash
+cp .env.example .env                     # 要る行だけコメントを外す（何も外さなくても起動する）
+docker compose up --build                # 8080。設計 JSON はホストの ./schema へ
+GRABADO_READONLY=true docker compose up  # 公開デモと同じ条件（save / import が 403）
+```
+
+compose を使わないなら `docker build -t grabado .` ＋
+`docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado`。
+**レジストリからは取れない**（§9.1）。
+
+**起動の判定は compose の `healthcheck`** —— `?action=capabilities` を busybox の `wget` で
+叩く。**イメージに `curl` は無く、actuator も入れていない**（ともに 2026-08-26 実測）。
+`start_period` を 60s にしたのは**起動に 18 秒かかった**から（同日実測・Docker Desktop for
+Windows）。**Dockerfile の `HEALTHCHECK` は置いていない** —— E2E の待ち合わせに要る 2-4 が決める。
+
+**実測（2026-08-26、段階2-3。`docker compose up -d --build`）**
+
+| 確かめたこと | 結果 |
+|---|---|
+| `healthcheck` | 51 秒で `healthy` |
+| `/` | 200 ＋ **ヘッダ 5 本**（2-2 の回帰） |
+| `?action=list` / `?action=capabilities` | 200 ／ `{"readonly":false,"introspection":false,"ai":false}` |
+| `?action=save` | **201。ホストの `schema/` に実ファイルが出た**（Docker Desktop for Windows） |
+| `GRABADO_READONLY=true` | `save` / `import` が **403**、`list` / `load` は 200 |
+| コンテナに渡った env | **`.env` が持つ 1 本だけ**（未設定の 11 本は渡らない） |
+
+★ **`save` を `curl` で叩くときは `Content-Type: application/json` が要る。** 付けないと
+curl が `application/x-www-form-urlencoded` を送り、**Tomcat がパラメータ解析で body を
+読み尽くす** —— **201 が返るのに 0 バイトのファイルが書かれる**（2026-08-26 実測）。
+フロントは [`../js/io.ts`](../js/io.ts) が明示しているので実運用では起きない。
+**2-4 の E2E はこれを踏む。**

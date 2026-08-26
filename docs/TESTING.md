@@ -39,8 +39,13 @@ npm run test:image    # 通常モードで一巡 → READONLY で起こし直し
 ```
 
 **3.0 分**（フロントか backend を変えた場合）／ **35 秒**（変えていない場合。ビルドがキャッシュに
-当たる。2026-08-26 実測）。**CI には載せていない** —— 2-5 の担当で、**載せる前に手元で通ることを
-確かめる**順序を崩さないため（判断規約は org の `ci-strategy.md`）。
+当たる。2026-08-26 実測）。
+
+**CI では [`ci-image.yml`](../.github/workflows/ci-image.yml) が回す**（段階2-5。paths は
+`.dockerignore` の許可リストが正本）。**ジョブ 131 秒** —— うち**イメージの build が 78 秒**
+（**まっさらな runner なので `--no-cache` 相当**）、起動 6 秒、13 本 11 秒、Chromium の取得 24 秒。
+**手元より速い**のは、Docker Desktop for Windows を通していないから。分担と 3 層の割り当ては
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §9.6、判断規約は org の `ci-strategy.md`。
 
 backend（`server/`。段階5-1b で入った Kotlin / Spring Boot）は Gradle 側にある。**要 JDK 25。**
 

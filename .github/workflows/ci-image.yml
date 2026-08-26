@@ -37,6 +37,9 @@ on:
       - '.dockerignore'
       - 'compose.yaml'
       - 'compose.e2e.yaml'
+      # ★ Linux でだけ重なる 3 枚目（段階2-5。理由はそのファイルの冒頭）。
+      #   **このワークフローが動く ubuntu では常に効く**ので、外すと検査の条件が変わる。
+      - 'compose.e2e.linux.yaml'
       # --- web ステージの入力（.dockerignore の許可リストと 1 対 1）---
       - 'index.html'
       - 'package.json'

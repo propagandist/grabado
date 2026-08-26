@@ -846,11 +846,11 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 ## 9. 配布とイメージ（到達点）
 
-**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 / 2-3 / 2-4 にある。**
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 / 2-3 / 2-4 / 2-5 にある。**
 **段階2-1 でイメージが動くようになり**（3 ステージ・digest ピン・非 root。実測は §9.1）、
 **段階2-2 で CSP が付き**（§9.4）、**段階2-3 で compose と env が入り**（§9.3 / §9.5）、
-**段階2-4 で機械が見るようになった**（[`../tests/image/`](../tests/image/)。§9.5）。
-**残っているのは 2-5 以降** —— CI と `frontend/` 集約。
+**段階2-4 で機械が見るようになり**（[`../tests/image/`](../tests/image/)。§9.5）、
+**段階2-5 で CI に載った**（§9.6）。**残っているのは 2-6** —— `frontend/` 集約。
 
 **HANDOVER §2 との差分は 1 つ**（配置。§2.2 の骨格は `frontend/` / `backend/` を前提にしているが、
 実在は**リポジトリルート**と **`server/`**）。**HANDOVER が触れていない論点が 1 つ** ——
@@ -1062,3 +1062,82 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 
 ★ **`--wait` は healthy まで待つ**（同日実測）。だから **Dockerfile に `HEALTHCHECK` を
 置かない** —— 判定間隔と猶予の正本を `compose.yaml` の 1 か所に保つ（2-3 が 2-4 に預けた判断）。
+
+### 9.6 CI（段階2-5）
+
+**判断規約は org の `ci-strategy.md`、層の割り当ては同 `security-verification.md` §0**
+（**中身をここへ写さない**。導線は [`../CLAUDE.md`](../CLAUDE.md)）。
+
+**`paths` は `on:` にしか書けず、ジョブ単位では絞れない** —— **絞りたい単位が、そのまま
+ワークフローの単位になる**。ワークフローが 3 本ある理由はそれだけで、種類が 3 つあるからではない。
+
+| ワークフロー | いつ | 何を見る | 所要 |
+|---|---|---|---:|
+| [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
+| [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
+| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
+| [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
+
+**実測（2026-08-26、段階2-5。ubuntu-latest）**
+
+| 内訳 | 秒 |
+|---|---:|
+| `ci-image` の **イメージ build** | **78**（**まっさらな runner ＝ `--no-cache` 相当**。2-4 の申し送りはここで返した） |
+| 同 起動（`--wait` が healthy を見るまで） | **6**（手元の Docker Desktop for Windows は 18。`start_period: 60s` は遅いほうに合わせてある） |
+| 同 13 本 | **11** |
+| 同 Chromium の取得 | **24〜39** |
+| `ci-frontend` の Chromium の取得 | **39（ジョブの 46%）** |
+| `ci-server` の `./gradlew build` | 93 |
+
+**3 本は並列に走る**ので、**PR の待ち時間は最長の 131〜147 秒**（合計ではない）。
+
+**★ 幅は 2 run の実測**（2026-08-26。**同じ内容で回した**）。**ぶれているのは Chromium の取得だけ**
+（24 秒 → 39 秒）で、**イメージ build 78 秒・13 本 11 秒・E2E ステップ 96〜97 秒は 2 run とも動かない**。
+**遅さの原因も、ぶれの原因も、同じダウンロード**にある —— 上の「キャッシュを足すならキーの設計から」は、
+**速度だけでなく再現性の話でもある**。
+
+**★ `pull_request` のみ。** `main` / `develop` への直接 push は `.githooks/pre-push` が禁じており、
+`develop` が動くのは PR の squash merge だけ。**`pull_request` はマージ結果に対して走る**ので、
+push 側を足すと同じ検査を 2 度払うことになる。
+
+**★ このリポジトリは public なので、org の枠（2,000 分/月）を消費しない**（2026-08-26 実測）。
+**それでも `paths` で絞る** —— 根拠が枠から「**入力が変わらなければ出力も変わらない**」と
+待ち時間へ置き換わっただけで、結論は動かない。**`ci-image.yml` の paths の正本は
+[`.dockerignore`](../.dockerignore) の許可リスト**（＝ イメージに入るもの）＋ E2E 側の入力。
+
+#### 検査の 3 層
+
+| 層 | grabado では |
+|---|---|
+| **① 手元**（0 分） | 導入時に 1 回。**gitleaks は 2026-08-26 に実走**（331 コミット / 0 件）、**actionlint も同日**（1.7.12 / 0 件。**壊して拾うことも確かめた**） |
+| **② 自動テスト**（増分 0 分） | 上の 3 本に相乗り —— CSP とヘッダ（`csp.test.ts` ＋ イメージ E2E）・env の写し（`env-contract.test.ts`）・READONLY・契約表 |
+| **③ 週次 cron** | **置かない** |
+
+**★ ③ を置かない。** 分類 B に持ち込まないという org §0 の判断で、grabado は
+**レジストリで配らない**ので分類 B のまま（§9.1）。**public 化で「枠」の根拠は消えたが**、
+**cron でスキャンしても Dependabot 以上のことができない**（同 §3★★）。
+**代わりに GitHub 側の 0 分の層が 3 本**（いずれも Actions を 1 分も使わない）:
+
+| 時間で変わる層 | 何が見るか |
+|---|---|
+| ベースイメージ | **Dependabot `docker` entry**（weekly。digest を書き換える。§9.1） |
+| 依存の CVE | version updates 4 entry ＋ **security updates** —— **`server/` は `deps-submit.yml` が渡すグラフで初めて効く**（GitHub は `gradle.lockfile` を読めない） |
+
+**★ 前提: Dependency graph が有効であること**（**2026-08-26 に有効化**。それまで無効で、
+**`dependabot/alerts` は 0 件を返していた** —— 有効化した瞬間に **2 件**出た。
+**API に口が無く Web UI のみ**。詳細は `CUSTOMIZATIONS.md` の段階2-5 実測 4）。
+
+**★ 「Dependabot が見る」は拾う／直すを分けて読む**（2026-08-26 実測）:
+
+| 依存の位置 | 拾える | 直せる |
+|---|---|---|
+| `gradle.lockfile` / `package-lock.json` にある | ○ | **○**（修正 PR が出る） |
+| **提出したグラフにしか無い**（ビルドスクリプトの classpath） | ○ | **×** —— `security_update_dependency_not_found` で PR を作れない |
+
+**cron を足しても「直せない」側は変わらない**ので ③ を置かない判断は動かないが、
+**根拠を書くときはこの粒度が要る。**
+| 秘密の混入 | **secret scanning ＋ push protection** —— **どの変更でも起こりうるので paths で絞れない**（org §3）。**入る前に止める**のは push protection だけ |
+
+**CodeQL は「決めて外した」** —— public なので技術的には入る（2026-08-26 実測: `not-configured` /
+standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② まで**で、これは枠の話ではない。
+根拠と再考の条件は `CUSTOMIZATIONS.md` の段階2-5。

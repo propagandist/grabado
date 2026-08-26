@@ -55,6 +55,14 @@ GitHub Actions の無料枠 2,000 分/月は **org 全体で共有**。枯らす
 
 `gh api repos/propagandist/.github/contents/docs/ci-strategy.md --jq .content | base64 -d`
 
+**★ 訂正（2026-08-26。#98）—— このリポジトリは public なので、上の枠を消費しない**
+（public の標準ランナーは 2,000 分の対象外。org 規約 §1）。**元の記述は消さない**
+（判断の履歴であり、**org の他リポジトリには効く**）。**規約を読む義務も変わらない** ——
+**変わったのは「枠」という理由だけ**で、`paths` と `pull_request` 限定は
+「**入力が変わらなければ出力も変わらない**」と待ち時間を根拠に維持している。
+**ワークフローは 3 本 ＋ 提出 1 本**（`ci-frontend` / `ci-server` / `ci-image` ／ `deps-submit`。
+分担と所要は `docs/ARCHITECTURE.md` §9.6）。
+
 **作業の型**（プランを起票で止める／起票の作法／着手前／本文／マージ）は同
 `docs/work-conventions.md`（**軸が違う。CI の有無と関係なく効く**）。
 **文章の基準**（一貫性・明確さ・リズム・文体・正確さ・網羅性）は同 `docs/writing-baseline.md`
@@ -75,6 +83,24 @@ org の基準を読むこと。読むのは **§2 ／ §3 の [B] ／ §4.2〜4.
 **リポジトリは public**（**2026-08-26 に変更**。#95）。**分類は B のまま** —— #83 の決めたこと 5 で
 **イメージをレジストリで配らない**と決めたので、分類 P には載らない。
 **履歴の秘密走査は 2026-08-26 に実走して 0 件**（331 コミット。記録は `CUSTOMIZATIONS.md`）。
+
+**★ ③ 層（週次 cron）は置かない**（**2026-08-26**。#98）—— 分類 B に持ち込まないという判断。
+**代わりに GitHub 側の 0 分の層 3 本**が時間で変わる層を見る —— **secret scanning ＋
+push protection** ／ **Dependabot の security updates**（`server/` には `deps-submit.yml` が
+解決済みグラフを渡して初めて効く）／ **`docker` entry**（ベースイメージ）。
+**CodeQL は「決めて外した」**（public なので技術的には入る）。根拠と確かめ方は
+`CUSTOMIZATIONS.md` の段階2-5。**ワークフローは 3 本**（`ci-frontend` / `ci-server` / `ci-image`）。
+
+**★ Dependency graph は 2026-08-26 に有効化した**（#98。**private のあいだ無効で、public に
+しても自動では有効にならなかった**）。**API に口が無く、Web UI でしか切り替えられない** ——
+`security_and_analysis` に `dependency_graph` を渡すと **200 が返るのに黙って無視される**。
+**「200 が返った＝効いた」と読まない**（確かめ方は
+`gh api repos/propagandist/grabado/dependency-graph/sbom` が 200 を返すか）。
+
+**★ 「Dependabot が見る」は拾う／直すを分けて書く**（**2026-08-26 実測**）——
+`gradle.lockfile` / `package-lock.json` にある依存は**拾えて直せる**が、
+**`deps-submit` が提出したグラフにしか無い依存**（ビルドスクリプトの classpath）は
+**拾えるが直せない**（`security_update_dependency_not_found` で PR が作れない）。
 
 **法務は区分 4**（預からない＝当社の設備が個人データを受け取らない）。
 **個人データの流れ・外部へ出る先を変える前に** 同 `docs/legal-baseline.md`
@@ -103,6 +129,11 @@ org の基準を読むこと。読むのは **§2 ／ §3 の [B] ／ §4.2〜4.
 - **merge 方式は squash**（`(#N)` が付く。**2026-08-23 実測**）
 - **ラベルは既定の 9 種だけ。マイルストーンは運用していない**（**2026-08-23 実測**）——
   **決定の記録先は `CUSTOMIZATIONS.md`** で、issue とは別系統（上の `## 迷ったら`）
+  - **★ 訂正（2026-08-26。#98）—— 12 種に増えた。** Dependabot を有効化した日に、
+    **`dependencies` / `docker` / `javascript` が自動で作られた**（人が足したのではない）。
+    org 規約の「**新規ラベルを作らない**」は**人の側の規律**で、**bot が足すぶんは止まらない**。
+    **選ぶときは 12 種から選ぶ**（依存の更新・脆弱性は `dependencies`）。
+    **マイルストーンは引き続き運用していない**
 - **本文の書式の見本は [#72](https://github.com/propagandist/grabado/issues/72)**
   （**2026-08-23 実測**。§11 段階11-2a の起票で、org 規約 §2 の 7 項目に沿った最初の 1 本。
   それまで issue は 1 本も無かった）

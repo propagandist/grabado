@@ -9456,6 +9456,407 @@ PayPal 寄付ボタン・**2012 年からの News 10 本**・`/js/*.js` を指�
 - **`--no-cache` の Docker ビルド時間は未測定**（2-4 から続く）。**CI の見積もりに要る**
 - **About 欄の website は空のまま** —— `grabado.dev` の取得状況が未確認（#84）
 
+### 2026-08-26 HANDOVER §2「配布」段階2-5 —— CI に載せ、検査を 3 層へ割り当てる
+
+正本は [issue #98](https://github.com/propagandist/grabado/issues/98)。契約は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9.6。**フロントと backend の実装は 0 行**
+（動いたのはワークフロー 3 本・テスト基盤・リポジトリ設定・文書）。
+
+**2-4 で 13 本になったイメージ E2E を機械の目に載せ**、2-0 から宙に浮いていた
+**「週次 CVE cron を置くか」を決め切った**段階。
+
+#### 通った（2026-08-26 実測。ubuntu-latest）
+
+| ワークフロー | 所要 | 内訳 |
+|---|---:|---|
+| `ci-frontend` | **69〜85 秒** | **Chromium の取得 39（46%）** / vitest 11 / 実ブラウザ 12 / dist 5 / typecheck 3 / known-issues 3 / npm ci 3 |
+| `ci-server` | **92〜107 秒** | `./gradlew build` 93 |
+| `ci-image`（新設） | **131〜147 秒** | **イメージ build 78** / Chromium 24〜39 / 起動 6 / 13 本 11 |
+
+**3 本は並列に走る**ので、**PR の待ち時間は最長の 131〜147 秒**（合計ではない）。
+
+**★ 幅は 2 run の実測**（同じ内容で回した）。**ぶれているのは Chromium の取得だけ**（24 → 39 秒）で、
+**イメージ build 78 秒・13 本 11 秒・E2E ステップ 96〜97 秒は 2 run とも動かない**。
+**遅さの原因も、ぶれの原因も、同じダウンロード**にある —— 実測 2 の「キャッシュを足すなら
+キーの設計から」は、**速度だけでなく再現性の話でもある**。
+
+**★ `--no-cache` のビルド時間に答えが出た**（2-4 の申し送り）—— **78 秒**。runner は毎回まっさらで
+レイヤキャッシュを持たないので、**この数字がそのまま `--no-cache` 相当**になる。**手元の 3.0 分より
+速い**（Docker Desktop for Windows を通していないため）。起動も **6 秒**（手元は 18 秒。
+`compose.yaml` の `start_period: 60s` は遅いほうに合わせてある）。
+
+#### ★ 実測 1: **Linux ホストでは配布物が動かない**（この段階の最大の収穫）
+
+**申し送りに 3 段階連続（2-1 / 2-3 / 2-4）で書かれていた「Linux ホストの bind mount は未実測」が、
+CI に載せた初回の run で出た。** しかも**壊れ方が 2 方向ある**。
+
+| # | 症状 | 原因 |
+|---|---|---|
+| 1 | **コンテナが起動しない** | イメージは非 root（uid 100）。mount 先は clone / テストを回した人の uid。`FileDesignStore` の起動時 fail-fast が `正本ディレクトリに書けない: /data/schema` で止める（**段階5-3 の設計が正しく働いた形**） |
+| 2 | **書けたものをホストが読めない** | 原子的置換の `Files.createTempFile` が **POSIX 0600** で作る（umask ではなく明示的に）。`ATOMIC_MOVE` のあとも **600・uid 100 所有**のまま。ホスト側は `EACCES` |
+
+**★ 2 のほうが重い。** 1 は fail-fast が止めてくれるが、**2 は 201 が返り、ファイルもできる** ——
+**Linux ホストで保存した設計 JSON を、そのホストのユーザーが `git add` できない。**
+**「正本は git 管理のファイル」（`CLAUDE.md` 制約2）を直接壊す。**
+
+**Docker Desktop for Windows / macOS は所有権を偽装する**ので、**2-1 から 2-4 まで手元では
+一度も踏まなかった**。**CI に載せたその日に出た**のが、この段階の値そのもの。
+
+**追い方も記録しておく**（**CI の run を 3 回使った**）:
+
+1. 初回の run が残したのは **`container … exited (1)` の 1 行だけ**。`--wait` は
+   「healthy にならなかった」としか言わない
+2. **`compose.ts` の `up()` に「落ちたらコンテナのログを出す」を足した** —— 次の run で
+   `IllegalStateException: 正本ディレクトリに書けない` が出て、**1 往復で原因が確定**した。
+   **落ちたときにしか走らない**ので、緑のときの出力は 1 行も増えない
+3. mount 先を `chmod 0777` にしたら**起動はした**が、今度は **7 本目が `EACCES`** で落ちた
+   （症状 2）。**片方を直すと、もう片方が出る形**だった
+
+**配布物の側は [#103](https://github.com/propagandist/grabado/issues/103) に切り出した**
+（下の決めたこと 5）。**README 2 本の「Linux ホストは未実測」は、実測されたので書き換えた** ——
+「既知の不具合」として**症状 2 つと回避策**を書いてある。
+
+#### ★ 実測 2: `ci-frontend` の 46% は Chromium の取得
+
+`ci-frontend.yml` が「**ブラウザのキャッシュはまだ足さない。内訳は jobs API の `steps[]` で採る**」と
+予告していた数字を採った —— **85 秒のうち 39 秒**。`ci-image` も同じものを 24〜39 秒払っている。
+**2 run のあいだで動いたのはこのステップだけ**（build もテストも動かない）ので、
+**ジョブ全体のぶれもここが作っている**。
+
+**それでも足さない。** キャッシュのキーを Playwright の版に結び付け損ねると、
+**古いブラウザのまま緑になる** —— **検査が静かに嘘をつく側の失敗**で、遅いよりも悪い。
+**足すならキーの設計を先に決める別 issue で**（org `ci-strategy.md` §3③「高速化は最後」）。
+
+#### ★ 実測 3: 有効化したその日に Dependabot が 3 本出した
+
+**設定を入れた直後に `Dependabot Updates` が 3 回走り、#99 / #100 / #101 が開いた。**
+
+| PR | 中身 | すぐ分かったこと |
+|---|---|---|
+| #99 | `node` 24-alpine → **26-alpine**（`Dockerfile`） | **`Dockerfile` 自身が「版は `ci-frontend.yml` の `node-version: 24` に揃える」と書いている** —— **そのままマージすると版がずれる** |
+| #100 | frontend group 3 本 | **`ci-frontend` が赤**（この段階では中身を見ていない） |
+| #101 | `com.anthropic:anthropic-java` 2.34.0 → 2.55.0 | —— |
+
+**どれも 2-5 の対象外**（別 PR）だが、**「有効化すると何が起きるか」がその日に分かった**ので残す。
+
+#### 決めたこと 1: ③ 層（週次 cron）は**置かない**。**ただし根拠を置き直す**
+
+org `security-verification.md` §0 は「**分類 B/C/D/L に ③ を持ち込むな。① を導入時に 1 回 ＋
+② で足りる**」と言い、grabado は **#83 の決めたこと 5（レジストリで配らない）により分類 B のまま**
+なので、**P の条件つき例外には載らない**。
+
+**★ ただし public 化で「枠」の根拠は消えた**（public の標準ランナーは org の 2,000 分を
+消費しない）。**同じ結論を、別の根拠で立て直した** —— **cron でスキャンしても Dependabot
+以上のことができない**（同 §3★★「develop 側の依存を週次で見ると Dependabot と二重になる」と同型）。
+
+**根拠が消えたのに結論だけ残すと、次に読む人が判断に使えない。**
+
+#### 決めたこと 2: 代わりに **GitHub 側の 0 分の層を 3 本**そろえる
+
+**いずれも Actions を 1 分も使わない**（リポジトリ設定と、push 1 回につき 1 度のグラフ提出）。
+
+| 時間で変わる層 | 何が見るか | 実施 |
+|---|---|---|
+| ベースイメージ | Dependabot `docker` entry（weekly。digest を書き換える） | **2-1 で入っていた** |
+| 依存の CVE | version updates 4 entry ＋ **security updates** | **有効化した** |
+| 秘密の混入 | **secret scanning ＋ push protection** | **有効化した** |
+
+**実施前後**（状態で確認。この環境では `gh` の出力が混線するので値で見る。
+確かめ方は `gh api repos/propagandist/grabado --jq .security_and_analysis`）
+
+| 項目 | 前 | 後 |
+|---|---|---|
+| `dependabot_security_updates` | `disabled` | **`enabled`** |
+| `secret_scanning` | `disabled` | **`enabled`** |
+| `secret_scanning_push_protection` | `disabled` | **`enabled`** |
+| `secret_scanning_non_provider_patterns` | `disabled` | **`disabled`（決めて外した）** |
+| `secret_scanning_validity_checks` | `disabled` | **`disabled`（決めて外した）** |
+
+- **★ Dependabot alerts は既に有効だった**（`GET /vulnerability-alerts` が **204**。
+  `dependabot/alerts` は **0 件**）。**無効だったのは security updates だけ**で、
+  **alerts があっても修正 PR は 1 本も出ない**状態だった。**「alerts が有効＝直る」ではない。**
+- **★ `validity_checks` を外したのは軸が違うから** —— **検出した秘密をプロバイダへ送って
+  有効性を確かめる**機能で、**外部へ出る先が増える**（org `legal-baseline.md` の軸）
+- **★ `server/` には `deps-submit.yml` が要る。** **GitHub は `gradle.lockfile` を読めない**ので、
+  解決済みグラフを渡さないと **CVE の修正 PR が `server/` には出ない**。
+  `ci-server.yml` が「必要になったら置き換えること」と予告していた形をそのまま実装した ——
+  **既定ブランチへの push かつ Gradle のファイルが変わったときだけ**（GitHub の
+  「Automatic dependency submission」は**全ブランチの全 push で走る**ので使わない）
+
+#### 決めたこと 3: CodeQL default setup は「**決めて外す**」
+
+**public なので技術的には入る**（実測: `not-configured` / `runner_type: standard` / 言語 5 種を認識）。
+それでも入れないのは、**§0 が分類 B に置く層は ① ＋ ② までだから**であって、枠の話ではない。
+**「気づいても動く仕組みが無い検査」は org §4 の「守れていないのに緑が出る」に近づく。**
+
+2-0 の決めたこと 5（レジストリ）・#93 の判断 2（`HEALTHCHECK`）と同じ扱いで、
+**「まだ決めていない」ではなく「決めて外した」**として残す。
+**再考の条件**: アラートを見る人と、出たときに何をするかが決まったとき。
+
+#### 決めたこと 4: `ci-image` は **1 ジョブ**。paths の正本は `.dockerignore`
+
+- **1 ジョブ** —— build → 起動 → 13 本は**直列依存**で、分けても切り分けやすくならない。
+  課金はジョブ単位で 1 分未満切り上げなので、分けた本数ぶん損をするだけ
+- **paths は `.dockerignore` の許可リスト**（＝ イメージに入るもの）＋ E2E 側の入力。
+  **文書をまるごと入れない**／**config を一括で入れない**（この検査の入力は
+  `vite.config.ts` と `playwright.image.config.ts` の 2 本だけ）
+- **キャッシュを入れない**（実測 2）
+
+#### 決めたこと 5: Linux の逃がし方は**テスト側に閉じ**、配布物は #103
+
+`compose.e2e.linux.yaml` を足し、**Linux でだけコンテナをホストと同じ uid で走らせる**
+（`compose.ts` が `process.platform` を見て 3 枚目に重ね、`TEST_UID` / `TEST_GID` を渡す）。
+**実測 1 の 2 症状が同時に消える。**
+
+- **`compose.yaml` も `compose.e2e.yaml` も 1 行も触らない** —— 配布の形をテストの都合で
+  曲げない（#93 の判断 4）。**プラットフォーム差はプラットフォーム差の側に閉じる**
+- **★ これはテストを通すための細工で、利用者の条件とは違う。この細工がある限り、E2E は
+  その欠陥を捕まえない。** ファイルの冒頭・`compose.ts`・`TESTING.md` の 3 か所に書いた
+- **#103 の案 B（compose で `user:` を指定）をテストだけで先行適用した形**なので、
+  **その案が効くことの実測にもなっている**。残るのは「利用者に `export UID GID` を
+  要求してよいか」の判断
+- **CI を緑にすることと配布物の設計変更を同じ diff に混ぜない** —— 2-0 が
+  「大移動と新規作成を同じ diff に混ぜない」と決めたのと同じ判断（ユーザー判断）
+
+#### 決めたこと 6: 既存 2 本は **`on:` も steps も動かさず、訂正を追記**する
+
+public 化で根拠が効かなくなった記述が 2 か所あった。**元の記述は判断の履歴なので消さない**
+（org の作法。`CLAUDE.md` の `Closes` の行と同じ形）。
+
+- `ci-frontend.yml`「**枠は org 全体で共有（2,000 分/月）で、枯らすと他リポジトリの本番
+  デプロイまで止まる**」→ **public の標準ランナーは枠を消費しない**。**`paths` と
+  `pull_request` 限定は維持する**（根拠が「入力が変わらなければ出力も変わらない」と
+  待ち時間へ置き換わっただけ）
+- `ci-server.yml`「Automatic dependency submission を有効にしない」→ **枠の根拠は消えたが
+  結論は変わらない**。**予告が実体になった**ので、その行から `deps-submit.yml` を指す
+
+#### 検出が本物か確かめた
+
+**手元で完結する検査（① 層）は、壊して拾うことを確かめた。**
+
+| 壊し方 | 拾ったもの |
+|---|---|
+| `deps-submit.yml` の `timeout-minutes` を `abc` にする | **actionlint 1.7.12** が `syntax-check` で拾い、戻すと 0 件（作業ツリーも無差分） |
+
+**★ actionlint を手元で回したのは、`deps-submit.yml` が `develop` に入るまで一度も走らないから。**
+org `ci-strategy.md` が「**workflow が invalid だと起動しないが、それは『枠が枯れて起動しない』と
+区別がつかない**」と警告している位置にあたる。**① 層で塞ぐ**（**CI には足さない** —— 分類 B に
+③ を持ち込まないのと同じ理由で、`zizmor` / `trivy` の類は cartera（分類 A）の話）。
+
+**★ `ci-image` の中身は 2-4 が既に 3 通りの壊し方で確かめている**（`Referrer-Policy` を落とす /
+`Cache-Control` を変える / `GRABADO_READONLY` を渡さない）ので、ここでは繰り返さない。
+
+**★ paths が効くこと（起動契機の検出試験）は、この PR では確かめられない。**
+**その理由自体を実測した**（2026-08-26）—— **`CLAUDE.md` だけを変えた push でも 3 本とも起動した**
+（`CLAUDE.md` は 3 本のどの `paths` にも無い）。**`pull_request` の `paths` は「その push の差分」
+ではなく「PR 全体の差分」で評価される** —— だから**ワークフロー自身を足した PR は、以後どの
+コミットを積んでも常に起動する**。
+
+**これは `paths` の効き方そのもの**なので、覚えておく価値がある —— **「文書だけのコミットを
+足せば CI が走らない」は成り立たない。** 起動契機を確かめるには、**別の PR を立てる**しかない
+（下の申し送り）。
+
+**★★ 回収した（2026-08-26。#104）。** **文書 3 本だけの PR**（`CUSTOMIZATIONS.md` /
+`CLAUDE.md` / `docs/ARCHITECTURE.md`）を立てたら、**2 分待っても 1 本も起動しなかった**。
+**同じ内容を #102 にコミットとして足したときは 3 本とも起動している** —— 対にすると、
+`paths` の評価単位が **PR 全体の差分**であることがはっきり出る。
+
+| 何をしたか | 変更 | 起動 |
+|---|---|---|
+| #102 にコミットを足す | `CLAUDE.md` だけ | **3 本** |
+| **#104 を新しく立てる** | 文書 3 本だけ | **0 本** |
+
+**★ ここでも「空を『無い』と読まない」を通した** —— `gh run list` が空だったのを
+**即断せず 2 分待って再確認**し、**比較対象（#102 のブランチに 3 本ある）と並べて**判定した。
+
+**★ その確認で `gh pr checks` に危うく騙された。** 起動の有無を見ようとしたら
+**`no checks reported on the branch`** が返り、**「1 本も起動しなかった」と読みかけた** ——
+実際は **run が登録される前に問い合わせただけ**で、`gh run list` を見ると 3 本とも走っていた。
+**空の応答を「無い」と読まない** —— #95 の「gitleaks の `dir` モードの 3 件を漏洩 3 件と
+読まない」と同じ型で、**取り違えると、本当に起動しなかった日に気づけなくなる。**
+**起動の有無は `gh run list --json headSha` で、その SHA の run を数えて見る。**
+
+#### 却下した案
+
+- **週次 CVE cron を置く** —— 決めたこと 1
+- **CodeQL default setup を入れる** —— 決めたこと 3
+- **CI で回すのを `docker build` ＋ 起動確認までにする** —— 速いが、**2-2〜2-4 が固めたもの
+  （CSP・`Cache-Control`・READONLY の 403・保存の書き込み）が CI から見えないまま残る**。
+  **実際、緑になった run が見ているのはその 13 本**である
+- **buildx / GHA のキャッシュを最初から入れる** —— 実測 2
+- **`push` でも回す** —— `pull_request` は**マージ結果**に対して走るので二重払い
+- **`ci-frontend` / `ci-server` に相乗りさせる** —— `paths` は `on:` にしか書けない。
+  Docker を要求する検査を混ぜると、**フロント 1 行の PR でも待たされる**
+- **既存 2 本の paths を public 前提で緩める** —— 枠が根拠でなくなっても
+  「入力が変わらなければ出力も変わらない」は残る。**待ち時間も理由になる**
+- **`compose.yaml` / `Dockerfile` を CI 都合で触る** —— 決めたこと 5
+- **`chmod 0777` だけで通す** —— **起動はするが、書かれたファイルを読めない**（実測 1 の症状 2）。
+  **片方しか塞がらない**
+- **Linux の問題を 2-5 で直す** —— 決めたこと 5（ユーザー判断）
+- **2-5 を 2 本の issue に割る**（ci-image ／ 検査層の割り当て）—— 「cron を置かない」と
+  「代わりに何が見るか」は**同じ判断**で、割ると**片方だけ載った時間**ができる
+- **`ci-budget.md` の台帳に行を足す** —— **public は枠を食わないので要らない**
+  （org §3 の 2026-08-23 の判断。**理由が枠なので、別掲側にも行を作らない**）
+
+#### ★ 実測 4: マージした直後に `deps-submit` が赤くなった（2026-08-26。上の申し送りへの追記）
+
+**申し送りの「マージするまで 1 度も走らない」は当たった。そして、その直後に走って落ちた。**
+
+- **走った理由**は paths に**自分自身**（`.github/workflows/deps-submit.yml`）を入れてあるから。
+  新規追加そのものがマッチする。**次に走るのは Gradle のファイルを触ったとき**
+- **落ちた場所**は最後の 1 手 —— **グラフの生成もアップロードも成功**している
+  （`BUILD SUCCESSFUL in 45s` → `Uploaded bytes 5203` → `Artifact … successfully finalized`）。
+  そのうえで提出が `HttpError` になった:
+
+```
+The Dependency graph is disabled for this repository.
+Please enable it before submitting snapshots.
+```
+
+##### ★★ **SBOM の 404 は「未生成」ではなかった。グラフ自体が無効だった**
+
+**申し送りに「SBOM が未生成なだけと見ている —— 確かめていない」と推測で書いた部分が、実測で覆った。**
+**確かめていないものを「見ている」と書いておいたおかげで、覆ったことが分かる形になっている。**
+
+| 実測（2026-08-26） | 値 |
+|---|---|
+| `GET /dependency-graph/sbom` | **404**（`security_and_analysis` に `dependency_graph` の項目は**そもそも無い**） |
+| `GET /vulnerability-alerts` | **204**（＝ Dependabot alerts は有効） |
+| `GET /dependabot/alerts` | **200 で 0 件** |
+| org の `dependency_graph_enabled_for_new_repositories` | **`false`**（**新規リポジトリの既定**であって、既存の現在値ではない） |
+
+**private のあいだ無効だったものが、public にしても自動では有効にならなかった**と見ている
+（#95 で可視性だけを変えた）。**★ ここは断定できない** —— 有効化の履歴を読む口を見つけていない。
+
+##### ★★ **API では有効化できない**
+
+`PATCH /repos/{owner}/{repo}` に `security_and_analysis.dependency_graph` を渡すと
+**200 が返るが、応答に項目は現れず、SBOM は 404 のまま** —— **黙って無視される。**
+**「200 が返った＝効いた」と読まないこと。** 扱えるのは
+`secret_scanning` / `..._push_protection` / `dependabot_security_updates` /
+`..._non_provider_patterns` / `..._validity_checks` / `advanced_security` だけで、
+**Dependency graph はどの API にも無い**（Web UI の Settings → Code security のみ。**ユーザー操作**）。
+
+##### ★★ これは決めたこと 1 の**前提**に当たる
+
+**③ 層（週次 cron）を置かない根拠は「代わりに Dependabot が見るから」だった。** ところが:
+
+| Dependabot の口 | 動くか | 依存するもの |
+|---|---|---|
+| **version updates**（`dependabot.yml`。weekly） | **動いている**（実測 3 の #99 / #100 / #101 が証拠） | **マニフェストを直接読む。グラフに依存しない** |
+| **security updates**（CVE 公開時に修正 PR） | **グラフが無いあいだは成立しない** | **alerts ＝ 依存グラフ** |
+
+**つまり「置かない」判断そのものは変えないが、その根拠は Dependency graph が有効になって初めて立つ。**
+`dependabot/alerts` の **0 件**も、**「脆弱性が無い」なのか「グラフが無くて見ていない」なのか
+切り分けられていない** —— **空の応答を「無い」と読まない**（この段階で 2 度目の同じ型）。
+
+**有効化と、そのあとの確認（SBOM に Gradle の依存が入る／`deps-submit` の再実行が緑／alerts の
+0 件の意味）は、この記録の次に続く。**
+
+
+##### ★ 有効化したあと（2026-08-26。ユーザーが Settings で Enable した）
+
+**API に口が無いので、ここだけは人の操作で進んだ。** そのうえで機械が確かめられたことは 4 つ。
+
+| 確かめたこと | 結果 |
+|---|---|
+| `GET /dependency-graph/sbom` | **404 → 200**（**146 パッケージ**。npm だけ。`package-lock.json` から自動検出されたぶん） |
+| `deps-submit` の再実行 | **success**（落ちていたのは提出の 1 手だけだったので、再実行で通った） |
+| 提出後の SBOM | **146 → 315**（**Gradle 側が 169 本入った**。`org.springframework.boot:*` / `org.jetbrains.kotlin:*` など） |
+| `dependabot/alerts` | **0 件 → 2 件** |
+
+##### ★★ **「0 件」は「脆弱性が無い」ではなかった**
+
+**切り分けが付いた。** 上の申し送りで 2 度「空の応答を『無い』と読まない」と書いたが、
+**この 0 件がまさにそれだった** —— **グラフが無いあいだ、Dependabot は何も見ていなかった。**
+
+| 出た alert | 重大度 | 影響 → 修正 |
+|---|---|---|
+| `org.jetbrains.kotlin:kotlin-gradle-plugin`（CVE-2026-53914） | medium | `< 2.4.20-Beta1` → **2.4.20-Beta1**。Kotlin Build Cache の unsafe deserialization で**ビルド時のコード実行** |
+| `org.apache.commons:commons-lang3`（CVE-2025-48924） | medium | `>= 3.0, < 3.18.0` → **3.18.0**。長い入力での uncontrolled recursion |
+
+**手元の `npm audit` は 0 件**（dev 込み。分類 B なので `--omit=dev` は使わない）—— **npm 側は本当に 0** で、
+**Gradle 側だけが見えていなかった**という形。
+
+##### ★★ **配布イメージには入らない**（切り分け）
+
+**2 件とも manifest が `server/settings.gradle.kts` ＝ Gradle プラグインの classpath。**
+`deps-submit` が全 configuration を解決するので拾えたもので、**実行時の依存ではない**:
+
+- **`server/gradle.lockfile`（実行時・142 行）に 2 件とも無い**
+- `server/settings-gradle.lockfile`（5 行）にも無い
+- ＝ **runtime ステージの jar には入らない**（マルチステージなので、ビルド時の classpath は残らない）
+
+**影響するのはビルド環境**であって、**配る成果物ではない**。
+
+##### ★★★ **拾えたが、直せなかった** —— `security_update_dependency_not_found`
+
+**alert が出た直後に `Dependabot Updates` が 2 本走り、2 本とも failure。**
+
+```
+| security_update_dependency_not_found | {} |
+Error: The updater encountered one or more errors.
+```
+
+**理由は上の切り分けと同じところにある** —— **提出したグラフからは検出できるが、Dependabot が
+書き換えられる manifest には載っていない**（`kotlin-gradle-plugin` は `plugins {}` の解決結果、
+`commons-lang3` はその推移的依存）。**書き換え先が無いので PR を作れない。**
+
+**★ これは決めたこと 2 の根拠を、さらに 1 段細かくする。**
+
+| 依存の位置 | 拾えるか | **直せるか** |
+|---|---|---|
+| `gradle.lockfile` / `package-lock.json` にある依存 | **拾える** | **直せる**（Dependabot が PR を出す） |
+| **提出したグラフにしか無い依存**（ビルドスクリプトの classpath） | **拾える** | **★ 直せない**（`security_update_dependency_not_found`） |
+
+**「Dependabot が見る」は「拾える」までで、「直せる」は manifest にある依存に限られる。**
+**③ 層を置かない判断は変えない**（cron を足しても「拾う」が二重になるだけで、**直せない側は同じ**）が、
+**根拠の書き方はこの粒度でないと、次に読む人が判断に使えない。**
+
+##### この 2 件をどうするか（**未決**）
+
+- **修正版が Beta しかない**（`kotlin-gradle-plugin` は 2.4.20-Beta1）。**安定版を待つのが既定**
+- **`commons-lang3` は推移的**なので、プラグイン側が上がれば一緒に直る
+- **配布物に入らない**ので、利用者に届くリスクではない
+- **★ 決めるのは別の場**（org `security-verification.md` §0 の 3 条件目「**CVE が出たときに
+  何をするかまで決まっていること**」が、ここで実地に問われている）
+
+#### 申し送り
+
+- **★ Linux ホストでは配布物が動かない**（実測 1）—— **[#103](https://github.com/propagandist/grabado/issues/103)**。
+  **README 2 本には「既知の不具合」として書いた**。**`compose.e2e.linux.yaml` を消せることが
+  #103 の受け入れ基準**で、**それがある限り E2E はこの欠陥を捕まえない**
+- **★ paths の検出試験は済んだ**（**#104 で回収**。上の実測）—— **文書だけの PR は 0 本起動**、
+  **同じ内容を既存 PR に足すと 3 本起動**
+- **★ `deps-submit.yml` は `develop` への push でしか走らない** —— **マージするまで 1 度も
+  走らない**。actionlint は通したが、**実際にグラフが入ったかはマージ後に確認する**:
+  `gh api repos/propagandist/grabado/dependency-graph/sbom`。
+  **★ この API は 2026-08-26 時点で 404**（`dependabot/alerts` は 200 で 0 件なので、
+  **依存グラフ自体はある**。SBOM が未生成なだけと見ている —— **確かめていない**）
+  - **★★ 訂正（同日。実測 4）** —— **この見立ては外れた。Dependency graph 自体が無効だった。**
+    マージ直後に `deps-submit` が走り、**提出だけが `The Dependency graph is disabled` で落ちた**。
+    **`dependabot/alerts` が 200 で 0 件でも、グラフがあることの証拠にはならない。**
+    **元の記述は消さない** —— 「確かめていない」と書いておいたから、覆ったことが分かる
+- **★ Dependency graph の有効化が要る**（実測 4）—— **API では不可。Web UI のみ**。
+  **有効化するまで、決めたこと 1 の根拠（security updates が CVE を拾う）は成立しない**
+  - **★★ 済んだ（2026-08-26。ユーザーが Settings で Enable）。** SBOM が 200 になり、
+    `deps-submit` の再実行が緑、**Gradle の依存 169 本がグラフに入った**。
+    **alert は 0 → 2 件**（実測 4 の追記）
+- **★ 出た alert 2 件が未決** —— どちらも **medium・ビルド時のみ・配布イメージには入らない**。
+  **修正版が Beta しかない**（`kotlin-gradle-plugin` 2.4.20-Beta1）ので、**安定版を待つのが既定**。
+  **決めるのは別の場**
+- **★★ グラフにしか無い依存は「拾えるが直せない」**（`security_update_dependency_not_found`）。
+  **cron を足しても直せない側は変わらない**ので ③ を置かない判断は動かないが、
+  **「Dependabot が見る」を根拠に書くときは、拾う／直すを分けて書く**
+- **Dependabot の 3 本が開いている**（実測 3）—— **#99 は `Dockerfile` の Node を 26 に上げるが、
+  `ci-frontend.yml` は 24 のまま**。**版がずれる**ので、マージするなら揃えること
+- **Chromium の取得（`ci-frontend` 39 秒 ＋ `ci-image` 24 秒）はキャッシュしていない**（実測 2）。
+  **キーの設計を決める別 issue**
+- **`ci-image` の 13 本は Linux では「ホストと同じ uid」で走っている** —— **イメージが
+  用意した uid 100 で動くことは、CI では検証していない**（#103 が直したら戻る）
+- **残るのは 2-6**（`frontend/` 集約。golden 114 本の無差分が成功判定）と **§6.4 の仕上げ**、
+  **公開デモの外側 #84**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

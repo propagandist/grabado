@@ -78,8 +78,9 @@ git checkout -b hotfix/0.1.1 main
 
 **GitHub 側のブランチ保護は可視性で分かれる** —— Free プランの private リポでは使えず、**public では使える**。
 private だった間の代わりとして、**ローカルの pre-push hook** で `main` / `develop` への直接 push を
-禁止している（`.githooks/pre-push`）。**2026-08-26 に public 化する**（[#95](https://github.com/propagandist/grabado/issues/95)）ので
-GitHub 側の保護は使えるようになるが、**実際に張るかは別 issue で決める** —— 可視性を変えることと、
+禁止している（`.githooks/pre-push`）。**2026-08-26 に public 化した**（[#95](https://github.com/propagandist/grabado/issues/95)。
+`gh repo view` が `PUBLIC` を返すことを確認）ので**保護は使えるようになった**が、
+**実際に張るかは別 issue で決める** —— 可視性を変えることと、
 何を強制するかは別。**張ったあとも hook は残す**（止める層が違う。hook はローカルの push、保護はサーバ側）。
 
 ### 有効化（clone 後に各自1回だけ）

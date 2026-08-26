@@ -91,6 +91,17 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
 **CodeQL は「決めて外した」**（public なので技術的には入る）。根拠と確かめ方は
 `CUSTOMIZATIONS.md` の段階2-5。**ワークフローは 3 本**（`ci-frontend` / `ci-server` / `ci-image`）。
 
+**★ Dependency graph は 2026-08-26 に有効化した**（#98。**private のあいだ無効で、public に
+しても自動では有効にならなかった**）。**API に口が無く、Web UI でしか切り替えられない** ——
+`security_and_analysis` に `dependency_graph` を渡すと **200 が返るのに黙って無視される**。
+**「200 が返った＝効いた」と読まない**（確かめ方は
+`gh api repos/propagandist/grabado/dependency-graph/sbom` が 200 を返すか）。
+
+**★ 「Dependabot が見る」は拾う／直すを分けて書く**（**2026-08-26 実測**）——
+`gradle.lockfile` / `package-lock.json` にある依存は**拾えて直せる**が、
+**`deps-submit` が提出したグラフにしか無い依存**（ビルドスクリプトの classpath）は
+**拾えるが直せない**（`security_update_dependency_not_found` で PR が作れない）。
+
 **法務は区分 4**（預からない＝当社の設備が個人データを受け取らない）。
 **個人データの流れ・外部へ出る先を変える前に** 同 `docs/legal-baseline.md`
 （**軸が違う。分類とは別に決まる**）。

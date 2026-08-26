@@ -9740,6 +9740,74 @@ Please enable it before submitting snapshots.
 **有効化と、そのあとの確認（SBOM に Gradle の依存が入る／`deps-submit` の再実行が緑／alerts の
 0 件の意味）は、この記録の次に続く。**
 
+
+##### ★ 有効化したあと（2026-08-26。ユーザーが Settings で Enable した）
+
+**API に口が無いので、ここだけは人の操作で進んだ。** そのうえで機械が確かめられたことは 4 つ。
+
+| 確かめたこと | 結果 |
+|---|---|
+| `GET /dependency-graph/sbom` | **404 → 200**（**146 パッケージ**。npm だけ。`package-lock.json` から自動検出されたぶん） |
+| `deps-submit` の再実行 | **success**（落ちていたのは提出の 1 手だけだったので、再実行で通った） |
+| 提出後の SBOM | **146 → 315**（**Gradle 側が 169 本入った**。`org.springframework.boot:*` / `org.jetbrains.kotlin:*` など） |
+| `dependabot/alerts` | **0 件 → 2 件** |
+
+##### ★★ **「0 件」は「脆弱性が無い」ではなかった**
+
+**切り分けが付いた。** 上の申し送りで 2 度「空の応答を『無い』と読まない」と書いたが、
+**この 0 件がまさにそれだった** —— **グラフが無いあいだ、Dependabot は何も見ていなかった。**
+
+| 出た alert | 重大度 | 影響 → 修正 |
+|---|---|---|
+| `org.jetbrains.kotlin:kotlin-gradle-plugin`（CVE-2026-53914） | medium | `< 2.4.20-Beta1` → **2.4.20-Beta1**。Kotlin Build Cache の unsafe deserialization で**ビルド時のコード実行** |
+| `org.apache.commons:commons-lang3`（CVE-2025-48924） | medium | `>= 3.0, < 3.18.0` → **3.18.0**。長い入力での uncontrolled recursion |
+
+**手元の `npm audit` は 0 件**（dev 込み。分類 B なので `--omit=dev` は使わない）—— **npm 側は本当に 0** で、
+**Gradle 側だけが見えていなかった**という形。
+
+##### ★★ **配布イメージには入らない**（切り分け）
+
+**2 件とも manifest が `server/settings.gradle.kts` ＝ Gradle プラグインの classpath。**
+`deps-submit` が全 configuration を解決するので拾えたもので、**実行時の依存ではない**:
+
+- **`server/gradle.lockfile`（実行時・142 行）に 2 件とも無い**
+- `server/settings-gradle.lockfile`（5 行）にも無い
+- ＝ **runtime ステージの jar には入らない**（マルチステージなので、ビルド時の classpath は残らない）
+
+**影響するのはビルド環境**であって、**配る成果物ではない**。
+
+##### ★★★ **拾えたが、直せなかった** —— `security_update_dependency_not_found`
+
+**alert が出た直後に `Dependabot Updates` が 2 本走り、2 本とも failure。**
+
+```
+| security_update_dependency_not_found | {} |
+Error: The updater encountered one or more errors.
+```
+
+**理由は上の切り分けと同じところにある** —— **提出したグラフからは検出できるが、Dependabot が
+書き換えられる manifest には載っていない**（`kotlin-gradle-plugin` は `plugins {}` の解決結果、
+`commons-lang3` はその推移的依存）。**書き換え先が無いので PR を作れない。**
+
+**★ これは決めたこと 2 の根拠を、さらに 1 段細かくする。**
+
+| 依存の位置 | 拾えるか | **直せるか** |
+|---|---|---|
+| `gradle.lockfile` / `package-lock.json` にある依存 | **拾える** | **直せる**（Dependabot が PR を出す） |
+| **提出したグラフにしか無い依存**（ビルドスクリプトの classpath） | **拾える** | **★ 直せない**（`security_update_dependency_not_found`） |
+
+**「Dependabot が見る」は「拾える」までで、「直せる」は manifest にある依存に限られる。**
+**③ 層を置かない判断は変えない**（cron を足しても「拾う」が二重になるだけで、**直せない側は同じ**）が、
+**根拠の書き方はこの粒度でないと、次に読む人が判断に使えない。**
+
+##### この 2 件をどうするか（**未決**）
+
+- **修正版が Beta しかない**（`kotlin-gradle-plugin` は 2.4.20-Beta1）。**安定版を待つのが既定**
+- **`commons-lang3` は推移的**なので、プラグイン側が上がれば一緒に直る
+- **配布物に入らない**ので、利用者に届くリスクではない
+- **★ 決めるのは別の場**（org `security-verification.md` §0 の 3 条件目「**CVE が出たときに
+  何をするかまで決まっていること**」が、ここで実地に問われている）
+
 #### 申し送り
 
 - **★ Linux ホストでは配布物が動かない**（実測 1）—— **[#103](https://github.com/propagandist/grabado/issues/103)**。
@@ -9758,6 +9826,15 @@ Please enable it before submitting snapshots.
     **元の記述は消さない** —— 「確かめていない」と書いておいたから、覆ったことが分かる
 - **★ Dependency graph の有効化が要る**（実測 4）—— **API では不可。Web UI のみ**。
   **有効化するまで、決めたこと 1 の根拠（security updates が CVE を拾う）は成立しない**
+  - **★★ 済んだ（2026-08-26。ユーザーが Settings で Enable）。** SBOM が 200 になり、
+    `deps-submit` の再実行が緑、**Gradle の依存 169 本がグラフに入った**。
+    **alert は 0 → 2 件**（実測 4 の追記）
+- **★ 出た alert 2 件が未決** —— どちらも **medium・ビルド時のみ・配布イメージには入らない**。
+  **修正版が Beta しかない**（`kotlin-gradle-plugin` 2.4.20-Beta1）ので、**安定版を待つのが既定**。
+  **決めるのは別の場**
+- **★★ グラフにしか無い依存は「拾えるが直せない」**（`security_update_dependency_not_found`）。
+  **cron を足しても直せない側は変わらない**ので ③ を置かない判断は動かないが、
+  **「Dependabot が見る」を根拠に書くときは、拾う／直すを分けて書く**
 - **Dependabot の 3 本が開いている**（実測 3）—— **#99 は `Dockerfile` の Node を 26 に上げるが、
   `ci-frontend.yml` は 24 のまま**。**版がずれる**ので、マージするなら揃えること
 - **Chromium の取得（`ci-frontend` 39 秒 ＋ `ci-image` 24 秒）はキャッシュしていない**（実測 2）。

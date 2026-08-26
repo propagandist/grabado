@@ -434,7 +434,7 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 こと、落ちた提案の理由が **locale の語**で出ること（`js/io/` は locale を通せないので、
 `applyNotice` は翻訳関数を引数に取る —— テストは恒等関数を渡せる）。
 
-### 配布イメージ — golden を 1 本も持たない（§2 段階2-4）
+### 配布イメージ — golden を 1 本も持たない（§2 段階2-4 / 2-5）
 
 **見ているのは「配る形」**なので golden の出番が無い。段階の完了判定は
 「**golden 114 本が無差分**」＋下の 2 本。
@@ -444,14 +444,26 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 | [`../tests/image/smoke.spec.ts`](../tests/image/smoke.spec.ts) | 通常モード。**単一プロセスが classpath の static を配る**こと・Rollup グラフ外の資産・**セキュリティヘッダ 5 本 × 4 経路**・**`Cache-Control` の経路別**・条件付き GET の 304・**bind mount への write-through**・**CSP 違反 0 件のまま主要操作が一巡**すること |
 | [`../tests/image/readonly.spec.ts`](../tests/image/readonly.spec.ts) | 公開デモと同じ条件。**READONLY でも healthy**・save / import が 403・list / load は 200（ホストが置いたファイルが読める）・**画面のボタンが押せない** |
 
-コンテナの起こし方は [`../tests/image/compose.ts`](../tests/image/compose.ts)（`--wait` で healthy を待つ）。
+コンテナの起こし方は [`../tests/image/compose.ts`](../tests/image/compose.ts)（`--wait` で healthy を待つ。
+**落ちたときだけコンテナのログを出す** —— `--wait` は「healthy にならなかった」としか言わないので、
+無いと**起動時の例外が 1 行も見えない**。段階2-5）。
 **mount 先は `tests/tmp-image-schema/`** —— 正本ディレクトリ `schema/` にテストを書かせないため、
 [`../compose.e2e.yaml`](../compose.e2e.yaml) が volumes の 1 行だけを上書きする。
+**Linux では [`../tests/image/global-setup.ts`](../tests/image/global-setup.ts) が mount 先を
+誰でも書けるようにする** —— **これはテストを通すための細工で、利用者の条件とは違う**
+（配布物の側の問題は [#103](https://github.com/propagandist/grabado/issues/103)。**直ったら消す**）。
 
 ★ **この系統が最初に見つけたのは、保存のたびに出ていた CSP 違反**（`js/io.ts` の `sendSave` が
 応答を `xml: true` で受けており、`responseXML` を読むと Chrome が空の応答に HTML パーサを当てる。
 2026-08-26）。**`vite preview` には backend が無く、`curl` では CSP が見えない**ので、
 **既存のどの系統からも見えない位置**にあった。
+
+★ **2 つ目は、Linux ホストでは起動すらしないこと**（2026-08-26。**CI に載せた初回の run**）。
+コンテナは**非 root**（uid 100）で走り、**bind mount の所有権はホスト側のものがそのまま見える**
+—— `FileDesignStore` の起動時 fail-fast が `正本ディレクトリに書けない: /data/schema` で止めた
+（段階5-3 の設計が正しく働いた形）。**Docker Desktop for Windows は所有権を偽装する**ので、
+**手元では 2-1 から 2-4 まで一度も踏まなかった** —— 申し送りに 3 段階連続で
+「Linux ホストは未実測」と書かれていたものが、**CI に載せたその日に出た**。
 
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 

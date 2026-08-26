@@ -32,18 +32,28 @@ export const IMAGE_SCHEMA_DIR = "tests/tmp-image-schema";
  */
 const PROJECT = "grabado-image-e2e";
 
-const BASE = [
-    "compose",
-    // 手元の .env を変数展開に使わせない（tests/image/e2e.env の冒頭）
-    "--env-file",
-    "tests/image/e2e.env",
-    "-f",
-    "compose.yaml",
-    "-f",
-    "compose.e2e.yaml",
-    "-p",
-    PROJECT,
-];
+/**
+ * **Linux でだけ 3 枚目の override を重ねる**（段階2-5）。**理由はそのファイルの冒頭**
+ * —— bind mount の所有権が効くのは Linux だけで、**2 方向に壊れる**。
+ * **#103 が配布物を直したら、この分岐ごと消す。**
+ */
+const IS_LINUX = process.platform === "linux";
+
+function baseArgs(): string[] {
+    return [
+        "compose",
+        // 手元の .env を変数展開に使わせない（tests/image/e2e.env の冒頭）
+        "--env-file",
+        "tests/image/e2e.env",
+        "-f",
+        "compose.yaml",
+        "-f",
+        "compose.e2e.yaml",
+        ...(IS_LINUX ? ["-f", "compose.e2e.linux.yaml"] : []),
+        "-p",
+        PROJECT,
+    ];
+}
 
 /**
  * **手元のシェルに残っている値で条件が変わらないようにする。**
@@ -63,11 +73,19 @@ function baseEnv(): NodeJS.ProcessEnv {
     ]) {
         delete env[name];
     }
+    /*
+     * ★ **Linux では、コンテナをホストと同じ uid で走らせる**（compose.e2e.linux.yaml）。
+     *   `process.getuid` は Windows に存在しないので、分岐の中でだけ呼ぶ。
+     */
+    if (IS_LINUX) {
+        env["TEST_UID"] = String(process.getuid!());
+        env["TEST_GID"] = String(process.getgid!());
+    }
     return env;
 }
 
 function run(args: string[], env: NodeJS.ProcessEnv = {}): void {
-    execFileSync("docker", [...BASE, ...args], {
+    execFileSync("docker", [...baseArgs(), ...args], {
         cwd: REPO_ROOT,
         env: { ...baseEnv(), ...env },
         stdio: "inherit",
@@ -75,7 +93,7 @@ function run(args: string[], env: NodeJS.ProcessEnv = {}): void {
 }
 
 function capture(args: string[]): string {
-    return execFileSync("docker", [...BASE, ...args], {
+    return execFileSync("docker", [...baseArgs(), ...args], {
         cwd: REPO_ROOT,
         env: baseEnv(),
         encoding: "utf8",

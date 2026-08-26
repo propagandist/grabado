@@ -15,6 +15,12 @@
 #   PR 1 本あたりの消費が倍になる。**枠は org 全体で共有（2,000 分/月）で、枯らすと
 #   他リポジトリの本番デプロイまで止まる。**
 #
+# ★ 訂正（2026-08-26 実測。段階2-5）—— **public にした日に、上の「枠」の根拠は効かなくなった。**
+#   public の標準ランナーは org の 2,000 分を消費しない（org ci-strategy §1）。
+#   **元の記述は消さない**（判断の履歴なので）。**`paths` と `pull_request` 限定は維持する**
+#   —— 根拠が「枠」から「**入力が変わらなければ出力も変わらない**」と待ち時間へ
+#   置き換わっただけで、結論は動かない。
+#
 # ★ paths は「この検査の入力」だけを列挙する
 #   テストが `tests/` の外を読む面は実際に確かめた —— `tools/`（migrate-design.test.ts が
 #   import）、`scripts/`（`npm test` のラッパ）、`db/` `locale/` `index.html`（harness が読む
@@ -88,6 +94,13 @@ jobs:
       # Playwright の 3 系統（characterization / known-issues / dist）が同じ Chromium を使う。
       # ★ ブラウザのキャッシュはまだ足さない —— 規約 §3③「高速化は最後。しかも実測してから」。
       #   内訳は `gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` の steps[] の時刻差で採る。
+      # ★ **採った**（2026-08-26。段階2-5）—— ジョブ **85 秒**のうち **Chromium の取得が 39 秒（46%）**。
+      #   **2 run では 69〜85 秒**で、**動いたのはこの取得だけ**（他のステップは 2 回とも同じ）——
+      #   **遅さの原因も、ぶれの原因もここ**。
+      #   残りは npm ci 3 / 型検査 3 / vitest 11 / 実ブラウザ 12 / known-issues 3 / dist 5 秒。
+      #   **それでも足さない** —— キャッシュのキーを Playwright の版に結び付け損ねると、
+      #   **古いブラウザのまま緑になる**（検査が静かに嘘をつく側の失敗）。足すなら
+      #   **キーの設計を先に決める**別 issue で。ci-image.yml も同じ 39 秒を払っている。
       - name: Chromium の取得
         run: npx playwright install --with-deps chromium
 

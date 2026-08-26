@@ -13,6 +13,12 @@
 #   default branch だけなのに、である。
 #   必要になったら `gradle/actions/dependency-submission` を **default branch への push かつ
 #   Gradle のファイルが変わったときだけ**動かす自前ワークフローに置き換えること。
+#   **★ 置き換えた**（2026-08-26。段階2-5）—— `.github/workflows/deps-submit.yml`。
+#   契機は Dependabot の **security** updates を `server/` に効かせること
+#   （**GitHub は `gradle.lockfile` を読めない**ので、解決済みグラフを渡さないと
+#   CVE の修正 PR が `server/` には出ない）。**上の「枠」の根拠は public 化で効かなくなったが**
+#   （public の標準ランナーは枠を消費しない。2026-08-26 実測）、**結論は変わらない**
+#   —— 同じ結果を出すために全ブランチの全 push で走らせる理由が、枠とは別に無い。
 #
 # ★ wrapper は毎回検証する
 #   `validate-wrappers: true` が `gradle-wrapper.jar` を Gradle の既知リリースのハッシュと

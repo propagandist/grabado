@@ -34,6 +34,8 @@ config.xml
 test-results/
 # E2E の正本ディレクトリ（段階5-9。実ファイルに書くので一時ディレクトリを本物として使う）
 tests/tmp-schema/
+# イメージ E2E が mount するディレクトリ（段階2-4。compose.e2e.yaml が右辺を差し替える）
+tests/tmp-image-schema/
 playwright-report/
 blob-report/
 .playwright/

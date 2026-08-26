@@ -62,6 +62,14 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(req.contentType).toBe("application/json");
             /* body は serializer の出力とバイト一致（UI が別経路で組み直していない） */
             expect(req.data).toBe(expected);
+            /*
+             * ★ **応答を XML として読まない**（段階2-4）。save が返すのは 201 ＋ 空 body で
+             *   Content-Type も付かないので `responseXML` は null にしかならず、**読むだけで
+             *   CSP の style-src-attr 違反が 2 件出る**（2026-08-26 実測。イメージ E2E が
+             *   捕まえた）。ここは**安いほうの受け皿**で、実際に違反が出ないことを見るのは
+             *   tests/image/smoke.spec.ts（ブラウザでしか出ない）。
+             */
+            expect(req.xml).toBeUndefined();
         });
 
         test(".json 付きの名前を渡しても二重にならない", () => {

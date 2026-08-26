@@ -189,6 +189,25 @@ class BackendBehaviourTest {
             .hasValueSatisfying { assertThat(it).contains("frame-ancestors 'none'") }
     }
 
+    /*
+     * 経路別の `Cache-Control`（段階2-4）。**この応答が運ぶのは設計データ**なので `no-store`
+     * —— 正本は git 管理のファイルで、応答はその写しでしかない。
+     *
+     * 経路 → 値の表そのものは `CacheControlTest` が持つ。ここが見るのは**実 HTTP で本当に
+     * 出ていること**だけで、**静的資産の側は手元の jar に入らない**（dist を static へ入れるのは
+     * Dockerfile の COPY。段階2-0 の決めたこと 2）ので `tests/image/` が見る。
+     */
+    @Test
+    fun `backend の応答は Cache-Control が no-store`() {
+        assertThat(get("list", null).headers().firstValue(SecurityHeadersFilter.CACHE_CONTROL))
+            .hasValue(SecurityHeadersFilter.NO_STORE)
+
+        // ヘッダが落ちるのは、たいてい正常系ではない経路（上の★と同じ理由）
+        assertThat(
+            get("load", "does-not-exist.json").headers().firstValue(SecurityHeadersFilter.CACHE_CONTROL),
+        ).hasValue(SecurityHeadersFilter.NO_STORE)
+    }
+
     /** 正本（SecurityHeadersFilter.HEADERS）の 5 本が、この応答に 1 本残らず付いていること */
     private fun assertSecurityHeaders(response: HttpResponse<ByteArray>) {
         SecurityHeadersFilter.HEADERS.forEach { (name, value) ->

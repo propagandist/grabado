@@ -29,6 +29,19 @@ npm run migrate:design -- <ファイル>  # 設計 JSON の移行（§4 段階4-
 npm run test:server   # server/ の jar を作ってから Playwright を回す
 ```
 
+配布イメージの E2E（段階2-4）。**要 Docker。** compose がイメージを build して起こし、
+ブラウザ（実 XHR）→ 単一プロセス（Spring Boot）→ bind mount したホストのファイル、を通しで動かす。
+**手元の jar には static が入らない**ので（dist を入れるのは Dockerfile の COPY）、
+「単一プロセスが static と API の両方を配る」を確かめられるのはここだけ。
+
+```bash
+npm run test:image    # 通常モードで一巡 → READONLY で起こし直して一巡 → down まで
+```
+
+**3.0 分**（フロントか backend を変えた場合）／ **35 秒**（変えていない場合。ビルドがキャッシュに
+当たる。2026-08-26 実測）。**CI には載せていない** —— 2-5 の担当で、**載せる前に手元で通ることを
+確かめる**順序を崩さないため（判断規約は org の `ci-strategy.md`）。
+
 backend（`server/`。段階5-1b で入った Kotlin / Spring Boot）は Gradle 側にある。**要 JDK 25。**
 
 ```bash
@@ -420,6 +433,25 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 こと、落ちた提案の理由が **locale の語**で出ること（`js/io/` は locale を通せないので、
 `applyNotice` は翻訳関数を引数に取る —— テストは恒等関数を渡せる）。
 
+### 配布イメージ — golden を 1 本も持たない（§2 段階2-4）
+
+**見ているのは「配る形」**なので golden の出番が無い。段階の完了判定は
+「**golden 114 本が無差分**」＋下の 2 本。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/image/smoke.spec.ts`](../tests/image/smoke.spec.ts) | 通常モード。**単一プロセスが classpath の static を配る**こと・Rollup グラフ外の資産・**セキュリティヘッダ 5 本 × 4 経路**・**`Cache-Control` の経路別**・条件付き GET の 304・**bind mount への write-through**・**CSP 違反 0 件のまま主要操作が一巡**すること |
+| [`../tests/image/readonly.spec.ts`](../tests/image/readonly.spec.ts) | 公開デモと同じ条件。**READONLY でも healthy**・save / import が 403・list / load は 200（ホストが置いたファイルが読める）・**画面のボタンが押せない** |
+
+コンテナの起こし方は [`../tests/image/compose.ts`](../tests/image/compose.ts)（`--wait` で healthy を待つ）。
+**mount 先は `tests/tmp-image-schema/`** —— 正本ディレクトリ `schema/` にテストを書かせないため、
+[`../compose.e2e.yaml`](../compose.e2e.yaml) が volumes の 1 行だけを上書きする。
+
+★ **この系統が最初に見つけたのは、保存のたびに出ていた CSP 違反**（`js/io.ts` の `sendSave` が
+応答を `xml: true` で受けており、`responseXML` を読むと Chrome が空の応答に HTML パーサを当てる。
+2026-08-26）。**`vite preview` には backend が無く、`curl` では CSP が見えない**ので、
+**既存のどの系統からも見えない位置**にあった。
+
 ### UI の保存/読込経路 — golden を持たない 2 本（§4 段階4-3b）
 
 **golden はここを 1 ビットも押さえない。** golden 50 本（`ddl` 35 ＋ `json` 7 ＋ `state` 8）は
@@ -624,6 +656,8 @@ tests/
   contract/      backend の HTTP 契約（言語非依存の表。§5 段階5-1b）
   server/        実 HTTP の E2E（§5 段階5-9 / §11 段階11-5）。**要 JDK 25**。
                  ブラウザ → proxy → Kotlin → fs ／ AI は上流まで（opt-in）
+  image/         配布イメージの E2E（§2 段階2-4）。**要 Docker**。
+                 compose で起こして通しで叩く ／ READONLY で起こし直してもう一巡
 
 server/src/test/kotlin/dev/grabado/
   api/BackendContractTest.kt    tests/contract/ の表を実 HTTP に流す

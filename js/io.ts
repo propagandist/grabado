@@ -858,9 +858,17 @@ export class IO {
         this.owner.setTitle(name);
         /* 412 を受けたら同じ内容を再送するので、名前と本文を控えておく */
         this.pendingSave = { file: jsonKeyword(name), name: name, json: json };
-        /* xml: true は**応答**の解釈指定。送る body とは無関係 */
+        /*
+         * ★ **応答はテキストで受ける**（段階2-4 で `xml: true` を外した）。save が返すのは
+         *   **201 ＋ 空 body で Content-Type も付かない**ので、`responseXML` は
+         *   **null にしかならない** —— そして読むだけで **CSP の `style-src-attr` 違反が
+         *   2 件出る**（2026-08-26 実測。Chrome が空の応答に HTML パーサを当てるため）。
+         *
+         *   `saveresponse()` は第 1 引数を使っていないので、**外して失われる情報は無い**。
+         *   段階4-3b が load から、5-7b が import から外したのと同じ整理で、
+         *   **XML を実際に読むのは locale と datatypes だけ**になった。
+         */
         OZ.Request(url, this.saveresponse, {
-            xml: true,
             method: "post",
             data: json,
             headers: h,

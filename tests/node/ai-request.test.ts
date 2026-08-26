@@ -2,18 +2,18 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
-import { buildAiRequest, serializeAiRequest } from "../../js/io/ai/request.ts";
+import { buildAiRequest, serializeAiRequest } from "../../frontend/js/io/ai/request.ts";
 import {
     applyNotice,
     orderedSuggestions,
     parseSelection,
     reviewNotice,
-} from "../../js/io/ai/notice.ts";
-import type { PatchRejection } from "../../js/io/ai/apply-patch.ts";
-import type { AiSuggestion } from "../../js/io/ai/suggestion.ts";
-import type { DesignModel } from "../../js/io/model.ts";
-import { TypePalette } from "../../js/io/palette.ts";
-import { parseDesignXml } from "../../js/io/xml-parser.ts";
+} from "../../frontend/js/io/ai/notice.ts";
+import type { PatchRejection } from "../../frontend/js/io/ai/apply-patch.ts";
+import type { AiSuggestion } from "../../frontend/js/io/ai/suggestion.ts";
+import type { DesignModel } from "../../frontend/js/io/model.ts";
+import { TypePalette } from "../../frontend/js/io/palette.ts";
+import { parseDesignXml } from "../../frontend/js/io/xml-parser.ts";
 import { REPO_ROOT, readFixture } from "../support/fixtures.ts";
 
 /*
@@ -30,7 +30,7 @@ const dom = new JSDOM("");
 const parser = new dom.window.DOMParser();
 
 function paletteOf(db: string): TypePalette {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     const palette = new TypePalette();
     palette.setRoot(parser.parseFromString(xml, "text/xml").documentElement as unknown as Element);
     return palette;

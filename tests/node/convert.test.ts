@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
-import { KIND_FALLBACKS, convertDesign, fallbackIndex } from "../../js/io/convert.ts";
-import type { DesignModel } from "../../js/io/model.ts";
-import { TypePalette, type TypeKind } from "../../js/io/palette.ts";
-import { parseDesignXml } from "../../js/io/xml-parser.ts";
+import { KIND_FALLBACKS, convertDesign, fallbackIndex } from "../../frontend/js/io/convert.ts";
+import type { DesignModel } from "../../frontend/js/io/model.ts";
+import { TypePalette, type TypeKind } from "../../frontend/js/io/palette.ts";
+import { parseDesignXml } from "../../frontend/js/io/xml-parser.ts";
 import { DB_PROFILES, REPO_ROOT, readFixture } from "../support/fixtures.ts";
 
 /*
@@ -27,7 +27,7 @@ const dom = new JSDOM("");
 const parser = new dom.window.DOMParser();
 
 function paletteOf(db: string): TypePalette {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     const palette = new TypePalette();
     palette.setRoot(
         parser.parseFromString(xml, "text/xml").documentElement as unknown as Element,

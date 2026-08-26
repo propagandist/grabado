@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { detectDesignFormat } from "../../js/io/detect.ts";
+import { detectDesignFormat } from "../../frontend/js/io/detect.ts";
 import { FIXTURES, GOLDEN_DIR, SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
 
 /*

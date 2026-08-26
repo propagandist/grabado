@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { className, fieldName, kotlinIdentifier } from "../../js/io/orm/jpa.ts";
-import { ORM_EXTENSIONS, ORM_TARGETS, isOrmTarget } from "../../js/io/orm/generate.ts";
+import { className, fieldName, kotlinIdentifier } from "../../frontend/js/io/orm/jpa.ts";
+import { ORM_EXTENSIONS, ORM_TARGETS, isOrmTarget } from "../../frontend/js/io/orm/generate.ts";
 import { DB_PROFILES, ormGoldenCases, readFixture } from "../support/fixtures.ts";
 import { goldenPath, readGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";

@@ -33,7 +33,7 @@ function collectSources(dir: string): string[] {
         .map((name) => join(dir, name));
 }
 
-const SOURCES = ["js", "src"].flatMap((dir) => collectSources(join(REPO_ROOT, dir)));
+const SOURCES = ["js", "src"].flatMap((dir) => collectSources(join(REPO_ROOT, "frontend", dir)));
 
 describe("動的評価を持ち込まない（CSP の前提）", () => {
     test("走査対象が空になっていない", () => {

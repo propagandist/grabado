@@ -7,9 +7,9 @@ import { REPO_ROOT } from "../support/fixtures.ts";
 import { captureDesignState } from "../support/state.ts";
 /* OZ の型は js/oz.ts の export に移した（HANDOVER §3 段階3-1）。
    実体は window.eval したバンドルが載せるので、ここでは型だけ借りる。 */
-import type { OzRequestCallback, OzRequestOptions } from "../../js/oz.ts";
+import type { OzRequestCallback, OzRequestOptions } from "../../frontend/js/oz.ts";
 /* UI 層の型（段階4-3b。実体はバンドルの内側） */
-import type { IO } from "../../js/io.ts";
+import type { IO } from "../../frontend/js/io.ts";
 /* バンドルが window に載せるハンドルの型（実体は tests/node/app-entry.ts） */
 import type { GrabadoTestApi } from "./app-entry.ts";
 
@@ -114,8 +114,15 @@ export interface NodeHarness {
     close(): void;
 }
 
+/**
+ * URL パスをフロントの実体へ写す。**base は `frontend/`**（段階2-6 で集約した）。
+ *
+ * ★ **呼び出し側は URL のまま**（`index.html` / `db/<db>/datatypes.xml`）。集約で動いたのは
+ *   ファイルシステム上の位置だけで、**URL 空間は 1 バイトも変わっていない** —— その事実を
+ *   写像をここ 1 か所に閉じることで表している。
+ */
 function readRepoFile(relPath: string): string {
-    return readFileSync(join(REPO_ROOT, relPath), "utf8");
+    return readFileSync(join(REPO_ROOT, "frontend", relPath), "utf8");
 }
 
 /**

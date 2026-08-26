@@ -41,17 +41,12 @@ on:
       #   **このワークフローが動く ubuntu では常に効く**ので、外すと検査の条件が変わる。
       - 'compose.e2e.linux.yaml'
       # --- web ステージの入力（.dockerignore の許可リストと 1 対 1）---
-      - 'index.html'
+      # 段階2-6: フロントは frontend/ に集約したので、許可リストの `!frontend` と対になる。
+      - 'frontend/**'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
       - 'vite.config.ts'
-      - 'src/**'
-      - 'js/**'
-      - 'styles/**'
-      - 'db/**'
-      - 'locale/**'
-      - 'images/**'
       # --- api ステージの入力 ---
       - 'server/**'
       # --- E2E そのもの ---

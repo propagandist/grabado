@@ -62,7 +62,7 @@ Dockerfile                upstream の Dockerfile（busybox httpd。house 版で
 | 層 | 現行 | house 到達点（HANDOVER） | Tier |
 |---|---|---|---|
 | frontend | 素の JS（`js/`）＋グローバル `SQL.*`。**§3 段階1 で Vite バンドル化・段階2 で ES クラス化・段階3-1〜3-3b で 18 本すべてを `.ts` 化・段階3-4 で `SQL.*` と `window` 登録を撤去** | 完全 TS 化（Vite/strict）。描画エンジンは温存 | Tier 2 |
-| **DDL 生成** | ~~`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）~~ → **段階6-5a で [`../js/io/ddl/`](../js/io/ddl/) へ逐語移植（XSLT は撤去）** | TS 実装（**§6.3 の規約は 6-5b**） | — |
+| **DDL 生成** | ~~`db/<db>/output.xsl`（XSLT 1.0 をブラウザの `XSLTProcessor` で実行）~~ → **段階6-5a で [`../frontend/js/io/ddl/`](../frontend/js/io/ddl/) へ逐語移植（XSLT は撤去）** | TS 実装（**§6.3 の規約は 6-5b**） | — |
 | IO | XML 永続化（読み書き） | JSON 統一・決定論出力。XML は読込専用に | — |
 | backend | ~~PHP（`backend/php-*`）~~ **段階5-2 で撤去** | Kotlin/Spring Boot（file I/O ＋ introspection＋AI proxy）。**段階5-1b で `server/` に実体が入り、list/load/save は実測契約を満たしている**（§7）。introspection は 5-7、AI proxy は §11 | — |
 | 永続化 | 共有 PG / ファイル 各種 | git 管理 JSON ファイル正本（DB レス既定） | — |
@@ -117,13 +117,13 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 
 ### 4.2 URL の組み立て（フロント側）
 
-[`../js/io.ts`](../js/io.ts) が発行する URL は次の形。
+[`../frontend/js/io.ts`](../frontend/js/io.ts) が発行する URL は次の形。
 
 ```
 <xhrpath>backend/<backend名>/?action=<action>[&keyword=<name>|&database=<name>]
 ```
 
-- `<xhrpath>` = `CONFIG.XHR_PATH || ""`（[`../js/config.ts`](../js/config.ts) の実値は **空文字**）。cookie `wwwsqldesigner` で上書き可。
+- `<xhrpath>` = `CONFIG.XHR_PATH || ""`（[`../frontend/js/config.ts`](../frontend/js/config.ts) の実値は **空文字**）。cookie `wwwsqldesigner` で上書き可。
 - `<backend名>` は画面の backend セレクタの値（`CONFIG.AVAILABLE_BACKENDS`、既定 `php-mysql`）。URL クエリ `?backend=<name>` でも選択できる。
   → **段階5-5 でセレクタごと撤去し、フロントは `backend/file/` に固定した**（§7.1）。サーバは
   このセグメントを読まないままなので、`?backend=` 付きの古い URL も動く。
@@ -154,11 +154,11 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 - 日本語 `keyword` は URL エンコードで往復し、ファイル名も UTF-8 でそのまま作られる。
 - **`keyword` 省略時は 200 + PHP の Fatal error 本文**を返す（`fopen("data/")` が失敗 → `fwrite(false, ...)` で TypeError）。移植先では 400 を返すべき。
 
-`IO.check()`（[`../js/io.ts`](../js/io.ts)）は 201 / 404 / 500 / 501 / 503 を「表示すべき応答」として扱い、textarea にロケール文言を出す。**201 も含まれる**ため、save 成功時もメッセージが出る。
+`IO.check()`（[`../frontend/js/io.ts`](../frontend/js/io.ts)）は 201 / 404 / 500 / 501 / 503 を「表示すべき応答」として扱い、textarea にロケール文言を出す。**201 も含まれる**ため、save 成功時もメッセージが出る。
 
 **段階4-6 から、server への保存は `load` → `save` の 2 往復になる。** フロントは save の直前に同じ
 `keyword` で `load` を投げ、返ったバイト列を「自分が最後に観測した版」と比べてから本番の save を出す
-（read-before-write。理由と限界は [`../js/io/conflict.ts`](../js/io/conflict.ts) の冒頭）。**backend は 1 行も変わっていない** ——
+（read-before-write。理由と限界は [`../frontend/js/io/conflict.ts`](../frontend/js/io/conflict.ts) の冒頭）。**backend は 1 行も変わっていない** ——
 現行 PHP に条件付き更新の手がかり（ETag / Last-Modified）が無いための、フロント側だけの実装。
 
 - プリフライトの **404 は正常系**（＝新規保存）なので `check()` に通さない。textarea を汚さない
@@ -237,8 +237,8 @@ docker run -d --name grabado-pg-survey --network <net> -e POSTGRES_PASSWORD=... 
 ### 5.1 読み込み順（＝依存の薄い順のおおよその指標）
 
 かつて `index.html` に並んでいた 18 本の `<script src>` は、**§3 段階1 で `src/main.ts` の
-import 列に移し、段階3-0 で [`../src/app.ts`](../src/app.ts) に分離した**（順序はどちらも同じ）。
-`src/app.ts` は js/ を評価するだけで起動はせず、[`../src/main.ts`](../src/main.ts) が
+import 列に移し、段階3-0 で [`../frontend/src/app.ts`](../frontend/src/app.ts) に分離した**（順序はどちらも同じ）。
+`src/app.ts` は js/ を評価するだけで起動はせず、[`../frontend/src/main.ts`](../frontend/src/main.ts) が
 `import "./app.ts"` ＋ `new SQL.Designer()` を持つ。読み込み順の定義はこの 1 か所だけで、
 Node ハーネスも同じ `src/app.ts` を束ねて使う（§5.4）。
 
@@ -269,7 +269,7 @@ io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
   polyfill は段階2 で撤去。`SqlNamespace` 型もここにある（段階3-1）。段階3-2 で
   `SqlDesigner`（`Designer` インスタンスの面）が `types/globals.d.ts`（段階3-3b で削除済み）
   から移設されたが、**段階4-1c で撤去し、`this.owner` を持つ 10 本は
-  [`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts) の `Designer` を直接 `import type` する**
+  [`../frontend/js/wwwsqldesigner.ts`](../frontend/js/wwwsqldesigner.ts) の `Designer` を直接 `import type` する**
   （本ファイルは js/ のどこにも依存しなくなった）。
 - `visual.ts` → `row.ts` / `table.ts` / `relation.ts` / `key.ts` が描画中核（Tier 2 で温存）。
   **段階2 で ES クラス階層になり、段階3-2 で `.ts` 化した**（§5.4）。
@@ -284,9 +284,9 @@ io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
 
 | 残る面 | 置き場所 | なぜ残るか |
 |---|---|---|
-| `window.d` | [`../src/main.ts`](../src/main.ts) | upstream 由来のデバッグハンドル。段階3-4b から page 側テストの入口も兼ねる（`page.evaluate` はバンドル外なので window ハンドルが要る） |
+| `window.d` | [`../frontend/src/main.ts`](../frontend/src/main.ts) | upstream 由来のデバッグハンドル。段階3-4b から page 側テストの入口も兼ねる（`page.evaluate` はバンドル外なので window ハンドルが要る） |
 
-`window.DATATYPES` は**段階4-0b で撤去**し、[`../js/io/palette.ts`](../js/io/palette.ts) の
+`window.DATATYPES` は**段階4-0b で撤去**し、[`../frontend/js/io/palette.ts`](../frontend/js/io/palette.ts) の
 `TypePalette` を `Designer.palette` として持つ形にした（読み手は owner 鎖で到達。差し替え口は
 node が `designer.palette`、page が `window.d.palette`）。
 `LOCALE` は「テストが触らない」点だけが `DATATYPES` と違い、段階3-4c でモジュール変数にできた。
@@ -295,7 +295,7 @@ Node ハーネスがバンドルの内側に手を届かせる経路は
 **クラスの `SQL` 名前空間登録（`SQL.Row = Row;` 等）は段階3-4a で全廃した。** ファイル跨ぎの
 クラス参照は値 import になり、`SqlNamespace` は `{ Designer, designer }` の 2 つまで縮んだ
 （`Designer` は 3-4c で消える。`designer` は §4 の DI 化で消える）。pub/sub は
-[`../js/globals.ts`](../js/globals.ts) の named export で、`escape` は段階4-1a で
+[`../frontend/js/globals.ts`](../frontend/js/globals.ts) の named export で、`escape` は段階4-1a で
 `js/io/ddl-xml.ts` の `escapeXML` になった
 （呼び手 3 か所がすべて `toXML` 経路だったので、書き出しの移設と同時に出た）。
 **そのモジュールは段階6-5a で消えた** —— XML の書き出しごと無くなったので、
@@ -305,8 +305,8 @@ grabado に XML エスケープを持つ場所はもう無い。
 
 | | 何が配る | 用途 |
 |---|---|---|
-| `npm run dev` | Vite dev server（127.0.0.1:4173、root＝リポジトリルート） | 開発。`npm run test:browser` の webServer もこれ |
-| `npm run build` | `dist/`（index.html ＋ bundle ＋ CSS、`db/` `locale/` `images/` は static-copy） | 配布物。`npm run test:dist` がスモークを張る |
+| `npm run dev` | Vite dev server（127.0.0.1:4173、**root＝`frontend/`**。段階2-6） | 開発。`npm run test:browser` の webServer もこれ |
+| `npm run build` | **`frontend/dist/`**（index.html ＋ bundle ＋ CSS、`db/` `locale/` `images/` は static-copy） | 配布物。`npm run test:dist` がスモークを張る |
 | `npm test` | vite の build API が `src/app.ts` を単一 IIFE に束ねる（`write: false` なのでディスクには出さない） | Node ハーネスが jsdom に流す（§5.4・[`TESTING.md`](TESTING.md)） |
 
 `db/` `locale/` は `OZ.Request` が相対 URL で取りに行き、`images/` はバンドル後の CSS が
@@ -315,9 +315,9 @@ grabado に XML エスケープを持つ場所はもう無い。
 
 ### 5.2 DDL 生成（段階6-5a で XSLT から TS へ）
 
-SQL 出力は [`../js/io/ddl/generate.ts`](../js/io/ddl/generate.ts) が組み立てる。入口は
+SQL 出力は [`../frontend/js/io/ddl/generate.ts`](../frontend/js/io/ddl/generate.ts) が組み立てる。入口は
 `generateDdl(model: DesignModel, palette: TypePalette): string` で、`palette.db()` で
-プロファイルを選び、`.trim()` した文字列を [`../js/io.ts`](../js/io.ts) の `clientsql()` が
+プロファイルを選び、`.trim()` した文字列を [`../frontend/js/io.ts`](../frontend/js/io.ts) の `clientsql()` が
 `#textarea` に入れる。**呼び手は `clientsql()` の 1 か所だけ**（保存/読込は段階4-3b で JSON に移った）。
 
 > 旧版の本書はこのメソッドを `sql()` と書いていたが、実装名は **`clientsql()`**。
@@ -384,7 +384,7 @@ golden は実ブラウザ（Playwright/Chromium）で採り、日常回帰は js
   `lib.dom` の型と同名のままなので、参照側が `import { Window as SqlWindow }` で受ける）。
 
 **2 つの実行系の差は §3 段階3-0 でほとんど消えた。** Node ハーネスも
-[`../src/app.ts`](../src/app.ts) を vite で束ねた単一 IIFE を評価する形になり、
+[`../frontend/src/app.ts`](../frontend/src/app.ts) を vite で束ねた単一 IIFE を評価する形になり、
 スコープの性質と strict がブラウザ側と揃った（[`TESTING.md`](TESTING.md)）。
 
 | | ESM（`npm run dev` / `build` / `test:browser` / `test:dist`） | Node ハーネス（`npm test`） |
@@ -430,7 +430,7 @@ golden は実ブラウザ（Playwright/Chromium）で採り、日常回帰は js
 （`SQL.designer` は段階4-0a で owner 鎖に、`window.DATATYPES` は段階4-0b で `Designer.palette` に）。
 
 段階3-3b で **`types/globals.d.ts` は役目を終えて削除**した（最後まで残っていた `window.d` の宣言は
-[`../src/main.ts`](../src/main.ts) へ移した）。[`../tsconfig.json`](../tsconfig.json) の `checkJs` も
+[`../frontend/src/main.ts`](../frontend/src/main.ts) へ移した）。[`../tsconfig.json`](../tsconfig.json) の `checkJs` も
 落としてある（`allowJs` だけは [`../vitest.config.ts`](../vitest.config.ts) が
 `scripts/canonical-cwd.mjs` を import するために残る）。
 
@@ -478,10 +478,10 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 | `OZ.Request` | `(url, callback?, options?) => XMLHttpRequest \| false` | `false` は [`../tests/node/harness.ts`](../tests/node/harness.ts) の差し替え実装が返す |
 | `OZ.$`（3-2 で追補） | 上に加えて `(x: string) => HTMLElement` のオーバーロード | 単一シグネチャだと文字列を渡したとき `T` の推論候補に `string` が入り、制約違反で `EventTarget` にフォールバックする（既定の `HTMLElement` は候補が 1 つも無いときしか使われない） |
 | `OZ.Event.add`（3-2） | `<E extends Event = Event>(elm, event, cb: (e: E) => void) => number` | `EventListener` は呼び出しシグネチャなので `strictFunctionTypes` が効き、`click(e: MouseEvent)` を bind して渡すと反変で TS2345。登録は 3-2 で 21 箇所、3-3 でさらに 40 箇所超 |
-| `SqlDesigner`（3-2） | [`../js/globals.ts`](../js/globals.ts) の `export interface` | 描画中核 7 本の `this.owner` の面を 1 か所に集約。7 本にローカル interface を書くと面がずれても気づけず、削除コストも 7 倍。段階3-3 で `import type { Designer }` に置き換わる |
+| `SqlDesigner`（3-2） | [`../frontend/js/globals.ts`](../frontend/js/globals.ts) の `export interface` | 描画中核 7 本の `this.owner` の面を 1 か所に集約。7 本にローカル interface を書くと面がずれても気づけず、削除コストも 7 倍。段階3-3 で `import type { Designer }` に置き換わる |
 | `SqlNamespace`（3-2） | `Visual` / `Row` / `Table` / `Relation` / `Key` / `Rubberband` / `Map` を追加 | `.ts` 側は import した `SQL` に代入するので、宣言が無いと代入自体が TS2339（`.js` のようなグローバル型の合成は起きない）。同時にこれが `new SQL.Row(...)` を import に書き換えずに済む根拠でもある |
 | `SqlDesigner`（3-3b） | `export type SqlDesigner = Designer;`（実体への型エイリアス） | 3-2 の構造的 interface を実体に置き換えた。参照している 13 本は無改修。近似で書いていた面は実体との食い違いが `typecheck` で出る（`getOption` の戻りが `string \| number \| boolean` だったのはこれで判明） |
-| `SqlDesigner`（4-1c で撤去） | — （参照 13 本を `import type { Designer } from "./wwwsqldesigner.ts"` に置換） | 3-3b 以降は名前が 2 つあるだけの状態だった。§4 でモデル層の型が増える前に実体 1 本へ寄せた。**必ずトップレベル `import type`**（インライン形は `verbatimModuleSyntax` で import 文が emit に残り、副作用 import として読み込み順を壊す）。書き方の正本は [`../js/table.ts`](../js/table.ts) の冒頭 |
+| `SqlDesigner`（4-1c で撤去） | — （参照 13 本を `import type { Designer } from "./wwwsqldesigner.ts"` に置換） | 3-3b 以降は名前が 2 つあるだけの状態だった。§4 でモデル層の型が増える前に実体 1 本へ寄せた。**必ずトップレベル `import type`**（インライン形は `verbatimModuleSyntax` で import 文が emit に残り、副作用 import として読み込み順を壊す）。書き方の正本は [`../frontend/js/table.ts`](../frontend/js/table.ts) の冒頭 |
 | `dom` 形態 (ii)（3-3b） | 完成形を `IoDom` / `TableManagerDom` / `RowManagerDom` / `KeyManagerDom` で宣言 | 初期化に `as unknown as XxxDom` 1 個、ループ代入に `(this.dom as unknown as Record<string, HTMLInputElement>)[id]` 1 個。4 本で計 8 個のキャストと引き換えに読み出しが全部注釈ゼロで通る |
 | `SqlNamespace`（3-3b） | 残り 8 クラスを追加し、`Designer: typeof Designer` / `designer: Designer` に | `SQL.Window` は `lib.dom` の `Window` と同名なので、import 側で `import type { Window as SqlWindow }` と改名して受ける |
 
@@ -489,7 +489,7 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 
 §4（IO）は入出力を `js/io/` に集め、描画クラスから `toXML()` / `fromXML()` を
 1 行も残さず抜いた。組み方は **2×2 の格子**で、これが分割の原理そのもの
-（[`../js/io/model.ts`](../js/io/model.ts) のヘッダが正本）。
+（[`../frontend/js/io/model.ts`](../frontend/js/io/model.ts) のヘッダが正本）。
 
 ```
              ライブ側（描画エンジンを触る）   形式側（バイト列を知る）
@@ -506,23 +506,23 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 
 | ファイル | 位置 | 役割 |
 |---|---|---|
-| [`detect.ts`](../js/io/detect.ts) | 入・前段 | 中身の先頭 1 文字で JSON / XML / 空 / 不明を決める。フォールバックは作らない |
-| [`json-parser.ts`](../js/io/json-parser.ts) | 入・形式 | 設計 JSON → `DesignModel`。壊れた入力は `tables[0].columns[2].name` の位置つきで throw |
-| [`xml-parser.ts`](../js/io/xml-parser.ts) | 入・形式 | 設計 XML → `DesignModel`。**逐語移設**なので現行の受け流す癖（未知の型は添字 0・最後の一致が勝つ）ごと保つ |
-| [`apply.ts`](../js/io/apply.ts) | 入・ライブ | `DesignModel` → ライブツリー。**純関数ではない** —— `moveTo()` の snap・`update()` の FK 連鎖・ff hack の**順序**が挙動 |
-| [`extract.ts`](../js/io/extract.ts) | 出・ライブ | ライブツリー → `DesignModel`。描画エンジンを知っている唯一の出力側 |
-| [`json-serializer.ts`](../js/io/json-serializer.ts) | 出・形式 | `DesignModel` → 設計 JSON（決定論。書けない設計は 1 バイトも書かずに throw） |
-| [`ddl/`](../js/io/ddl/) | 出・形式 | `DesignModel` → **DDL**（段階6-5a）。`generate.ts` が入口、`shared.ts` が型解決と既定値の引用、残る 5 本がプロファイルごとの逐語移植 |
-| [`json-format.ts`](../js/io/json-format.ts) | 形式の定義 | 設計 JSON の形とキー順の契約（型だけ・emit 空）。散文は [`FORMAT.md`](FORMAT.md) |
-| [`model.ts`](../js/io/model.ts) | モデルの定義 | `DesignModel` の型（型だけ・emit 空）。上の格子の説明もここ |
-| [`palette.ts`](../js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |
-| [`conflict.ts`](../js/io/conflict.ts) | 保存境界 | 保存前の外部変更検知の判定（純関数。`absent` / `clean` / `exists` / `conflict`） |
-| [`template.ts`](../js/io/template.ts) | 参照 | §6.2 初期テーブルテンプレート（§6 段階6-4 で追加）。`<template>` を読み、新規テーブルの初期列と PRIMARY を作る。`Add row` の既定型（`newrowtype`）も同じ層 |
-| [`convert.ts`](../js/io/convert.ts) | 出・前段 | プロファイル変換（§6 段階6-10a）。`DesignModel` → **別プロファイルの** `DesignModel` ＋ 落ちたものの一覧。純関数で、型は正規型（`kind`）1 段だけを介して写す |
-| [`ai/`](../js/io/ai/) | 格子の外 | AI との往復（§11）。`suggestion.ts` が提案と patch の型（型だけ・emit 空）、`apply-patch.ts` が `DesignModel` → `DesignModel` の純関数（11-1）、`request.ts` が `DesignModel` → 送信 JSON（11-3）、`notice.ts` が提案 → 人が読む 1 枚（11-3）。**4 本とも LLM も HTTP も 1 バイトも知らない** |
+| [`detect.ts`](../frontend/js/io/detect.ts) | 入・前段 | 中身の先頭 1 文字で JSON / XML / 空 / 不明を決める。フォールバックは作らない |
+| [`json-parser.ts`](../frontend/js/io/json-parser.ts) | 入・形式 | 設計 JSON → `DesignModel`。壊れた入力は `tables[0].columns[2].name` の位置つきで throw |
+| [`xml-parser.ts`](../frontend/js/io/xml-parser.ts) | 入・形式 | 設計 XML → `DesignModel`。**逐語移設**なので現行の受け流す癖（未知の型は添字 0・最後の一致が勝つ）ごと保つ |
+| [`apply.ts`](../frontend/js/io/apply.ts) | 入・ライブ | `DesignModel` → ライブツリー。**純関数ではない** —— `moveTo()` の snap・`update()` の FK 連鎖・ff hack の**順序**が挙動 |
+| [`extract.ts`](../frontend/js/io/extract.ts) | 出・ライブ | ライブツリー → `DesignModel`。描画エンジンを知っている唯一の出力側 |
+| [`json-serializer.ts`](../frontend/js/io/json-serializer.ts) | 出・形式 | `DesignModel` → 設計 JSON（決定論。書けない設計は 1 バイトも書かずに throw） |
+| [`ddl/`](../frontend/js/io/ddl/) | 出・形式 | `DesignModel` → **DDL**（段階6-5a）。`generate.ts` が入口、`shared.ts` が型解決と既定値の引用、残る 5 本がプロファイルごとの逐語移植 |
+| [`json-format.ts`](../frontend/js/io/json-format.ts) | 形式の定義 | 設計 JSON の形とキー順の契約（型だけ・emit 空）。散文は [`FORMAT.md`](FORMAT.md) |
+| [`model.ts`](../frontend/js/io/model.ts) | モデルの定義 | `DesignModel` の型（型だけ・emit 空）。上の格子の説明もここ |
+| [`palette.ts`](../frontend/js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |
+| [`conflict.ts`](../frontend/js/io/conflict.ts) | 保存境界 | 保存前の外部変更検知の判定（純関数。`absent` / `clean` / `exists` / `conflict`） |
+| [`template.ts`](../frontend/js/io/template.ts) | 参照 | §6.2 初期テーブルテンプレート（§6 段階6-4 で追加）。`<template>` を読み、新規テーブルの初期列と PRIMARY を作る。`Add row` の既定型（`newrowtype`）も同じ層 |
+| [`convert.ts`](../frontend/js/io/convert.ts) | 出・前段 | プロファイル変換（§6 段階6-10a）。`DesignModel` → **別プロファイルの** `DesignModel` ＋ 落ちたものの一覧。純関数で、型は正規型（`kind`）1 段だけを介して写す |
+| [`ai/`](../frontend/js/io/ai/) | 格子の外 | AI との往復（§11）。`suggestion.ts` が提案と patch の型（型だけ・emit 空）、`apply-patch.ts` が `DesignModel` → `DesignModel` の純関数（11-1）、`request.ts` が `DesignModel` → 送信 JSON（11-3）、`notice.ts` が提案 → 人が読む 1 枚（11-3）。**4 本とも LLM も HTTP も 1 バイトも知らない** |
 
-**12 本目の [`template.ts`](../js/io/template.ts) は §6 段階6-4 で足した**（§4 の 11 本ではない）。
-**13 本目の [`convert.ts`](../js/io/convert.ts) は §6 段階6-10a。** 格子の「出・形式側」の
+**12 本目の [`template.ts`](../frontend/js/io/template.ts) は §6 段階6-4 で足した**（§4 の 11 本ではない）。
+**13 本目の [`convert.ts`](../frontend/js/io/convert.ts) は §6 段階6-10a。** 格子の「出・形式側」の
 **手前**に立つ層で、形式を 1 つも知らない（バイト列に触れない）かわりに**型パレットを 2 つ**見る ——
 設計側と出力側で、その間を正規型で結ぶ。`db` の 1 文字列が決めていた 4 つのうち
 「DDL 生成器」と「型パレット」を分けたのがこの段階で、**設計 JSON の型キーの名前空間は
@@ -530,7 +530,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 格子の外にあるのは、入出力ではなく**プロファイルの既定値**を読む層だから —— 位置づけは
 `palette.ts` と同じで、実行時の依存は 0 本（import は型だけ）。
 
-**[`ai/`](../js/io/ai/) は §11 段階11-1。格子の第 3 の軸**で、`extract` / `apply` / `parser` /
+**[`ai/`](../frontend/js/io/ai/) は §11 段階11-1。格子の第 3 の軸**で、`extract` / `apply` / `parser` /
 `serializer` のどれにも同居しない —— 入力も出力も `DesignModel` で、バイト列にも
 ライブツリーにも触らないため。いちばん近いのは `convert.ts`（モデル → モデルの純関数）だが、
 あちらが**型パレットを 2 つ**見るのに対しこちらは 1 つで、写すのは型ではなく**構造**
@@ -545,7 +545,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 2. **型パレット依存の解決は引数で渡す。** モデルが持つ型は**パレットの添字**のままで、
    sql 名にも id にも解決しない。解決するのは形式側 2 本が受け取る `palette` 引数（4-1a）。
 3. **`js/io/` は locale を通さない。** 例外 message は開発者向けで、価値の本体が位置情報。
-   ユーザーへの見せ方（見出しだけ locale・詳細は素通し）は呼び手の [`../js/io.ts`](../js/io.ts) が決める（4-3b）。
+   ユーザーへの見せ方（見出しだけ locale・詳細は素通し）は呼び手の [`../frontend/js/io.ts`](../frontend/js/io.ts) が決める（4-3b）。
 4. **UI と通信は `js/io.ts` に残す。** ダイアログの組み立て・`alert` / `confirm` / `prompt`・
    `OZ.Request`・localStorage・ダウンロードはすべてこちら側で、`js/io/` は形式とモデルしか知らない。
 
@@ -637,7 +637,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 ### 7.2 introspection JSON
 
 **形の正は [`../server/src/main/kotlin/dev/grabado/introspect/IntrospectionModel.kt`](../server/src/main/kotlin/dev/grabado/introspect/IntrospectionModel.kt)**
-（TypeScript 側の受け皿は [`../js/io/introspect-model.ts`](../js/io/introspect-model.ts)）。
+（TypeScript 側の受け皿は [`../frontend/js/io/introspect-model.ts`](../frontend/js/io/introspect-model.ts)）。
 「設計 JSON v2 を返さない」理由は [`FORMAT.md`](FORMAT.md) の最終節 —— 要点は **backend は生の
 SQL 型情報を返し、型 id への解決はフロントの `TypePalette` が持つ**こと（`x` / `y` は
 `importresponse` の `alignTables()` が埋める）。
@@ -690,7 +690,7 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 **決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階11-0 にある。**
 
 **本章はすべて実装済み**（11-1 で適用側、11-2a で proxy の契約、**11-2b で上流を叩く実装**）。
-入口は [`../js/io/ai/`](../js/io/ai/) と
+入口は [`../frontend/js/io/ai/`](../frontend/js/io/ai/) と
 [`../server/src/main/kotlin/dev/grabado/ai/`](../server/src/main/kotlin/dev/grabado/ai/)。
 **残るのはフロントの配線だけ**（11-3 以降。`js/` はまだ 1 行も AI を知らない）。
 
@@ -738,7 +738,7 @@ READONLY / キー未設定 / モデル名未設定 / 実装が無い のどれ�
 
 **送らないもの**: `x` / `y`（判定に無関係でトークンだけ食う）、`formatVersion`、`db`。
 
-組み立てるのは [`../js/io/ai/request.ts`](../js/io/ai/request.ts) の純関数（段階11-3）。
+組み立てるのは [`../frontend/js/io/ai/request.ts`](../frontend/js/io/ai/request.ts) の純関数（段階11-3）。
 **同じモデルからは同じバイト列**が出る —— §8.5 の結果キャッシュの鍵がこのバイト列の SHA-256 なので、
 揺れると当たらなくなる。**整形して送る**のは、送信前プレビューに出すのがこの文字列そのもので、
 **見せているものと送るものを 1 バイトも違わせない**ため（決めたこと 3 の担保）。
@@ -760,11 +760,11 @@ set-nullable / set-default / add-comment
 **`drop-table` / `drop-column` は存在しない。** 承認 UI の誤操作 1 回で設計が消える形を作らない。
 消したい列の指摘は `patch` を持たない提案（`rationale` だけ）として出す。
 
-適用は [`../js/io/ai/apply-patch.ts`](../js/io/ai/apply-patch.ts) の**純関数**
+適用は [`../frontend/js/io/ai/apply-patch.ts`](../frontend/js/io/ai/apply-patch.ts) の**純関数**
 （`DesignModel` → `DesignModel`）。ライブツリーを触るのは既存の `applyDesignModel()`（§4-1b の経路）。
 **LLM の非決定性は「生成」だけに閉じ込め、「適用」はテスト済みロジックに合流する**（CLAUDE.md 制約7）。
 
-**段階11-1 で入った**（型は [`suggestion.ts`](../js/io/ai/suggestion.ts)、テストは
+**段階11-1 で入った**（型は [`suggestion.ts`](../frontend/js/io/ai/suggestion.ts)、テストは
 [`../tests/node/apply-patch.test.ts`](../tests/node/apply-patch.test.ts) の 57 本）。
 op が何を書き換えるかは次のとおりで、**書き込み先はモデルの形がそのまま決めている**:
 
@@ -846,14 +846,16 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 ## 9. 配布とイメージ（到達点）
 
-**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 / 2-3 / 2-4 / 2-5 にある。**
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 〜 2-6 にある。**
 **段階2-1 でイメージが動くようになり**（3 ステージ・digest ピン・非 root。実測は §9.1）、
 **段階2-2 で CSP が付き**（§9.4）、**段階2-3 で compose と env が入り**（§9.3 / §9.5）、
 **段階2-4 で機械が見るようになり**（[`../tests/image/`](../tests/image/)。§9.5）、
-**段階2-5 で CI に載った**（§9.6）。**残っているのは 2-6** —— `frontend/` 集約。
+**段階2-5 で CI に載り**（§9.6）、**段階2-6 で `frontend/` へ集約して §2 を閉じた**。
 
 **HANDOVER §2 との差分は 1 つ**（配置。§2.2 の骨格は `frontend/` / `backend/` を前提にしているが、
-実在は**リポジトリルート**と **`server/`**）。**HANDOVER が触れていない論点が 1 つ** ——
+実在は **`frontend/`** と **`server/`**。**段階2-6 で集約した** —— ただし
+**`package.json` と `tests/` は root のまま**なので、骨格の `COPY frontend/package*.json` とは
+なお違う）。**HANDOVER が触れていない論点が 1 つ** ——
 **イメージをレジストリで配るかどうか**で、これは §9.1 の最後に書いた。
 **HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
 
@@ -861,11 +863,11 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 | ステージ | 何をする | 入力 | 出力 |
 |---|---|---|---|
-| **web** | `npm ci` → `npm run build` | リポジトリルート（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/` と設定ファイル） | `dist/` |
-| **api** | `./gradlew bootJar` | `server/` ＋ web の `dist/` を `src/main/resources/static/` へ COPY | `grabado.jar` |
+| **web** | `npm ci` → `npm run build` | **`frontend/`**（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/`）＋ root の設定ファイル（`package.json` / `vite.config.ts` / `tsconfig.json`） | **`frontend/dist/`** |
+| **api** | `./gradlew bootJar` | `server/` ＋ web の **`frontend/dist/`** を `src/main/resources/static/` へ COPY | `grabado.jar` |
 | **runtime** | thin JRE で jar を起こす | `grabado.jar` | 8080 で待つ**単一プロセス** |
 
-- **`frontend/` は無い。** フロントのビルド文脈は**リポジトリルート**（集約は 2-6）
+- **`frontend/` に集約した**（段階2-6）。**`package.json` と `tests/` は root のまま** —— `tests/contract/` は backend と共有し、`tests/image/` は root の `compose.yaml` を叩くため（issue #107 の判断）
 - **dist を static へ入れるのは COPY で、Gradle タスクにしない** —— タスクにすると手元の
   `./gradlew bootJar` が Node のビルドを要求し、開発時の 2 プロセスと `npm run test:server` が壊れる。
   代償として**手元の jar には static が入らない**ので、**イメージの検証はイメージでやる**（2-4）
@@ -905,7 +907,7 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 | | 誰が配るか | 静的資産 | `/backend/*` `/api/*` |
 |---|---|---|---|
 | **コンテナ**（配布物） | **単一プロセス**（Spring Boot） | classpath の `static/` | 同じプロセス |
-| **開発**（2 プロセス） | Vite dev server ＋ `bootRun` | Vite（root＝リポジトリルート） | dev proxy が 8080 へ回す |
+| **開発**（2 プロセス） | Vite dev server ＋ `bootRun` | Vite（**root＝`frontend/`**） | dev proxy が 8080 へ回す |
 
 **この差を吸うのが `vite.config.ts` の proxy**（走らせ方は §7.4）。**URL 空間はどちらでも同じ**
 なので、**フロントは自分がどちらで配られているかを知らない**。
@@ -964,7 +966,7 @@ relaxed binding。**2026-08-26 実測**で `…_SHOP_URL` などを渡すと `?a
 
 **CSP を成立させるために動かしたもの**（フロント側。詳細は CUSTOMIZATIONS の段階2-2）:
 
-- **cookie の読み取りから eval を撤去**（[`../js/wwwsqldesigner.ts`](../js/wwwsqldesigner.ts)）
+- **cookie の読み取りから eval を撤去**（[`../frontend/js/wwwsqldesigner.ts`](../frontend/js/wwwsqldesigner.ts)）
   —— これが無いと `script-src 'unsafe-eval'` が要る
 - **`assetsInlineLimit: 0`**（[`../vite.config.ts`](../vite.config.ts)）—— `styles/print.css` が
   `data:text/css` の `<link>` へ inline 化されるのを止め、`style-src` を `'self'` のまま保つ
@@ -1002,7 +1004,7 @@ material-inspired の svg（CSS ソースに元からある）。
   なると、**1 年間ブラウザに焼き付く**
 
 **★ 実測で 1 つ直した（2026-08-26 / 段階2-4）** —— **保存のたびに CSP 違反が 2 件出ていた。**
-[`js/io.ts`](../js/io.ts) の `sendSave` が応答を `xml: true` で受けており、`responseXML` を読むと
+[`js/io.ts`](../frontend/js/io.ts) の `sendSave` が応答を `xml: true` で受けており、`responseXML` を読むと
 Chrome が**空の応答に HTML パーサを当てて** `style-src-attr` 違反を出す。save が返すのは
 **201 ＋ 空 body で Content-Type も付かない**ので `responseXML` は null にしかならず、
 `saveresponse()` はその値を使ってもいなかった。**`xml: true` を外して解消。**
@@ -1041,7 +1043,7 @@ Windows）。**Dockerfile の `HEALTHCHECK` は置いていない** —— E2E �
 ★ **`save` を `curl` で叩くときは `Content-Type: application/json` が要る。** 付けないと
 curl が `application/x-www-form-urlencoded` を送り、**Tomcat がパラメータ解析で body を
 読み尽くす** —— **201 が返るのに 0 バイトのファイルが書かれる**（2026-08-26 実測）。
-フロントは [`../js/io.ts`](../js/io.ts) が明示しているので実運用では起きない。
+フロントは [`../frontend/js/io.ts`](../frontend/js/io.ts) が明示しているので実運用では起きない。
 **2-4 の E2E は `window.d.io` を通すので、この罠を踏まない。**
 
 **イメージの検証は機械がやる**（段階2-4）。走らせ方と見ているものは

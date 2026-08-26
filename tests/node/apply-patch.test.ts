@@ -2,15 +2,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
-import { applyPatch, applyPatches } from "../../js/io/ai/apply-patch.ts";
-import type { PatchRejection, PatchResult } from "../../js/io/ai/apply-patch.ts";
-import type { AiPatch, AiSuggestion, AiTarget } from "../../js/io/ai/suggestion.ts";
-import { generateDdl } from "../../js/io/ddl/generate.ts";
-import { parseDesignJson } from "../../js/io/json-parser.ts";
-import { serializeDesignJson } from "../../js/io/json-serializer.ts";
-import type { DesignModel, RowModel, TableModel } from "../../js/io/model.ts";
-import { TypePalette } from "../../js/io/palette.ts";
-import { parseDesignXml } from "../../js/io/xml-parser.ts";
+import { applyPatch, applyPatches } from "../../frontend/js/io/ai/apply-patch.ts";
+import type { PatchRejection, PatchResult } from "../../frontend/js/io/ai/apply-patch.ts";
+import type { AiPatch, AiSuggestion, AiTarget } from "../../frontend/js/io/ai/suggestion.ts";
+import { generateDdl } from "../../frontend/js/io/ddl/generate.ts";
+import { parseDesignJson } from "../../frontend/js/io/json-parser.ts";
+import { serializeDesignJson } from "../../frontend/js/io/json-serializer.ts";
+import type { DesignModel, RowModel, TableModel } from "../../frontend/js/io/model.ts";
+import { TypePalette } from "../../frontend/js/io/palette.ts";
+import { parseDesignXml } from "../../frontend/js/io/xml-parser.ts";
 import { REPO_ROOT, readFixture } from "../support/fixtures.ts";
 
 /*
@@ -33,7 +33,7 @@ const dom = new JSDOM("");
 const parser = new dom.window.DOMParser();
 
 function paletteOf(db: string): TypePalette {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     const palette = new TypePalette();
     palette.setRoot(parser.parseFromString(xml, "text/xml").documentElement as unknown as Element);
     return palette;

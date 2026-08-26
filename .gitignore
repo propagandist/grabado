@@ -9,9 +9,10 @@ Thumbs.db
 
 # === Node / Vite ===
 node_modules/
-# ルートの Vite 出力だけを無視する。階層無制限の "dist/" にすると
-# tests/dist/（配布物スモークのテストコード）まで巻き込む
-/dist/
+# Vite の出力だけを無視する。階層無制限の "dist/" にすると
+# tests/dist/（配布物スモークのテストコード）まで巻き込む。
+# 段階2-6 で root が frontend/ になったので、出力もそこへ出る。
+/frontend/dist/
 .vite/
 *.local
 

@@ -1,15 +1,15 @@
 # FORMAT.md — 設計 JSON（`formatVersion: 2`）
 
 grabado の**正本フォーマット**。git 管理のファイルとして保存され、共有は PR で行う
-（CLAUDE.md 制約2）。読み書きは [`../js/io/json-serializer.ts`](../js/io/json-serializer.ts) と
-[`../js/io/json-parser.ts`](../js/io/json-parser.ts) の 2 本だけを通る。形の定義（キー順の契約を含む）は
-[`../js/io/json-format.ts`](../js/io/json-format.ts) が正本で、本書はその散文版。
+（CLAUDE.md 制約2）。読み書きは [`../frontend/js/io/json-serializer.ts`](../frontend/js/io/json-serializer.ts) と
+[`../frontend/js/io/json-parser.ts`](../frontend/js/io/json-parser.ts) の 2 本だけを通る。形の定義（キー順の契約を含む）は
+[`../frontend/js/io/json-format.ts`](../frontend/js/io/json-format.ts) が正本で、本書はその散文版。
 
 > 状態: **確定版**（§4 完了時点・段階4-7 で総点検）。4-2 で新設 → 4-2b で型キーを安定 `id` に →
 > 4-3b で UI の全経路に配線 → 4-4 で書き出しの拒否条件（同名テーブル）→ 4-5 で「既定値なし」を
 > `""` の 1 通りに → 4-6 で保存前の外部変更検知。保存（textarea / クリップボード / ダウンロード /
 > localStorage / server）はすべてこの形式で、読み込みは JSON と XML の両方を受ける
-> （形式は中身の先頭 1 文字で判別する。[`../js/io/detect.ts`](../js/io/detect.ts)）。
+> （形式は中身の先頭 1 文字で判別する。[`../frontend/js/io/detect.ts`](../frontend/js/io/detect.ts)）。
 > **§6 段階6-3（PG18 パレット差し替え）で形式そのものは 1 バイトも変わらなかった** ——
 > 動いたのは `columns[].type` に入る値（型 `id`）だけで、`formatVersion` は 2 のまま。
 > 移行の規則は「パレットを差し替えるときの移行」に確定版がある。
@@ -103,7 +103,7 @@ cookie の `db` は変わらないのでリロードで元に戻る半端な状�
 | `columns` | array of string | ○ | — |
 
 `type` は **parser も serializer も値を検査しない**（文字列であることだけを見る）。選択肢を持つのは
-UI 側（[`../js/keymanager.ts`](../js/keymanager.ts)）で、[`Key`](../js/key.ts) は falsy を `INDEX` に
+UI 側（[`../frontend/js/keymanager.ts`](../frontend/js/keymanager.ts)）で、[`Key`](../frontend/js/key.ts) は falsy を `INDEX` に
 倒す。**値を列挙して拒まない**というのが §6.3 の判断（段階6-5b）—— 形式側で拒むと、いま開ける
 設計が読めなくなる側の変更になる。かわりに生成器が 4 種すべてを受ける。
 
@@ -116,7 +116,7 @@ name 属性の無い XML を読んだ場合も `""` になる（それまでは�
 **段階6-8d で 8 プロファイルすべてがこの規約に載った**（6-5b の `postgresql` に始まり、
 6-7a 〜 6-7c で新設 3 本、6-8a 〜 6-8d で既存 4 本）。命名規約は dialect 非依存なのでどれも
 呼ぶだけで済み、プロファイルごとに違うのは識別子の囲み方（`IdentifierRules`）だけ。
-規則の実体は [`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts)。
+規則の実体は [`../frontend/js/io/ddl/naming.ts`](../frontend/js/io/ddl/naming.ts)。
 
 | 対象 | 名前 | 備考 |
 |---|---|---|
@@ -133,7 +133,7 @@ config も持てないため。
 ### 識別子の引用
 
 `/^[a-z_][a-z0-9_]*$/` に収まり、かつ **PostgreSQL 18 の予約語**（`pg_get_keywords()` の
-catcode `R` / `T`。一覧は [`../js/io/ddl/keywords.ts`](../js/io/ddl/keywords.ts)）でなければ**裸**。
+catcode `R` / `T`。一覧は [`../frontend/js/io/ddl/keywords.ts`](../frontend/js/io/ddl/keywords.ts)）でなければ**裸**。
 それ以外は `"` で囲み、値の中の `"` は `""` にする。テーブル名・列名・制約名・index 名・
 FK の参照先まで同じ規則で、`COMMENT ON` だけ別扱いということはない。
 
@@ -143,7 +143,7 @@ house 標準（snake_case・複数形）に従っていれば 1 つも囲まれ�
 
 **書き換えないかわりに、入力側で気づけるようにした**（段階6-9b）。**そのプロファイルで実際に
 壊れる 3 つ**だけを画面で警告する —— 空文字・長さ超過・Oracle の `"`（known-issue #15）。
-規則は `IdentifierRules` に同居し（[`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts)）、
+規則は `IdentifierRules` に同居し（[`../frontend/js/io/ddl/naming.ts`](../frontend/js/io/ddl/naming.ts)）、
 **囲めば通るもの（予約語・日本語・記号）は 1 つも警告しない**。**止めない** —— 拒むと、
 PG で作った設計を oracle で開いた瞬間に既存の名前が不正になり直せなくなる。
 snake_case / 複数形の lint はこの土台の上に載るが、まだ入っていない。
@@ -207,7 +207,7 @@ snake_case / 複数形の lint はこの土台の上に載るが、まだ入っ�
 #### 正規型 `kind`（**段階6-9c で新設**）
 
 各 `<type>` は `kind` を 1 つ持つ。**「その型が何の値か」だけ**を表す 21 語の閉じた語彙で、
-語彙は [`../js/io/palette.ts`](../js/io/palette.ts) の `TYPE_KINDS`:
+語彙は [`../frontend/js/io/palette.ts`](../frontend/js/io/palette.ts) の `TYPE_KINDS`:
 
 ```
 int8 int16 int32 int64 decimal float32 float64
@@ -232,7 +232,7 @@ other
 house 既定 8 型 × 8 プロファイルの表で、実装との一致をテストが検算する）。
 
 `kind` は**永続化には現れない** —— 設計 JSON が持つ型キーは `id` のままで、`kind` は
-パレット側の属性。読み手は [`../js/io/palette.ts`](../js/io/palette.ts) の `kindAt` で、
+パレット側の属性。読み手は [`../frontend/js/io/palette.ts`](../frontend/js/io/palette.ts) の `kindAt` で、
 **語彙の閉じ方を押さえているのは [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts) だけ**
 （実行時に検査すると「知らない値が来たらどうするか」の分岐が増えるので、ファイル規則として持つ）。
 
@@ -273,7 +273,7 @@ house 既定 8 型 × 8 プロファイルの表で、実装との一致をテ�
 house 既定がその DB で何を失うかがテンプレートに出る —— **PK に既定値を書けないのは
 `sql-standard` と `sqlite` の 2 本**（UUID 生成関数が無い。採番はアプリ側）。
 
-読むのは [`../js/io/template.ts`](../js/io/template.ts)、`type` / `newrowtype` が実在の `id` で
+読むのは [`../frontend/js/io/template.ts`](../frontend/js/io/template.ts)、`type` / `newrowtype` が実在の `id` で
 あることの検査は [`../tests/node/palette-id.test.ts`](../tests/node/palette-id.test.ts)。
 
 #### 既定値を `quote` で囲むか（**段階6-4 で規則になった**）
@@ -300,7 +300,7 @@ house 既定がその DB で何を失うかがテンプレートに出る ——
 「`CURRENT_TIMESTAMP` だけを特例にする」という upstream の規則が残っていた。
 **囲む側の規則（値の中の `'` をエスケープしない）は 6-4 では直していない** ——
 known-issues #11 に隔離してある。**段階6-5a は規則を 1 文字も変えずに
-[`../js/io/ddl/shared.ts`](../js/io/ddl/shared.ts) へ移設しただけ**で、囲む側の規則ごと
+[`../frontend/js/io/ddl/shared.ts`](../frontend/js/io/ddl/shared.ts) へ移設しただけ**で、囲む側の規則ごと
 設計し直すのは 6-5b。
 
 #### パレットを差し替えるときの移行（**規則は段階6-3 で確定**）
@@ -317,7 +317,7 @@ known-issues #11 に隔離してある。**段階6-5a は規則を 1 文字も�
 |---|---|
 | 1 | **`formatVersion` は上げない。** キーの構造は変わらず値（型 `id`）だけが変わる。移行漏れは「その `id` が現在のパレットに無い」で parser が位置つきに落とすので、版を上げなくても機械判定できる（4-2b は型キーが `label` → `id` と**構造ごと**変わったので上げた） |
 | 2 | 表は**プロファイルごと**に持つ（`tools/migrate-design.mjs` の `TYPE_MIGRATIONS`）。型 `id` はプロファイル内で一意なだけなので、`db` を見ずに当てると別プロファイルの同名 `id` を巻き込む |
-| 3 | 寄せ先が `length="0"`（サイズを取らない型）なら **`size` キーも落とす**。`char(10)` → `text` で残すと `TEXT(10)` という壊れた DDL が出る。**同じ判断を読み込み側（[`../js/io/xml-parser.ts`](../js/io/xml-parser.ts)）も持つ**ので、両者が食い違うと「移行したファイル」と「XML から読み直したファイル」が別物になる |
+| 3 | 寄せ先が `length="0"`（サイズを取らない型）なら **`size` キーも落とす**。`char(10)` → `text` で残すと `TEXT(10)` という壊れた DDL が出る。**同じ判断を読み込み側（[`../frontend/js/io/xml-parser.ts`](../frontend/js/io/xml-parser.ts)）も持つ**ので、両者が食い違うと「移行したファイル」と「XML から読み直したファイル」が別物になる |
 | 4 | **表に無い未知の `id` はツールが動かさない。** そのまま残して parser に落とさせる —— ツールが勝手に寄せると、移行表に無い判断を静かに下すことになる |
 | 5 | 移行先が現在のパレットに実在することをツールが毎回検算する（表とパレットの食い違いで**黙って読めないファイルを書く**のを止める） |
 
@@ -360,23 +360,23 @@ id の発番が要る。「壊れた設計を保存させない」方向の始�
 いまは形式・内部表現ともに `""` の 1 通りしかない。
 
 `default` 欄に `"NULL"`（大小問わず）と打った場合、**nullable な列では `""` に潰れる**
-（[`Row.update()`](../js/row.ts) の正規化。nullable 列の `DEFAULT NULL` は SQL 上も暗黙の既定と
+（[`Row.update()`](../frontend/js/row.ts) の正規化。nullable 列の `DEFAULT NULL` は SQL 上も暗黙の既定と
 同義なので情報は失われない）。`NOT NULL` の列では文字列としてそのまま保存される —— 現行の
 条件をそのまま残したためで、意図した既定値を勝手に消さないという意味でもこちらが安全側。
-正規化は `Row.update()` の 1 箇所だけにあり、parser は読んだ生値を渡す（[`js/io/model.ts`](../js/io/model.ts)）。
+正規化は `Row.update()` の 1 箇所だけにあり、parser は読んだ生値を渡す（[`js/io/model.ts`](../frontend/js/io/model.ts)）。
 
 ## ファイル名（段階4-3b）
 
 **拡張子は `.json`。** server 経路（`?action=save&keyword=…`）は keyword に `.json` を付けて送るので
 backend 上のファイルは `<name>.json` になり、ダウンロードは `new-database.json` で落ちる。
-`jsonKeyword()`（[`../js/io.ts`](../js/io.ts)）が二重付与を防ぐので、`list` が返した名前を
+`jsonKeyword()`（[`../frontend/js/io.ts`](../frontend/js/io.ts)）が二重付与を防ぐので、`list` が返した名前を
 そのまま prompt に貼っても壊れない。設計の名前（`setTitle` に渡す値）には付けない。
 
 拡張子が要るのは、`.gitattributes` / `.prettierignore` / 移行 glob
 （`npm run migrate:design -- schema/*.json`）のいずれもファイルを名指しできないため。
 正本の置き場所は各プロダクトのリポジトリの `schema/`（[`BRANCHING.md`](BRANCHING.md)）。
 
-**読み込み側は拡張子を見ない。** 中身の先頭 1 文字で判別する（[`../js/io/detect.ts`](../js/io/detect.ts)）
+**読み込み側は拡張子を見ない。** 中身の先頭 1 文字で判別する（[`../frontend/js/io/detect.ts`](../frontend/js/io/detect.ts)）
 ので、拡張子なしで保存された 4-3b 以前のファイルも、`.txt` で書き出した旧 XML もそのまま読める。
 
 拡張子の**強制**（`.json` 以外の save を拒む・`list` が `*.json` だけを返す）は正本ディレクトリの
@@ -385,7 +385,7 @@ backend 上のファイルは `<name>.json` になり、ダウンロードは `n
 ## 壊れた入力の扱い
 
 parser は**部分的に読み込まない**。次のいずれかで例外を投げ、その時点で開いている設計は変えない
-（[`Designer.fromJson()`](../js/wwwsqldesigner.ts) は parse を `clearTables()` より先に置いてある）。
+（[`Designer.fromJson()`](../frontend/js/wwwsqldesigner.ts) は parse を `clearTables()` より先に置いてある）。
 
 - JSON として構文が壊れている（`JSON.parse` の `SyntaxError` がそのまま出る）
 - `formatVersion` が 2 でない
@@ -396,10 +396,10 @@ parser は**部分的に読み込まない**。次のいずれかで例外を投
 
 例外の message は開発者向けで **locale を通さない**（価値の本体が `tables[0].columns[2].name` の
 位置情報で、訳すと壊れるため）。**ユーザーへの見せ方は 4-3b で「見出しだけ locale・詳細は素通し」に
-確定した** —— [`../js/io.ts`](../js/io.ts) の `loadDesignText()` が
+確定した** —— [`../frontend/js/io.ts`](../frontend/js/io.ts) の `loadDesignText()` が
 `alert(_("jsonerror") + ": " + e.message)` に流す。現行の 18 か所と同じ形。
 
-そもそも parser に渡らない入力が 2 つある（[`../js/io/detect.ts`](../js/io/detect.ts) の判別）。
+そもそも parser に渡らない入力が 2 つある（[`../frontend/js/io/detect.ts`](../frontend/js/io/detect.ts) の判別）。
 どちらも locale 付きの短い alert で終わり、**開いている設計は変わらない**。
 
 | 入力 | 判別 | 出るもの |
@@ -413,7 +413,7 @@ parser は**部分的に読み込まない**。次のいずれかで例外を投
 ## 書き出せない設計
 
 serializer 側にも拒否条件がある。いずれも **1 バイトも書かずに例外**で、受け止めは
-[`IO.toJsonOrAlert()`](../js/io.ts) 1 か所（失敗したら textarea を空で上書きしたり
+[`IO.toJsonOrAlert()`](../frontend/js/io.ts) 1 か所（失敗したら textarea を空で上書きしたり
 空ファイルを保存したりしない）。
 
 - 型パレットに `db` 属性が無い / 型 `id` が無い（4-2b）
@@ -452,8 +452,8 @@ npm run migrate:design -- schema/*.json
 再読込を促す。古い編集状態でファイルを上書きしない」と定義していて、**server 経路の save
 （`#serversave` と F2 の `#quicksave`）は保存の前に同じ名前を 1 回 load する**。
 
-判定は [`verdictForSave()`](../js/io/conflict.ts)（純関数）の 4 値で、confirm を出すかどうかは
-[`../js/io.ts`](../js/io.ts) の `preflightresponse()` が決める。
+判定は [`verdictForSave()`](../frontend/js/io/conflict.ts)（純関数）の 4 値で、confirm を出すかどうかは
+[`../frontend/js/io.ts`](../frontend/js/io.ts) の `preflightresponse()` が決める。
 
 | 判定 | 状況 | 挙動 |
 |---|---|---|
@@ -504,8 +504,8 @@ save → 412 → confirm → 再送の往復を通す）。
 ## introspection JSON は**この形式ではない**（§5 段階5-6）
 
 backend が `?action=import` で返すのは設計 JSON **ではなく**、別系列の形式
-（`introspectionVersion`）。正は [`../js/io/introspect-model.ts`](../js/io/introspect-model.ts) の
-型宣言で、写し方は [`../js/io/introspect-parser.ts`](../js/io/introspect-parser.ts)。
+（`introspectionVersion`）。正は [`../frontend/js/io/introspect-model.ts`](../frontend/js/io/introspect-model.ts) の
+型宣言で、写し方は [`../frontend/js/io/introspect-parser.ts`](../frontend/js/io/introspect-parser.ts)。
 
 分けた理由は 3 つ、どれも**設計 JSON を返すと壊れる**というもの:
 

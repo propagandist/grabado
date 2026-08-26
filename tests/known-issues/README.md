@@ -147,5 +147,5 @@ PG に `KEY (...)` 構文は無いので `CREATE INDEX idx_<table>_<cols>` に�
 - ~~**`CONFIG.AVAILABLE_DBS` に `web2py` が重複**~~
   **§6 段階6-1 で解消した**（`web2py` ごと対応 DB から外れたため。副産物であって、
   この重複を直すこと自体が目的ではなかった）。
-- **`DEFAULT_BACKEND` が配列**（[js/config.ts:61](../../js/config.ts#L61)）。
+- **`DEFAULT_BACKEND` が配列**（[js/config.ts:61](../../frontend/js/config.ts#L61)）。
   出力に影響しないため今回は記録のみ（[`../../CUSTOMIZATIONS.md`](../../CUSTOMIZATIONS.md)）。

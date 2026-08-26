@@ -3,7 +3,7 @@ import {
     identifierIssue,
     identifierRulesFor,
     type IdentifierRules,
-} from "../../js/io/ddl/naming.ts";
+} from "../../frontend/js/io/ddl/naming.ts";
 import { DB_PROFILES } from "../support/fixtures.ts";
 
 /*

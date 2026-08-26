@@ -20,7 +20,8 @@
 #   import）、`scripts/`（`npm test` のラッパ）、`db/` `locale/` `index.html`（harness が読む
 #   静的資産）、`docs/TYPE-MAPPING.md`（type-mapping.test.ts が実装と 1 セルずつ突き合わせる）、
 #   `SecurityHeadersFilter.kt`（csp.test.ts が**ヘッダの正本**と vite.config.ts の写しを
-#   突き合わせる。段階2-2）。
+#   突き合わせる。段階2-2）、`application.yaml` / `compose.yaml` / `.env.example`
+#   （env-contract.test.ts が **env の正本**と 2 つの写しを突き合わせる。段階2-3）。
 #   **`docs/` をまるごとは入れない** —— 文書だけの PR（段階5-0 のような）で数分使うのは、
 #   「入力が変わらなければ出力も変わらない」に反する。
 #   **テストが読む repo ルートのファイルを増やしたら、ここに足すこと。**
@@ -44,6 +45,9 @@ on:
       - 'index.html'
       - 'docs/TYPE-MAPPING.md'
       - 'server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt'
+      - 'server/src/main/resources/application.yaml'
+      - 'compose.yaml'
+      - '.env.example'
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'

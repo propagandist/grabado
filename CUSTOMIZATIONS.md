@@ -9425,10 +9425,27 @@ PayPal 寄付ボタン・**2012 年からの News 10 本**・`/js/*.js` を指�
 - **`index.html` の `<title>` を直す** —— 下の申し送り。**README の書き換えと同じ diff に混ぜない**
 - **GHAS の有効化や CI ワークフローをここでやる** —— 決めたこと 5
 
+#### ★ 実測 3: 実施の結果（2026-08-26。上の予約に対する追記）
+
+**順序どおりに実行し、状態で確かめた**（この環境では git / gh の出力が混線するので、
+成否はコマンドの出力ではなく `--json` の値で見る）。
+
+| 手順 | 結果 |
+|---|---|
+| 1. `gh repo edit --default-branch develop`（**#96 のマージ前**） | `defaultBranchRef` = **`develop`**、可視性は `PRIVATE` のまま |
+| 2. #96 を squash merge（**`--subject` を触らない**） | `develop` の先頭が **`docs: … (#96)`**。`(#N)` が付いた |
+| 3. **`Closes` の観測**（決めたこと 4） | **★ 発火した。** #95 が **マージの 2 秒後に自動で CLOSED**（merged `12:22:54Z` → closed `12:22:56Z`） |
+| 4. `gh repo edit --visibility public` | `visibility` = **`PUBLIC`** |
+| 5. About 欄 | description 1 本 ＋ **topics 12 本**。**website は空のまま**（#84） |
+
+**★ #73 の「`Closes` / `Fixes` は発火しない」は、既定が `main` だった頃の実測だった。**
+**既定を `develop` にした日に解消した** —— `CLAUDE.md` の該当行を**元の実測を消さずに**訂正した。
+**これで issue を手で閉じる運用が要らなくなる。**
+
 #### 申し送り
 
-- **★ `Closes` が発火したかを観測する**（決めたこと 4）。**発火したなら `CLAUDE.md` の該当行を
-  2-5 の PR で訂正する。** 発火しなければ #95 を手で閉じる
+- **`Closes` の観測は済んだ**（実測 3）。**`CLAUDE.md` の該当行は訂正済み** ——
+  **以後は issue を手で閉じない**（PR 本文に `Closes` を書く）
 - **★ `index.html` が upstream のまま** —— `<title>WWW SQL Designer</title>` と
   冒頭コメント（`(C) 2005-2015 Ondrej Zara` / `Version: 2.7`）。**ブラウザのタブに出る**ので
   公開の顔の一部だが、**#95 の対象範囲は README だった**。触ると golden にも当たるので**別 issue**

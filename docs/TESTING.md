@@ -92,7 +92,8 @@ cd server && \
 
 `npm test` 系と `./gradlew test` は**互いに依存しない**。フロントのテストは仮想 backend
 （[`../tests/node/harness.ts`](../tests/node/harness.ts)）を使うので、Kotlin を起動しない。
-CI もワークフローを分けてある（`.github/workflows/ci-frontend.yml` / `ci-server.yml`）。
+CI もワークフローを分けてある（`.github/workflows/ci-frontend.yml` / `ci-server.yml` /
+`ci-image.yml` の 3 本。**`paths` で絞りたい単位が、そのままワークフローの単位になる**。段階2-5）。
 
 `npm run test:browser` と `npm run known-issues` は **Vite dev server** を Playwright が勝手に起動する
 （[`../vite.config.ts`](../vite.config.ts)、127.0.0.1:4173）。手で立てる必要はない。

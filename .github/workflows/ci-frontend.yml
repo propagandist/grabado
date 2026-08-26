@@ -94,6 +94,11 @@ jobs:
       # Playwright の 3 系統（characterization / known-issues / dist）が同じ Chromium を使う。
       # ★ ブラウザのキャッシュはまだ足さない —— 規約 §3③「高速化は最後。しかも実測してから」。
       #   内訳は `gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` の steps[] の時刻差で採る。
+      # ★ **採った**（2026-08-26。段階2-5）—— ジョブ **85 秒**のうち **Chromium の取得が 39 秒（46%）**。
+      #   残りは npm ci 3 / 型検査 3 / vitest 11 / 実ブラウザ 12 / known-issues 3 / dist 5 秒。
+      #   **それでも足さない** —— キャッシュのキーを Playwright の版に結び付け損ねると、
+      #   **古いブラウザのまま緑になる**（検査が静かに嘘をつく側の失敗）。足すなら
+      #   **キーの設計を先に決める**別 issue で。ci-image.yml も同じ 39 秒を払っている。
       - name: Chromium の取得
         run: npx playwright install --with-deps chromium
 

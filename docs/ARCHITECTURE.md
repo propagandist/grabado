@@ -1122,6 +1122,20 @@ push 側を足すと同じ検査を 2 度払うことになる。
 |---|---|
 | ベースイメージ | **Dependabot `docker` entry**（weekly。digest を書き換える。§9.1） |
 | 依存の CVE | version updates 4 entry ＋ **security updates** —— **`server/` は `deps-submit.yml` が渡すグラフで初めて効く**（GitHub は `gradle.lockfile` を読めない） |
+
+**★ 前提: Dependency graph が有効であること**（**2026-08-26 に有効化**。それまで無効で、
+**`dependabot/alerts` は 0 件を返していた** —— 有効化した瞬間に **2 件**出た。
+**API に口が無く Web UI のみ**。詳細は `CUSTOMIZATIONS.md` の段階2-5 実測 4）。
+
+**★ 「Dependabot が見る」は拾う／直すを分けて読む**（2026-08-26 実測）:
+
+| 依存の位置 | 拾える | 直せる |
+|---|---|---|
+| `gradle.lockfile` / `package-lock.json` にある | ○ | **○**（修正 PR が出る） |
+| **提出したグラフにしか無い**（ビルドスクリプトの classpath） | ○ | **×** —— `security_update_dependency_not_found` で PR を作れない |
+
+**cron を足しても「直せない」側は変わらない**ので ③ を置かない判断は動かないが、
+**根拠を書くときはこの粒度が要る。**
 | 秘密の混入 | **secret scanning ＋ push protection** —— **どの変更でも起こりうるので paths で絞れない**（org §3）。**入る前に止める**のは push protection だけ |
 
 **CodeQL は「決めて外した」** —— public なので技術的には入る（2026-08-26 実測: `not-configured` /

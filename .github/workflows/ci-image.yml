@@ -1,0 +1,107 @@
+# grabado の配布イメージの検査（HANDOVER §2 / 段階2-5）。**paths で絞って**回す ci-heavy 型
+# （propagandist/.github の workflow-templates/ci-heavy の考え方。ci-server.yml と同じ形）。
+#
+# ★ なぜ 3 本目のワークフローなのか
+#   `paths` は **`on:` にしか書けず、ジョブ単位では絞れない**。**Docker を要求する検査**を
+#   ci-frontend.yml へ混ぜると、**フロントを 1 行だけ直した PR でも待たされる**。
+#   ワークフローごと起動しなければ 0 分——だから分ける。
+#
+# ★ なぜ 1 ジョブなのか
+#   build → 起動 → 13 本は**直列依存**で、分けても切り分けやすくならない。課金は
+#   ジョブ単位で 1 分未満切り上げ（org ci-strategy §2）なので、分けた本数ぶん損をするだけ。
+#
+# ★ **このリポジトリは public なので、この検査は org の枠を食わない**（2026-08-26 実測。
+#   public の標準ランナーは 2,000 分の対象外）。**それでも paths で絞る**のは、根拠が
+#   枠ではなく「**入力が変わらなければ出力も変わらない**」と、待ち時間だから。
+#
+# ★ paths の正本は `.dockerignore` の許可リスト（＝ **イメージに入るもの**）＋ E2E 側の入力。
+#   - **`docs/**` は入れない**——文書だけの PR で数分使うのは上の原則に反する
+#   - **`'*.config.ts'` で一括しない**——この検査の入力は `vite.config.ts` と
+#     `playwright.image.config.ts` の 2 本だけで、`vitest.config.ts` は無関係
+#   - **`schema/` も入れない**——E2E は compose.e2e.yaml が mount 先を差し替える
+#   **`.dockerignore` の許可リストを足したら、ここにも足すこと。**
+#
+# ★ キャッシュ（buildx / gha）は入れていない——org ci-strategy §3③「**高速化は最後。
+#   しかも実測してから**」。内訳は
+#   `gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` の steps[] の時刻差で採る。
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+name: CI (image)
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      # --- 配る形そのもの ---
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'compose.yaml'
+      - 'compose.e2e.yaml'
+      # --- web ステージの入力（.dockerignore の許可リストと 1 対 1）---
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+      - 'src/**'
+      - 'js/**'
+      - 'styles/**'
+      - 'db/**'
+      - 'locale/**'
+      - 'images/**'
+      # --- api ステージの入力 ---
+      - 'server/**'
+      # --- E2E そのもの ---
+      - 'tests/image/**'
+      - 'playwright.image.config.ts'
+      - '.github/workflows/ci-image.yml'
+
+# 既定に頼らず最小を明示する。イメージを build して叩くだけなら write は要らない。
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 検査
+    runs-on: ubuntu-latest
+    # build（npm ci ＋ vite build ＋ bootJar）から 13 本までを 1 ジョブで通す。
+    # ハングした run が既定の 6 時間まわり続けるのを防ぐ。必ず付ける。
+    timeout-minutes: 30
+
+    steps:
+      # ★ action は SHA でピンする。**末尾コメントの版表記を消さないこと**
+      #   —— Dependabot が SHA と一緒に書き換える対象で、消すとどの版か読めなくなる。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ★ 版は Dockerfile の web ステージ（node:24-alpine）と ci-frontend.yml に揃える。
+      #   ここで要るのは Playwright を回す Node で、**イメージの中身はこれとは別**
+      #   （web ステージが自分のベースイメージで build する）。
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 依存の取得
+        run: npm ci
+
+      - name: Chromium の取得
+        run: npx playwright install --with-deps chromium
+
+      # compose が build → 通常モードで一巡 → READONLY で起こし直して一巡 → down まで。
+      # **docker / docker compose は ubuntu-latest に同梱**（別途の setup action は要らない）。
+      #
+      # ★ **ここが Linux ホストの bind mount を機械が見る唯一の場所**。手元は Docker Desktop
+      #   for Windows で所有権を無視するが、ここでは効く（段階2-1 / 2-3 / 2-4 の申し送り）。
+      - name: 配布イメージの E2E（通常 8 ＋ READONLY 5）
+        run: npm run test:image
+
+      # E2E は tests/tmp-image-schema/ にしか書かない（.gitignore 済み）。ここで
+      # 追跡ファイルが動いていたら、mount 先か後片付けの想定が崩れている。
+      - name: 作業ツリーが動いていないこと
+        run: git diff --exit-code

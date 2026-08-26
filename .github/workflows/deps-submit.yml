@@ -1,0 +1,69 @@
+# server/ の**解決済み依存グラフ**を GitHub へ渡す（HANDOVER §2 / 段階2-5）。
+#
+# ★ なぜ要るのか
+#   **Dependabot の security updates（CVE が公開された時点で修正 PR が出る仕組み）は、
+#   GitHub が依存を読めるものにしか効かない。** npm 側は `package-lock.json` を GitHub が
+#   自分で読むが、**Gradle は読めない**——`gradle.lockfile` を置いていても、である。
+#   ここが解決済みグラフを渡して初めて `server/` の推移的依存まで見られる。
+#
+# ★ GitHub の「Automatic dependency submission」は**有効にしない**
+#   ci-server.yml が予告していた置き換えが、これ。Settings → Advanced Security →
+#   Dependency graph の自動提出機能は **Gradle プロジェクトで全ブランチの全 push に走る**
+#   （org の実測: cartera で 9.5 日に 123 回。うち 73 回が feature ブランチ）。
+#   **依存グラフが使われるのは既定ブランチだけ**なので、ここは
+#   **既定ブランチ（develop）への push かつ Gradle のファイルが変わったときだけ**動かす。
+#   —— このリポジトリは public で org の枠は食わないが（2026-08-26 実測）、
+#   **同じ結果を出すために毎 push 走らせる理由は、枠とは別に無い。**
+#
+# ★ なぜ push で、pull_request ではないのか
+#   PR の時点のグラフを渡しても、GitHub が見るのは**既定ブランチのもの**。
+#   `develop` が動くのは PR の squash merge だけなので、**マージ 1 回につき 1 回**走る。
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+#           供給網の基準は同 docs/security-baseline.md §5.1、層の割り当ては
+#           同 docs/security-verification.md §0（**分類 B に週次 cron を持ち込まない**）
+name: 依存グラフの提出 (server)
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'server/build.gradle.kts'
+      - 'server/settings.gradle.kts'
+      - 'server/gradle.lockfile'
+      - 'server/settings-gradle.lockfile'
+      - 'server/gradle/wrapper/**'
+      - '.github/workflows/deps-submit.yml'
+
+# ★ **write が要る数少ないジョブ**。Dependency submission API は「GitHub に書き戻す」
+#   側の口で、read では 403 になる（org ci-strategy §4「付けるときはなぜ要るかを書く」）。
+permissions:
+  contents: write
+
+# 書き戻す系なので**同時に 2 本出さない**。ただし途中で殺さない（後勝ちにしない）。
+concurrency:
+  group: deps-submit
+  cancel-in-progress: false
+
+jobs:
+  submit:
+    name: 提出
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # グラフの送信に使うのは GITHUB_TOKEN で、checkout が残す資格情報ではない。
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: 25
+
+      # setup-gradle と同じ SHA（gradle/actions は 1 リポジトリに両方が入っている）。
+      # ★ **末尾コメントの版表記を消さないこと**——Dependabot が書き換える対象。
+      - uses: gradle/actions/dependency-submission@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          build-root-directory: server

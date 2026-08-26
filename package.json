@@ -14,6 +14,7 @@
     "test:dist": "playwright test --config=playwright.dist.config.ts",
     "build:server": "node scripts/build-server.mjs",
     "test:server": "npm run build:server && playwright test --config=playwright.server.config.ts",
+    "test:image": "playwright test --config=playwright.image.config.ts",
     "test:all": "npm run test:browser && npm run test",
     "golden:update": "cross-env UPDATE_GOLDEN=1 playwright test --project=characterization",
     "known-issues": "playwright test --project=known-issues",

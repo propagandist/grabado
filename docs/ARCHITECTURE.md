@@ -846,10 +846,11 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 ## 9. 配布とイメージ（到達点）
 
-**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 / 2-3 にある。**
+**決定とその根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0 / 2-1 / 2-2 / 2-3 / 2-4 にある。**
 **段階2-1 でイメージが動くようになり**（3 ステージ・digest ピン・非 root。実測は §9.1）、
-**段階2-2 で CSP が付き**（§9.4）、**段階2-3 で compose と env が入った**（§9.3 / §9.5）。
-**残っているのは 2-4 以降** —— イメージの E2E・CI・`frontend/` 集約。
+**段階2-2 で CSP が付き**（§9.4）、**段階2-3 で compose と env が入り**（§9.3 / §9.5）、
+**段階2-4 で機械が見るようになった**（[`../tests/image/`](../tests/image/)。§9.5）。
+**残っているのは 2-5 以降** —— CI と `frontend/` 集約。
 
 **HANDOVER §2 との差分は 1 つ**（配置。§2.2 の骨格は `frontend/` / `backend/` を前提にしているが、
 実在は**リポジトリルート**と **`server/`**）。**HANDOVER が触れていない論点が 1 つ** ——
@@ -979,6 +980,34 @@ material-inspired の svg（CSS ソースに元からある）。
 **HSTS はここに入れない** —— 公開デモの外側（[issue #84](https://github.com/propagandist/grabado/issues/84)）。
 **ローカルは `http://localhost:8080`** で動くので、壊してはいけない。
 
+**`Cache-Control` だけは経路で値が変わる**（段階2-4）。だから上の 5 本とは別に持ち、
+**`vite preview` には写していない** —— 静的サーバの固定ヘッダでは経路別を表せないので、
+**写しを増やさない側**を選んだ。
+
+| 経路 | 値 | なぜ |
+|---|---|---|
+| `/assets/**` | `public, max-age=31536000, immutable` | Vite がハッシュを名前に織り込む。**中身が変われば URL が変わる** |
+| `/backend/**` `/api/**` | `no-store` | 設計データと AI の応答。**正本は git 管理のファイル**で、これは写し |
+| それ以外 | `no-cache` | ハッシュを持たない（`index.html` / `db/` / `locale/` / `images/` / `styles/`）。毎回検証させる |
+
+規則の正本は [`SecurityHeadersFilter`](../server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt)
+の `cacheControlFor`。表を掃くのは `CacheControlTest`、**実物が出ていることを見るのは
+[`tests/image/`](../tests/image/)**（静的資産の側は**手元の jar に入らない**ので、そこでしか出ない）。
+
+- ★ **段階2-3 まで 1 本も出していなかった**（2026-08-26 実測）。Spring Boot は
+  `spring.web.resources.cache` を設定しない限り、静的資源にも何も付けない
+- ★ **`no-cache` は実際には 304 で返る** —— 静的資産は `Last-Modified` を持つ（`ETag` は
+  出ていない。同日実測。値は jar のタイムスタンプなので、**イメージを作り直せば変わる**）
+- ★ **知らない経路は `no-cache` へ倒れる。** 前綴りに一致しないものが黙って `immutable` に
+  なると、**1 年間ブラウザに焼き付く**
+
+**★ 実測で 1 つ直した（2026-08-26 / 段階2-4）** —— **保存のたびに CSP 違反が 2 件出ていた。**
+[`js/io.ts`](../js/io.ts) の `sendSave` が応答を `xml: true` で受けており、`responseXML` を読むと
+Chrome が**空の応答に HTML パーサを当てて** `style-src-attr` 違反を出す。save が返すのは
+**201 ＋ 空 body で Content-Type も付かない**ので `responseXML` は null にしかならず、
+`saveresponse()` はその値を使ってもいなかった。**`xml: true` を外して解消。**
+**イメージ E2E が捕まえた** —— `vite preview` には backend が無く、`curl` では CSP が見えない。
+
 ### 9.5 走らせ方
 
 **配布物（コンテナ）。** 開発時の 2 プロセスは §7.4。
@@ -1013,4 +1042,23 @@ Windows）。**Dockerfile の `HEALTHCHECK` は置いていない** —— E2E �
 curl が `application/x-www-form-urlencoded` を送り、**Tomcat がパラメータ解析で body を
 読み尽くす** —— **201 が返るのに 0 バイトのファイルが書かれる**（2026-08-26 実測）。
 フロントは [`../js/io.ts`](../js/io.ts) が明示しているので実運用では起きない。
-**2-4 の E2E はこれを踏む。**
+**2-4 の E2E は `window.d.io` を通すので、この罠を踏まない。**
+
+**イメージの検証は機械がやる**（段階2-4）。走らせ方と見ているものは
+[`TESTING.md`](TESTING.md)、決定と実測は `CUSTOMIZATIONS.md` の段階2-4。
+
+```bash
+npm run test:image   # compose で build → 通常モードで一巡 → READONLY で起こし直して一巡 → down
+```
+
+**実測（2026-08-26、段階2-4。Docker 29.5.3 / Docker Compose v5.1.4）**
+
+| 確かめたこと | 結果 |
+|---|---|
+| 通し | **13 本が緑**（通常 8 ＋ READONLY 5） |
+| 所要 | **3.0 分**（フロントか backend を変えた場合）／ **35 秒**（変えていない場合。ビルドがキャッシュに当たる） |
+| READONLY への入れ替え | `docker compose up -d --wait` の再実行で **12.2 秒**（`Recreated` → `Healthy`） |
+| 後片付け | `down` でコンテナもネットワークも残らない |
+
+★ **`--wait` は healthy まで待つ**（同日実測）。だから **Dockerfile に `HEALTHCHECK` を
+置かない** —— 判定間隔と猶予の正本を `compose.yaml` の 1 か所に保つ（2-3 が 2-4 に預けた判断）。

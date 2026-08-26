@@ -1,0 +1,21 @@
+# イメージ E2E だけの上書き（HANDOVER §2 / 段階2-4）。**契約は docs/ARCHITECTURE.md §9。**
+#
+#   npm run test:image     # これを -f で重ねて起こす。手で叩くことは無い
+#
+# ★ **正本ディレクトリ `schema/` にテストを書かせない。** compose.yaml の既定 mount は
+#   `./schema:/data/schema` で、そこは git で管理する設計 JSON の置き場（CLAUDE.md 制約2）。
+#   E2E は保存を実際に走らせるので、**そのままだとリポジトリに毎回ゴミが出る**。
+#
+# ★ **compose.yaml は 1 行も触らない。** 配布の形をテストの都合で曲げないため —— mount 左辺を
+#   変数化する案は却下した（issue #93）。ここが上書きするのは volumes の 1 行だけで、
+#   env も ports も healthcheck も本体のものがそのまま効く。
+#
+# ★ mount 先は tests/tmp-image-schema/（.gitignore 済み）。段階5-9 の tests/tmp-schema/ と
+#   同じ形 —— **実ファイルに書くことが目的**なので一時ディレクトリを本物として使う。
+#   **ディレクトリは globalSetup が先に作る**（無いと compose が root 所有で作り、
+#   非 root（uid=100）のコンテナが書けない。2026-08-26 実測）。
+
+services:
+  app:
+    volumes:
+      - ./tests/tmp-image-schema:/data/schema

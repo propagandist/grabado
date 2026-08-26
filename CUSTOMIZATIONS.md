@@ -9165,6 +9165,159 @@ mount の右辺を変える ／ `${VAR:-}` 形式に戻す。
 - **確かめたのは Docker 29.5.3 / Docker Compose v5.1.4**（2026-08-26 実測）。
   **古い `docker-compose` v1 では試していない**
 
+### 2026-08-26 HANDOVER §2「配布」段階2-4 —— イメージの E2E と `Cache-Control`
+
+正本は [issue #93](https://github.com/propagandist/grabado/issues/93)。契約は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9.4（`Cache-Control`）と §9.5（走らせ方と実測）。
+**2-1 でイメージが動き、2-2 で CSP が付き、2-3 で compose が入ったが、どれも人が手で 1 回
+叩いただけだった** —— それを機械が見るようになった段階。
+
+#### 通った（2026-08-26 実測）
+
+`npm run test:image` の 1 コマンドで **13 本が緑**（通常 8 ＋ READONLY 5）。
+
+| 確かめたこと | 結果 |
+|---|---|
+| 所要 | **3.0 分**（フロントか backend を変えた場合）／ **35 秒**（変えていない場合） |
+| READONLY への入れ替え | `up -d --wait` の再実行で **12.2 秒**（`Recreated` → `Healthy`） |
+| 後片付け | `down` でコンテナもネットワークも残らない |
+
+**35 秒で回る**のは `tests/` が `.dockerignore` の許可リストに入っていないから ——
+**テストを直しただけならイメージは作り直されない。**
+
+#### ★ 実測 1: **保存のたびに CSP 違反が 2 件出ていた**（この段階の最大の収穫）
+
+最初の実行が「保存」のテストで赤くなった。`Applying inline style violates … 'style-src 'self''`。
+**機能は壊れていない**（保存はできていた）が、**CSP 下で操作するたびに console にエラーが出続けていた。**
+
+追い方も記録しておく（**推測では 3 回外した**）:
+
+1. `console` の `location()` は **`:0:0`** で役に立たない
+2. ブラウザ側の `securitypolicyviolation` イベントで `style-src-attr` / `sample` は空 と判明
+3. `Element.prototype.setAttribute` と `innerHTML` の setter にフックを仕掛けたが **1 度も通らない**
+4. **CDP の `Log.entryAdded`** が `stackTrace` を持っていて、`Request.a.onreadystatechange` の
+   1 フレームだけを指した —— そこは `r.xml ? a.responseXML : a.responseText`
+
+**原因は [`js/io.ts`](js/io.ts) の `sendSave` が応答を `xml: true` で受けていたこと。**
+save が返すのは **201 ＋ 空 body で `Content-Type` も付かない**ので、`responseXML` は
+**null にしかならない** —— にもかかわらず、**読むだけで Chrome が空の応答に HTML パーサを当て**、
+違反が 2 件出る。同じ XHR で `responseText` を読めば **0 件**（切り分けを実測で確認）。
+
+`saveresponse()` は第 1 引数を使っていないので、**`xml: true` を外して失われる情報は無い**。
+段階4-3b が load から、5-7b が import から外したのと同じ整理で、**XML を実際に読むのは
+locale と datatypes だけ**になった。
+
+**なぜ 2-2 で見つからなかったか** —— `vite preview` には backend が無く（save の経路が動かない）、
+2-2 がイメージに向けたのは `curl` だけで、**CSP はブラウザにしか出ない**
+（org security-verification §1.2）。**既存のどの系統からも見えない位置**にあった。
+11-5 が `vite.config.ts` の proxy の漏れを捕まえたのと同じ形で、**通しでしか出ないもの**。
+
+#### ★ 実測 2: `docker compose up --wait` は healthy まで待つ
+
+`Container … Waiting` → `Healthy` が出る（Compose v5.1.4）。**これで 2-3 が預けた宿題に
+答えが出た** —— 下の決めたこと 2。
+
+#### 決めたこと 1: `Cache-Control` は**経路別**にし、共通の 5 本には入れない（ユーザー判断）
+
+2-2 の申し送り「入れるなら 2-4 のイメージ E2E と同じ PR が自然」を回収した。値は 3 通りで、
+**規則の正本は `SecurityHeadersFilter.cacheControlFor`**（表は `ARCHITECTURE.md` §9.4）。
+
+- **`HEADERS`（全応答共通）に入れない** —— 経路別を表せないうえ、入れると
+  `vite.config.ts` の `preview.headers` へ写す義務が生まれる（`csp.test.ts` が突き合わせている）。
+  **静的サーバの固定ヘッダでは経路別を表現できない**ので、**写しを増やさない側**を選んだ
+- **知らない経路は `no-cache` へ倒す** —— 前綴りに 1 文字でも足りなければ落ちる側へ寄せる。
+  黙って `immutable` になると**1 年間ブラウザに焼き付く**
+- **★ 段階2-3 まで 1 本も出していなかった**（実測）。Spring Boot は
+  `spring.web.resources.cache` を設定しない限り静的資源にも何も付けない
+- **★ `no-cache` は 304 で返る** —— 静的資産は `Last-Modified` を持つ（`ETag` は無い。実測）
+
+#### 決めたこと 2: `Dockerfile` の `HEALTHCHECK` は**置かない**（ユーザー判断。**決めて外す**）
+
+待ち合わせは `--wait` ＝ compose の healthcheck で足りる（実測 2）。
+**判定間隔と猶予の正本を 2 か所に増やさない。** 2-0 が「レジストリで配らない」を
+**決めて外した**のと同じ扱いで、必要になった時点で別 issue。
+
+#### 決めたこと 3: READONLY は**同じ compose を env 違いで起こし直す**（ユーザー判断）
+
+Playwright の project 依存で `image` → `readonly-setup` → `image-readonly` と直列にした。
+
+- **ビルドは 1 回**のまま、**両方の条件で compose 経路を機械が通る**（2-3 の申し送りを塞ぐ）
+- **READONLY でも healthy** であることが `--wait` の成功として同時に証明される ——
+  判定先が `?action=capabilities`（**副作用が無く、止めている条件でも 200 が返る唯一の口**）
+  であることの裏づけでもある。ここを取り違えると**公開デモだけが unhealthy になる**
+
+#### 決めたこと 4: 正本ディレクトリ `schema/` にテストを書かせない
+
+mount 左辺だけを差し替える override（`compose.e2e.yaml`）を足し、
+`tests/tmp-image-schema/` へ逃がした（`tests/tmp-schema/` と同じ形）。
+**`compose.yaml` は 1 行も触らない** —— 配布の形をテストの都合で曲げないため。
+
+**★ override の `volumes` は同じ target で置換される**（2026-08-26 実測。
+`docker compose config` で確認。2 本にはならない）。
+
+#### 決めたこと 5: 手元の `.env` を E2E から切り離す
+
+`--env-file tests/image/e2e.env`（空のファイル）を渡し、`compose.ts` が
+`GRABADO_READONLY` / `ANTHROPIC_API_KEY` など 5 本を**プロセス env から落としてから**起こす。
+
+**理由は 2-3 の実測そのもの** —— compose の `environment:` は「キーだけ」形式なので
+**シェルや `.env` に値があれば渡る**。手元の `.env` に鍵があるだけで
+`?action=capabilities` の期待値が人によって変わり、`GRABADO_READONLY` が残っていれば
+**通常モードの一巡が丸ごと readonly になる**。
+
+#### 決めたこと 6: Playwright の `webServer` を使わない
+
+`webServer` は終了時にプロセスを木ごと kill するので、**Windows ではコンテナが残りうる**。
+`globalSetup` / `globalTeardown` で `up` / `down` を呼ぶ形にして、
+**docker のライフサイクルは docker のコマンドで閉じる**。
+
+#### 検出が本物か確かめた（#89 / #91 と同じ手順）
+
+**3 通りに壊して、狙ったテストだけが赤くなり、戻して緑に戻った。**
+
+| 壊し方 | 赤くなったもの |
+|---|---|
+| `Referrer-Policy` を 1 本落とす | 「セキュリティヘッダ 5 本が 4 経路すべてに付く」だけ |
+| `/assets/` の `Cache-Control` を `no-cache` にする | 「`Cache-Control` が経路別に出る」だけ |
+| `GRABADO_READONLY` を渡さない | READONLY の 3 本（capabilities / 403 / ボタン） |
+
+`xml: true` に戻すと `tests/node/io-ui.test.ts` が赤くなることも確認した（**安いほうの受け皿**。
+実際に違反が出ないことを見るのはブラウザだけ）。
+
+**★ この確認そのものが 1 本のテストの欠陥を暴いた。** 「403 のあともファイルは 1 バイトも
+変わらない」を独立したテストにしていたが、**READONLY を渡さずに回しても緑のまま**だった ——
+直前のテストが失敗すると **Playwright が worker を作り直し、`beforeAll` が種ファイルを復元する**。
+**順序に意味があるアサーションは、順序が保証される場所（同じテストの中）に置く。**
+
+#### 却下した案
+
+- **`Dockerfile` に `HEALTHCHECK` を置く** —— 判定間隔と猶予の正本が 2 か所になる
+- **READONLY を別ポートで同時に起こす** —— 速いが、**READONLY 側だけ compose を通らない**
+- **`schema/` に直接書く** —— 正本ディレクトリをテストが汚す。消し忘れがコミットされる芽
+- **`compose.yaml` の mount 左辺を変数化する** —— 配布の形をテスト都合で曲げ、
+  `env-contract` の mount 検査（`split(":")[1]`）も壊れる
+- **`Cache-Control` を `HEADERS` に入れる** —— 決めたこと 1
+- **Playwright の `webServer` で `docker compose up`** —— 決めたこと 6
+- **`xml: true` を残して CSP 側を緩める** —— `style-src` に `'unsafe-inline'` を足すのは
+  org security-baseline §3.5 が名指しする実質的な無効化。**読んでいない値のために防御を捨てる**
+- **CI に載せる** —— 2-5 の担当。**org 共有の枠を使いながらデバッグしない**
+- **細かい契約をイメージ E2E で試す** —— 網羅は契約表と Kotlin 側が持つ（#69 / #81 と同じ方針）
+
+#### 申し送り
+
+- **★ リポジトリはまだ private**（2-0 / 2-1 / 2-2 / 2-3 から続く。**5 段階連続**）。
+  **public 化は次の issue で決める** —— public の標準ランナーは org の枠を消費しないので、
+  **2-5 の CI 設計の前提が変わる**
+- **CI にはまだ載っていない**（2-5）。**この段階のあいだ、イメージが壊れても
+  「手で `npm run test:image` を回した人」しか気づかない**
+- **`innerHTML` は 24 か所残っている**（2-2 の申し送りのまま）。今回のフックで
+  **保存の経路では 1 度も通らない**ことは分かったが、棚卸しはしていない
+- **Linux ホストの bind mount は 2-4 でも実測していない**（2-1 / 2-3 から続く）。
+  手元が Docker Desktop for Windows のまま。**E2E は uid が合っていることを見ているので、
+  Linux で落ちるならこのテストが落ちる**
+- **`--no-cache` のビルド時間は測っていない。** 上の 3.0 分はキャッシュが部分的に効いた値で、
+  **CI（毎回まっさらな runner）の見積もりには使えない** —— 2-5 が測る
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

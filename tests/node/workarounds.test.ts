@@ -23,8 +23,16 @@ import { REPO_ROOT } from "../support/fixtures.ts";
  * テストが 1 件も走らないまま「TypeError: Cannot read properties of undefined
  * (reading 'config')」で落ちる。詳細と撤去条件は CUSTOMIZATIONS.md の決定ログ。
  * upstream: vitest-dev/vitest#10692 / #10812 / PR#10843
+ *
+ * ★ **4.1.11 でも直っていない**（2026-08-27 実測）。撤去条件の 2 を実際に回した ——
+ *   `vitest.config.ts` のガードを外し、小文字 cwd で `node_modules/vitest/vitest.mjs` を
+ *   直に起動したところ、**`Test Files 24 failed / Tests no tests` ＋
+ *   `TypeError: Cannot read properties of undefined (reading 'config')`** が再現した。
+ *   **1 回目で落ちたので「20/20 緑」の条件は満たさない。**
+ *   **ガードを外さないと検証にならない**（外さないと、こちらの `assertCanonicalCwd` が
+ *   先に止めるので「落ちた ＝ まだ壊れている」と読み違える）。
  */
-const KNOWN_BROKEN_VITEST = "4.1.10";
+const KNOWN_BROKEN_VITEST = "4.1.11";
 
 function installedVitestVersion(): string {
     const pkg = readFileSync(

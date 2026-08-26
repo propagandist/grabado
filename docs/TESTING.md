@@ -42,8 +42,9 @@ npm run test:image    # 通常モードで一巡 → READONLY で起こし直し
 当たる。2026-08-26 実測）。
 
 **CI では [`ci-image.yml`](../.github/workflows/ci-image.yml) が回す**（段階2-5。paths は
-`.dockerignore` の許可リストが正本）。**ジョブ 131 秒** —— うち**イメージの build が 78 秒**
-（**まっさらな runner なので `--no-cache` 相当**）、起動 6 秒、13 本 11 秒、Chromium の取得 24 秒。
+`.dockerignore` の許可リストが正本）。**ジョブ 131〜147 秒**（2 run の幅） —— うち**イメージの build が 78 秒**
+（**まっさらな runner なので `--no-cache` 相当**）、起動 6 秒、13 本 11 秒、Chromium の取得 24〜39 秒。
+**ぶれているのは Chromium の取得だけ**で、build とテストは 2 run とも動かない。
 **手元より速い**のは、Docker Desktop for Windows を通していないから。分担と 3 層の割り当ては
 [`ARCHITECTURE.md`](ARCHITECTURE.md) §9.6、判断規約は org の `ci-strategy.md`。
 

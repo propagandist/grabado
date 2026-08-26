@@ -1073,9 +1073,9 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 
 | ワークフロー | いつ | 何を見る | 所要 |
 |---|---|---|---:|
-| [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **85 秒** |
-| [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **107 秒** |
-| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131 秒** |
+| [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
+| [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
+| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
 **実測（2026-08-26、段階2-5。ubuntu-latest）**
@@ -1085,11 +1085,16 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | `ci-image` の **イメージ build** | **78**（**まっさらな runner ＝ `--no-cache` 相当**。2-4 の申し送りはここで返した） |
 | 同 起動（`--wait` が healthy を見るまで） | **6**（手元の Docker Desktop for Windows は 18。`start_period: 60s` は遅いほうに合わせてある） |
 | 同 13 本 | **11** |
-| 同 Chromium の取得 | 24 |
+| 同 Chromium の取得 | **24〜39** |
 | `ci-frontend` の Chromium の取得 | **39（ジョブの 46%）** |
 | `ci-server` の `./gradlew build` | 93 |
 
-**3 本は並列に走る**ので、**PR の待ち時間は最長の 131 秒**（合計の 323 秒ではない）。
+**3 本は並列に走る**ので、**PR の待ち時間は最長の 131〜147 秒**（合計ではない）。
+
+**★ 幅は 2 run の実測**（2026-08-26。**同じ内容で回した**）。**ぶれているのは Chromium の取得だけ**
+（24 秒 → 39 秒）で、**イメージ build 78 秒・13 本 11 秒・E2E ステップ 96〜97 秒は 2 run とも動かない**。
+**遅さの原因も、ぶれの原因も、同じダウンロード**にある —— 上の「キャッシュを足すならキーの設計から」は、
+**速度だけでなく再現性の話でもある**。
 
 **★ `pull_request` のみ。** `main` / `develop` への直接 push は `.githooks/pre-push` が禁じており、
 `develop` が動くのは PR の squash merge だけ。**`pull_request` はマージ結果に対して走る**ので、

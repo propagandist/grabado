@@ -76,6 +76,13 @@ org の基準を読むこと。読むのは **§2 ／ §3 の [B] ／ §4.2〜4.
 **イメージをレジストリで配らない**と決めたので、分類 P には載らない。
 **履歴の秘密走査は 2026-08-26 に実走して 0 件**（331 コミット。記録は `CUSTOMIZATIONS.md`）。
 
+**★ ③ 層（週次 cron）は置かない**（**2026-08-26**。#98）—— 分類 B に持ち込まないという判断。
+**代わりに GitHub 側の 0 分の層 3 本**が時間で変わる層を見る —— **secret scanning ＋
+push protection** ／ **Dependabot の security updates**（`server/` には `deps-submit.yml` が
+解決済みグラフを渡して初めて効く）／ **`docker` entry**（ベースイメージ）。
+**CodeQL は「決めて外した」**（public なので技術的には入る）。根拠と確かめ方は
+`CUSTOMIZATIONS.md` の段階2-5。**ワークフローは 3 本**（`ci-frontend` / `ci-server` / `ci-image`）。
+
 **法務は区分 4**（預からない＝当社の設備が個人データを受け取らない）。
 **個人データの流れ・外部へ出る先を変える前に** 同 `docs/legal-baseline.md`
 （**軸が違う。分類とは別に決まる**）。

@@ -79,9 +79,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # ★ 版は Dockerfile の web ステージ（node:24-alpine）と ci-frontend.yml に揃える。
-      #   ここで要るのは Playwright を回す Node で、**イメージの中身はこれとは別**
-      #   （web ステージが自分のベースイメージで build する）。
+      # ★ ここで要るのは **Playwright を回す Node** で、**イメージの中身とは別**
+      #   （web ステージは自分のベースイメージで build する）。**揃える義務は無い**が、
+      #   ci-frontend.yml と同じ版にしておく——2 本の CI で違う Node を使う理由が無い。
+      #   **Dockerfile の web ステージが「ci-frontend.yml の node-version に揃える」と
+      #   言っている先は ci-frontend であって、ここではない**（揃える先を 3 か所に増やさない）。
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24

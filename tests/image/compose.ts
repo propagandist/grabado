@@ -94,6 +94,17 @@ export function up(env: NodeJS.ProcessEnv = {}, options: { build?: boolean } = {
     try {
         run(args, env);
     } catch (error) {
+        /*
+         * ★ **落ちたらコンテナのログを出す。** `--wait` は「healthy にならなかった」としか
+         *   言わないので、これが無いと**起動時の例外が 1 行も見えない** —— 段階2-5 で CI が
+         *   `exited (1)` だけを残して赤くなり、原因を見るためだけに 1 往復した。
+         *   **落ちたときにしか走らない**ので、緑のときの出力は 1 行も増えない。
+         */
+        try {
+            run(["logs", "--no-color", "--tail", "100", "app"]);
+        } catch {
+            /* ログさえ取れないなら、元のエラーだけを投げる */
+        }
         throw new Error(
             `docker compose up に失敗した。8080 を別のコンテナが掴んでいないか確認する` +
                 `（docker ps --format '{{.Names}}\t{{.Ports}}'）。\n${String(error)}`,

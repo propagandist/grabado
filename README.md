@@ -1,130 +1,151 @@
-WWW SQL Designer allows users to create database designs, which can be saved/loaded and exported to SQL scripts. Various databases and languages are supported. Ability to import existing database design.
+# grabado
 
-[YouTube video](http://www.youtube.com/watch?v=hCQzJx9AKhU), [User manual](https://github.com/ondras/wwwsqldesigner/wiki/Manual)
+**grabado** is a browser-based ER diagram and database design tool. Draw a schema, export DDL for
+eight database profiles, or point it at an existing database and get the diagram back. A design is
+a plain JSON file that lives in your git repository — there is no database behind the editor.
 
-# About
+It is a fork of [ondras/wwwsqldesigner](https://github.com/ondras/wwwsqldesigner) by Ondrej Zara
+(BSD-3-Clause). The drawing engine is kept; everything around it was rewritten in TypeScript, the
+PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a single Docker image.
 
-Hi and welcome to WWW SQL Designer! This tool allows you to draw and create database schemas (E-R diagrams) directly in browser, without the need for any external programs (flash). You only need JavaScript enabled.
-The Designer works perfectly in Chrome, Mozilla (Firefox, Seamonkey), Internet Explorer, MS Edge, Safari and Opera.
+> **The documentation is written in Japanese.** This README is the only English document —
+> everything under [`docs/`](docs/), [`CLAUDE.md`](CLAUDE.md) and [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md)
+> is Japanese. 日本語版 README は [`README.ja.md`](README.ja.md)。
 
-Many database features are supported, such as keys, foreign key constraints, comments and indexes. You can either save your design (for further loading & modifications), print it or export as SQL script. It is possible to retrieve (import) schema from existing database.
+## What it does
 
-WWW SQL Designer was created by [Ondrej Zara](http://ondras.zarovi.cz/) and is built atop the [oz.js](http://code.google.com/p/oz-js/) JavaScript module. It is distributed under New BSD license.
+- **Draw** — tables, columns, keys, foreign key constraints, indexes and comments, in the browser
+- **Export DDL** — eight database profiles from one design (see the table below)
+- **Export ORM models** — JPA (Kotlin) and Prisma
+- **Import an existing database** — introspection reads `information_schema` and returns JSON
+- **AI suggestions** — optional, bring your own key. Suggestions are reviewed and applied through
+  the same deterministic path as everything else; **nothing is applied automatically**
+- **Designs are files** — deterministic JSON (stable key and array order, one table per block),
+  so a schema change is a readable diff and sharing is a pull request
 
-If you wish to support this project, <a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=3340079'><img src='https://www.paypal.com/en_GB/i/btn/btn_donate_LG.gif' alt='Donate at PayPal' title='Donate at PayPal' /></a> at PayPal!
+## Supported databases
 
-# Quick Start
+| Profile | DDL export | Introspection |
+|---|---|---|
+| `postgresql` | yes | yes |
+| `mysql` | yes | yes |
+| `mariadb` | yes | yes |
+| `h2` | yes | yes |
+| `mssql` | yes | — |
+| `oracle` | yes | — |
+| `sqlite` | yes | — |
+| `sql-standard` | yes | — |
 
-> grabado 注記: HANDOVER §3 段階1 でフロントに Vite のビルド工程が入った。`index.html` は
-> `/src/main.ts` を読むので、**素の静的サーバでルートを配るだけでは動かない**。
+PostgreSQL 18 is the default palette: designs are drawn with PostgreSQL types and converted at
+export time, so the saved file is identical whichever profile you export to.
+[`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) shows what each type becomes in every profile —
+that table is generated from the implementation and verified by a test, not written by hand.
 
-## Local Installation:
+## Designs are files, not rows in a database
 
-1. `npm install`
-2. `npm run dev` （Vite dev server）
-3. Visit http://127.0.0.1:4173/index.html
+The editor keeps its working state in the browser. Saving writes through to a mounted directory,
+so the source of truth is the JSON file in your repository — reviewed and merged like code.
+The format is documented in [`docs/FORMAT.md`](docs/FORMAT.md). XML designs from upstream
+wwwsqldesigner can still be read; grabado only writes JSON.
 
-配布物を確かめるときは `npm run build`（`dist/` が出る）→ `npm run preview`
-（http://127.0.0.1:4174）。テストの走らせ方は [`docs/TESTING.md`](docs/TESTING.md)。
+## Quick start
 
-## Docker Installation:
+The image is not published to any registry — **build it yourself**.
 
-**マルチステージ（段階2-1）。** フロントの dist を Spring Boot の classpath `static/` に
-同梱するので、**単一プロセス**が 8080 で静的資産と API の両方を配る。
+### With Docker Compose
 
-### compose（段階2-3）
+```bash
+cp .env.example .env      # uncomment only the lines you need; it starts with none of them
+docker compose up --build
+```
 
-1. `cp .env.example .env` —— **要る行だけコメントを外す。何も外さなくても起動する**
-2. `docker compose up --build`
-3. Visit http://127.0.0.1:8080
+Then open <http://127.0.0.1:8080>.
 
-- 設計 JSON はホストの **`schema/`** に書かれる（正本は git 管理のファイル）。置き場所を
-  変えるなら [`compose.yaml`](compose.yaml) の mount の**左側**
-- 公開デモと同じ条件にするなら `GRABADO_READONLY=true docker compose up` ——
-  保存・introspection・AI が止まる（`list` / `load` は生きている）
-- **`.env` がコンテナへ丸ごと入るわけではない。** `compose.yaml` の `environment:` が
-  列挙した env だけが渡る（`env_file:` は使っていない）
-- **`=` の右を空にした行を `.env` に残さない。** 空文字は既定に倒れず、そのまま渡って
-  **起動を落とす**（例: `GRABADO_READONLY=`）
+- Designs are written to `schema/` on the host. To put them somewhere else, change the **left**
+  side of the mount in [`compose.yaml`](compose.yaml)
+- `.env` is **not** copied into the container. Only the variables listed under `environment:` in
+  [`compose.yaml`](compose.yaml) are passed through (`env_file:` is not used)
+- **Do not leave a key with an empty value** in `.env`. An empty string does not fall back to the
+  default — it is passed through and the container fails to start (e.g. `GRABADO_READONLY=`)
 
-### compose を使わない
+### Without Compose
 
-1. Build `docker build -t grabado .`
-2. Run   `docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado`
-3. Visit http://127.0.0.1:8080
+```bash
+docker build -t grabado .
+docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado
+```
 
-- `-v` の左側は**設計 JSON を置くホスト側のディレクトリ**
-- `-e GRABADO_READONLY=true` で読み取りビューアになる
-- **イメージはレジストリで配らない。各自が build する**
+The left side of `-v` is the host directory holding your design files.
 
-### Linux ホストでの注意
+### Read-only mode
 
-コンテナは**非 root（uid=100）**で走り、mount 先へ実ファイルを書く。**Docker Desktop for
-Windows で書けることは実測している**が、**Linux ホストは未実測** —— ホスト側ディレクトリの
-所有権が合わなければ保存が失敗する。
+```bash
+GRABADO_READONLY=true docker compose up
+```
 
-env の一覧は [`.env.example`](.env.example)、契約は
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9。
+Saving, introspection and AI are disabled; listing and loading still work. This is the mode a
+public demo runs in — AI calls cost money and introspection is an SSRF pivot, so neither belongs
+on a deployment strangers can reach.
 
-## Code Style
-Please use the following auto formatters to maintain the code style
+### Note for Linux hosts
 
-| File            | Remarks           | Formatter                                                                        |
-|-----------------|-------------------|----------------------------------------------------------------------------------|
-| `/index.html`   |                   | VSCode built-in formatter                                                        |
-| `/js/*.js`      | 4 spaces for tabs | https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode    |
-| `/styles/*.css` |                   | https://marketplace.visualstudio.com/items?itemName=aeschli.vscode-css-formatter |
-| `/locale/*.xml` |                   | https://marketplace.visualstudio.com/items?itemName=DotJoshJohnson.xml           |
+The container runs as a **non-root user (uid 100)** and writes real files into the mount.
+This is verified on Docker Desktop for Windows; **it has not been measured on a Linux host** —
+if the ownership of the host directory does not match, saving will fail.
 
-# News
+### Local development
 
-## Moved to GitHub
+```bash
+npm install
+npm run dev               # Vite dev server
+```
 
-Google Code is closing down, we are now completely migrated to GitHub.
+Then open <http://127.0.0.1:4173/index.html>. To check the built assets, `npm run build`
+(produces `dist/`) followed by `npm run preview` (<http://127.0.0.1:4174>).
 
-## Experimental real-time collaboration version
+## Configuration
 
-Thanks to Bharat Patil: http://bharat.whiteboard.jit.su/
+Every variable is listed with a one-line description in [`.env.example`](.env.example);
+the contract is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §7.3 (backend), §8.4 (AI) and §9.3
+(image). The defaults live in `server/src/main/resources/application.yaml` — they are deliberately
+not repeated anywhere else.
 
-## New release
+Two things are worth knowing before you start:
 
-Version 2.7 was released on 3.8.2012. This is mainly a bugfix release, although several new features (most notable localStorage support) are present.
+- **AI is off unless both an API key and a model name are set.** The key is injected as an
+  environment variable into your own container; it is never stored in the browser
+- **Introspection targets are named in configuration, never sent in a request.** There is no way
+  to hand grabado a JDBC URL from the outside
 
-## Release
+## Documentation
 
-Version 2.6 was released on 22.9.2011. Several new translations (pt\_BR, sv, ar) added; VML removed; new visualization options available (show length and datatype); new DBs and backends; support for touch devices...
+| Document | What it holds |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layout, backend and AI contracts, the image |
+| [`docs/FORMAT.md`](docs/FORMAT.md) | The design JSON format |
+| [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | What each type becomes in each profile |
+| [`docs/TESTING.md`](docs/TESTING.md) | Test layout and how to run it |
+| [`docs/BRANCHING.md`](docs/BRANCHING.md) | Branching model |
+| [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) | Every decision made since the fork, with its reasoning |
+| [`CLAUDE.md`](CLAUDE.md) | Working rules and hard constraints |
 
-## Experimental clone with deletion of saved designs
+## Tests
 
-http://code.google.com/r/charlieyouakim-wwwsqldesigner-deleteadd/
+```bash
+npm ci
+npx playwright install chromium   # first time only
 
-## New optional patch
+npm test              # Node side (jsdom). Fast; this is the everyday one
+npm run test:browser  # Real browser (Chromium). The authority for the DDL golden files
+npm run known-issues  # Reproduces known defects on purpose
+npm run test:server   # Kotlin backend over real HTTP
+npm run test:image    # Builds the image, starts the container and drives it end to end
+```
 
-A new patch, which enable optional display of field details, was submitted by Wilson Oliveira. While this code is not ready yet to be commited into repository, everyone can download it from http://ondras.zarovi.cz/sql/wwwsqldesigner-inline_field_details_patch.zip.
+The golden files pin the bytes the tool actually emits. A change that moves them is either a bug
+or a decision that has to be recorded — see [`docs/TESTING.md`](docs/TESTING.md).
 
+## Origin and license
 
-## Release
-
-Version 2.5 was released on 18.6.2010. Many new features were added (hiding of sidebar, colored relation, multi-selection and multi-drag, ...), tons of bugs were fixed.
-
-## Release
-
-Version 2.4 was released on 5.11.2009. Several outstanding issues were fixed and new locales added.
-
-## Release
-
-Version 2.3.3 was released on 28.7.2009. This long-awaited release includes numerous fixes, compatibility improvements, new locales, backends and DB datatypes.
-
-## Release
-
-Version 2.3.2 was released on 8.1.2009. Apart from some traditional bugfixes and locales, a new functionality is introduced - the ability to mark foregin keys between existing table fields!
-
-## Google Code
-
-The project was recently moved to Google Code hosting, which (amongst many other things) introduces Subversion hosting. Enjoy! (The old website, http://ondras.zarovi.cz/sql/, will still exist for some time.)
-
-## 2.0 is here
-
-Good news: A new version of WWW SQL Designer, rewritten from scratch, is now available. It has many new features, including bezier connectors, support for various customizations, localization, options and more.
-
-Bad news: This new version is not backwards compatible with 1.x, so all old localizations and XSLT templates won't work with 2.x. Sorry for inconvenience :/
+BSD-3-Clause, inherited from upstream — see [`license.txt`](license.txt). grabado does not follow
+upstream; every difference is recorded in [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) as it is made.

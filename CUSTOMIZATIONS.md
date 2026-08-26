@@ -9318,6 +9318,127 @@ mount 左辺だけを差し替える override（`compose.e2e.yaml`）を足し�
 - **`--no-cache` のビルド時間は測っていない。** 上の 3.0 分はキャッシュが部分的に効いた値で、
   **CI（毎回まっさらな runner）の見積もりには使えない** —— 2-5 が測る
 
+### 2026-08-26 リポジトリを public にする —— 公開面の棚卸しと README の書き換え
+
+正本は [issue #95](https://github.com/propagandist/grabado/issues/95)。**段階に属さない**
+（§2 の分割表 #83 に行が無い）。直前は 2-4（#93）、次は 2-5（CI）。**アプリのコードは 0 行**
+——動いたのは README 2 本と文書 3 本、それと**リポジトリ設定**。
+
+#### なぜここで止めたか
+
+**「★ リポジトリはまだ private」は 2-0 / 2-1 / 2-2 / 2-3 / 2-4 の申し送りに 5 段階連続で書かれていた。**
+`CLAUDE.md` の冒頭は「**目的 = 会社のブランディングとして無料公開する OSS**」と言うのに、
+**public 化の判断はどこにも記録が無い**。しかも 2-5（CI）は**可視性で前提が変わる** ——
+private なら Docker ビルド検査は org の枠を食い、**枠は既に超過して課金されている**
+（2026-08 の org 実測: net $9.36）。**どちらの前提で設計するかが決まらない限り、2-5 が宙に浮く。**
+
+#### ★ 実測 1: 履歴に秘密は無い（gitleaks 実走）
+
+org `security-verification.md` §1.1 の 2 モードをそのまま回した。**手元に gitleaks は無いので
+docker で走らせた**（`.env` を読ませないために `-v` はリポジトリだけに絞っている）:
+
+```bash
+docker run --rm -v "d:/projects/grabado:/repo" zricethezav/gitleaks:latest git /repo --no-banner --redact
+docker run --rm -v "d:/projects/grabado:/repo" zricethezav/gitleaks:latest dir /repo --no-banner --redact
+```
+
+| モード | 検出 | 中身 |
+|---|---:|---|
+| **`git`（本命）** | **0 件** | `331 commits scanned` / `5.55 MB` / **52.2 秒** / `no leaks found` |
+| `dir`（作業ツリー） | **3 件** | **3 件とも `/repo/.env`** —— `anthropic-api-key` 1 / `generic-api-key` 2（`GEMINI_API_KEY` と `FONTAWESOME_NPM_AUTH_TOKEN`）。**すべて git 管理外**（`git ls-files .env` も `git log --all -- .env` も空）で、`.dockerignore` の許可リストにも入っていない |
+
+**★ `dir` の 3 件を「漏洩 3 件」と読まない。** `.gitignore` を無視してファイルシステムを走査するので、
+**手元の `.env` を拾うのは設計どおり**（org の実走記録も同じ形）。**読み方を間違えると、本当の混入に
+気づけなくなる。** 本命は `git` のほうで、そこが 0 だったので public 化の前提が立った。
+
+#### 実測 2: 公開面の棚卸し（2026-08-26）
+
+| 確かめたこと | 値 |
+|---|---|
+| 可視性 / 既定ブランチ | **`PRIVATE`** / **`main`**（実施前） |
+| `develop` と `main` | develop が **83 コミット先行**。**main だけのコミットは 0**（`main` は `develop` の祖先） |
+| 追跡ファイル | **442 本**。`dist` / `server/build` / `node_modules` は **0 本** |
+| `npm audit`（**dev 込み**。分類 B なので `--omit=dev` は使わない） | **0 件**（critical〜info すべて 0） |
+| `propagandist/.github` を指す箇所 | **10 箇所 / 5 ファイル**（`CLAUDE.md` 4・workflows 4・`dependabot.yml` 1・本書 1） |
+| 「自社 / 社内 / 弊社 / 当社」 | **57 箇所 / 14 ファイル**。大半は本書（30）と `CLAUDE.md`（6）。コードは 8 箇所（すべてコメント） |
+| メールアドレス・社内ドメイン | **0 件**。`Railway` は HANDOVER §2.3 と本書の決定ログだけ |
+| 既存 issue #72〜#95 | **12 本。公開して困る記述は無い**（すべて設計判断の記録） |
+| README のリンク | **相対リンク 40 本すべて実在**（機械確認） |
+
+#### 決めたこと 1: README は英語 `README.md` ＋ 日本語 `README.ja.md`（ユーザー判断）
+
+**公開の顔は英語**にし、**日本語版を併置**した。upstream の残骸 —— WWW SQL Designer の紹介文・
+PayPal 寄付ボタン・**2012 年からの News 10 本**・`/js/*.js` を指す Code Style 表（**`js/` に `.js` は
+1 本も無い**。段階3-3b で尽きた）—— は 2 本とも落ちている。
+
+- **`CLAUDE.md` の「文章の値」に例外として記録した** ——「常体・日本語」の原則は変えず、
+  **`README.md` だけが英語**。**2 本は同じ構成を保つ**（片方だけ直さない）
+- **英語 README に「他の文書はすべて日本語」と明記**した。書いていなければ、`docs/` を開いた人が
+  「訳が抜けている」と読む
+
+#### 決めたこと 2: `docs/` の社内前提はそのまま公開する（ユーザー判断）
+
+`HANDOVER.md` は §2.3 Railway・§6.2 / §6.3 の house 規約・§8 が**社内版前提のまま**で、
+`CLAUDE.md` の冒頭がその齟齬を宣言している。**1 行も触らなかった。**
+
+- **house 標準（Kotlin/Spring Boot・PG18・命名規約）は機密ではない**
+- **HANDOVER は当時の判断の記録**でもあり、書き換えると「**なぜ変えたか**」が失われる
+  （段階5-0 で「誤りの訂正と方針の改訂は別物」と決めたのと同じ扱い）
+
+#### 決めたこと 3: 既定ブランチを `develop` にする（ユーザー判断）
+
+**`main` を節目ごとに fast-forward で追う運用は、忘れた日に同じ問題が再発する。**
+`main` は `develop` の祖先で **main だけのコミットは 0** なので、履歴を書き換えずに切り替えられる。
+
+**★ 順序を `--default-branch develop` → `--visibility public` に固定した** ——
+逆にすると、**83 コミット遅れた `main`（イメージが起動しない頃の状態）が公開トップに出る時間**ができる。
+
+#### 決めたこと 4: 既定ブランチの変更を、この PR の**マージより前**に置く
+
+#73 で分かった「`Closes` / `Fixes` が発火しない」は、**GitHub がキーワードで閉じるのは既定ブランチへの
+マージのときだけ**という仕様の帰結だった。**既定を `develop` にしてからこの PR をマージすれば、
+その場で観測できる。** #95 は「次の PR で確かめる」と予約していたが、**1 本早められる。**
+
+**観測の結果は `CLAUDE.md` へ訂正として書く**（本記録の時点では**条件つきの予約**のまま）。
+
+#### 決めたこと 5: ブランチ保護と GHAS は張らない。記述だけ訂正する
+
+**可視性を変えることと、何を回すかは別。** ここで CI やスキャンを触ると、**2-5 の判断材料が先に
+固まってしまう**（#95 の判断 5）。
+
+- `docs/BRANCHING.md` の「**GitHub 側のブランチ保護は現行プラン（private リポ）で使えない**」は
+  **public にした日に嘘になる**ので、**可視性で分かれるという事実に書き換えた**。
+  **保護を実際に張るかは別 issue**、**hook は張ったあとも残す**（止める層が違う）
+- 「Team 以上へのアップグレードが要る」も**誤りになる**ので同時に訂正した
+
+#### 却下した案
+
+- **public 化を延期する** —— 申し送りが 6 段階目に伸びるだけで、**2-5 が private 前提で固まり、
+  public にした日に設計を見直す**ことになる
+- **README を公開後に直す** —— **目的と食い違う状態が、公開の瞬間に必ず一度は表に出る**
+- **棚卸しと実施を 2 本の issue に割る** —— 棚卸しの結論は「公開してよい／だめ」で、
+  **実施と切り離すと合意が会話の中にしか無い時間ができる**
+- **`main` を ff して既定を `main` のままにする** / **`main` 一本に統合して `develop` を畳む** ——
+  決めたこと 3
+- **org 規約の中身を README や `docs/` へ写す**（public 化で `propagandist/.github` を指す 10 箇所が
+  外部から読めない URL になる）—— **写せばその日から正本が 2 つになる**
+- **`index.html` の `<title>` を直す** —— 下の申し送り。**README の書き換えと同じ diff に混ぜない**
+- **GHAS の有効化や CI ワークフローをここでやる** —— 決めたこと 5
+
+#### 申し送り
+
+- **★ `Closes` が発火したかを観測する**（決めたこと 4）。**発火したなら `CLAUDE.md` の該当行を
+  2-5 の PR で訂正する。** 発火しなければ #95 を手で閉じる
+- **★ `index.html` が upstream のまま** —— `<title>WWW SQL Designer</title>` と
+  冒頭コメント（`(C) 2005-2015 Ondrej Zara` / `Version: 2.7`）。**ブラウザのタブに出る**ので
+  公開の顔の一部だが、**#95 の対象範囲は README だった**。触ると golden にも当たるので**別 issue**
+- **★ 週次 CVE cron は「置かない」側に倒れる見込み**（2-5 へ）—— org `security-verification.md` §0 は
+  **分類 B に ③ 層を持ち込むな**と言う。#83 の決めたこと 5（**レジストリで配らない**）により
+  **grabado は分類 B のまま**なので、P の条件つき例外には載らない。**2-5 で明示的に見直す**
+- **public の標準ランナーは org の枠を消費しない** —— **2-5 の CI 設計はこの前提で組める**
+- **`--no-cache` の Docker ビルド時間は未測定**（2-4 から続く）。**CI の見積もりに要る**
+- **About 欄の website は空のまま** —— `grabado.dev` の取得状況が未確認（#84）
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
@@ -9332,6 +9453,7 @@ mount 左辺だけを差し替える override（`compose.e2e.yaml`）を足し�
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 | ~~`Dockerfile`（busybox httpd 11 行）~~ | **段階2-1 で置き換え**。`COPY . .` でリポジトリをそのまま配る作りで、`index.html` が `/src/main.ts` を読むので**起動しても動かなかった**（README にも「現在このイメージは動かない」と書いてあった）。`.dockerignore` の 4 行の拒否リストも同時に**許可リスト**へ | **完了。**3 ステージ（web / api / runtime）・digest ピン・非 root。契約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9、実測は段階2-1 の記録 |
+| ~~`README.md`（upstream の紹介文・PayPal 寄付ボタン・**2012 年からの News 10 本**）~~ | **2026-08-26 に全面書き換え**（#95）。`/js/*.js` を指す Code Style 表も落ちた（**`js/` に `.js` は 1 本も無い**。段階3-3b で尽きた）。**「現在このイメージは動かない」の注記**も 2-1 で実体が消えていたので落ちている | **完了。**公開の顔は英語 [`README.md`](README.md)、日本語版は [`README.ja.md`](README.ja.md)。**2 本は同じ構成を保つ**（片方だけ直さない。値は [`CLAUDE.md`](CLAUDE.md) の「文章の値」） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。
 

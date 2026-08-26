@@ -76,7 +76,11 @@ git checkout -b hotfix/0.1.1 main
 
 ## ローカルブランチ保護（pre-push hook）
 
-GitHub 側のブランチ保護は現行プラン（private リポ）で使えないため、**ローカルの pre-push hook** で `main` / `develop` への直接 push を禁止する（`.githooks/pre-push`）。
+**GitHub 側のブランチ保護は可視性で分かれる** —— Free プランの private リポでは使えず、**public では使える**。
+private だった間の代わりとして、**ローカルの pre-push hook** で `main` / `develop` への直接 push を
+禁止している（`.githooks/pre-push`）。**2026-08-26 に public 化する**（[#95](https://github.com/propagandist/grabado/issues/95)）ので
+GitHub 側の保護は使えるようになるが、**実際に張るかは別 issue で決める** —— 可視性を変えることと、
+何を強制するかは別。**張ったあとも hook は残す**（止める層が違う。hook はローカルの push、保護はサーバ側）。
 
 ### 有効化（clone 後に各自1回だけ）
 
@@ -98,4 +102,6 @@ pwsh scripts/setup-hooks.ps1
 - `main` / `develop` への push・削除は拒否。統合は必ず GitHub 上の PR マージで行う（hook はローカル push のみ対象なので PR マージには影響しない）。
 - 緊急でどうしても直 push が必要な場合のみ、一時解除: `PUSH_ALLOW_PROTECTED=1 git push ...`
 
-> 注意: hook はクライアント側の運用支援であり、サーバー側の強制ではない。確実な強制が必要なら GitHub Team 以上へのアップグレードでブランチ保護を有効化する（[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) 参照）。
+> 注意: hook はクライアント側の運用支援であり、**サーバ側の強制ではない**。確実な強制が要るなら
+> **public のブランチ保護**を張る（**Team 以上へのアップグレードは要らない**。private だった頃の
+> 記述を 2026-08-26 に訂正した。決定の記録は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)）。

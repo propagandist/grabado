@@ -1,6 +1,8 @@
 # git hook / シェルスクリプトは LF 固定（Windows でも shebang を壊さない）
 .githooks/** text eol=lf
 scripts/*.sh text eol=lf
+# ★ コンテナの entrypoint（issue #103）。CRLF だと shebang が壊れて起動しない
+docker-entrypoint.sh text eol=lf
 
 # PowerShell は Windows ネイティブなので CRLF
 scripts/*.ps1 text eol=crlf

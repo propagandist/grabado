@@ -897,10 +897,16 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
   も手元の `.env` も入らない。**`.dockerignore` の許可リストが効いている**
 - **ランタイムは Java 25 LTS**（起動ログ `using Java 25.0.4`）。`jvmToolchain` /
   `ci-server.yml` の `setup-java` / イメージの 3 つを同じ版に揃えてある
-- **非 root**（`uid=100(grabado)`）で走り、bind mount した `/data/schema` に **save が
-  実ファイルを書けた**（Docker Desktop for Windows で実測。**Linux ホストでの uid の
-  合わせ方は 2-3**）—— **★ 訂正（2026-08-26 / 段階2-3）: 2-3 でも実測していない。**
-  手元が Docker Desktop for Windows のままなので、README には**条件つきの予約**として置いた
+- **非 root で走り**、bind mount した `/data/schema` に **save が実ファイルを書けた**
+  （Docker Desktop for Windows で実測）—— **★ 訂正（2026-08-26 / 段階2-3）: 2-3 でも
+  Linux ホストは実測していない。** 手元が Docker Desktop for Windows のままだった
+  - **★★ 解決（2026-08-27。[#103](https://github.com/propagandist/grabado/issues/103)）**
+    —— **Linux では 2 方向に壊れていた**（コンテナが書けない／書けたものをホストが読めない）。
+    **降りる先を固定 uid から「mount 先の所有者」へ変えた** ——
+    [`../docker-entrypoint.sh`](../docker-entrypoint.sh) が `stat` して `su-exec` で降りる。
+    **`USER` 命令は無い**（entrypoint だけが root で、**アプリは必ず降りた先で動く**）。
+    **uid 0 のとき**（Docker Desktop の偽装・mount 無し）は既定の `grabado` へ。
+    **ci-image が Linux で 13 本緑**になったのが実測
 - **単一プロセスが両方を配る**ことの確認 —— 起動ログに
   `Adding welcome page: class path resource [static/index.html]`、`/db/postgresql/datatypes.xml`
   が 200、`?action=list` が JSON、`?action=capabilities` が
@@ -940,7 +946,8 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 **mount は `./schema:/data/schema`。** 左（ホスト側）が設計 JSON の正本で、git で管理する
 （CLAUDE.md 制約2）。`schema/` は**リポジトリに実在させてある**（`.gitkeep`）—— 無いと
-compose が root 所有で作り、**非 root（uid=100）のコンテナが書けない**。
+compose が root 所有で作る（**その場合は entrypoint が既定の `grabado` へ降りるので書けない**。
+#103）。
 `GRABADO_SCHEMA_DIR` は**コンテナ内のパス**なので、これだけ変えても mount 先は動かない
 （ずれれば起動時の検証で落ちる —— 黙って別の場所へ書くことはない）。
 

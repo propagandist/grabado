@@ -32,13 +32,11 @@ export const IMAGE_SCHEMA_DIR = "tests/tmp-image-schema";
  */
 const PROJECT = "grabado-image-e2e";
 
-/**
- * **Linux でだけ 3 枚目の override を重ねる**（段階2-5）。**理由はそのファイルの冒頭**
- * —— bind mount の所有権が効くのは Linux だけで、**2 方向に壊れる**。
- * **#103 が配布物を直したら、この分岐ごと消す。**
+/*
+ * ★ **段階2-5 にあった Linux 専用の 3 枚目（compose.e2e.linux.yaml）は消えた**（issue #103）。
+ *   コンテナ側が **mount 先の所有者へ降りる**ようになったので、**テストが条件を細工しなくて
+ *   よくなった** —— いまここが起こすのは**利用者とまったく同じ 2 枚**である。
  */
-const IS_LINUX = process.platform === "linux";
-
 function baseArgs(): string[] {
     return [
         "compose",
@@ -49,7 +47,6 @@ function baseArgs(): string[] {
         "compose.yaml",
         "-f",
         "compose.e2e.yaml",
-        ...(IS_LINUX ? ["-f", "compose.e2e.linux.yaml"] : []),
         "-p",
         PROJECT,
     ];
@@ -72,14 +69,6 @@ function baseEnv(): NodeJS.ProcessEnv {
         "GRABADO_AI_EFFORT",
     ]) {
         delete env[name];
-    }
-    /*
-     * ★ **Linux では、コンテナをホストと同じ uid で走らせる**（compose.e2e.linux.yaml）。
-     *   `process.getuid` は Windows に存在しないので、分岐の中でだけ呼ぶ。
-     */
-    if (IS_LINUX) {
-        env["TEST_UID"] = String(process.getuid!());
-        env["TEST_GID"] = String(process.getgid!());
     }
     return env;
 }

@@ -24,6 +24,9 @@
 !vite.config.ts
 !frontend
 
+# --- runtime ステージ（issue #103。mount 先の所有者へ降りる）---
+!docker-entrypoint.sh
+
 # frontend/ を丸ごと戻すとビルド出力まで入ってくる。**後勝ち**なので、ここで削り直す。
 frontend/dist
 

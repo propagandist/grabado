@@ -69,20 +69,33 @@ RUN sh ./gradlew bootJar --no-daemon
 FROM eclipse-temurin:25-jre-alpine@sha256:3137541deb3cac6626b5d9a4a2187bc0d6a34312f858bd2c67dd01e732e6b682
 
 # ★ 非 root で走らせる。`/data/schema` は **save が書く先**（正本は git 管理のファイル。
-#   CLAUDE.md 制約2）なので、先に作って所有権を渡す。**bind mount で uid が合わないと
-#   書けない** —— compose は ./schema を mount する（リポジトリに実在させてある）。
-#   **Linux ホストは未実測**で、注意は README。
+#   CLAUDE.md 制約2）なので、先に作って所有権を渡す。
+#
+# ★ **降りる先は起動時に決める**（issue #103）。bind mount は**ホスト側の所有権をそのまま
+#   通す**ので、固定の uid で走ると Linux ホストで 2 方向に壊れる（書けない／書いたものを
+#   ホストが読めない）。`docker-entrypoint.sh` が mount 先の所有者を見て su-exec で降りる
+#   —— **理由と分岐はそのファイルの冒頭**。
+#
+# ★ **su-exec は「runtime に残るのは jar 1 本だけ」を崩す唯一の例外**（静的バイナリ 1 本）。
+#   段階2-1 の原則を曲げてまで入れたのは、**利用者が `docker compose up` 以外に何もしなくて
+#   よい**形が #103 の目指す状態だったから。
 RUN addgroup -S grabado && adduser -S -G grabado grabado \
- && mkdir -p /data/schema && chown grabado:grabado /data/schema
+ && mkdir -p /data/schema && chown grabado:grabado /data/schema \
+ && apk add --no-cache su-exec
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 WORKDIR /app
 
 # 名前は build.gradle.kts の archiveFileName が固定している（**ワイルドカードにしない**）。
 COPY --from=api /src/build/libs/grabado.jar ./grabado.jar
 
-USER grabado
 EXPOSE 8080
 
-# exec 形式なので PID 1 が java そのものになり、SIGTERM が直接届く
+# ★ **`USER grabado` は置かない**（issue #103）。entrypoint が mount 先の所有者を読むために
+#   root で始まり、**アプリは必ず su-exec で降りた先で動く**。root のまま走ることは無い。
+#
+# exec 形式で su-exec も exec するので、**PID 1 は java** になり SIGTERM が直接届く
 # （Spring Boot の graceful shutdown が効く）。
-ENTRYPOINT ["java", "-jar", "/app/grabado.jar"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["java", "-jar", "/app/grabado.jar"]

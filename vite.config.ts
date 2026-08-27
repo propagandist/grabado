@@ -61,7 +61,7 @@ export default defineConfig({
      * ★ **dev server には出さない。** HMR が inline script を使うので 'unsafe-inline' が
      *   要り、「本番と同じヘッダ」でなくなる。
      *
-     * ★ **値の正本は server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt。**
+     * ★ **値の正本は server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt。**
      *   ここはその写しで、tests/node/csp.test.ts が両者のずれを赤くする。
      */
     preview: {

@@ -679,7 +679,7 @@ tests/
   image/         配布イメージの E2E（§2 段階2-4）。**要 Docker**。
                  compose で起こして通しで叩く ／ READONLY で起こし直してもう一巡
 
-server/src/test/kotlin/dev/grabado/
+server/src/test/kotlin/io/propagandist/grabado/
   api/BackendContractTest.kt    tests/contract/ の表を実 HTTP に流す
   api/BackendBehaviourTest.kt   表で書けないもの（往復・副作用の不在）
   api/ReadOnlyContractTest.kt   同じ表の serverMode: readonly（§5 段階5-3）
@@ -768,7 +768,7 @@ GRABADO_IT_AI_MODEL=claude-opus-5 server/gradlew -p server test   --tests '*Anth
 ## セキュリティヘッダと CSP の前提（§2 段階2-2）
 
 配布イメージは**単一プロセスが static と API の両方を配る**（段階2-1）ので、ヘッダは
-[`SecurityHeadersFilter`](../server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt)
+[`SecurityHeadersFilter`](../server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt)
 1 本で全応答に付く。**値の正本はそこ**で、[`../vite.config.ts`](../vite.config.ts) の
 `preview.headers` はその写し —— 手元の `vite preview` を**配布時と同じヘッダ**で回すために置いている。
 

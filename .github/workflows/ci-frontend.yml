@@ -47,7 +47,7 @@ on:
       - 'scripts/**'
       - 'tools/**'
       - 'docs/TYPE-MAPPING.md'
-      - 'server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt'
+      - 'server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt'
       - 'server/src/main/resources/application.yaml'
       - 'compose.yaml'
       - '.env.example'

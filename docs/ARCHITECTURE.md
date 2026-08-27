@@ -17,29 +17,30 @@
 ## 1. 現行（wwwsqldesigner）ディレクトリ構成（取り込み時点）
 
 ```
-index.html                アプリ本体（SPA エントリ。§3 段階1 で <script type="module" src="/src/main.ts"> 1 本に）
-src/app.ts                ★ §3 で追加。js/ を読み込み順どおり import するだけ（起動しない）
-src/main.ts               ★ §3 で追加。src/app.ts を読んで new SQL.Designer() する起動エントリ
-js/                        描画エンジン・UI・IO（保持＝Tier 2 で TS 化。§3 段階3 で全 18 本が .ts に）
-  oz.ts config.ts globals.ts        ★ 段階3-1 で .ts 化
-  visual/row/table/relation/key/rubberband/map .ts  ★ 段階3-2 で .ts 化
-  toggle/io/tablemanager/rowmanager/keymanager/window/options/wwwsqldesigner .ts
+frontend/                 ★ §2 段階2-6 で集約（vite の root。URL 空間は集約の前後で不変）
+ index.html               アプリ本体（SPA エントリ。§3 段階1 で <script type="module" src="/src/main.ts"> 1 本に）
+ src/app.ts               ★ §3 で追加。js/ を読み込み順どおり import するだけ（起動しない）
+ src/main.ts              ★ §3 で追加。src/app.ts を読んで new SQL.Designer() する起動エントリ
+ js/                       描画エンジン・UI・IO（保持＝Tier 2 で TS 化。§3 段階3 で全 18 本が .ts に）
+   oz.ts config.ts globals.ts       ★ 段階3-1 で .ts 化
+   visual/row/table/relation/key/rubberband/map .ts ★ 段階3-2 で .ts 化
+   toggle/io/tablemanager/rowmanager/keymanager/window/options/wwwsqldesigner .ts
                                     ★ 段階3-3a で class 化 → 3-3b で .ts 化
-  io/palette.ts            ★ §4 段階4-0b で追加。型パレット層（旧 window.DATATYPES）
-  io/model.ts              ★ §4 段階4-1a で追加。直列化の中間モデル（型のみ・emit 0）
-  io/extract.ts            ★ §4 段階4-1a で追加。ライブツリー → DesignModel
-  io/ddl/                  ★ §6 段階6-5a で追加。db/<db>/output.xsl（XSLT 1.0・5 本）の置き換え
-    generate.ts              入口。DesignModel + TypePalette → DDL 文字列
-    shared.ts                型解決と既定値の引用（XSLT が見ていた入力に相当する構造体を組む）
-    ansi.ts                  CREATE TABLE ＋ ALTER TABLE 系の共通骨格（postgresql / sql-standard / h2）
-    postgresql.ts            8 プロファイル。mysql 系 / mssql / oracle / sqlite は骨格が違うので独立
-  io/xml-parser.ts         ★ §4 段階4-1b で追加。XML → DesignModel（形式側・ライブツリーに触らない）
-  io/apply.ts              ★ §4 段階4-1b で追加。DesignModel → ライブツリー（形式を知らない）
-  config.ts                アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
-styles/                    スタイル（保持）
-locale/                    多言語（日本語ロケール微調整の対象）
-db/<db>/                   DB プロファイル。型パレット差分の対象
-  datatypes.xml            型パレット定義（**段階6-5a 以降、db/ にはこれしか無い**）
+   io/palette.ts           ★ §4 段階4-0b で追加。型パレット層（旧 window.DATATYPES）
+   io/model.ts             ★ §4 段階4-1a で追加。直列化の中間モデル（型のみ・emit 0）
+   io/extract.ts           ★ §4 段階4-1a で追加。ライブツリー → DesignModel
+   io/ddl/                 ★ §6 段階6-5a で追加。db/<db>/output.xsl（XSLT 1.0・5 本）の置き換え
+     generate.ts             入口。DesignModel + TypePalette → DDL 文字列
+     shared.ts               型解決と既定値の引用（XSLT が見ていた入力に相当する構造体を組む）
+     ansi.ts                 CREATE TABLE ＋ ALTER TABLE 系の共通骨格（postgresql / sql-standard / h2）
+     postgresql.ts           8 プロファイル。mysql 系 / mssql / oracle / sqlite は骨格が違うので独立
+   io/xml-parser.ts        ★ §4 段階4-1b で追加。XML → DesignModel（形式側・ライブツリーに触らない）
+   io/apply.ts             ★ §4 段階4-1b で追加。DesignModel → ライブツリー（形式を知らない）
+   config.ts               アプリ設定（CONFIG.*。旧 config.xml ではなく JS リテラル）
+ styles/                   スタイル（保持）
+ locale/                   多言語（日本語ロケール微調整の対象）
+ db/<db>/                  DB プロファイル。型パレット差分の対象
+   datatypes.xml           型パレット定義（**段階6-5a 以降、db/ にはこれしか無い**）
 ~~backend/~~               **段階5-2 で撤去**（PHP 15 本 ＋ submodule `php-s3/amazon-s3-php`）。
                           ★ 旧実装は commit 7b3bb3d に残っている:
                               git show 7b3bb3d:backend/php-file/index.php
@@ -47,14 +48,18 @@ db/<db>/                   DB プロファイル。型パレット差分の対�
                           実測の結果は §4 に、introspection の実出力は
                           samples/introspection-postgresql.xml にバイト列で固定してある。
 server/                   ★ §5 段階5-1b で追加。Kotlin / Spring Boot 4（下記）
-  src/main/kotlin/dev/grabado/
+  src/main/kotlin/io/propagandist/grabado/
     api/                    URL 形状・status・ヘッダ（契約を持つ唯一の層）
-    design/                 keyword の検証（純粋）と正本ディレクトリへの I/O
+    ai/                     AI proxy（§11。上流呼び出しと structured outputs）
     config/                 設定（@ConfigurationProperties）とセキュリティヘッダ
+    design/                 keyword の検証（純粋）と正本ディレクトリへの I/O
+    introspect/             information_schema → JSON（§5 段階5-7a）
   gradle/libs.versions.toml 版はここ 1 か所（Dependabot が読む）
   gradle.lockfile           依存ロック（org security-baseline §3.12）
+package.json              ★ root のまま（`tests/` も。理由は §9.1 と issue #107）
+tests/                    5 系統（走らせ方は TESTING.md）
 license.txt               BSD License（保持必須）
-Dockerfile                upstream の Dockerfile（busybox httpd。house 版で置換予定）
+Dockerfile                ★ §2 段階2-1 で置換。マルチステージ 3 段（web / api / runtime）
 ```
 
 ## 2. 移行対応図（現行 → house）
@@ -636,7 +641,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 
 ### 7.2 introspection JSON
 
-**形の正は [`../server/src/main/kotlin/dev/grabado/introspect/IntrospectionModel.kt`](../server/src/main/kotlin/dev/grabado/introspect/IntrospectionModel.kt)**
+**形の正は [`../server/src/main/kotlin/io/propagandist/grabado/introspect/IntrospectionModel.kt`](../server/src/main/kotlin/io/propagandist/grabado/introspect/IntrospectionModel.kt)**
 （TypeScript 側の受け皿は [`../frontend/js/io/introspect-model.ts`](../frontend/js/io/introspect-model.ts)）。
 「設計 JSON v2 を返さない」理由は [`FORMAT.md`](FORMAT.md) の最終節 —— 要点は **backend は生の
 SQL 型情報を返し、型 id への解決はフロントの `TypePalette` が持つ**こと（`x` / `y` は
@@ -691,7 +696,7 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 
 **本章はすべて実装済み**（11-1 で適用側、11-2a で proxy の契約、**11-2b で上流を叩く実装**）。
 入口は [`../frontend/js/io/ai/`](../frontend/js/io/ai/) と
-[`../server/src/main/kotlin/dev/grabado/ai/`](../server/src/main/kotlin/dev/grabado/ai/)。
+[`../server/src/main/kotlin/io/propagandist/grabado/ai/`](../server/src/main/kotlin/io/propagandist/grabado/ai/)。
 **残るのはフロントの配線だけ**（11-3 以降。`js/` はまだ 1 行も AI を知らない）。
 
 **HANDOVER §11 との差分は 3 つ**（URL 名・構造化出力の手段・プライバシー既定）。
@@ -717,7 +722,7 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 呼ばないので、**429 が `check()` に届く経路が存在しない**（5-1b で 400 を足したときと同じ形）。
 到達しない status は無言で成功扱いにならない。配線と同時に広げるのが 11-3。
 
-status の写像は [`ApiExceptionHandler`](../server/src/main/kotlin/dev/grabado/api/ApiExceptionHandler.kt)
+status の写像は [`ApiExceptionHandler`](../server/src/main/kotlin/io/propagandist/grabado/api/ApiExceptionHandler.kt)
 の 1 つの表にある（例外 → status を 2 か所に書かない）。**403 は理由を区別しない** ——
 READONLY / キー未設定 / モデル名未設定 / 実装が無い のどれも「このデプロイでは禁止されている」。
 
@@ -814,12 +819,12 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 | `GRABADO_AI_EFFORT` | **空**（上流の既定に任せる） | `low` / `medium` / `high` / `xhigh` / `max`。**コストの主要な変数**。値が不正なら**起動時に落ちる** |
 
 **上限の既定値は実測ではなく判断**で、根拠は
-[`AiProperties`](../server/src/main/kotlin/dev/grabado/config/GrabadoProperties.kt) の KDoc にある。
+[`AiProperties`](../server/src/main/kotlin/io/propagandist/grabado/config/GrabadoProperties.kt) の KDoc にある。
 **費用が自社負担**なので上限はサーバが持ち、クライアントの自己申告を上限にしない。
 
 `?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」**∧ 実装がある**。
 **実装があっても使えないなら false**（5-7a と同じ）で、11-2a の時点では
-[`SuggestionSource`](../server/src/main/kotlin/dev/grabado/ai/SuggestionSource.kt) の実装が
+[`SuggestionSource`](../server/src/main/kotlin/io/propagandist/grabado/ai/SuggestionSource.kt) の実装が
 main に 1 つも無いので**実運用ではまだ常に false** —— 固定応答を返すスタブを本番に置かない
 （置くと「AI が動いているように見えて実は固定」が載る）。
 
@@ -834,7 +839,7 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 - **結果キャッシュ（自前）** —— 送るバイト列の SHA-256 → 提案 JSON。**プロセス内メモリのみ**
   （DB レス既定）。**成立するのは serializer が決定論だから**（制約3。§4 の決定論が効く 2 つ目の場所で、
   1 つ目は 5-4 の ETag）。11-2a で入った
-  （[`SuggestionCache`](../server/src/main/kotlin/dev/grabado/ai/SuggestionCache.kt)。LRU ＋ TTL）
+  （[`SuggestionCache`](../server/src/main/kotlin/io/propagandist/grabado/ai/SuggestionCache.kt)。LRU ＋ TTL）
 
 結果キャッシュの規則が 2 つ:
 
@@ -948,7 +953,7 @@ relaxed binding。**2026-08-26 実測**で `…_SHOP_URL` などを渡すと `?a
 ### 9.4 CSP と配信ヘッダ
 
 **全応答に 5 本付く**（段階2-2）。**単一プロセスが static も API も配る**ので、
-[`SecurityHeadersFilter`](../server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt)
+[`SecurityHeadersFilter`](../server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt)
 1 本で両方に掛かる。**値と、その値である理由の正本はそこ**（ここに写さない）。
 
 出るのは `X-Content-Type-Options` / `Referrer-Policy` / `X-Frame-Options` /
@@ -992,7 +997,7 @@ material-inspired の svg（CSS ソースに元からある）。
 | `/backend/**` `/api/**` | `no-store` | 設計データと AI の応答。**正本は git 管理のファイル**で、これは写し |
 | それ以外 | `no-cache` | ハッシュを持たない（`index.html` / `db/` / `locale/` / `images/` / `styles/`）。毎回検証させる |
 
-規則の正本は [`SecurityHeadersFilter`](../server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt)
+規則の正本は [`SecurityHeadersFilter`](../server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt)
 の `cacheControlFor`。表を掃くのは `CacheControlTest`、**実物が出ていることを見るのは
 [`tests/image/`](../tests/image/)**（静的資産の側は**手元の jar に入らない**ので、そこでしか出ない）。
 

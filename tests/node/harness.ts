@@ -258,7 +258,7 @@ export async function createHarness(): Promise<NodeHarness> {
     let aiReviewResponse: { body: string; status: number } | null = null;
 
     /**
-     * Kotlin 実装（`server/src/main/kotlin/dev/grabado/design/ETags.kt`）と**同じ計算**。
+     * Kotlin 実装（`server/src/main/kotlin/io/propagandist/grabado/design/ETags.kt`）と**同じ計算**。
      * 内容の SHA-256 を先頭 16 バイトだけ hex にして引用符で囲む。
      *
      * 同じ規則にしておかないと、契約表の ETag まわりが「両側で検証された」と言えなくなる。

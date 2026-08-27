@@ -8,6 +8,7 @@
 
 ## プロジェクト概要
 - **配置**（**2026-08-27。段階2-6 で集約**）: フロントの実体は **`frontend/`**（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/`）、backend は **`server/`**。**`package.json` と `tests/` は root のまま** —— `tests/contract/` は backend と共有し、`tests/image/` は root の `compose.yaml` を叩くため（#107）。**vite の root は `frontend/`、出力は `frontend/dist/`。URL 空間は集約の前後で 1 バイトも変わっていない。**
+- **座標**（**2026-08-27。#109**）: ルートパッケージは **`io.propagandist.grabado`**（サブは `.api` `.ai` `.config` `.design` `.introspect`）、Gradle の `group` も同じ。**製品ドメインの逆順（`dev.grabado`）から会社の名前空間へ移した。** ★ **grabado 固有の識別子は据え置き** —— `grabado.jar` ／ `GRABADO_*` env ／ `rootProject.name = "grabado-server"` ／ `@ConfigurationProperties("grabado")` ／ `GrabadoApplication`・`GrabadoProperties`。**これらは外向きの契約**で、パッケージとは別の軸。
 - frontend: 描画エンジンを温存しつつ**完全 TypeScript 化**（Vite / strict）。
 - backend: PHP を廃し **Kotlin/Spring Boot**。save/load は**マウント済みファイルの I/O**、introspection は `information_schema`→JSON、AI proxy を提供。
 - 正本: **git 管理の JSON ファイル**（`/data/schema` に mount）。共有は PR。編集ストアは **DB レス**（ブラウザ内 / IndexedDB）。

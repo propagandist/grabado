@@ -17,7 +17,7 @@ import { REPO_ROOT } from "../support/fixtures.ts";
 
 const FILTER = join(
     REPO_ROOT,
-    "server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt",
+    "server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt",
 );
 
 /**

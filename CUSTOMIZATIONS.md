@@ -10011,6 +10011,103 @@ vite の `outDir` は root 基準なので、`root: "frontend"` にした時点�
 - **`tests/golden/README.md` と `tests/known-issues/README.md` のリンクも動いた**
   （golden 本体 114 本は無差分）
 
+### 2026-08-27 ルートパッケージを `io.propagandist.grabado` にする
+
+正本は [issue #109](https://github.com/propagandist/grabado/issues/109)。**段階に属さない**
+（#83 の分割表にも §5 にも行が無い。#95 と同じ扱い）。**挙動は 1 バイトも変えていない** ——
+動いているものを動いているまま**座標だけ付け替えた**。
+
+#### なぜ
+
+**公開物の名前空間が、会社ではなく製品ドメインを名乗っていた。** `dev.grabado` は段階5-1b で
+骨格を入れたときのもので、**ドメイン `grabado.dev` の逆順**。リポジトリは 2026-08-26 に public に
+なり（#95）、**jar の中身も `deps-submit.yml` が提出する座標も外から見える**。
+
+**壊れてはいなかった。** だから「直す」のではなく「揃える」作業になる。
+
+#### 通った（2026-08-27 実測）
+
+| 確かめたこと | 結果 |
+|---|---|
+| **`server/gradlew -p server clean build`** | **BUILD SUCCESSFUL**（**本命**。component scan の解決・`@SpringBootTest` 4 本・実コード FQN の取り残しがここで落ちる） |
+| `git grep -E 'dev\.grabado|dev/grabado'` | **0 件**（実施前は **106 行 / 55 ファイル**） |
+| `git status` の rename | **47 本**（main 31 ＋ test 16。**すべて `RM`** ＝ 移動＋中身の書き換え） |
+| `gradle.lockfile` / `settings-gradle.lockfile` | **1 バイトも動いていない**（自プロジェクトの `group` はロックに書かれない） |
+| `npm run typecheck` / `npm test` / `test:browser` / `known-issues` / `test:server` / `test:image` | 緑（下の申し送り） |
+
+#### 決めたこと 1: `io.propagandist` 直下ではなく **`io.propagandist.grabado`**（ユーザー判断）
+
+`io.propagandist.api` のような形は **1 リポジトリ 1 プロダクトを前提**にしている。org の他プロダクトと
+同じ classpath に載った瞬間に `api` / `config` が衝突する。**製品名の階層は削らない。**
+
+#### 決めたこと 2: `group` も同じ値に揃える（ユーザー判断）
+
+片方だけ変えると、`deps-submit.yml` が提出する座標と `.kt` の `package` 行で**違う会社名**が出る。
+**次に読む人がどちらが正かを判断できない。正本は 1 つ。**
+
+#### 決めたこと 3: **grabado 固有の識別子は動かさない**（ユーザー判断）
+
+`grabado.jar` ／ `GRABADO_*` env ／ `rootProject.name` ／ `@ConfigurationProperties("grabado")` ／
+`GrabadoApplication`・`GrabadoProperties` は**据え置き**。
+
+- `GRABADO_*` は `application.yaml` / `compose.yaml` / `.env.example` の 3 か所を
+  `env-contract.test.ts` が突き合わせている**外向きの契約**
+- `grabado.jar` は `Dockerfile` の `COPY` が**ワイルドカードを避けるため**に依存している
+- **同じ PR で外向きの契約を動かすと、落ちたときにパッケージのせいか契約のせいか切り分けられない**
+
+#### 決めたこと 4: ディレクトリは **1 回で動かす**
+
+`GrabadoApplication` の `@SpringBootApplication` ＋ `@ConfigurationPropertiesScan` は
+**そのクラスのパッケージを起点に走査する**（`scanBasePackages` の明示は 0 件）。
+**サブパッケージを 1 つでも旧位置に取り残すと、その bean だけが静かに消える**
+——**アプリは起動し、当該 URL だけ 404 になる**。だからファイル単位ではなく
+**パッケージルートごと `git mv`** し、rename が 47 本であることを数えた。
+
+#### ★ ついでに直した: `ARCHITECTURE.md` のツリーは **3 世代ぶん古かった**
+
+#109 は「`ai/` と `introspect/` が抜けている（実体は 5 つ）」と指摘していたが、**開いてみると
+古さはそれだけではなかった**。
+
+| 古かった箇所 | いつから |
+|---|---|
+| `server/…/` の下が **3 つ**（`api` / `design` / `config`。`ai` と `introspect` が無い） | §11 と 5-7a から |
+| **`index.html` / `src/` / `js/` / `styles/` / `locale/` / `db/` が root のまま** | **段階2-6 から**（集約の取りこぼし） |
+| `Dockerfile` が「**upstream の busybox httpd。house 版で置換予定**」 | **段階2-1 から**（置換済み） |
+| `package.json` / `tests/` が**そもそも載っていない** | 最初から |
+
+**ツリーは「1 か所」に見えて、実際には各段階が触るべき場所だった。** 段階ごとに自分の行だけを
+直していると、**誰も全体を見ないまま古くなる**。まとめて現在の姿へ直した。
+
+**★ 2-6 の取りこぼしはこれで 2 件目**（1 件目は `ReviewSchemaTest` の
+`repoRoot.resolve("js")`。#110）。**どちらも「フロントを動かしたとき、フロント以外に波及する面」**
+で、**2-6 の検証が `frontend/` の中しか見ていなかった**ことを示している。
+
+#### 却下した案
+
+| 案 | 却下理由 |
+|---|---|
+| **`io.propagandist` 直下** | 決めたこと 1。製品名の階層は削らない |
+| **パッケージだけ変えて `group` は据え置く** | 決めたこと 2。座標とパッケージで違う会社名が出る |
+| **固有識別子（jar 名・env・クラス名）も寄せる** | 決めたこと 3。外向きの契約を同じ PR で動かすと切り分けができない |
+| **移動と置換を 2 コミットに割る** | merge は squash なので develop に載るのは 1 本。**「移動したがコンパイルが通らない」中間状態を作るだけ** |
+| **IDE のリファクタ機能を使う** | `server/bin/` を巻き込む。KDoc の FQN を拾うかが版依存。**diff で全量が読めない**。`sed` は決定論 |
+| **#107（2-6）と同じ PR に混ぜる** | 2-6 は 140 本を動かしている。合わせると **190 本超**になり、**「挙動を変えていない」ことが読めなくなる** |
+
+#### 申し送り
+
+- **★ マージ後に依存グラフを確かめること** —— `gh api repos/propagandist/grabado/dependency-graph/sbom`。
+  **古い座標 `dev.grabado:grabado-server` が残って二重になっていないか**。**未検証**で、
+  `deps-submit.yml` が走るまで確かめられない（`server/build.gradle.kts` を触ったので**走る**）
+- **`docs/` の相対リンク 10 本が動いた** —— #109 は「**機械の検査は無い。目で踏むしかない**」と
+  書いていたが、**実在の確認だけは機械でできた**（各リンクを `dirname` からの相対で解決して
+  `[ -e ]` で見る。**全 `docs/*.md` で MISSING 0**）。
+  **確かめられないのは「リンク先が意図した箇所か」**であって、**実在は確かめられる** ——
+  この 2 つを混ぜない
+- **`.claude/settings.local.json` に古い `sed` の許可エントリが残っている**（git 管理外）。
+  パスが変われば**一致しなくなるだけ**なので触っていない
+- **ツリーのような「全体を書いた図」は、段階ごとの検証から漏れる。** 上の★のとおり
+  **3 世代ぶん古くなっていた** —— **図を持つ文書は、節を触るたびに図も見ること**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

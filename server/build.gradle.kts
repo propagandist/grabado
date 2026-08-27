@@ -21,7 +21,7 @@ plugins {
     alias(libs.plugins.spring.boot)
 }
 
-group = "dev.grabado"
+group = "io.propagandist.grabado"
 version = "0.0.0"
 
 kotlin {

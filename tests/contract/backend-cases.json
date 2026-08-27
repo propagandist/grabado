@@ -5,7 +5,7 @@
     "散文の正は docs/ARCHITECTURE.md の §4（実測・旧 PHP）と §7（Kotlin の到達点）。",
     "",
     "読み手は 2 つ:",
-    "  1. Kotlin  — server/src/test/kotlin/dev/grabado/api/BackendContractTest.kt が",
+    "  1. Kotlin  — server/src/test/kotlin/io/propagandist/grabado/api/BackendContractTest.kt が",
     "               @ParameterizedTest で全ケースを MockMvc に流す",
     "  2. TypeScript — tests/node/ の仮想 backend（tests/node/harness.ts）に virtual:true の",
     "               ケースを流す。これで仮想 backend が『サーバについての手書きの推測』から",

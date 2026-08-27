@@ -35,6 +35,12 @@ on:
     paths:
       - 'server/**'
       - 'tests/contract/**'
+      # ★ ReviewSchemaTest が **Kotlin からフロントのソースを読む**唯一の箇所（§11 の
+      #   語彙が両側でずれていないことを見る）。**入力なので paths に要る** ——
+      #   段階2-6 の集約でこのパスが動いたとき、ここに無かったせいで
+      #   **フロントだけを触った PR では気づけない**状態になっていた。
+      #   ci-frontend.yml が SecurityHeadersFilter.kt を列挙しているのと同じ形。
+      - 'frontend/js/io/ai/suggestion.ts'
       - '.github/workflows/ci-server.yml'
 
 permissions:

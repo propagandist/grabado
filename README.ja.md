@@ -86,24 +86,13 @@ GRABADO_READONLY=true docker compose up
 AI は API 費用が自社負担、introspection は SSRF の踏み台になるので、
 **知らない人が触れる所には置けない**。
 
-### 既知の不具合: Linux ホスト
+### Linux ホストでの注意
 
-**Linux ホストではコンテナが起動しない。****2026-08-26 実測** —— CI が ubuntu でイメージを
-通しで動かすようになった日に出た（[#103](https://github.com/propagandist/grabado/issues/103)）。
+**そのまま動く。** コンテナは**起動時に mount 先の所有者を見て、そこへ降りる** ——
+書かれたファイルはあなたの所有になるので、**設計をそのまま `git add` できる**。
 
-コンテナは**非 root（uid=100）**で走り、**bind mount はホスト側の所有権をそのまま通す**ので、
-**2 方向に壊れる**。
-
-1. **コンテナが書けない。** `schema/` は clone した人の uid で作られるので、起動時の検証が
-   `正本ディレクトリに書けない: /data/schema` で止める。**これは設計どおり** ——
-   コンテナ内の fs へ黙って書き、コンテナを捨てた瞬間に設計が消えるより、起動しないほうがよい。
-2. **書けたものをホストが読めない。** 1 を回避しても、保存された JSON は **`600`・uid 100 所有**
-   で置かれる（原子的置換に使う一時ファイルが POSIX 0600 で作られるため）——
-   **自分の設計を `git add` できない。**
-
-**Docker Desktop for Windows / macOS は所有権を偽装する**ので、どちらの症状も出ない。
-#103 が入るまでは Docker Desktop で動かすか、起動前に `chown -R 100:100 schema` する
-（そのぶんホスト側では uid 100 の所有になる）。
+仕組みと分岐は [`docker-entrypoint.sh`](docker-entrypoint.sh) の冒頭。**設定は要らない**
+（`docker compose up` だけでよい）。
 
 ### ローカル開発
 

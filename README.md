@@ -87,24 +87,12 @@ Saving, introspection and AI are disabled; listing and loading still work. This 
 public demo runs in — AI calls cost money and introspection is an SSRF pivot, so neither belongs
 on a deployment strangers can reach.
 
-### Known issue: Linux hosts
+### Note for Linux hosts
 
-**On a Linux host the container does not start.** Measured on 2026-08-26, once CI began running
-the image end-to-end on Ubuntu (issue
-[#103](https://github.com/propagandist/grabado/issues/103)).
+**It just works.** The container figures out who owns the mount at startup and drops to that
+user, so files it writes are owned by you — you can `git add` your designs directly.
 
-The container runs as a **non-root user (uid 100)**, and a bind mount carries the host's ownership
-straight through — so it breaks in two directions:
-
-1. **The container cannot write.** `schema/` belongs to whoever cloned the repository, so the
-   startup check (`正本ディレクトリに書けない: /data/schema`) refuses to start. This is by design:
-   grabado would rather not start than lose your designs to a container-local filesystem.
-2. **The host cannot read what was written.** Even past step 1, saved JSON lands as mode `600`
-   owned by uid 100 — you cannot `git add` your own designs.
-
-**Docker Desktop for Windows and macOS fake the ownership**, so neither symptom appears there.
-Until #103 lands, run grabado on Docker Desktop, or `chown -R 100:100 schema` before starting
-(your designs will then be owned by uid 100 on the host).
+Details are in `docker-entrypoint.sh`. Nothing to configure; `docker compose up` is enough.
 
 ### Local development
 

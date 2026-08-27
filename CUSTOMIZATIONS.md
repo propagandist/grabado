@@ -10203,6 +10203,99 @@ SIGTERM が直接届く（graceful shutdown が効く）。
   **こちらは配布物に入る**。**digest ピンと Dependabot の `docker` entry が対処する設計**
   （段階2-1）だが、**中身は棚卸ししていない**
 
+### 2026-08-27 ベースイメージの CVE を棚卸しした（① 層）
+
+**段階2-1 で digest ピンと Dependabot の `docker` entry を入れて以来、中身を 1 度も見ていなかった。**
+#103 の作業中に IDE の Docker 拡張が警告を出したのが発端で、**org `security-verification.md`
+§1.3 の ① 層**として `trivy image` を回した。
+
+#### 実測（2026-08-27。trivy `--severity CRITICAL,HIGH`）
+
+| 対象 | ステージ | CRITICAL | HIGH | 配布物に入るか |
+|---|---|---:|---:|---|
+| `node:24-alpine` | web | **1** | 9 | **入らない** |
+| `eclipse-temurin:25-jdk-alpine` | api | 0 | （未計測） | **入らない** |
+| `eclipse-temurin:25-jre-alpine` | runtime | **0** | **3** | **入る** |
+| **実イメージ**（`grabado-image-e2e-app`） | — | **0** | **3** | ＝ 上と同じ |
+| うち **`app/grabado.jar`** | — | **0** | **0** | **Kotlin / Spring Boot の依存は 0 件** |
+
+#### ★ 切り分け 1: **CRITICAL は配布物に入らない**
+
+`node:24-alpine` の CRITICAL 1 件は **npm が同梱する `tar` 7.5.16**（`CVE-2026-59873`。
+crafted gzip bomb による DoS）。**web ステージにしか無く、マルチステージなので runtime に残らない**
+——**実イメージを走査して 0 件であることを確かめた**（表の 4 行目）。
+
+**「Dockerfile に CRITICAL がある」と「配る物に CRITICAL がある」は別**。
+**IDE の警告は前者**で、**行番号ごとに出る**ぶん**後者と読み違えやすい**。
+
+#### ★ 切り分け 2: 配布物の HIGH 3 件は**同一 CVE**
+
+`CVE-2026-14456`（openssl の QUIC サーバにおける unbounded memory growth ＝ DoS）が
+`libcrypto3` / `libssl3` / `openssl` の **3 パッケージに出ているだけ**で、**実質 1 件**。
+
+**grabado は QUIC サーバではない**（Spring Boot / Tomcat は HTTP/1.1）ので、**到達しない**。
+**ただし「入っていない」ではなく「使っていない」**なので、直せるなら直す側。
+
+#### ★★ 上げ先が無い（2026-08-27 実測）
+
+**修正版 `3.5.8-r0` は存在する**が、**3 つのベースイメージとも Dockerfile のピンが上流の最新と
+一致していた**（`docker buildx imagetools inspect` で確認）。**上流のイメージがまだ 3.5.7-r0 を
+含んでいる**ということで、**digest を上げても直らない**。
+
+**Dependabot が PR を出さないのは正しい動作。** **上流が新しい digest を出せば追随する。**
+
+#### ★★★ ただし **Dependabot はベースイメージの中身を見ていない**
+
+これが今回いちばん重要な発見。
+
+```
+$ gh api 'repos/propagandist/grabado/dependabot/alerts?state=open'
+maven  org.jetbrains.kotlin:kotlin-gradle-plugin
+maven  org.apache.commons:commons-lang3
+```
+
+**alpine のパッケージ（openssl）は 1 件も出ない。** `docker` entry がするのは
+**「上流のタグが指す digest が動いたら書き換える」だけ**で、**中に何件の CVE があるかは見ていない**。
+
+**段階2-5 の「ベースイメージ ← Dependabot の `docker` entry」は、この粒度で読む必要がある:**
+
+| 何を | Dependabot は |
+|---|---|
+| 上流が**直したこと**に追随する | **する**（digest が動けば PR） |
+| **いま何件あるか**を教える | **しない** |
+| 上流が**直さない**あいだ気づかせる | **しない** |
+
+**つまり「拾えるが直せない」（#105）とは別の形で、こちらは「そもそも拾っていない」。**
+
+#### 決めたこと: ③ 層（週次 trivy）は**置かない**。**① を「ベースを動かすとき」に紐づける**
+
+org §0 の「**分類 B は ① を導入時に 1 回 ＋ ② で足りる**」は変えない。**ただし「導入時に 1 回」は
+今回が初回**で、**次にいつ回すかが決まっていなかった** —— そこを決める:
+
+**Dependabot の `docker` entry が PR を出したら、マージ前に `trivy image` を回す。**
+上流が digest を動かすのは**たいてい中身を直したとき**なので、**そこが自然な棚卸しの契機**になる。
+**時間で回すのではなく、変更に紐づける**（②「変更のたび」に近い形）。
+
+#### 却下した案
+
+- **週次 cron で `trivy image` を回す** —— 分類 B に ③ を持ち込まない（org §0）。
+  **public なので枠は食わないが、根拠は枠ではない**（段階2-5 の決めたこと 1 と同じ形）
+- **`node:24-alpine` の CRITICAL を理由にベースを変える** —— **配布物に入らない**。
+  **入らないものを理由に配る形を変えない**
+- **digest を手で上げる** —— **上げ先が無い**（上流のピンが最新）
+- **openssl の HIGH を dismiss する** —— **GitHub の alert には出ていない**ので、dismiss する対象が
+  そもそも無い。**trivy でしか見えないものを GitHub 側で消すことはできない**
+
+#### 申し送り
+
+- **★ `CVE-2026-14456`（openssl）は上流待ち。** **修正版 3.5.8-r0 はある**が、
+  **ベースイメージがまだ含んでいない**。**Dependabot の docker entry が digest を動かしたら、
+  そこで解消しているはず** —— **そのときに `trivy image` で確かめる**（上の決めたこと）
+- **`eclipse-temurin:25-jdk-alpine` の HIGH は数えていない**（api ステージ＝配布物に入らないので、
+  切り分けだけして中身は見ていない）
+- **`trivy` の `-` は「未走査」であって「0 件」ではない**（org §1.3 の★）。
+  **今回は `app/grabado.jar` が `0`** と出ているので、**走査したうえで 0 件**である
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

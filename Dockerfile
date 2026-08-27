@@ -79,11 +79,16 @@ FROM eclipse-temurin:25-jre-alpine@sha256:3137541deb3cac6626b5d9a4a2187bc0d6a343
 # ★ **su-exec は「runtime に残るのは jar 1 本だけ」を崩す唯一の例外**（静的バイナリ 1 本）。
 #   段階2-1 の原則を曲げてまで入れたのは、**利用者が `docker compose up` 以外に何もしなくて
 #   よい**形が #103 の目指す状態だったから。
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# ★ `chmod +x` をイメージ側で立てるのは、**実行ビットがホストの OS 次第**だから ——
+#   Windows のチェックアウトでは立たず、`COPY` はホストのモードをそのまま持ち込むので
+#   **`exec: permission denied` で起動に失敗する**（2026-08-27 に CI で踏んだ）。
+#   上の api ステージが `sh ./gradlew` と書いているのと**同じ理由・同じ対処**である。
 RUN addgroup -S grabado && adduser -S -G grabado grabado \
  && mkdir -p /data/schema && chown grabado:grabado /data/schema \
- && apk add --no-cache su-exec
-
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+ && apk add --no-cache su-exec \
+ && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 WORKDIR /app
 

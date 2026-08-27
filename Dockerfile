@@ -18,7 +18,7 @@
 
 
 # ---------------------------------------------------------------------------
-# 1) web —— フロントを束ねる（vite build -> /web/dist）
+# 1) web —— フロントを束ねる（vite build -> /web/frontend/dist。root は frontend/。段階2-6）
 #
 # ★ 版は ci-frontend.yml の `node-version: 24` に揃える。**CI と違うもので配布物を作らない。**
 # ---------------------------------------------------------------------------
@@ -32,6 +32,10 @@ RUN npm ci
 
 # 残りはビルドの入力そのもの。**何が入るかは .dockerignore の許可リストが唯一の正**
 # ——ここに COPY を並べると、配るものの正本が 2 か所になる。
+#
+# ★ 段階2-6 でフロントの実体は frontend/ へ移った。**vite の root が frontend/ なので、
+#   出力は /web/frontend/dist**（下の api ステージの COPY と対）。**cwd は /web のまま**で、
+#   package.json も vite.config.ts も root に居るので、この 2 行は動いていない。
 COPY . .
 RUN npm run build
 
@@ -51,7 +55,7 @@ WORKDIR /src
 # wrapper が落とす Gradle 配布物は distributionSha256Sum が固定している
 # （server/gradle/wrapper/gradle-wrapper.properties）—— **取りに行くものはハッシュで縛る。**
 COPY server/ ./
-COPY --from=web /web/dist ./src/main/resources/static
+COPY --from=web /web/frontend/dist ./src/main/resources/static
 
 # ★ `sh ./gradlew` と書くのは、**実行ビットがホストの OS 次第**だから（Windows のチェック
 #   アウトでは落ちる）。同じ Dockerfile がどこでビルドされても同じように動く形にする。

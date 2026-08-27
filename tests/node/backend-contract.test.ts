@@ -202,7 +202,7 @@ describe("backend の契約（仮想 backend / 段階5-1c）", () => {
          * check() に case を足しても locale のキーが無ければ、textarea には翻訳されない
          * "http400" という文字列がそのまま出る（_() は未知キーをキー名のまま返す）。
          */
-        const en = readFileSync(join(REPO_ROOT, "locale", "en.xml"), "utf8");
+        const en = readFileSync(join(REPO_ROOT, "frontend", "locale", "en.xml"), "utf8");
 
         for (const status of statusesCheckMustKnow()) {
             expect(en, `locale/en.xml に http${status} が無い`).toContain(`name="http${status}"`);

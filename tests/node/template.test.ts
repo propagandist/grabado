@@ -2,14 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
-import { TypePalette } from "../../js/io/palette.ts";
+import { TypePalette } from "../../frontend/js/io/palette.ts";
 import {
     applyTemplate,
     newRowType,
     readTemplate,
-} from "../../js/io/template.ts";
-import type { Table } from "../../js/table.ts";
-import type { Row, RowData } from "../../js/row.ts";
+} from "../../frontend/js/io/template.ts";
+import type { Table } from "../../frontend/js/table.ts";
+import type { Row, RowData } from "../../frontend/js/row.ts";
 import { DB_PROFILES, REPO_ROOT } from "../support/fixtures.ts";
 
 /*
@@ -32,7 +32,7 @@ const parser = new dom.window.DOMParser();
 
 function paletteOf(db: string): TypePalette {
     return paletteFromXml(
-        readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8")
+        readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8")
     );
 }
 

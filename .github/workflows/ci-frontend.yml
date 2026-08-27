@@ -28,6 +28,7 @@
 #   `SecurityHeadersFilter.kt`（csp.test.ts が**ヘッダの正本**と vite.config.ts の写しを
 #   突き合わせる。段階2-2）、`application.yaml` / `compose.yaml` / `.env.example`
 #   （env-contract.test.ts が **env の正本**と 2 つの写しを突き合わせる。段階2-3）。
+#   **段階2-6 で js/ src/ styles/ db/ locale/ images/ index.html は `frontend/**` 1 行に畳んだ。**
 #   **`docs/` をまるごとは入れない** —— 文書だけの PR（段階5-0 のような）で数分使うのは、
 #   「入力が変わらなければ出力も変わらない」に反する。
 #   **テストが読む repo ルートのファイルを増やしたら、ここに足すこと。**
@@ -39,16 +40,12 @@ on:
   pull_request:
     branches: [develop, main]
     paths:
-      - 'js/**'
-      - 'src/**'
+      # 段階2-6: フロントの実体は frontend/ に集約した（js / src / styles / db / locale /
+      # images / index.html がここに入る）。**package.json と tests/ は root のまま。**
+      - 'frontend/**'
       - 'tests/**'
-      - 'db/**'
-      - 'locale/**'
-      - 'styles/**'
-      - 'images/**'
       - 'scripts/**'
       - 'tools/**'
-      - 'index.html'
       - 'docs/TYPE-MAPPING.md'
       - 'server/src/main/kotlin/dev/grabado/config/SecurityHeadersFilter.kt'
       - 'server/src/main/resources/application.yaml'

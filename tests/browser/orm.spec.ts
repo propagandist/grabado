@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { ORM_EXTENSIONS, ORM_TARGETS } from "../../js/io/orm/generate.ts";
+import { ORM_EXTENSIONS, ORM_TARGETS } from "../../frontend/js/io/orm/generate.ts";
 import { DB_PROFILES, ormGoldenCases, readFixture } from "../support/fixtures.ts";
 import { goldenPath, writeOrReadGolden } from "../support/golden.ts";
 import { assertNoCarriageReturn } from "../support/normalize.ts";

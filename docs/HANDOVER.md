@@ -49,7 +49,7 @@
 ### 2.2 マルチステージ Dockerfile（骨格・版は着手時に最新 LTS 確認）
 
 > **注記（2026-08-24 / 段階2-0）**: この骨格は `frontend/` / `backend/` を前提にしているが、
-> **実在はリポジトリルート（フロント）と `server/`（backend）**なので読み替えが要る。
+> **実在は `frontend/`（フロント。ただし `package.json` と `tests/` は root）と `server/`（backend）**なので読み替えが要る。
 > 集約は §2 の最後（2-6）に独立段階で行う。**決定と §2 の分割は
 > [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0、契約は
 > [`ARCHITECTURE.md`](ARCHITECTURE.md) §9**（HANDOVER = 入口 / CUSTOMIZATIONS = 正）。

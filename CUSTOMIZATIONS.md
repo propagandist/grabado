@@ -107,7 +107,7 @@
 
 ### 2026-08-09 `js/config.js` の軽微な既存バグ（記録のみ・今回直さない）
 
-- `CONFIG.AVAILABLE_DBS` に `"web2py"` が**2 回**入っている（[`js/config.js`](js/config.js) 2-14 行）。DB セレクタに重複した選択肢が出る。
+- `CONFIG.AVAILABLE_DBS` に `"web2py"` が**2 回**入っている（[`frontend/js/config.js`](frontend/js/config.js) 2-14 行）。DB セレクタに重複した選択肢が出る。
 - `CONFIG.DEFAULT_BACKEND` が文字列ではなく**配列** `["php-mysql"]`（同 55 行）。
 - いずれも DDL / serializer の出力に影響しないため特性化テストの対象外。テストは `CONFIG.AVAILABLE_DBS` ではなく **`db/` のディレクトリ実体**を DB 一覧の正としている。
 
@@ -139,7 +139,7 @@ HANDOVER §3 は「Vite で束ねる → `checkJs`+JSDoc → 依存の薄い順�
   1 本だけ張る。golden は読むだけで採り直さない。
 - **UI の end-to-end 操作確認（ARCHITECTURE §3 の未実施項目）をここで実施した。** テーブル追加・カラム追加・
   SQL 出力（`clientsql`）・スタイル切替・ロケール切替・cookie 保存が Vite 化後も動くことを確認済み。
-  スタイル切替は `<link>` の **`title` 属性**での照合（[`js/wwwsqldesigner.js:118-133`](js/wwwsqldesigner.js#L118-L133)）
+  スタイル切替は `<link>` の **`title` 属性**での照合（[`frontend/js/wwwsqldesigner.js:118-133`](frontend/js/wwwsqldesigner.js#L118-L133)）
   なので、build でファイル名がハッシュ化されても機能する。
 
 **upstream の `Dockerfile`（busybox httpd でリポジトリを丸ごと配る）はこの変更で動かなくなる。**
@@ -181,7 +181,7 @@ TS2339 のうち 247 件以上が `'Row'` / `'Map'` / `'Table'` / `'Rubberband'`
 
 - **`_init()` / `_build()` の呼び出しを基底コンストラクタから外し**、各サブクラスが従来
   `SQL.Visual.apply(this)` を書いていた位置で呼ぶ形にした（Step4 で先に分離してから class 化）。
-  [`js/table.js`](js/table.js) の `_build()` が `this.owner.map.dom.container` を読むため、
+  [`frontend/js/table.js`](frontend/js/table.js) の `_build()` が `this.owner.map.dom.container` を読むため、
   「基底コンストラクタが `_build()` を呼ぶ」形は **ES クラスの「`super()` 前に `this` を触れない」制約と
   原理的に両立しない**。呼び出し順は現行と 1 行もずれていない。
 - **クラスフィールド初期化子は使わない**。派生クラスの初期化子は `super()` 直後に走るため、現行の
@@ -210,7 +210,7 @@ TS2339 のうち 247 件以上が `'Row'` / `'Map'` / `'Table'` / `'Rubberband'`
 で、生成した瞬間にクラスが唯一のインスタンスに置き換わっていた。参照側（`table` / `row` / `relation` /
 `rowmanager` の 6 箇所）はすべて実体を期待しているので、**クラス = `SQL.Designer` / インスタンス =
 `SQL.designer`** に分けた。自己登録をコンストラクタに残したのは、起動経路が 3 つあり
-（[`src/main.ts`](src/main.ts) / `tests/node/harness.ts` の `window.eval` / ブラウザ）、いずれも戻り値を
+（[`frontend/src/main.ts`](frontend/src/main.ts) / `tests/node/harness.ts` の `window.eval` / ブラウザ）、いずれも戻り値を
 `SQL` に載せないため。DI 化は §4 の IO 分離と同時に行う。
 **副作用**: `new SQL.Designer()` を 2 回呼べるようになった（現在は 2 回目が「クラスではない」で落ちる）。
 呼ぶ箇所は無い。
@@ -219,7 +219,7 @@ TS2339 のうち 247 件以上が `'Row'` / `'Map'` / `'Table'` / `'Rubberband'`
 
 - `OZ.Class` / `implement` / `extend` / `dispatch`（参照 0・`arguments.callee` 依存）。
 - ES5 polyfill 群（`js/oz.js` の `Function.prototype.bind` と `Array.prototype.*`、
-  [`js/globals.js`](js/globals.js) の `endsWith` / `trim` / `Object.create`）。**すべて `if (!X)` ガード付きで、
+  [`frontend/js/globals.js`](frontend/js/globals.js) の `endsWith` / `trim` / `Object.create`）。**すべて `if (!X)` ガード付きで、
   ネイティブがある実行系では本体が一度も評価されない**＝「微妙に違う実装で上書きしていた」ことは
   原理的に起こり得ない。jsdom と Chromium 151 の両方でネイティブ実在を実測した。
 - 非標準の静的版（`Array.indexOf` ほか 7 本、`String.trim`）は**ネイティブに無いので実際に
@@ -228,28 +228,28 @@ TS2339 のうち 247 件以上が `'Row'` / `'Map'` / `'Table'` / `'Rubberband'`
 
 **挙動不変の例外として直した 2 件**（暗黙グローバル）。
 
-- [`js/io.js`](js/io.js) の `req = r[1]`（`var` 抜け）、[`js/oz.js`](js/oz.js) の `var x = (y = 0)`（`y` が暗黙グローバル）。
+- [`frontend/js/io.js`](frontend/js/io.js) の `req = r[1]`（`var` 抜け）、[`frontend/js/oz.js`](frontend/js/oz.js) の `var x = (y = 0)`（`y` が暗黙グローバル）。
 - 根拠は **ESM が常に strict** であること。Vite の dev / build 経路では既に `ReferenceError` で落ちており、
   sloppy な `window.eval` で動く Node ハーネスとの間で「現行挙動」が割れている。再現すべき単一の挙動が
   存在しないので修正側を採った。**PG18 introspection の判断（well-formed でない XML を再現しない）と同じ論法**。
 - 実測（Vite dev + Chromium、`?backend=php-file`）: 修正前は `pageerror: req is not defined` ×2 で
   `SQL.designer.io` が生えない＝**アプリが起動しない**。修正後は pageerror 0 件。
-  `oz.js` 側の到達経路はミニマップの mousedown（`OZ.DOM.pos` の唯一の呼び出し元は [`js/map.js`](js/map.js)）で、
+  `oz.js` 側の到達経路はミニマップの mousedown（`OZ.DOM.pos` の唯一の呼び出し元は [`frontend/js/map.js`](frontend/js/map.js)）で、
   同じく修正前は `ReferenceError: y is not defined` を実測した。
 - どちらも golden の経路は通らないので `git diff tests/golden/` は空のまま。
 
 **今回やらなかったこと（理由つき）**。
 
 - **`DATATYPES = false` → `null` の是正を見送った**。`== false` / `!DATATYPES` は全 12 箇所中 0 件で、
-  唯一の真偽評価が [`js/wwwsqldesigner.js:353`](js/wwwsqldesigner.js#L353) の `window.DATATYPES.xml`。
+  唯一の真偽評価が [`frontend/js/wwwsqldesigner.js:353`](frontend/js/wwwsqldesigner.js#L353) の `window.DATATYPES.xml`。
   `false` なら `undefined`（例外にならない）、`null` なら **TypeError**。`checkJs` を立てない段階2 では
   診断が 1 件も変わらず利益ゼロで、この分岐は §4 の XML 書き出し撤去で丸ごと消える。
   `typeIndex` / `fkTypeFor` も同じ扱いにした。
-- **[`js/wwwsqldesigner.js:356`](js/wwwsqldesigner.js#L356) の未定義 `e` を触っていない**。代入ではなく読み取りなので
+- **[`frontend/js/wwwsqldesigner.js:356`](frontend/js/wwwsqldesigner.js#L356) の未定義 `e` を触っていない**。代入ではなく読み取りなので
   strict / sloppy で挙動が割れておらず、到達不能（`XMLSerializer` が無い環境のみ）。直すには
   「何を表示すべきか」を発明することになる。段階3 の計測で `TS2304` が 1 件だけ残り、本物のバグを指す
   マーカーになる。
-- **[`js/wwwsqldesigner.js:215`](js/wwwsqldesigner.js#L215) の `eval`（cookie）も据え置き**。形式が `{k:'v'}` で JSON ではなく
+- **[`frontend/js/wwwsqldesigner.js:215`](frontend/js/wwwsqldesigner.js#L215) の `eval`（cookie）も据え置き**。形式が `{k:'v'}` で JSON ではなく
   `JSON.parse` に単純置換できない。§4 の IO 移植で消える。
 - **`SQL.Visual` を継承していない 7 クラス**（`IO` / `Toggle` / `TableManager` / `RowManager` /
   `KeyManager` / `Window` / `Options`）は class 化していない。継承が無いので「クラスを知らない」問題も
@@ -323,7 +323,8 @@ TypeError: Cannot read properties of undefined (reading 'config')
 upstream: [vitest#10692](https://github.com/vitest-dev/vitest/issues/10692) /
 [#10812](https://github.com/vitest-dev/vitest/issues/10812) /
 [PR#10843](https://github.com/vitest-dev/vitest/pull/10843)（**いずれも未修正**。4.1.10 が最新で、
-v5.0.0-beta.7 でも同じエラーが報告されている）。
+v5.0.0-beta.7 でも同じエラーが報告されている ——**2026-08-11 時点の状態**。
+**最新版がどれかは腐る**ので、以後の観測は下の 4.1.11 の節が持つ）。
 
 **採った対策**: [`scripts/vitest.mjs`](scripts/vitest.mjs) が cwd を `fs.realpathSync.native` と
 一致する形に正規化してから vitest CLI を起動する。判定は [`scripts/canonical-cwd.mjs`](scripts/canonical-cwd.mjs)
@@ -371,6 +372,28 @@ vitest のバージョンを固定していて、**上げると必ず 1 回赤�
 
 **Linux では起きない**（`process.cwd()` が常に解決済みの物理パスを返すため）。HANDOVER §2 で
 主経路が Docker に移れば本件は消えるが、Windows でのローカル開発が続く限りラッパーは残す。
+
+#### ★ 4.1.11 で撤去条件 2 を実際に回した（2026-08-27）—— **まだ直っていない**
+
+Dependabot の [#100](https://github.com/propagandist/grabado/pull/100) が vitest を
+**4.1.10 → 4.1.11** に上げようとし、**`workarounds.test.ts` が設計どおり赤くなった**
+（`expected '4.1.11' to be '4.1.10'`）。**仕掛けが働いた形**なので、指示どおり棚卸しをした。
+
+`vitest.config.ts` のガードを外し、**小文字 cwd で `node_modules/vitest/vitest.mjs` を直に起動**:
+
+```
+ Test Files  24 failed (24)
+      Tests  no tests
+TypeError: Cannot read properties of undefined (reading 'config')
+```
+
+**症状がそのまま再現した。1 回目で落ちたので「20/20 緑」は満たさない**（20 回は回していない ——
+**1 回でも落ちれば条件は崩れる**）。よって**回避策は残し、`KNOWN_BROKEN_VITEST` を 4.1.11 へ**更新した。
+
+**★★ ガードを外さないと検証にならない。** 外さずに走らせると、**こちらの `assertCanonicalCwd` が
+先に止める** —— 落ちた理由が「vitest のバグ」なのか「自分のガード」なのか区別できず、
+**「まだ壊れている」と読み違える**。**実際、最初の 1 回はそれで誤読しかけた。**
+**次に版が上がったときも、まずガードを外すこと。**
 
 ### 2026-08-11 HANDOVER §3「フロント TS 化」段階3-0 — Node ハーネスを IIFE バンドルに載せ替えた
 
@@ -421,7 +444,7 @@ vitest のバージョンを固定していて、**上げると必ず 1 回赤�
 ESM で配る側（`dev` / `build` / `test:browser` / `test:dist`）は常に strict なのに `window.eval` 側は
 sloppy、という乖離を縮めるために前置した。rolldown の IIFE 出力自体には `"use strict"` が付かない。
 安全性は事前に実測済み（`js/` に `with` / `arguments.callee` / 8 進リテラルは 0 件。`eval` は
-[`js/wwwsqldesigner.js:215`](js/wwwsqldesigner.js#L215) の 1 件だけで、外側で `var` 宣言済みの `obj` に
+[`frontend/js/wwwsqldesigner.js:215`](frontend/js/wwwsqldesigner.js#L215) の 1 件だけで、外側で `var` 宣言済みの `obj` に
 代入する**式評価**なので strict でも挙動が変わらない）。実際に `npm test` は緑のまま。
 
 **しかし暗黙グローバルは、これを入れても `npm test` では捕まらない。** jsdom の `Window` は vm の
@@ -451,8 +474,8 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 段階3 の本体（`js/` 18 本・4,183 行の `.ts` 化）に着手した。**一度に全部やらない**。
 `tsc --allowJs --checkJs --noEmit --strict --noUncheckedIndexedAccess` での実測は **1,281 件**あり、
 1 PR で潰すと golden に差分が出たときに原因ファイルを切り分けられない（段階1 と同じ論法）。
-本 PR は読み込み順の先頭 3 本 — [`js/oz.ts`](js/oz.ts) / [`js/config.ts`](js/config.ts) /
-[`js/globals.ts`](js/globals.ts)（462 行・101 診断）— に絞り、**残り 15 本が従うイディオムを確定する**
+本 PR は読み込み順の先頭 3 本 — [`frontend/js/oz.ts`](frontend/js/oz.ts) / [`frontend/js/config.ts`](frontend/js/config.ts) /
+[`frontend/js/globals.ts`](frontend/js/globals.ts)（462 行・101 診断）— に絞り、**残り 15 本が従うイディオムを確定する**
 ことを目的にした。構成は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.1・§5.5、走らせ方は
 [`docs/TESTING.md`](docs/TESTING.md)。ここには判断だけ残す。
 
@@ -478,7 +501,7 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 同ファイルは `SqlDesigner` とデバッグ用ハンドルだけに縮んだ。
 
 **イディオム B: 読み込み順の先頭から進める。**
-[`src/app.ts`](src/app.ts) の順に前から `.ts` 化すれば、`.ts` 側が参照するシンボルは常に
+[`frontend/src/app.ts`](frontend/src/app.ts) の順に前から `.ts` 化すれば、`.ts` 側が参照するシンボルは常に
 **既に `.ts` 化済み**で import に置き換えられる。葉から進めると未 `.ts` のグローバルに対する
 ambient 宣言が要り、その宣言自体が後で捨てる作業になる。**移行用の ambient 宣言ファイルは作らない**。
 例外は実行時インスタンス（`SQL.designer` を `table` / `row` / `relation` / `rowmanager` が見る 6 箇所）で、
@@ -504,13 +527,13 @@ import にすると循環するため `SQL` 名前空間オブジェクト経由
 必ず真になるので else 側には落ちない。実測を見て初めて「存在するが到達しない」と分かる部類で、
 `in` の結果だけを見て撤去していたら判断を誤っていた。
 
-これで [`js/oz.ts`](js/oz.ts) から消したもの: 参照 0 の `select` / `gecko` / `webkit` / `khtml`、
+これで [`frontend/js/oz.ts`](frontend/js/oz.ts) から消したもの: 参照 0 の `select` / `gecko` / `webkit` / `khtml`、
 `Event.add` / `remove` の `attachEvent` / `detachEvent` 分岐、`Event.stop` / `prevent` / `target` の
 IE フォールバック、`Style.get` の `currentStyle`、`Style.set` の opacity→filter と float→styleFloat、
 `DOM.pos` の opera 分岐、`Request` の `ActiveXObject` 分岐。299 → 354 行（消したぶんより型注釈と根拠コメントのほうが多い）。
 
-**`OZ.ie` / `OZ.opera` はプロパティだけ残した。** [`js/tablemanager.js:217`](js/tablemanager.js#L217)（IE6 で
-`select()` が throw する回避）と [`js/io.js:689`](js/io.js#L689)（F2 の preventDefault）がまだ `.js` で読む。
+**`OZ.ie` / `OZ.opera` はプロパティだけ残した。** [`frontend/js/tablemanager.js:217`](frontend/js/tablemanager.js#L217)（IE6 で
+`select()` が throw する回避）と [`frontend/js/io.js:689`](frontend/js/io.js#L689)（F2 の preventDefault）がまだ `.js` で読む。
 元式は上表のとおり両実行系で false なので値は `false` 固定にし、参照側を `.ts` 化する段階3-3 で
 分岐ごと畳んで消す。
 
@@ -543,7 +566,7 @@ TS の制御フロー解析が無限ループと認識するのは `while (true)
 
 **`window.SQL` への代入だけキャストが要る。** まだ `.js` の 15 本が `SQL.Visual = Visual;` と
 トップレベルで生やしており、TS は `allowJs` のもとで**その代入から `SQL` のグローバル型を合成する**。
-結果 `window.SQL` の型は「[`js/globals.ts`](js/globals.ts) の `SqlNamespace` ∩ 合成型」になり、
+結果 `window.SQL` の型は「[`frontend/js/globals.ts`](frontend/js/globals.ts) の `SqlNamespace` ∩ 合成型」になり、
 まだ生えていないクラス 14 個を要求してくる。`as unknown as typeof window.SQL` で受けた。
 段階3-3 で `.js` が尽きれば合成が止まり、素の代入に戻せる。
 
@@ -554,7 +577,7 @@ TS の制御フロー解析が無限ループと認識するのは `while (true)
 `TS2339: Property 'toXML' does not exist on type 'new () => SqlDesigner'` で落ちる。
 
 **`DATATYPES` と `LOCALE` はモジュールローカル変数にしなかった。**
-[`js/wwwsqldesigner.js:110,370`](js/wwwsqldesigner.js#L110) と両ハーネスが `window.DATATYPES = …` で
+[`frontend/js/wwwsqldesigner.js:110,370`](frontend/js/wwwsqldesigner.js#L110) と両ハーネスが `window.DATATYPES = …` で
 差し替え、`window.LOCALE[n] = v` で書き込む。参照経路を現行と 1 バイトも変えないため、
 `js/globals.ts` 側も `window.` 越しに読む形を保った。
 
@@ -571,8 +594,8 @@ TS の制御フロー解析が無限ループと認識するのは `while (true)
 ダイアログ開閉の `DOM.win`+`scroll`／POST での `Request`）。
 
 > 副産物の記録（いずれも `develop` 上で同じ操作を流し、**現行仕様であって段階3-1 の回帰ではない**
-> ことを確認済み）: **テーブルは Delete キーで消えない。** [`js/table.js`](js/table.js) の `click` が
-> `#area` へのバブリングを止めるため [`js/tablemanager.js:158`](js/tablemanager.js#L158) の
+> ことを確認済み）: **テーブルは Delete キーで消えない。** [`frontend/js/table.js`](frontend/js/table.js) の `click` が
+> `#area` へのバブリングを止めるため [`frontend/js/tablemanager.js:158`](frontend/js/tablemanager.js#L158) の
 > `rowManager.select(false)` が走らず、`TableManager.press` が「row 選択中」で早期 return する
 > （同 :242）。`#removetable` ボタンなら消える。また **`#addtable` は追加モードに入るだけ**で、
 > 実際の生成は `#area` のクリック（同 :142-161）、その直後に編集ダイアログが開いて `#background` が
@@ -581,9 +604,9 @@ TS の制御フロー解析が無限ループと認識するのは `while (true)
 ### 2026-08-12 HANDOVER §3「フロント TS 化」段階3-2 — 描画中核 7 本を `.ts` 化し、`dom` バッグの型を決めた
 
 段階3-1 で名指ししていた本丸（`dom` バッグの 3 形態）に着手した。対象は
-[`js/visual.ts`](js/visual.ts) / [`row.ts`](js/row.ts) / [`table.ts`](js/table.ts) /
-[`relation.ts`](js/relation.ts) / [`key.ts`](js/key.ts) / [`rubberband.ts`](js/rubberband.ts) /
-[`map.ts`](js/map.ts) の 1,589 行で、`tsc --allowJs --checkJs --strict --noUncheckedIndexedAccess`
+[`frontend/js/visual.ts`](frontend/js/visual.ts) / [`row.ts`](frontend/js/row.ts) / [`table.ts`](frontend/js/table.ts) /
+[`relation.ts`](frontend/js/relation.ts) / [`key.ts`](frontend/js/key.ts) / [`rubberband.ts`](frontend/js/rubberband.ts) /
+[`map.ts`](frontend/js/map.ts) の 1,589 行で、`tsc --allowJs --checkJs --strict --noUncheckedIndexedAccess`
 実測は **550 件**（TS2532 200 / TS2339 125 / TS2304 114 / TS7006 66 / TS2531 29 / TS7008 9 /
 TS18048 3 / TS2403 2 / TS7053 1 / TS2415 1）。構成は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 §5.1・§5.4・§5.5。ここには判断だけ残す。
@@ -605,7 +628,7 @@ TS18048 3 / TS2403 2 / TS7053 1 / TS2415 1）。構成は [`docs/ARCHITECTURE.md
 [`tsconfig.json`](tsconfig.json) の `target` が ES2022 ＝ **`useDefineForClassFields` が既定 true**
 なので、`.ts` でプロパティ宣言を書くと `dom;` がクラス本体に emit され、構築時に own property が
 生えて挙動が変わる。`!`（definite assignment assertion）でも emit されるので `declare` でなければ
-ならない。Vite/esbuild も同じフラグを見るため dist にも出る。逆に [`js/table.ts`](js/table.ts) の
+ならない。Vite/esbuild も同じフラグを見るため dist にも出る。逆に [`frontend/js/table.ts`](frontend/js/table.ts) の
 `static active` / `x` / `y` には**付けない**（現行が既に `static active;` を emit している）。
 段階3-3 / 3-4 でも効き続ける規則なので `docs/ARCHITECTURE.md` §5.5 の規約に足した。
 
@@ -620,7 +643,7 @@ TS18048 3 / TS2403 2 / TS7053 1 / TS2415 1）。構成は [`docs/ARCHITECTURE.md
 `data` は型引数にしていない。基底 `setTitle()` が `this.data.title` を書くので、型引数にすると
 そこにもキャストが要る。`Row` / `Table` が `declare data: RowData`（`extends VisualData` なので
 共変で合法）で狭めれば、基底のキャストは `dom` 由来の 4 個（`_init` 1 / `destroy` 2 / `setTitle` 1）に
-収まり、[`js/visual.ts`](js/visual.ts) 56 行の中に閉じる。見返りに `this.dom.*` の読み出し
+収まり、[`frontend/js/visual.ts`](frontend/js/visual.ts) 56 行の中に閉じる。見返りに `this.dom.*` の読み出し
 **172 箇所**（row 74 / table 36 / relation 35 / map 16 / rubberband 7 / visual 4）が注釈ゼロで通る。
 
 **形態 (ii)（`this.dom[id] = elm`）は段階3-3 に持ち越せる。** `io` / `keymanager` / `rowmanager` /
@@ -644,7 +667,7 @@ JSDoc に 1 回書く**ほうが読み手に伝わる。各キーの要素型（
 タプルにすると `noUncheckedIndexedAccess` 下でも `this.dom[0]` の 12 箇所が `!` 不要になり、
 代償は初期化の `as unknown as` 1 個だけ。
 
-**`this.owner`（Designer）の型は [`js/globals.ts`](js/globals.ts) の `SqlDesigner` に集約した。**
+**`this.owner`（Designer）の型は [`frontend/js/globals.ts`](frontend/js/globals.ts) の `SqlDesigner` に集約した。**
 イディオム B が禁じているのは「移行用の ambient 宣言**ファイル**を作る」ことで、`js/globals.ts` は
 実体のあるモジュールかつ既に `SQL.designer` の宣言責任を持つ。7 本にローカルの構造的 interface を
 書く案は、同じ Designer の別々の面を 7 回書くことになり、**面がずれても誰も気づかない**
@@ -666,7 +689,7 @@ JSDoc に 1 回書く**ほうが読み手に伝わる。各キーの要素型（
 （型引数を渡すため必須で、`visual.ts` は 7 本の先頭なので順序も安全）。イディオム B の例外
 （`SQL.designer` を名前空間経由で据え置く）と同じ論理が、クラス参照にも一貫して適用できた。
 
-[`js/globals.ts`](js/globals.ts) の `as unknown as typeof window.SQL` は**残る**。合成に寄与する
+[`frontend/js/globals.ts`](frontend/js/globals.ts) の `as unknown as typeof window.SQL` は**残る**。合成に寄与する
 `.js` が 15 本 → 8 本に減っただけで、素の代入に戻せるのは 3-3 完了時（コメントの数字を更新した）。
 
 **`js/oz.ts` に 2 件の型変更を入れた**（実行コードは無変更）。どちらも「`.ts` から初めて呼んで
@@ -687,10 +710,10 @@ JSDoc に 1 回書く**ほうが読み手に伝わる。各キーの要素型（
 
 | 箇所 | 症状 | 変更 |
 |---|---|---|
-| [`js/relation.ts`](js/relation.ts) `redraw()` | `var t1` / `t2` が `HTMLElement` → `number` の再宣言で TS2403。`t1++` が lvalue なので `as` では回避不能 | 要素側を `e1` / `e2` に改名（宣言 2 ＋ 読み出し 6 ＝ 8 行）。`:201` 以降の t1 / t2 の読み出し 10 箇所は無変更 |
-| [`js/table.ts`](js/table.ts) `down()` | `var t = OZ.Event.target(e)` と `var t = Table` が TS2403 | 前者を `el` に改名（2 行。読み出しは直後の 1 行のみ） |
-| [`js/row.ts`](js/row.ts) `fromXML()` | `var re` が `string \| null` → `RegExp` の再宣言で TS2403 | 後者を `quoteRe` に改名（2 行） |
-| [`js/table.ts`](js/table.ts) `addKey` | 仮引数名 `name` だが実引数は `Key` の第 2 引数＝`type` に渡っている | `addKey(type?: string)` に改名（1 語。`arguments` 不使用なので emit 上の意味は変わらない） |
+| [`frontend/js/relation.ts`](frontend/js/relation.ts) `redraw()` | `var t1` / `t2` が `HTMLElement` → `number` の再宣言で TS2403。`t1++` が lvalue なので `as` では回避不能 | 要素側を `e1` / `e2` に改名（宣言 2 ＋ 読み出し 6 ＝ 8 行）。`:201` 以降の t1 / t2 の読み出し 10 箇所は無変更 |
+| [`frontend/js/table.ts`](frontend/js/table.ts) `down()` | `var t = OZ.Event.target(e)` と `var t = Table` が TS2403 | 前者を `el` に改名（2 行。読み出しは直後の 1 行のみ） |
+| [`frontend/js/row.ts`](frontend/js/row.ts) `fromXML()` | `var re` が `string \| null` → `RegExp` の再宣言で TS2403 | 後者を `quoteRe` に改名（2 行） |
+| [`frontend/js/table.ts`](frontend/js/table.ts) `addKey` | 仮引数名 `name` だが実引数は `Key` の第 2 引数＝`type` に渡っている | `addKey(type?: string)` に改名（1 語。`arguments` 不使用なので emit 上の意味は変わらない） |
 
 **`var event` の TS2403（table 2 箇所 / map 2 箇所）はコード変更なしで消えた。** TS2403 は
 **宣言型の一致**を見るので、両分岐に同じ注釈 `MouseEvent | Touch` を書けばよい（読むのは
@@ -709,7 +732,7 @@ JSDoc に 1 回書く**ほうが読み手に伝わる。各キーの要素型（
   出さない」前例は**その false を誰も消費していない**から成立していたが、ここは
   `js/wwwsqldesigner.js:395,406` が `if (!r1) { continue; }` で実際に消費している。`Row` と偽ると
   3-3 でその分岐が「型上ありえない」ことになり、型が実在する制御フローを隠す。唯一ガードなしで
-  受ける [`js/key.ts`](js/key.ts) を `as Row` 1 キャストで通した。
+  受ける [`frontend/js/key.ts`](frontend/js/key.ts) を `as Row` 1 キャストで通した。
 - **`Table` の static は「読める形」だけ型に出した**（`static active: Table[]`）。`Table[] | false` に
   すると `move()` と `up()` の `t.active.length` が 2 箇所エラーになり、イディオム C でガードを足せない。
   `false` は「ドラッグ終了」の印で、`up()` がリスナーを外しているので次の `down()` が代入するまで
@@ -748,7 +771,7 @@ row 選択と解除 / PK 追加 / ミニマップのドラッグ / ラバーバ�
 > 確認済み。差分の中身まで完全に一致した）: **同名のテーブルが 2 つあると `fromXML` でリレーションが
 > 復元されない。** 既定名（`new table`）のまま 2 つ作って FK を張り、`toXML` → `fromXML` → `toXML` を
 > 往復すると `<relation table="new table" row="id" />` が消える。
-> [`js/wwwsqldesigner.js`](js/wwwsqldesigner.js) の `fromXML` が `findNamedTable(tname)` で
+> [`frontend/js/wwwsqldesigner.js`](frontend/js/wwwsqldesigner.js) の `fromXML` が `findNamedTable(tname)` で
 > 名前解決しており、参照元と参照先が同名だと両端が同じテーブルに解決されるため。
 > §4 の IO 作り替えで名前ではなく id で参照する形にすれば解消する（`formatVersion` 側の設計に含める）。
 
@@ -789,7 +812,7 @@ prototype メソッド → クラス本体のメソッド、末尾に `SQL.X = X
 メソッドをインスタンスの own property で上書きする」形は class でも同じ意味で動く。`OZ.Request` や
 `SQL.Window.open` に**同一の関数オブジェクト**を渡すための現行の書き方なので、変えない。
 
-**[`js/io.js`](js/io.js)（695 行・35 メソッド）は機械変換した。** 手で書き写すと差分の中に
+**[`frontend/js/io.js`](frontend/js/io.js)（695 行・35 メソッド）は機械変換した。** 手で書き写すと差分の中に
 写し間違いが紛れ込む。awk で「トップレベルの `SQL.IO.prototype.X = function (…) {` をメソッド
 シグネチャに」「トップレベルの `};` を `}` に」「本文を 4 スペース字下げ」だけを行い、
 **空白を無視した diff がシグネチャ 35 行と閉じ括弧 36 行、つまり変換対象そのものだけである**ことを
@@ -830,10 +853,10 @@ prototype メソッド → クラス本体のメソッド、末尾に `SQL.X = X
 
 ### 2026-08-12 HANDOVER §3「フロント TS 化」段階3-3b — 残り 8 本を `.ts` 化し、`js/` から `.js` を無くした
 
-段階3 の最後の実作業。[`js/toggle.ts`](js/toggle.ts) / [`io.ts`](js/io.ts) /
-[`tablemanager.ts`](js/tablemanager.ts) / [`rowmanager.ts`](js/rowmanager.ts) /
-[`keymanager.ts`](js/keymanager.ts) / [`window.ts`](js/window.ts) / [`options.ts`](js/options.ts) /
-[`wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の 8 本・2,132 行（診断 619 件）を `.ts` にした。
+段階3 の最後の実作業。[`frontend/js/toggle.ts`](frontend/js/toggle.ts) / [`io.ts`](frontend/js/io.ts) /
+[`tablemanager.ts`](frontend/js/tablemanager.ts) / [`rowmanager.ts`](frontend/js/rowmanager.ts) /
+[`keymanager.ts`](frontend/js/keymanager.ts) / [`window.ts`](frontend/js/window.ts) / [`options.ts`](frontend/js/options.ts) /
+[`wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) の 8 本・2,132 行（診断 619 件）を `.ts` にした。
 イディオムは段階3-1・3-2 で確定済みなので、ここには**この段階に固有の判断だけ**残す。
 規約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.5。
 
@@ -888,7 +911,7 @@ interface が持っていた面（`getOption` / `window` / `tableManager` …）
 
 あわせて **`OZ.ie` / `OZ.opera` をプロパティごと撤去**した（段階3-1 で「参照側を `.ts` 化する
 段階3-3 で分岐ごと畳んで消す」と予告していた分）。参照は
-[`js/io.ts`](js/io.ts) の F2 `preventDefault` と [`js/tablemanager.ts`](js/tablemanager.ts) の
+[`frontend/js/io.ts`](frontend/js/io.ts) の F2 `preventDefault` と [`frontend/js/tablemanager.ts`](frontend/js/tablemanager.ts) の
 IE6 `select()` 回避の 2 箇所だけで、どちらも実測で false 固定。
 
 **型のためのコード変更 3 件**（段階3-1 の 1 件、3-2 の 4 件に続く 6〜8 件目）。
@@ -896,8 +919,8 @@ IE6 `select()` 回避の 2 箇所だけで、どちらも実測で false 固定�
 | 箇所 | 症状 | 変更 |
 |---|---|---|
 | `io` / `tablemanager` / `keymanager` の 2 つ目の id ループ | 同名の `var elm` が「ボタン（`HTMLInputElement`）」と「ラベル」で再宣言され TS2403 | ラベル側を `labelElm` に改名（各 2 行。読み出しは直後の 1 行だけ） |
-| [`js/tablemanager.ts`](js/tablemanager.ts) `click()` | `newtable.addKey("PRIMARY", "")` が 2 引数（TS2554） | 第 2 引数を落とした。`Table.addKey` は 1 引数しか読まず、[`js/table.ts`](js/table.ts) 側に「是正は段階3-3 で」と予告コメントが入っていた |
-| [`js/table.ts`](js/table.ts) `findNamedRow` | 引数が `string` 固定だが、`Designer.fromXML` は属性欠落時に `null` を渡しうる | シグネチャを `string \| null` に広げた（型だけ） |
+| [`frontend/js/tablemanager.ts`](frontend/js/tablemanager.ts) `click()` | `newtable.addKey("PRIMARY", "")` が 2 引数（TS2554） | 第 2 引数を落とした。`Table.addKey` は 1 引数しか読まず、[`frontend/js/table.ts`](frontend/js/table.ts) 側に「是正は段階3-3 で」と予告コメントが入っていた |
+| [`frontend/js/table.ts`](frontend/js/table.ts) `findNamedRow` | 引数が `string` 固定だが、`Designer.fromXML` は属性欠落時に `null` を渡しうる | シグネチャを `string \| null` に広げた（型だけ） |
 
 **逆に、型のために増やしかけた emit を 2 件戻した。** バンドル diff の副次判定（下記）が
 説明のつかない差分として拾ったもの。(a) `removeSelection` で `var legacy = sel as …` と
@@ -907,7 +930,7 @@ IE6 `select()` 回避の 2 箇所だけで、どちらも実測で false 固定�
 
 **本物のバグを型で隠さない（マーカーとして残したもの）。**
 
-- [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) `toXML()` の**未定義 `e`**（段階2 が意図して
+- [`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) `toXML()` の**未定義 `e`**（段階2 が意図して
   残した TS2304 1 件）。`// @ts-expect-error` ＋ 根拠コメントで通した。`@ts-expect-error` は
   「エラーが消えたらそれ自体がエラーになる」ので、§4 の XML 書き出し撤去でこの分岐が消えたときに
   必ず気づける。到達不能（`XMLSerializer` が無い実行系のみ）なので撤去はしない。
@@ -918,11 +941,11 @@ IE6 `select()` 回避の 2 箇所だけで、どちらも実測で false 固定�
 
 **`.js` が尽きたことで回収したもの。**
 
-- [`js/globals.ts`](js/globals.ts) の `window.SQL = SQL as unknown as typeof window.SQL` が
+- [`frontend/js/globals.ts`](frontend/js/globals.ts) の `window.SQL = SQL as unknown as typeof window.SQL` が
   **素の代入に戻った**（`.js` のトップレベル代入からグローバル型が合成される問題が消えたため。
   段階3-1 から予告していた回収）。
 - `types/globals.d.ts` を**削除**。最後まで残っていた `window.d`（デバッグ用ハンドル）の宣言は
-  [`src/main.ts`](src/main.ts) の `declare global` へ引き取った。
+  [`frontend/src/main.ts`](frontend/src/main.ts) の `declare global` へ引き取った。
 - [`tsconfig.json`](tsconfig.json) から **`checkJs` を落とした**。`allowJs` は残す —
   [`vitest.config.ts`](vitest.config.ts) が [`scripts/canonical-cwd.mjs`](scripts/canonical-cwd.mjs) を
   import しているため（`js/` のためではない）。`include` からも `types/**/*.d.ts` を外した。
@@ -990,9 +1013,9 @@ F2 quicksave、テーブル編集ダイアログの `setSelectionRange`、`clien
 
 **`SQL.Map` / `SQL.Window` の名前ズレは「公開名」概念ごと消滅した。** `Minimap` は識別子 1 本になり
 （ES 標準 `Map` との衝突は最初から存在しない）、`Window` は参照側が `import { Window as SqlWindow }` で
-受ける形に統一された。[`js/map.ts`](js/map.ts) の「公開名 `SQL.Map` は現行のまま」という注釈は撤回。
+受ける形に統一された。[`frontend/js/map.ts`](frontend/js/map.ts) の「公開名 `SQL.Map` は現行のまま」という注釈は撤回。
 
-**pub/sub は `this` 束縛が消えても同値。** `_subscribers` の参照は [`js/globals.ts`](js/globals.ts) 内だけ
+**pub/sub は `this` 束縛が消えても同値。** `_subscribers` の参照は [`frontend/js/globals.ts`](frontend/js/globals.ts) 内だけ
 （＝モジュールプライベートに落とせる）、`SQL` オブジェクトは 1 個しか存在しない、呼び出しは全て
 メソッド呼び出しの形で関数値を取り出して渡す箇所が 0 件 — の 3 つが揃っているため。
 **`escape` は `lib.dom` の非推奨グローバルと同名**だが、`js/` 全体に裸の `escape(` 呼び出しが 0 件なので
@@ -1026,7 +1049,7 @@ untracked も無し＝`npm run golden:update` をこの PR で一度も打って
 両方で流し、**18/18・pageerror 0 件**（生成経路が全部変わる PR なので必須）。今回は検証を
 Playwright の一時 spec に起こして機械実行した（リポジトリには入れていない）。副産物として
 **`#keyleft`（`<<`）が avail → fields の追加、`#keyright`（`>>`）が fields からの削除**であること
-（[`js/keymanager.ts`](js/keymanager.ts) の `left()` / `right()` はボタンの左右と逆の語感になっている）と、
+（[`frontend/js/keymanager.ts`](frontend/js/keymanager.ts) の `left()` / `right()` はボタンの左右と逆の語感になっている）と、
 `clientsql` は `output.xsl` を `OZ.Request` で取りに行くので **`#textarea` が埋まるまで待つ必要がある**
 ことを確認している。一巡で出る console error 2 件（Dropbox CDN の遮断、F2 quicksave の 404）は
 ネットワーク由来で JS 例外ではない。
@@ -1044,11 +1067,11 @@ Playwright の一時 spec に起こして機械実行した（リポジトリに
 | 実行系 | 段階3-4a まで | 3-4b 以降 |
 |---|---|---|
 | Node（`npm test`） | `window.OZ.Request = …` → `window.eval("new SQL.Designer();")` → `window.SQL.designer` | `tests/node/app-entry.ts` が載せる `window.__grabado = { OZ, Designer }` → `api.OZ.Request = …` → `new api.Designer()` の戻り値 |
-| page（`test:browser` / `test:dist` / `known-issues`） | `window.SQL.designer` | [`src/main.ts`](src/main.ts) が置く **`window.d`**（upstream 由来のデバッグハンドルをテスト API に昇格） |
+| page（`test:browser` / `test:dist` / `known-issues`） | `window.SQL.designer` | [`frontend/src/main.ts`](frontend/src/main.ts) が置く **`window.d`**（upstream 由来のデバッグハンドルをテスト API に昇格） |
 
 **node 側は「テスト専用エントリ」を 1 本足す形にした。** [`tests/node/app-entry.ts`](tests/node/app-entry.ts) は
 `import "../../src/app.ts"` に続けてハンドルを載せるだけで、**読み込み順の定義は
-[`src/app.ts`](src/app.ts) の 1 か所のまま**。ハーネスの変更は `lib.entry` の 1 行と参照の付け替えだけで、
+[`frontend/src/app.ts`](frontend/src/app.ts) の 1 か所のまま**。ハーネスの変更は `lib.entry` の 1 行と参照の付け替えだけで、
 **`OZ.Request` を fs 読みに差し替える関数の中身は 1 文字も変えていない**（＝測っているものが変わらない
 ので、golden への影響がゼロだと事前に言い切れる）。`window.eval` の呼び方も不変。
 
@@ -1061,7 +1084,7 @@ rolldown の IIFE 出力形（`lib.name` が変数として emit されること
 新しい赤を引きうる）。§4 で「フックを 0 にする」ときの本命として申し送る。
 
 **page 側は `window.d` に寄せた。** 新しい名前を発明するより、既に存在するハンドルを公開面として
-文書化するほうが面が増えない（[`src/main.ts`](src/main.ts) のコメントが利用手順として機能している）。
+文書化するほうが面が増えない（[`frontend/src/main.ts`](frontend/src/main.ts) のコメントが利用手順として機能している）。
 タイミングは現行が `SQL.designer = this`（コンストラクタ先頭）、新形が `new Designer()` の戻り後だが、
 page 側テストはすべて `waitForFunction` / `goto` 後のポーリングなので観測できない。バンドル内部から
 `SQL.designer` を読む経路（`Table.snap()` などが同期 init 中に読む）は `SQL.designer = this` を
@@ -1081,13 +1104,13 @@ grep により自明になっていた。
 
 | 対象 | 処置 |
 |---|---|
-| [`js/oz.ts`](js/oz.ts) `window.OZ` ＋ `declare global` | 削除（最後の消費者だった Node ハーネスは 3-4b で `window.__grabado` 経由に） |
-| [`js/config.ts`](js/config.ts) `window.CONFIG` ＋ `declare global` | 削除（読み手 0・段階3-3b の時点でデッドだった） |
-| [`js/globals.ts`](js/globals.ts) `window._` / `window.SQL` | 削除 |
-| [`js/globals.ts`](js/globals.ts) `window.LOCALE` | `export const LOCALE` にモジュール化 |
-| [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) `SQL.Designer = Designer` | 削除（`SqlNamespace` は `{ designer }` だけになった） |
-| [`src/main.ts`](src/main.ts) `new window.SQL.Designer()` | 値 import して `new Designer()` |
-| [`js/globals.ts`](js/globals.ts) `window.DATATYPES` ／ [`src/main.ts`](src/main.ts) `window.d` | **残す**（下記） |
+| [`frontend/js/oz.ts`](frontend/js/oz.ts) `window.OZ` ＋ `declare global` | 削除（最後の消費者だった Node ハーネスは 3-4b で `window.__grabado` 経由に） |
+| [`frontend/js/config.ts`](frontend/js/config.ts) `window.CONFIG` ＋ `declare global` | 削除（読み手 0・段階3-3b の時点でデッドだった） |
+| [`frontend/js/globals.ts`](frontend/js/globals.ts) `window._` / `window.SQL` | 削除 |
+| [`frontend/js/globals.ts`](frontend/js/globals.ts) `window.LOCALE` | `export const LOCALE` にモジュール化 |
+| [`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) `SQL.Designer = Designer` | 削除（`SqlNamespace` は `{ designer }` だけになった） |
+| [`frontend/src/main.ts`](frontend/src/main.ts) `new window.SQL.Designer()` | 値 import して `new Designer()` |
+| [`frontend/js/globals.ts`](frontend/js/globals.ts) `window.DATATYPES` ／ [`frontend/src/main.ts`](frontend/src/main.ts) `window.d` | **残す**（下記） |
 
 **出荷コードが持つ `window` 面は `DATATYPES` と `d` の 2 つになった。**
 段階3-4 の到達点は「`window` 面をゼロにする」ではない — `page.evaluate` と `window.eval` は
@@ -1158,9 +1181,9 @@ grep により自明になっていた。
 
 - **新設ファイルは `js/io/` 配下に置く。** HANDOVER §4 の `io/serializer.ts` は物理パスの指定ではなく
   モジュールパスの表記と解釈する（同じ文中の `db/*.custom.xml` も実在しない）。`src/io/` に置くと
-  [`js/io.ts`](js/io.ts) → `src/` の逆向き辺が生え、それを避けるには IO ダイアログごと `src/` へ移す
+  [`frontend/js/io.ts`](frontend/js/io.ts) → `src/` の逆向き辺が生え、それを避けるには IO ダイアログごと `src/` へ移す
   作業が §4 に乗ってしまう。§2 の `frontend/` 集約でどのみち丸ごと動かす。
-- **Dropbox 連携は 4-3 で撤去する**（段階3-3b からの未決を解消）。[`js/io.ts`](js/io.ts) が 150 行以上
+- **Dropbox 連携は 4-3 で撤去する**（段階3-3b からの未決を解消）。[`frontend/js/io.ts`](frontend/js/io.ts) が 150 行以上
   減り、[`index.html`](index.html) の CDN 依存（テストが常に遮断している外部依存）も消える。
   「Docker で各自ローカル稼働・正本は git 管理ファイル・共有は PR」という §2 の形と役割が重複する。
 - **known-issue #2 は §4 で直し、DDL golden の更新も §4 で行う**。JSON 側だけ直して DDL 入力を
@@ -1176,7 +1199,7 @@ grep により自明になっていた。
 `grep -rn "datatypes" db/*/output.xsl` が 0 件で、`xsl:template match=` は `/sql`（9 本すべて）/
 `table` / `row` / `datatype`（`<row>` 直下の要素であって `<datatypes>` ではない）/ `relation` /
 `comment` のみ。つまり DDL 生成が要求する入力は `<sql><table>…</table></sql>` だけで、
-[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の `toXML()` が埋め込むパレット全文と
+[`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) の `toXML()` が埋め込むパレット全文と
 `<!-- Active URL -->` は DDL に影響しない。4-4 で「決定論な DDL 入力 XML」に作り替えても
 DDL golden 63 本が動かないはず、という予測の根拠。**4-4 の完了判定（`git diff tests/golden/ddl/` が空）が
 そのままこの実測の検算になる。**
@@ -1185,18 +1208,18 @@ DDL golden 63 本が動かないはず、という予測の根拠。**4-4 の完
 
 | 箇所 | 旧 | 新 | 同値である理由 |
 |---|---|---|---|
-| [`js/row.ts:169`](js/row.ts#L169) | `var des = SQL.designer;` | `this.owner.owner` | コンストラクタは `this.owner` 代入の**後**に `update(data)` を呼ぶ |
-| [`js/relation.ts:55`](js/relation.ts#L55) | `SQL.designer.getOption("style")` | `this.owner.…` | 直前の 4 行が同じ `this.owner` を前提に組み立てている |
-| [`js/table.ts:311`](js/table.ts#L311) | `SQL.designer.getOption("snap")` | `this.owner.…` | — |
-| [`js/table.ts:461`](js/table.ts#L461) | `SQL.designer.removeSelection()` | `this.owner.…` | `move` / `up` は `down()` が `this.move.bind(this)` で `document` に張る |
-| [`js/table.ts:484`](js/table.ts#L484) | `var d = SQL.designer;` | `var d = this.owner;` | 同じメソッドの末尾が既に `this.owner.sync()` を呼んでいる |
-| [`js/rowmanager.ts:124`](js/rowmanager.ts#L124) | `SQL.designer.getFKTypeFor(…)` | `this.owner.…` | 6 行上（`:118`）が同じ `this.owner` を読んでいる |
-| [`js/wwwsqldesigner.ts:76`](js/wwwsqldesigner.ts#L76) | `SQL.designer = this;` | 削除 | 読み手が 0 になった |
+| [`frontend/js/row.ts:169`](frontend/js/row.ts#L169) | `var des = SQL.designer;` | `this.owner.owner` | コンストラクタは `this.owner` 代入の**後**に `update(data)` を呼ぶ |
+| [`frontend/js/relation.ts:55`](frontend/js/relation.ts#L55) | `SQL.designer.getOption("style")` | `this.owner.…` | 直前の 4 行が同じ `this.owner` を前提に組み立てている |
+| [`frontend/js/table.ts:311`](frontend/js/table.ts#L311) | `SQL.designer.getOption("snap")` | `this.owner.…` | — |
+| [`frontend/js/table.ts:461`](frontend/js/table.ts#L461) | `SQL.designer.removeSelection()` | `this.owner.…` | `move` / `up` は `down()` が `this.move.bind(this)` で `document` に張る |
+| [`frontend/js/table.ts:484`](frontend/js/table.ts#L484) | `var d = SQL.designer;` | `var d = this.owner;` | 同じメソッドの末尾が既に `this.owner.sync()` を呼んでいる |
+| [`frontend/js/rowmanager.ts:124`](frontend/js/rowmanager.ts#L124) | `SQL.designer.getFKTypeFor(…)` | `this.owner.…` | 6 行上（`:118`）が同じ `this.owner` を読んでいる |
+| [`frontend/js/wwwsqldesigner.ts:76`](frontend/js/wwwsqldesigner.ts#L76) | `SQL.designer = this;` | 削除 | 読み手が 0 になった |
 
 読み手はすべて Designer に**所有される側**（Row / Table / Relation / RowManager）で、`owner` 鎖の終端は
 唯一の Designer と同一実体。Designer のコンストラクタ実行中に Table / Row が生成される経路でも、
 旧 `SQL.designer` は先頭で `this` を入れていたので参照先は変わらない（どちらも初期化途中の同じ `this`）。
-併せて [`js/globals.ts`](js/globals.ts) から `interface SqlNamespace` と `export const SQL` を削除し、
+併せて [`frontend/js/globals.ts`](frontend/js/globals.ts) から `interface SqlNamespace` と `export const SQL` を削除し、
 5 ファイルの `import { SQL, … }` を整理した。`export type SqlDesigner`（13 本が参照）は残す
 — `Designer` への一本化は描画エンジン側の面が固まる 4-1 で判断する。
 
@@ -1219,8 +1242,8 @@ DDL golden 63 本が動かないはず、という予測の根拠。**4-4 の完
 `#addtable` は「追加モード」に入るだけで実体は `#area` のクリックで生え、直後に編集ダイアログが開く。
 `#clientload` は `fromXML` の末尾で `window.close()` するので、続けて `#clientsql` を押すには開き直しが要る。
 
-**次段階（4-0b）への入力**。`window.DATATYPES` は読み 11（[`js/row.ts`](js/row.ts) ×4 /
-[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) ×5 / [`js/io.ts`](js/io.ts) ×2）・書き 2
+**次段階（4-0b）への入力**。`window.DATATYPES` は読み 11（[`frontend/js/row.ts`](frontend/js/row.ts) ×4 /
+[`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) ×5 / [`frontend/js/io.ts`](frontend/js/io.ts) ×2）・書き 2
 （`dbResponse()` と `Designer.fromXML`）・初期化 1。両ハーネスが `window.DATATYPES` を直接差し替えて
 いるので（[`tests/browser/harness.ts:60`](tests/browser/harness.ts#L60) /
 [`tests/node/harness.ts:188`](tests/node/harness.ts#L188)）、`page.evaluate` から届く差し替え口
@@ -1246,7 +1269,7 @@ DDL golden 63 本が動かないはず、という予測の根拠。**4-4 の完
 「モジュール変数 ＋ 公開プロパティ」の二重管理になる。差し替え口は node が `designer.palette`
 （ハーネスがコンストラクタの戻り値を掴んでいる）、page が `window.d.palette`。
 
-**決めたこと 2: スコープは要素アクセサのみの薄い抽出。** [`js/io/palette.ts`](js/io/palette.ts) の
+**決めたこと 2: スコープは要素アクセサのみの薄い抽出。** [`frontend/js/io/palette.ts`](frontend/js/io/palette.ts) の
 `TypePalette` は `setRoot` / `isLoaded` / `element` / `db` / `types` / `typeAt` / `groups` の 7 メソッドで、
 **キャッシュを一切持たない**。現行コードは参照のたびに `getElementsByTagName` を呼んでおり、
 唯一のキャッシュは `Designer.typeIndex` / `fkTypeFor`。これを palette に寄せると
@@ -1256,18 +1279,18 @@ DDL golden 63 本が動かないはず、という予測の根拠。**4-4 の完
 同時に行う。
 
 **内部値は `Element | false` のまま**にした。`null` にすると
-[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) `toXML()` の `XMLSerializer` フォールバック
+[`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) `toXML()` の `XMLSerializer` フォールバック
 （`DATATYPES.xml` を評価する死に分岐）が `undefined` から **TypeError** に変わる。この分岐は
 §4 の XML 書き出し撤去で消えるので、そのとき `null` 化する。
 
 **生成はコンストラクタの先頭寄り（`this.title = document.title;` の直後）。** `requestDB()` より前で
 あることは必須だが、それより強い理由がある — 旧 `window.DATATYPES` は
-[`js/globals.ts`](js/globals.ts) が `false` で初期化していたので**評価時点で必ず存在**し、未読込を
+[`frontend/js/globals.ts`](frontend/js/globals.ts) が `false` で初期化していたので**評価時点で必ず存在**し、未読込を
 `false` で表していた。生成が読み手より後になると「未読込」が `undefined` になり TypeError で割れる。
 
-**読み手の付け替えは owner 鎖**（4-0a と同じ）。[`js/row.ts`](js/row.ts) 4 箇所が
-`this.owner.owner.palette`（Row → Table → Designer）、[`js/io.ts`](js/io.ts) 2 箇所が
-`this.owner.palette`、[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) は `this.palette`（読み 3・書き 2）。
+**読み手の付け替えは owner 鎖**（4-0a と同じ）。[`frontend/js/row.ts`](frontend/js/row.ts) 4 箇所が
+`this.owner.owner.palette`（Row → Table → Designer）、[`frontend/js/io.ts`](frontend/js/io.ts) 2 箇所が
+`this.owner.palette`、[`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) は `this.palette`（読み 3・書き 2）。
 併せて `src/app.ts` の冒頭コメント（段階3-1 当時の「残り 15 本はまだ `.js`」）を現状に更新した。
 
 **検証**。`git diff tests/golden/` は空（63 ＋ 7 本すべて無差分。untracked も無し＝
@@ -1313,7 +1336,7 @@ FK 自動生成（`getFKTypeFor` → `types()`）、`#clientsql` のラベルと
 ### 2026-08-14 HANDOVER §4「IO」段階4-1a — 書き出し方向をモデル層に載せた
 
 §4 の 3 本目。**`Designer` / `Table` / `Row` / `Key` に散っていた `toXML()` 4 実装が
-[`js/io/`](js/io/) の 3 本に移り、描画クラスから書き出しコードが 1 行も残らなくなった**。
+[`frontend/js/io/`](frontend/js/io/) の 3 本に移り、描画クラスから書き出しコードが 1 行も残らなくなった**。
 主張は 4-0a / 4-0b と同じく「出力バイト列が 1 バイトも変わっていない」の 1 点。
 
 **まず 4-1 を 3 本に割った。** 台帳の §4 は 9 本（段階4-0a の記録の表）だったが、実測すると
@@ -1335,7 +1358,7 @@ golden は**結果**を押さえるが副作用の順序と回数は 1 つも押
 書き出しは新コード」の組み合わせが golden 70 本で検証されるので、**抽出が正しいことの独立証明**にもなる。
 
 **決めたこと 1: モデルは描画エンジンが実際に持っている値を写す。**
-[`js/io/model.ts`](js/io/model.ts) の `RowModel.type` は**型パレットの添字のまま**で、sql 名に
+[`frontend/js/io/model.ts`](frontend/js/io/model.ts) の `RowModel.type` は**型パレットの添字のまま**で、sql 名に
 解決しない。現行 `Row.toXML()` は添字から要素を引いてその要素の `sql` と `quote` を読むので、
 モデルを sql 名にすると serializer はパレットを名前で引き直すことになり、同じ `sql` を持つ型が
 2 つあるパレット（known-issue #3 の BIGINT）では**別の要素に当たりうる**。今の postgresql では
@@ -1349,8 +1372,8 @@ serializer / parser 側の引数（palette）で行う**、が §4 を通す規�
 
 - 平坦配列にすると「`designer.relations` を走査して child が自分のものを拾う」順序が
   現行の `row.relations` フィルタと一致することの**証明が要る**（成立はする — `new Relation` は
-  [`Designer.addRelation`](js/wwwsqldesigner.ts#L282) の 1 箇所だけで、コンストラクタが
-  [両 row に push](js/relation.ts#L79) した直後に designer 側にも push されるので、
+  [`Designer.addRelation`](frontend/js/wwwsqldesigner.ts#L282) の 1 箇所だけで、コンストラクタが
+  [両 row に push](frontend/js/relation.ts#L79) した直後に designer 側にも push されるので、
   `row.relations` は `designer.relations` の順序を保つ部分列になる）。`row.relations` を
   そのまま読めば証明そのものが不要になる。
 - 位置参照は `designer.tables.indexOf(row.owner)` が −1 を返す場合に現行と同値な出力を作れない
@@ -1361,12 +1384,12 @@ XML は元々名前で参照する形式なので、名前で持つことは決�
 リレーションが壊れる既知の不具合は名前解決に由来するが、**id 参照へ移すかは `formatVersion: 1` を
 決める 4-2 の判断**（段階4-0a の申し送りどおり）。
 
-**決めたこと 3: ファイル名は `serializer.ts` ではなく [`xml-serializer.ts`](js/io/xml-serializer.ts)。**
+**決めたこと 3: ファイル名は `serializer.ts` ではなく [`xml-serializer.ts`](frontend/js/io/xml-serializer.ts)。**
 HANDOVER §4 の `io/serializer.ts` は「全入出力を JSON に統一。`serialize`/`deserialize` を集約」の
 文脈にある名前なので JSON 用に取っておく。本ファイルは 4-3 で `js/io/ddl-xml.ts` に改名し、
 `output.xsl`（DDL 生成）専用の内部モジュールになる。
 
-**決めたこと 4: 基底 [`Visual.toXML()`](js/visual.ts) の空実装は残さず消した。**
+**決めたこと 4: 基底 [`Visual.toXML()`](frontend/js/visual.ts) の空実装は残さず消した。**
 残すと `table.toXML()` の消し漏れが TypeError にならず `undefined` が黙って返り、
 `xml += undefined` で golden が壊れる。基底ごと消せば消し漏れは即 TypeError で、
 `npm test` の最初の fixture で落ちる。規約4（死にコードの撤去は両実行系で実測してから）に
@@ -1392,12 +1415,12 @@ HANDOVER §4 の `io/serializer.ts` は「全入出力を JSON に統一。`seri
 | 差分 | 由来 | 行 |
 |---|---|---|
 | 新モジュール 9 関数の追加 | `extract` 4 ＋ `serialize` 4 ＋ `escapeXML` | +112 |
-| `function escape` の消滅 | [`js/globals.ts`](js/globals.ts) | −3 |
-| `Visual.toXML(){}` の消滅 | [`js/visual.ts`](js/visual.ts) | −1 |
-| `Row.toXML` の消滅 | [`js/row.ts`](js/row.ts) | −26 |
-| `Key.toXML` の消滅 | [`js/key.ts`](js/key.ts) | −10 |
-| `Table.toXML` の消滅 | [`js/table.ts`](js/table.ts) | −11 |
-| `Designer.toXML` の 1 行化 | [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) | −12 / +1 |
+| `function escape` の消滅 | [`frontend/js/globals.ts`](frontend/js/globals.ts) | −3 |
+| `Visual.toXML(){}` の消滅 | [`frontend/js/visual.ts`](frontend/js/visual.ts) | −1 |
+| `Row.toXML` の消滅 | [`frontend/js/row.ts`](frontend/js/row.ts) | −26 |
+| `Key.toXML` の消滅 | [`frontend/js/key.ts`](frontend/js/key.ts) | −10 |
+| `Table.toXML` の消滅 | [`frontend/js/table.ts`](frontend/js/table.ts) | −11 |
+| `Designer.toXML` の 1 行化 | [`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) | −12 / +1 |
 
 **インライン展開は起きていない**（`serializeTable` / `serializeRow` / `serializeKey` は呼び出しが
 各 1 箇所だが rolldown は畳まなかった）。位置移動ハンクも無く、新モジュールは `src/app.ts` に
@@ -1411,23 +1434,23 @@ emit は 1 つも増えていない（新設は関数と型だけでクラス本
 `#clientsave` の XML・`#clientsql` の DDL・UI 編集後の `toXML()`・`?backend=` 付き起動の
 4 つのハッシュがすべて一致**している（dev 側はバイト数と件数の一致まで。`<!-- Active URL -->` に
 ポート番号が入るのでハッシュはポートに依存する）。`toXML()` の消費者は
-[`js/io.ts`](js/io.ts) の 8 箇所のうち到達可能な 7 本すべてを踏んだ —— `#clientsave` /
+[`frontend/js/io.ts`](frontend/js/io.ts) の 8 箇所のうち到達可能な 7 本すべてを踏んだ —— `#clientsave` /
 `#clientcopy` / `#clientdownloadxml` / `#clientdownloadtxt` / `#clientlocalsave`（`#clientlocalload`
 との往復）/ **`#clientsql`（＝`finish()`。XSLT の入力が壊れていないことの確認）** / `#quicksave`。
 `#dropboxsave` は `CONFIG.DROPBOX_KEY` 未設定でボタンが hidden。この過程で確認した現行仕様:
 
 - **`#foreigncreate` は「作成モードに入る」だけで、FK 行と relation は相手テーブルの
-  クリックで生える**（[`RowManager.tableClick`](js/rowmanager.ts#L108)）。`#addtable` が
+  クリックで生える**（[`RowManager.tableClick`](frontend/js/rowmanager.ts#L108)）。`#addtable` が
   `#area` のクリックで実体化するのと同じパターン。
 - **Chromium のクリップボードは Windows で LF を CRLF に正規化する。** `#clientcopy` の結果を
   `#clientsave` とバイト比較するときは戻す必要がある（localStorage 経由は生のまま）。
 - `#quicksave` は `serversave(e, this._name)` で、`_name` が空の初回は prompt が出る。
 
 **次段階（4-1b: 読み込み方向）への入力**。`fromXML` 4 実装の DOM 走査規則は**微妙に不揃い**で、
-逐語移設のときに揃えてはいけない。[`Table.fromXML`](js/table.ts#L392) の `<comment>` だけが
+逐語移設のときに揃えてはいけない。[`Table.fromXML`](frontend/js/table.ts#L392) の `<comment>` だけが
 **直下の childNodes 走査で最後の一致が勝つ**（`getElementsByTagName("comment")[0]` にすると
-row 内の comment を拾う）のに対し、[`Row.fromXML`](js/row.ts) は `getElementsByTagName(...)[0]` で
-子孫の先頭が勝つ。relation は [`Designer.fromXML`](js/wwwsqldesigner.ts#L501) が
+row 内の comment を拾う）のに対し、[`Row.fromXML`](frontend/js/row.ts) は `getElementsByTagName(...)[0]` で
+子孫の先頭が勝つ。relation は [`Designer.fromXML`](frontend/js/wwwsqldesigner.ts#L501) が
 **document 順の第 2 パス**で回し、所属を `parentNode` / `parentNode.parentNode` の `name` 属性から
 **引き直す** —— ここが同名テーブルのバグの本体で、「今パースしている row が子側」と書くと
 バグが直ってしまい、テストが 1 本も落ちないまま挙動が変わる。順序依存（`clearTables()` →
@@ -1438,7 +1461,7 @@ row 内の comment を拾う）のに対し、[`Row.fromXML`](js/row.ts) は `ge
 ### 2026-08-15 HANDOVER §4「IO」段階4-1b — 読み込み方向を parser / apply に分けた
 
 §4 の 4 本目。**`Designer` / `Table` / `Row` / `Key` に散っていた `fromXML()` 4 実装が
-[`js/io/`](js/io/) の 2 本に移り、描画クラスから入出力コードが 1 行も残らなくなった**。
+[`frontend/js/io/`](frontend/js/io/) の 2 本に移り、描画クラスから入出力コードが 1 行も残らなくなった**。
 これで 4-1a の格子（ライブ側 = `extract` / `apply`、形式側 = `xml-serializer` / `xml-parser`）が
 4 本とも揃い、4-2 以降の JSON は**形式側 2 本を足すだけ**になる。
 
@@ -1485,7 +1508,7 @@ CLAUDE.md 制約1 なので、**コミット1 = 状態スナップショット g
 完全には対称でない** —— 読み込みモデルの `def` は「XML が言った値」、`extract` のそれは
 「ツリーが保持している値」。同様に `title` / `KeyModel.type` / `name` / `RelationRef` は parser 側
 だけ実行時 `null` がありうる（現行 4 実装の `!` と早期 return をそのまま持っている）。
-どちらも 4-4 / 4-5 で消す既知の逸脱として [`js/io/model.ts`](js/io/model.ts) に書いた。
+どちらも 4-4 / 4-5 で消す既知の逸脱として [`frontend/js/io/model.ts`](frontend/js/io/model.ts) に書いた。
 
 **決めたこと 4: 「テーブル 1 件ごとに parse→生成」ではなく全 parse → 全 apply。** parse は
 ソース XML（`DOMParser` が作った別 Document）だけを読み palette を書き換えないので、
@@ -1508,7 +1531,7 @@ serializer は出さない）は親名が `<key>` 由来になって `findNamedT
 **揃えなかった不揃い**（4-1a の申し送りどおり）: `<comment>` の走査規則（table = 直下
 childNodes・最後が勝つ / row = `getElementsByTagName` の子孫先頭が勝つ）、型解決ループに
 `break` が無く**最後の一致が勝つ**（known-issue #3 の BIGINT ドリフト）、`<part>` の `nodeValue` を
-ガードなしで読む。基底 [`Visual.fromXML()`](js/visual.ts) の空実装は 4-1a の `toXML()` と同じ論法で
+ガードなしで読む。基底 [`Visual.fromXML()`](frontend/js/visual.ts) の空実装は 4-1a の `toXML()` と同じ論法で
 残さず消した（残すと消し漏れが TypeError にならず黙って何もしない）。
 
 **検証**。`git status --porcelain tests/golden/xml tests/golden/ddl tests/golden/state` が
@@ -1526,11 +1549,11 @@ emit されていて**インライン展開は起きていない**。位置移�
 | 差分 | 由来 | ハンク |
 |---|---|---|
 | 新モジュール 11 関数の追加 | `parse` 6 ＋ `apply` 5 | +180 |
-| `Visual.fromXML(){}` の消滅 | [`js/visual.ts`](js/visual.ts) | −1 |
-| `Row.fromXML` の消滅 | [`js/row.ts`](js/row.ts) | −37 |
-| `Key.fromXML` の消滅 | [`js/key.ts`](js/key.ts) | −10 |
-| `Table.fromXML` の消滅 | [`js/table.ts`](js/table.ts) | −21 |
-| `findNamedTable` の JSDoc 1 行 | [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) | ±1 |
+| `Visual.fromXML(){}` の消滅 | [`frontend/js/visual.ts`](frontend/js/visual.ts) | −1 |
+| `Row.fromXML` の消滅 | [`frontend/js/row.ts`](frontend/js/row.ts) | −37 |
+| `Key.fromXML` の消滅 | [`frontend/js/key.ts`](frontend/js/key.ts) | −10 |
+| `Table.fromXML` の消滅 | [`frontend/js/table.ts`](frontend/js/table.ts) | −21 |
+| `findNamedTable` の JSDoc 1 行 | [`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) | ±1 |
 | `Designer.fromXML` の 4 行化 | 同上 | 28 → 5 |
 
 **対話パスは読み込みの 7 経路を移設前後で流した**（Playwright の使い捨てスクリプト。
@@ -1548,7 +1571,7 @@ backend は不在なので `page.route` で fixture を返した。**7 経路す
 
 **次段階（4-1c）への入力**。残るのは `SqlDesigner` → `Designer` の一本化（13 本）で、完了判定は
 **バンドル出力が 1 バイトも変わらない**こと（型エイリアスの置換だけなので emit は不変）。
-[`js/globals.ts`](js/globals.ts) の `export type SqlDesigner = Designer` は 3-2 の経緯コメントごと
+[`frontend/js/globals.ts`](frontend/js/globals.ts) の `export type SqlDesigner = Designer` は 3-2 の経緯コメントごと
 消える。§4 の残り（4-2 以降）は形式側 2 本の追加なので、ライブ側 2 本は原則もう触らない。
 
 ---
@@ -1556,12 +1579,12 @@ backend は不在なので `page.route` で fixture を返した。**7 経路す
 ### 2026-08-15 HANDOVER §4「IO」段階4-1c — `SqlDesigner` を `Designer` に一本化した
 
 §4 の 5 本目で、4-1 の締め。**型の名前が 2 つあった状態を実体 1 本に寄せ、参照 13 本すべてが
-[`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の `Designer` を直接見るようにした**。
+[`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) の `Designer` を直接見るようにした**。
 出荷コードの挙動には一切触れないので、**主張は「バンドル出力が 1 バイトも変わらない」の 1 点**
 （4-1a / 4-1b の「golden 無差分」より強い判定 —— テストが通る範囲ではなく emit そのものの同一性）。
 
 **なぜ今か。** `SqlDesigner` は段階3-2 の産物で、当時 `js/wwwsqldesigner.js` がまだ `.js` だった
-ため「`Designer` インスタンスの面」を [`js/globals.ts`](js/globals.ts) に構造的 interface として
+ため「`Designer` インスタンスの面」を [`frontend/js/globals.ts`](frontend/js/globals.ts) に構造的 interface として
 書いていた。段階3-3b で実体が `.ts` になった時点で `export type SqlDesigner = Designer;` の
 1 行に縮み、以後は**別名だけが残っていた**。§4 の残り（4-2 以降）はモデル層の型を増やす作業なので、
 「どの型が描画エンジンの実体か」が 2 通りに読める状態を持ち込まないためにここで畳む。
@@ -1569,20 +1592,20 @@ backend は不在なので `page.route` で fixture を返した。**7 経路す
 **決めたこと 1: 必ずトップレベル `import type` で書く。** インライン形
 （`import { type Designer } from "./wwwsqldesigner.ts"`）は `verbatimModuleSyntax` のもとで
 **import 文自体が emit に残る**ため、副作用 import として Rollup の依存グラフに辺が生える。
-`wwwsqldesigner` は [`src/app.ts`](src/app.ts) の読み込み順の**最後尾**なので、辺が生えた瞬間に
+`wwwsqldesigner` は [`frontend/src/app.ts`](frontend/src/app.ts) の読み込み順の**最後尾**なので、辺が生えた瞬間に
 順序が壊れる（バイト一致の判定はこれを機械的に検出する）。この警告は 3-1 以来 `globals.ts` の
-冒頭にあったが、置き場所ごと [`js/table.ts`](js/table.ts) の冒頭へ移した —— `src/app.ts` の順序で
+冒頭にあったが、置き場所ごと [`frontend/js/table.ts`](frontend/js/table.ts) の冒頭へ移した —— `src/app.ts` の順序で
 `Designer` 型を最初に使うファイルで、他 9 本は「理由は js/table.ts の冒頭」の 1 行だけを持つ
 （`js/oz.ts` / `js/visual.ts` と同じ「イディオムの正本は 1 か所」の形）。
 
 **決めたこと 2: 型の循環参照はそのまま許容する。** `table.ts` → `wwwsqldesigner.ts` →
 `table.ts` の循環が 10 本ぶん生まれるが、**型だけの辺なので emit には 1 本も出ない**。
-先例は 4-1a / 4-1b で入れた [`js/io/extract.ts`](js/io/extract.ts) /
-[`js/io/apply.ts`](js/io/apply.ts) の `import type { Designer } from "../wwwsqldesigner.ts"` で、
+先例は 4-1a / 4-1b で入れた [`frontend/js/io/extract.ts`](frontend/js/io/extract.ts) /
+[`frontend/js/io/apply.ts`](frontend/js/io/apply.ts) の `import type { Designer } from "../wwwsqldesigner.ts"` で、
 書き方をそれに揃えた。迂回のために `globals.ts` を経由させ続けるのは、**実体を隠す別名を
 残すこと**と同義で得がない。副作用として `globals.ts` は js/ のどこにも依存しなくなった。
 
-**見つけたこと: [`js/row.ts`](js/row.ts) の `SqlDesigner` は未使用 import だった。**
+**見つけたこと: [`frontend/js/row.ts`](frontend/js/row.ts) の `SqlDesigner` は未使用 import だった。**
 本文に使用箇所が 1 つも無い（`this.owner` は基底の `Visual` 側で解決され、Row が `Designer` へ
 届くのは `this.owner.owner` の owner 鎖）。したがって row.ts だけは `Designer` を足さず
 import を落とすだけにした。`noUnusedLocals` は入れていないので `typecheck` では出ず、
@@ -1598,7 +1621,7 @@ import を落とすだけにした。`noUnusedLocals` は入れていないの�
 `grep -rn "SqlDesigner" js/ src/ tests/` はコード 0 件（残るのは経緯を書いたコメント 5 行だけ）。
 
 **次段階（4-2）への入力**。ライブ側 2 本（`extract` / `apply`）とモデル
-（[`js/io/model.ts`](js/io/model.ts)）は 4-1a の形のまま確定したので、4-2 は形式側に
+（[`frontend/js/io/model.ts`](frontend/js/io/model.ts)）は 4-1a の形のまま確定したので、4-2 は形式側に
 `json-serializer` / `json-parser` を足す作業になる。判断が要るのは `formatVersion: 1` の内容で、
 4-1b が申し送った **relation の両端を名前で持つか `id` 参照に移すか**（同名テーブルの既知不具合を
 直すかどうか）がその中身。決定論出力（キー順・配列順・2 スペース・1 テーブル 1 ブロック）の
@@ -1609,13 +1632,13 @@ import を落とすだけにした。`noUnusedLocals` は入れていないの�
 ### 2026-08-15 HANDOVER §4「IO」段階4-2 — 設計 JSON（`formatVersion: 1`）を新設した
 
 §4 の 6 本目。**形式側に `json-serializer` / `json-parser` の 2 本を足しただけ**で、4-1 で確定した
-ライブ側（[`js/io/extract.ts`](js/io/extract.ts) / [`js/io/apply.ts`](js/io/apply.ts)）とモデル
-（[`js/io/model.ts`](js/io/model.ts)）には 1 行も触っていない。UI にも配線していない（4-3）ので、
+ライブ側（[`frontend/js/io/extract.ts`](frontend/js/io/extract.ts) / [`frontend/js/io/apply.ts`](frontend/js/io/apply.ts)）とモデル
+（[`frontend/js/io/model.ts`](frontend/js/io/model.ts)）には 1 行も触っていない。UI にも配線していない（4-3）ので、
 **既存 golden 78 本は 1 バイトも動かず、バンドル差分は削除 0 行の純粋な追加**。
 
 4-0a から申し送られていた 3 つの未決（型を何で焼くか / relation を名前か id か / パレットを同梱するか）を
 ここで決着させた。決定の内容は [`docs/FORMAT.md`](docs/FORMAT.md) に散文で、キー順の契約は
-[`js/io/json-format.ts`](js/io/json-format.ts) に型として置いてある。**FORMAT.md は 4-0a の表では
+[`frontend/js/io/json-format.ts`](frontend/js/io/json-format.ts) に型として置いてある。**FORMAT.md は 4-0a の表では
 4-7 の予定だったが前倒しした** —— スキーマを決めるのが本段階なので、未文書の期間を作らない
 （CLAUDE.md 制約4「JSON ルートに formatVersion。`docs/` に文書化」）。
 
@@ -1638,19 +1661,19 @@ id の発番が要り、4-1b / 4-1c の申し送り「4-2 以降はライブ側 
 **決めたこと 4: 既定値と同じキーは出さない。`default` は `null` と `""` を区別しない。**
 どちらも「既定値なし」としてキーごと落とす。これで known-issue #2（nullable な行が保存で
 `<default>NULL</default>` を獲得する）と #5（空の `<default>`）が **JSON 経路には最初から無い**。
-読み戻しは `null` を入れ、[`Row.update()`](js/row.ts#L167) の既存規則（`!nll` かつ `def === null` なら `""`）が
+読み戻しは `null` を入れ、[`Row.update()`](frontend/js/row.ts#L167) の既存規則（`!nll` かつ `def === null` なら `""`）が
 そのまま正規化する。**XML 経路（＝ DDL 入力）の #2 撤去は予定どおり 4-5** で、そちらは DDL golden 16 本が動く。
 
 **決めたこと 5: 壊れた入力は部分的に読み込まない。** parser は未知の型 label・`formatVersion` 違い・
 必須キーの欠落・型違いをすべて例外にする（メッセージに `tables[0].columns[2].name` の形で位置が入る）。
 現行 XML 経路の癖（未知の型は添字 0 ＝ known-issue #4、属性が無ければ実行時 null）は**逆に振った** ——
 読む対象が git 管理の正本ファイルなので、黙って別の型で開くのが最悪の失敗だから。あわせて
-[`Designer.fromJson()`](js/wwwsqldesigner.ts) は **parse を `clearTables()` より先**に置いた
+[`Designer.fromJson()`](frontend/js/wwwsqldesigner.ts) は **parse を `clearTables()` より先**に置いた
 （`fromXML()` は現行の挙動を保つ要件があるので clear が先のまま）。「例外が出ても今開いている設計が
 消えない」ことはテストで固定してある。
 
 **決めたこと 6: 内部関数に `Json` を冠する**（`serializeJsonTable` / `parseJsonKey` 等）。
-素直に `serializeTable` と書くと [`js/io/xml-serializer.ts`](js/io/xml-serializer.ts) の同名関数と
+素直に `serializeTable` と書くと [`frontend/js/io/xml-serializer.ts`](frontend/js/io/xml-serializer.ts) の同名関数と
 バンドル上で衝突し、**rolldown が旧側に `$1` を付ける**。実際に最初はそうなって、差分に
 「既存モジュールのリネーム 8 行」が混ざった。名前を分けたことで**差分が純粋な追加だけ**になり、
 4-1a / 4-1b と同じ強さの判定に戻った。
@@ -1676,12 +1699,12 @@ id の発番が要り、4-1b / 4-1c の申し送り「4-2 以降はライブ側 
 | `3007a3165,3172` | `Designer` の `toJson()` / `fromJson()` | +8 |
 
 **インライン展開も位置移動も無い**（19 関数すべてが独立した関数として emit されている）。
-型だけの [`js/io/json-format.ts`](js/io/json-format.ts) は emit が空なので
-[`src/app.ts`](src/app.ts) に載せていない（`js/io/model.ts` と同じ扱い）。
+型だけの [`frontend/js/io/json-format.ts`](frontend/js/io/json-format.ts) は emit が空なので
+[`frontend/src/app.ts`](frontend/src/app.ts) に載せていない（`js/io/model.ts` と同じ扱い）。
 
-**次段階（4-3）への入力**。UI 全経路を JSON に切り替える（[`js/io.ts`](js/io.ts) の 8 経路・Dropbox 撤去）。
+**次段階（4-3）への入力**。UI 全経路を JSON に切り替える（[`frontend/js/io.ts`](frontend/js/io.ts) の 8 経路・Dropbox 撤去）。
 ここで決めるのは 3 つ —— `db` が実行中のパレットと食い違うときの扱い、parser の例外をユーザーに
-どう見せるか（locale を通すか）、そして [`js/io/xml-serializer.ts`](js/io/xml-serializer.ts) を
+どう見せるか（locale を通すか）、そして [`frontend/js/io/xml-serializer.ts`](frontend/js/io/xml-serializer.ts) を
 `js/io/ddl-xml.ts` に改名して `output.xsl` 専用の内部モジュールにすること。
 `Designer.toJson()` / `fromJson()` の面は本段階で既にあるので、4-3 は呼び出し側の付け替えになる。
 
@@ -1814,7 +1837,7 @@ parser が持つ後方互換は **例外メッセージ 1 つだけ**にし、�
 #### 決めたこと 1: Dropbox は「隠す」ではなく機能ごと撤去する
 
 段階4-0a の決定（本書の §4 分割表）どおり実行した。撤去したのは
-[`js/io.ts`](js/io.ts) の 6 メソッド ＋ 型宣言（約 215 行）、[`index.html`](index.html) の CDN
+[`frontend/js/io.ts`](frontend/js/io.ts) の 6 メソッド ＋ 型宣言（約 215 行）、[`index.html`](index.html) の CDN
 `<script>` とボタン 3 つ、`dropbox-oauth-receiver.html`（ファイルごと）、`CONFIG.DROPBOX_KEY`、
 locale 7 言語 × 3 行。
 
@@ -1827,7 +1850,7 @@ locale 7 言語 × 3 行。
 
 #### 決めたこと 2: ファイルは改名するが、関数名は変えない
 
-[`js/io/xml-serializer.ts`](js/io/xml-serializer.ts) → [`js/io/ddl-xml.ts`](js/io/ddl-xml.ts)。
+[`frontend/js/io/xml-serializer.ts`](frontend/js/io/xml-serializer.ts) → [`frontend/js/io/ddl-xml.ts`](frontend/js/io/ddl-xml.ts)。
 4-3b でユーザーに見える保存経路が JSON になると、この XML は「設計の保存形式」ではなくなり
 **`output.xsl` への入力＝ DDL パイプラインの中間表現**だけになるので、名前をその役目に合わせた
 （モジュールごと消えるのは §6.3）。
@@ -1881,7 +1904,7 @@ dev（4173）と preview（4174）の両方でそのまま効く。
 #### 前提: golden はこの段階を 1 ビットも押さえない
 
 golden 85 本はすべて Designer のファサード（`toXML` / `toJson` / `fromXML` / `fromJson`）経由で
-採るので [`js/io.ts`](js/io.ts) を通らない。つまり **「UI が JSON に切り替わったこと」は
+採るので [`frontend/js/io.ts`](frontend/js/io.ts) を通らない。つまり **「UI が JSON に切り替わったこと」は
 golden 不変と両立してしまう**。歴代の段階が「golden 無差分」を主たる完了判定にできたのは
 変更対象が golden の経路上にあったからで、本段階はそこが構造的に違う。
 
@@ -1891,7 +1914,7 @@ golden 不変と両立してしまう**。歴代の段階が「golden 無差分�
 
 #### 決めたこと 1: 形式の判別は先頭 1 文字。フォールバックは作らない
 
-[`js/io/detect.ts`](js/io/detect.ts)（export 1 本）。BOM と先行空白を飛ばした最初の 1 文字が
+[`frontend/js/io/detect.ts`](frontend/js/io/detect.ts)（export 1 本）。BOM と先行空白を飛ばした最初の 1 文字が
 `{` なら json、`<` なら xml、無ければ empty、それ以外は unknown。
 
 **拡張子で決めない**のは、読込 5 経路のうち拡張子を持つのが `clientloadfromfile` だけだから
@@ -2073,7 +2096,7 @@ UI は無改修。メッセージは locale を通さず、重複した名前と
 **DDL golden 16 本が動く唯一の段階**で、差分の全行が ` DEFAULT NULL`（cubrid / mysql /
 sqlite）と vfp9 の ` UL ` ゴミの削除であることが機械的な完了判定になる（4-0a の予測）。
 `RowModel.def` の `string | null` から「既定 NULL」の内部表現が消えるので、
-[`js/io/model.ts`](js/io/model.ts) の型注釈もそこで直す。§4 の残りは 4-5 / 4-6
+[`frontend/js/io/model.ts`](frontend/js/io/model.ts) の型注釈もそこで直す。§4 の残りは 4-5 / 4-6
 （外部変更検知）/ 4-7（仕上げ）の 3 本。
 
 ### 2026-08-15 HANDOVER §4「IO」段階4-5 — `<default>NULL</default>` を撤去した
@@ -2103,7 +2126,7 @@ sqlite）と vfp9 の ` UL ` ゴミの削除であることが機械的な完了
 
 `RowModel.def` の型からは `null` が消えるが、**「入り側＝ファイルが言った値／出側＝ツリーが
 持つ値」という非対称は残す**。parser 側にも同じ規則を書くと、同じ規則が 2 箇所に分かれて
-片方だけ直す事故の余地ができる（4-1b の決めたこと 3 と同じ立場）。[`js/io/model.ts`](js/io/model.ts)
+片方だけ直す事故の余地ができる（4-1b の決めたこと 3 と同じ立場）。[`frontend/js/io/model.ts`](frontend/js/io/model.ts)
 のヘッダは「4-5 で消す既知の逸脱」から**「意図して残す理由」**に書き換えた。
 
 4-3b 以前に保存されたファイルの `<default>NULL</default>` は、parser を "NULL" のまま通って
@@ -2170,10 +2193,10 @@ backend 側の条件付き更新でしか閉じないので、ETag + `If-Match`�
 
 #### 決めたこと 2: 判定は純関数、UI と通信は js/io.ts
 
-[`js/io/conflict.ts`](js/io/conflict.ts) が `verdictForSave(baseline, name, server)` を返すだけの
+[`frontend/js/io/conflict.ts`](frontend/js/io/conflict.ts) が `verdictForSave(baseline, name, server)` を返すだけの
 純関数で（`absent` / `clean` / `exists` / `conflict`）、confirm を出すかどうかも、プリフライトを
 投げるかどうかも知らない。文言は locale を通す必要があるので呼び手側 —— `js/io/` 配下は locale を
-通さない規約（[`js/io/json-parser.ts`](js/io/json-parser.ts) の冒頭）に従った。
+通さない規約（[`frontend/js/io/json-parser.ts`](frontend/js/io/json-parser.ts) の冒頭）に従った。
 
 台帳（`IO.baseline`）は **keyword ごとの Map にせず 1 本だけ**持つ。「今の編集セッションの派生元」
 という意味づけで、別名へ保存すれば派生元も移る。Map にしても比較相手は毎回サーバの現物なので
@@ -2205,7 +2228,7 @@ backend 側の条件付き更新でしか閉じないので、ETag + `If-Match`�
 #### 検証
 
 - `git diff tests/golden/` は空（4-0a の分割表の予測どおり。golden 85 本は
-  [`js/io.ts`](js/io.ts) を通らない）
+  [`frontend/js/io.ts`](frontend/js/io.ts) を通らない）
 - `npm test` **179 passed** / 21 skipped（158 から +21 ＝ `conflict.test.ts` 9 本・
   `io-ui.test.ts` の 4-6 分 12 本）、`test:browser` **139 passed**・`test:dist` 3 passed・
   `known-issues` **5 passed**（いずれも件数不変）、`typecheck` 0 error
@@ -2239,13 +2262,13 @@ palette / extract / conflict）**の 3 つに割れているので、その線�
 
 | # | HANDOVER §4 の要求 | 実装 | 根拠になるテスト | 入った段階 |
 |---|---|---|---|---|
-| 1 | 全入出力を JSON に統一（YAML 不採用） | 保存 5 経路すべてが [`js/io/json-serializer.ts`](js/io/json-serializer.ts)、読み込みは [`js/io/detect.ts`](js/io/detect.ts) が振り分け | `tests/node/io-ui.test.ts` / `tests/browser/io-ui.spec.ts` | 4-3b |
+| 1 | 全入出力を JSON に統一（YAML 不採用） | 保存 5 経路すべてが [`frontend/js/io/json-serializer.ts`](frontend/js/io/json-serializer.ts)、読み込みは [`frontend/js/io/detect.ts`](frontend/js/io/detect.ts) が振り分け | `tests/node/io-ui.test.ts` / `tests/browser/io-ui.spec.ts` | 4-3b |
 | 2 | `serialize` / `deserialize` を `io/` に集約 | `js/io/` 11 本。描画クラスに `toXML` / `fromXML` は 1 つも残っていない | 状態スナップショット golden 8 本 | 4-1a / 4-1b |
-| 3 | 決定論出力（キー順・配列順・2 スペース・改行区切り） | キー順の契約は [`js/io/json-format.ts`](js/io/json-format.ts) の宣言順。**DDL 入力 XML も 4-4 で決定論になった**（`<!-- Active URL -->` と `<datatypes>` 全文の撤去） | 「同一モデル → 2 回の出力が一致」／「環境依存が出力に現れない」 | 4-2 / 4-4 |
+| 3 | 決定論出力（キー順・配列順・2 スペース・改行区切り） | キー順の契約は [`frontend/js/io/json-format.ts`](frontend/js/io/json-format.ts) の宣言順。**DDL 入力 XML も 4-4 で決定論になった**（`<!-- Active URL -->` と `<datatypes>` 全文の撤去） | 「同一モデル → 2 回の出力が一致」／「環境依存が出力に現れない」 | 4-2 / 4-4 |
 | 4 | round-trip ＋「同じモデル → 同じ文字列」 | `toJson` / `fromJson` を 3 周させて 1・2・3 回目が一致 | `tests/node/json.test.ts` / `tests/browser/json.spec.ts` | 4-2 |
 | 5 | diff フレンドリー（1 テーブル = 独立ブロック） | テーブル追加で既存部分が 1 バイトも動かない | `tests/browser/json.spec.ts` の diff テスト | 4-2 |
-| 6 | 外部変更検知（古い編集状態で上書きしない） | server 経路の save が read-before-write。判定は [`js/io/conflict.ts`](js/io/conflict.ts) の純関数 | `tests/node/conflict.test.ts` ＋ 仮想 backend の往復 | 4-6 |
-| 7 | XML は読込専用（書き出しは撤去） | ユーザーに見える保存経路から消え、[`js/io/ddl-xml.ts`](js/io/ddl-xml.ts) は `output.xsl` への中間表現としてだけ残る | DDL golden 63 本 ＋ DDL 入力 golden 7 本 | 4-3a / 4-3b |
+| 6 | 外部変更検知（古い編集状態で上書きしない） | server 経路の save が read-before-write。判定は [`frontend/js/io/conflict.ts`](frontend/js/io/conflict.ts) の純関数 | `tests/node/conflict.test.ts` ＋ 仮想 backend の往復 | 4-6 |
+| 7 | XML は読込専用（書き出しは撤去） | ユーザーに見える保存経路から消え、[`frontend/js/io/ddl-xml.ts`](frontend/js/io/ddl-xml.ts) は `output.xsl` への中間表現としてだけ残る | DDL golden 63 本 ＋ DDL 入力 golden 7 本 | 4-3a / 4-3b |
 | 8 | `formatVersion` を付け `docs/` に文書化 | `formatVersion: 2`（版 1 は移行コマンドを名指しして拒む）。散文は [`docs/FORMAT.md`](docs/FORMAT.md) | `tests/node/migrate-design.test.ts` ほか | 4-2 / 4-2b |
 
 **未着手の要求は 1 つも無い。** §4 が引き受けなかったもの（条件付き更新・型パレットの現代化・
@@ -2267,8 +2290,8 @@ palette / extract / conflict）**の 3 つに割れているので、その線�
 これが表から読めないと、§6 で直すときに「まだ全経路で起きる」前提の作業見積りになる。
 
 - **#3 / #4 は設計 JSON では起きない。** 型キーが安定 `id` になり（4-2b）、
-  [`js/io/json-parser.ts`](js/io/json-parser.ts) はパレットに無い id を throw する。
-  残るのは互換で読む XML 経路（[`js/io/xml-parser.ts`](js/io/xml-parser.ts)）だけで、そこは
+  [`frontend/js/io/json-parser.ts`](frontend/js/io/json-parser.ts) はパレットに無い id を throw する。
+  残るのは互換で読む XML 経路（[`frontend/js/io/xml-parser.ts`](frontend/js/io/xml-parser.ts)）だけで、そこは
   「現行の挙動を 1 バイトも変えない」逐語移設が要件なので**意図して直していない**。
 - **#5 は書き出し側では構造的に起きない**（4-5。`if (row.def)` が `""` を落とす）。残るのは
   introspection の出力を直接 XSLT に食わせる経路。
@@ -2292,7 +2315,7 @@ palette / extract / conflict）**の 3 つに割れているので、その線�
 
 | # | 文書 | 書いてあったこと | 実測 |
 |---|---|---|---|
-| 1 | `docs/FORMAT.md` | `keys[].type` は `PRIMARY` / `UNIQUE` / `INDEX` の 3 つ | **UI が作るのは 4 つ**（`FULLTEXT` がある。[`js/keymanager.ts`](js/keymanager.ts)）。しかも parser も serializer も**値を検査しない**（文字列であることだけ見る） |
+| 1 | `docs/FORMAT.md` | `keys[].type` は `PRIMARY` / `UNIQUE` / `INDEX` の 3 つ | **UI が作るのは 4 つ**（`FULLTEXT` がある。[`frontend/js/keymanager.ts`](frontend/js/keymanager.ts)）。しかも parser も serializer も**値を検査しない**（文字列であることだけ見る） |
 | 2 | `docs/TESTING.md` | `npm run typecheck` は「`src/ tests/ types/`、`js/` は `checkJs: false` で対象外」 | [`tsconfig.json`](tsconfig.json) の `include` は `js/ src/ tests/ *.config.ts`。**`types/` は段階3-3b で削除済み**で、`js/` は全部 `.ts` なので当然対象 |
 | 3 | 3 文書 | `js/row.js` / `js/config.js` / `types/globals.d.ts` へのリンク 7 本 | §3 で `.ts` 化・削除済み |
 
@@ -2311,7 +2334,7 @@ palette / extract / conflict）**の 3 つに割れているので、その線�
 | §5.2（introspection） | JSON 化。known-issue #9（PG18 実出力が well-formed でない・index が出ない） | 4-0a の実測 / ARCHITECTURE §4.6 |
 | §6.1（型パレット） | known-issues #3 / #4。**パレット差し替えと設計ファイルの移行は同じ PR で**（分けるとリポジトリの設計ファイルが読めない期間ができる＝制約1 違反）。移行表の形は 6-1 の着手時に決める | 4-2b |
 | §6.1 | `palette.ts` の型解決の再設計（`getTypeIndex` / `getFKTypeFor` の sql・re 照合）。4-0b は**意図してキャッシュ寿命を変えなかった** | 4-0b |
-| §6.3（エクスポート規約） | `output.xsl` の TS 化。これで [`js/io/ddl-xml.ts`](js/io/ddl-xml.ts) が**モジュールごと消える**。known-issues #5 / #6 ＋ 上の key type の `KEY (` 落ち | 4-0a / 4-1a |
+| §6.3（エクスポート規約） | `output.xsl` の TS 化。これで [`frontend/js/io/ddl-xml.ts`](frontend/js/io/ddl-xml.ts) が**モジュールごと消える**。known-issues #5 / #6 ＋ 上の key type の `KEY (` 落ち | 4-0a / 4-1a |
 | §2（Docker） | `js/io.ts`（823 行の UI・通信層）を含む `js/` の `frontend/` への集約 | 4-0a |
 
 #### 検証
@@ -2567,7 +2590,7 @@ PG 用 fixture が読めず DDL golden を採れなくなる。「現代化済�
 ### 2026-08-16 HANDOVER §6「機能」段階6-1 —— 対応 DB から 4 本を撤去する
 
 6-0 の分割表の 2 本目。**削除だけ**の段階で、`js/` の実質的な変更は
-[`js/config.ts`](js/config.ts) の `AVAILABLE_DBS` 1 か所しかない。
+[`frontend/js/config.ts`](frontend/js/config.ts) の `AVAILABLE_DBS` 1 か所しかない。
 
 消したもの（37 ファイル）:
 
@@ -2636,12 +2659,12 @@ DDL 本体ループは全緑のまま（`DB_PROFILES` が `readdirSync` で 5 �
 
 **(2) cookie に撤去済み DB が残っている既存ユーザーは、起動は通るが型に触れない。**
 `getOption("db")` は cookie の生値を返すだけで `AVAILABLE_DBS` と照合しない
-（[`js/wwwsqldesigner.ts:335-346`](js/wwwsqldesigner.ts#L335-L346)）。実ブラウザで実測した:
+（[`frontend/js/wwwsqldesigner.ts:335-346`](frontend/js/wwwsqldesigner.ts#L335-L346)）。実ブラウザで実測した:
 
 | | cookie 無し（＝ `DEFAULT_DB` の `mysql`） | cookie `db=cubrid` |
 |---|---|---|
 | `d.palette.isLoaded()` | `true` | **`false`** |
-| `d.palette.db()` | `"mysql"` | **`TypeError: this.element(...).getAttribute is not a function`**（[`js/io/palette.ts:54`](js/io/palette.ts#L54)） |
+| `d.palette.db()` | `"mysql"` | **`TypeError: this.element(...).getAttribute is not a function`**（[`frontend/js/io/palette.ts:54`](frontend/js/io/palette.ts#L54)） |
 | 起動時の `pageerror` | 0 件 | **0 件**（＝**静かに**通る。画面上は正常に見える） |
 | `minimal` を読ませる | テーブル 1 件・例外なし | **`TypeError: this.element(...).getElementsByTagName is not a function`**・テーブル 0 件・alert も出ない |
 
@@ -2711,7 +2734,7 @@ UI（`js/options.ts` に自動テストが無い唯一の面）は dev server �
 
 新設 3 本を前倒しする案を検討し、**パレットだけ置くのはきれいに切れない**と分かった。
 
-1. **パレットだけでは DDL が出ない。** [`js/io.ts`](js/io.ts) の `finish()` が
+1. **パレットだけでは DDL が出ない。** [`frontend/js/io.ts`](frontend/js/io.ts) の `finish()` が
    `db/<db>/output.xsl` を読むので、UI の db セレクタに出るのに DDL 生成が 404 になる
    ＝ 半移行を UI に晒す（CLAUDE.md 制約1）
 2. **`ddl.test.ts` が赤くなる。** `DB_PROFILES`（`db/` のディレクトリ実体）× `DDL_FIXTURES` で
@@ -2720,7 +2743,7 @@ UI（`js/options.ts` に自動テストが無い唯一の面）は dev server �
 3. **パレットの TS 化は 1 段階に収まらない。** 影響は 15 箇所以上（`palette.ts` 全面・
    `requestDB()` の XHR・`getTypeIndex` / `getFKTypeFor`・`xml-parser`・`row.ts` の型セレクタ・
    両ハーネスの差し替え口・`migrate-design.mjs` の `readPalette()`・`smoke.spec.ts`）。しかも
-   [`js/wwwsqldesigner.ts`](js/wwwsqldesigner.ts) の `fromXML()` が**古い XML に同梱された
+   [`frontend/js/wwwsqldesigner.ts`](frontend/js/wwwsqldesigner.ts) の `fromXML()` が**古い XML に同梱された
    `<datatypes>` を読む互換経路**を持ち、XHR が消えると「db の変更にはリロードが要る」という
    現行契約自体が変わる
 
@@ -3062,7 +3085,7 @@ introspection → 設計取り込みが壊れる。同じ問題が `DECIMAL` / `
 
 #### 決めたこと 4: `length` を契約にした（6-0 の移行表を 1 行訂正）
 
-`CHAR(10)` が `text` に寄ると size の "10" が残り、[`js/io/ddl-xml.ts`](js/io/ddl-xml.ts) が
+`CHAR(10)` が `text` に寄ると size の "10" が残り、[`frontend/js/io/ddl-xml.ts`](frontend/js/io/ddl-xml.ts) が
 `TEXT(10)` という**構文として壊れた DDL** を吐く（size があれば必ず括弧を付ける）。
 判断材料は `<type length="…">` にあるが、**この属性は `js/` のどこからも読まれていなかった**
 （upstream 由来の死んだ属性で、size は型と無関係な自由文字列だった）。6-3 で読む契約にし、
@@ -3323,7 +3346,7 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 ### 2026-08-20 HANDOVER §6「機能」段階6-5a —— `output.xsl` を TS 生成器へ逐語移植し、XSLT 経路を撤去する
 
 6-0 の分割表の 6 本目。**`db/<db>/output.xsl`（XSLT 1.0・5 本・計 952 行）が消え、
-[`js/io/ddl/`](js/io/ddl/) の 7 本になった。** `tests/golden/ddl/` の 35 本は 1 バイトも
+[`frontend/js/io/ddl/`](frontend/js/io/ddl/) の 7 本になった。** `tests/golden/ddl/` の 35 本は 1 バイトも
 動いていない —— それが本段階の完了判定そのもの。
 
 #### 決めたこと 1: 6-5 を 2 つに割った
@@ -3346,8 +3369,8 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 移植前の DDL 生成は **3 段**だった: `extractModel()` → `buildDdlInputXml()`（中間 XML）→
 XHR で `output.xsl` を GET → `XSLTProcessor`。他の形式（JSON）は 1 段なので、DDL だけが 2 段深い。
 
-[`js/io/ddl/generate.ts`](js/io/ddl/generate.ts) の `generateDdl(model, palette): string` は
-[`js/io/json-serializer.ts`](js/io/json-serializer.ts) の `serializeDesignJson(model, palette)` と
+[`frontend/js/io/ddl/generate.ts`](frontend/js/io/ddl/generate.ts) の `generateDdl(model, palette): string` は
+[`frontend/js/io/json-serializer.ts`](frontend/js/io/json-serializer.ts) の `serializeDesignJson(model, palette)` と
 **同じ 2 引数**にした。`Designer.toXML()` が `buildDdlInputXml(extractModel(this), this.palette)` で
 しかなかったので、中間 XML を挟む必然性が元から無かった（4-1a の格子がその形を用意していた）。
 
@@ -3355,7 +3378,7 @@ XHR で `output.xsl` を GET → `XSLTProcessor`。他の形式（JSON）は 1 �
 JSON になった時点で残っていたのは DDL の中間表現だけで、それが消えた。読み込みは互換で残る
 （HANDOVER §4「XML は読込専用」）。
 
-XSLT が見ていた入力に相当する構造体は [`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) が組む。
+XSLT が見ていた入力に相当する構造体は [`frontend/js/io/ddl/shared.ts`](frontend/js/io/ddl/shared.ts) が組む。
 XPath 式をそのまま TS の条件式に写せる形にしてあり（`test="comment"` → `if (table.comment)`、
 `@null = 0` → `!row.nullable`）、**型パレットを読むのはここだけ**。5 つのプロファイル実装は
 解決済みの文字列しか見ない —— XSLT が `datatypes.xml` を一度も参照していなかったのと同じ分業。
@@ -3432,7 +3455,7 @@ XML 経由では見えていなかった。mysql は落とす分岐を持たな�
 
 #### 決めたこと 7: `DEFAULT_DB` の実施漏れを埋めた
 
-[`js/config.ts`](js/config.ts) が `DEFAULT_DB: "mysql"` のままだった。6-1 がこれと
+[`frontend/js/config.ts`](frontend/js/config.ts) が `DEFAULT_DB: "mysql"` のままだった。6-1 がこれと
 `AVAILABLE_DBS` の並び替えを 6-3 へ送っていたが（「いま振ると初回ユーザーが最初に触るパレットが
 uuid 不在・`x_real` が `BIGINT` の未現代化 PG になる」）、**6-3 のエントリに実施記録が無く落ちていた**。
 `git log -- js/config.ts` の最新も 6-1。6-1 自身が「**テストが止めてくれない変更**」と書いている
@@ -3505,7 +3528,7 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 生成する DDL は人が読んでから実行するもので、アプリ自身は SQL を実行しない。
 
 **次段階への入力 —— 6-5b（§6.3 の規約と既知不具合の是正）**。生成器は
-[`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) が「囲まない側」の判定を持ち、囲む側は
+[`frontend/js/io/ddl/shared.ts`](frontend/js/io/ddl/shared.ts) が「囲まない側」の判定を持ち、囲む側は
 `quote` 属性を前後に足すだけ（#11）。**PG だけを strict として直し、未現代化 4 本は 6-8 まで
 1 バイトも動かさない** —— 6-3 / 6-4 と同じ型紙で、共通層に規則を置いて `palette.isStrict()` で
 有効化すれば 6-8 で自動的に効く。`CREATE INDEX` 経路は fixture が無いので golden では
@@ -3520,7 +3543,7 @@ org のセキュリティ基準（分類 B: §2 ／ §3 の [B] ／ §4.2〜4.3 
 28 本は 1 バイトも動いていない。** 6-5a の完了判定が「無差分そのもの」だったのに対し、
 本段階は**動いた 31 行を 1 行ずつ説明できること**が完了判定で、下の対応表がそれ。
 
-直したのは [`js/io/ddl/postgresql.ts`](js/io/ddl/postgresql.ts) が自分のヘッダに列挙していた
+直したのは [`frontend/js/io/ddl/postgresql.ts`](frontend/js/io/ddl/postgresql.ts) が自分のヘッダに列挙していた
 7 点 ＋ known-issue #11 の計 8 件。6-5a は挙動不変が要件だったので upstream の粗さを
 逐語で持ち込んであり、その一覧がそのまま本段階の作業リストになっていた。
 
@@ -3563,7 +3586,7 @@ $ docker exec kw psql -U postgres -Atc \
 `like` / `join` / `full` は関数名・型名にはなれるが**列名にはなれない**ので、落とすと
 `left text` のような壊れた DDL が出る。逆に `C`（`integer` / `varchar` / `between`）は
 列名に使えるので入れない —— 入れると house 標準の名前まで囲まれる。採取クエリと版と採取日は
-[`js/io/ddl/keywords.ts`](js/io/ddl/keywords.ts) の頭に書いてあり、6-8 で 4 プロファイルぶんが
+[`frontend/js/io/ddl/keywords.ts`](frontend/js/io/ddl/keywords.ts) の頭に書いてあり、6-8 で 4 プロファイルぶんが
 同じ形で足される。
 
 #### 決めたこと 3: autoincrement は**型を尊重して IDENTITY 句を足す**
@@ -3587,7 +3610,7 @@ UI では ai チェックと既定値欄が同時に触れるので到達でき�
 known-issue #6 の実害は `house-defaults.sql` に出ていた —— `users` が PRIMARY と UNIQUE の
 2 本を持つのに、どちらも `users_pkey` という名前で出て PG が 2 つ目を弾く。原因は
 「`key/@name` を読まずテーブル名から組む」ことなので、**名前欄を読む**のが直し方の本体。
-名前欄は [`js/keymanager.ts`](js/keymanager.ts) が持つ編集可能な値で、無視してよいものではない。
+名前欄は [`frontend/js/keymanager.ts`](frontend/js/keymanager.ts) が持つ編集可能な値で、無視してよいものではない。
 
 空のときの生成規約は **PG が自分で付ける名前に合わせた**（`<table>_pkey` / `<table>_<cols>_key`）。
 introspection で読み直しても名前が動かないため。**index だけは例外**で、PG の自動名は
@@ -3616,11 +3639,11 @@ name 属性の無い `<key>` を読むと `getAttribute` が null を返し、DD
 **`"null"` という文字列の制約名**を作っていた。mssql は `CONSTRAINT null`、sqlite は
 `CREATE INDEX 'null'` を実際に出す。
 
-この癖を残す根拠は [`js/io/model.ts`](js/io/model.ts) が書いていた「serializer が `String()` で
+この癖を残す根拠は [`frontend/js/io/model.ts`](frontend/js/io/model.ts) が書いていた「serializer が `String()` で
 受けて `name="null"` を書く現行仕様を保つ」（段階4-4 の決めたこと 3）だが、**その相手の XML
-serializer は 6-5a で撤去済み**。[`js/io/json-serializer.ts`](js/io/json-serializer.ts) は falsy を
+serializer は 6-5a で撤去済み**。[`frontend/js/io/json-serializer.ts`](frontend/js/io/json-serializer.ts) は falsy を
 キーごと落とすので、同じモデルから **JSON は「名前なし」・DDL は「名前は `null`」**という
-食い違いだけが残っていた。半移行そのものなので [`js/io/xml-parser.ts`](js/io/xml-parser.ts) で
+食い違いだけが残っていた。半移行そのものなので [`frontend/js/io/xml-parser.ts`](frontend/js/io/xml-parser.ts) で
 `?? ""` に正規化した。
 
 **これは未現代化 4 本の挙動を意図的に動かした本段階唯一の変更**（golden は 0 バイト差 ——
@@ -3652,9 +3675,9 @@ serializer は 6-5a で撤去済み**。[`js/io/json-serializer.ts`](js/io/json-
 
 | 規則 | 置き場所 | 6-8 での効き方 |
 |---|---|---|
-| 命名規約（dialect 非依存） | [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) | **呼ぶだけ** |
-| 識別子の引用（dialect 依存。囲む文字が 5 通り） | 同上の `quoteIdentifier(name, rules)` ＋ [`keywords.ts`](js/io/ddl/keywords.ts) | `IdentifierRules` を 4 つ足す。規則本体は共有 |
-| 既定値の `'` エスケープ（#11） | [`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) の `isStrict()` の中 | `strict="1"` が付いた瞬間に効く |
+| 命名規約（dialect 非依存） | [`frontend/js/io/ddl/naming.ts`](frontend/js/io/ddl/naming.ts) | **呼ぶだけ** |
+| 識別子の引用（dialect 依存。囲む文字が 5 通り） | 同上の `quoteIdentifier(name, rules)` ＋ [`keywords.ts`](frontend/js/io/ddl/keywords.ts) | `IdentifierRules` を 4 つ足す。規則本体は共有 |
+| 既定値の `'` エスケープ（#11） | [`frontend/js/io/ddl/shared.ts`](frontend/js/io/ddl/shared.ts) の `isStrict()` の中 | `strict="1"` が付いた瞬間に効く |
 
 **`naming.ts` の順序規約**: 名前は引用前の生名で組み、返り値を呼び手が `quoteIdentifier()` に通す。
 逆にすると `fk_"顧客"_"参照"` のような名前ができる（正しくは `"fk_顧客_参照"`）。
@@ -3968,7 +3991,7 @@ fixture 由来の実バイト列で通す役目を兼ねている。別名で書
 #### 決めたこと 5: known-issue **#14** を新設した
 
 `mssql` の UNIQUE キーが **T-SQL に無い `UNIQUE KEY (...)` 構文**（MySQL のもの）で出る。
-[`js/io/ddl/mssql.ts:63`](js/io/ddl/mssql.ts#L63) が `db/mssql/output.xsl` の逐語で、
+[`frontend/js/io/ddl/mssql.ts:63`](frontend/js/io/ddl/mssql.ts#L63) が `db/mssql/output.xsl` の逐語で、
 正しくは `CONSTRAINT <name> UNIQUE ( <cols> )`。**6-5a が移植した upstream の粗さで、
 当時の 9 件の一覧から漏れていたもの** —— 4 本の fixture を実型で書き直すときに
 house 既定の UNIQUE を読み直して見つかった。house 既定は `users` に UNIQUE を 1 本持つので
@@ -3987,7 +4010,7 @@ fixture が PG 用のままだった間は「未知型が先頭型に落ちる�
 | 未現代化 4 本: 式の既定値が引用符で囲まれる | `DEFAULT 'UUID()'`（mysql）／ `DEFAULT 'SYS_GUID()'`（oracle） | known-issue **#11** の未現代化ぶん |
 
 **`CURRENT_TIMESTAMP` だけが裸で出る**のは upstream が特例を 1 つだけ持っているため
-（[`js/io/ddl/shared.ts`](js/io/ddl/shared.ts) の `quoteDefault`）。strict なら
+（[`frontend/js/io/ddl/shared.ts`](frontend/js/io/ddl/shared.ts) の `quoteDefault`）。strict なら
 `isSqlExpression()` が式全般を見るので、6-8 で `UUID()` も `SYS_GUID()` も裸になる。
 
 **`mysql` の「コメントを 60 字で無言に切り詰める」は golden に出ていない**
@@ -4238,7 +4261,7 @@ H2 は postgresql と**構文レベルで同一**（`COMMENT ON` も `CREATE IND
 `GENERATED ALWAYS AS IDENTITY` も持ち、識別子は `"` で囲む）で、違うのは予約語の語彙だけ。
 このまま書けば **170 行のコピーが 3 本目としてできる**。
 
-[`js/io/ddl/ansi.ts`](js/io/ddl/ansi.ts) を作り、3 本の違いを 2 つに畳んだ:
+[`frontend/js/io/ddl/ansi.ts`](frontend/js/io/ddl/ansi.ts) を作り、3 本の違いを 2 つに畳んだ:
 
 | | `postgresql` | `sql-standard` | `h2` |
 |---|---|---|---|
@@ -4379,7 +4402,7 @@ $ mariadb -uroot -px -N -e "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHE
 
 #### 決めたこと 3: `mariadb` は `ansi.ts` に載らない（MySQL 系はもう 1 つの骨格）
 
-6-7b が抽出した [`ansi.ts`](js/io/ddl/ansi.ts) は「CREATE TABLE ＋ ALTER TABLE ADD CONSTRAINT で
+6-7b が抽出した [`ansi.ts`](frontend/js/io/ddl/ansi.ts) は「CREATE TABLE ＋ ALTER TABLE ADD CONSTRAINT で
 組み立てる系」で、MySQL 系は骨格からして違う:
 
 | | ansi 系（postgresql / sql-standard / h2） | MySQL 系（mariadb / mysql） |
@@ -4485,12 +4508,12 @@ CI のワークフローは増やしていない。**`test:browser` は 2 分台
 6-7c は「いま括ると『未現代化の mysql』と『現代化済みの mariadb』の両方を満たす形になり、
 6-8 で作り直しになる」として送っていた。**mysql を現代化する本段階が正しい時期。**
 
-[`js/io/ddl/ansi.ts`](js/io/ddl/ansi.ts)（6-7b）の対で、8 本が 2 つの骨格 ＋ 3 本の独立実装に分かれた:
+[`frontend/js/io/ddl/ansi.ts`](frontend/js/io/ddl/ansi.ts)（6-7b）の対で、8 本が 2 つの骨格 ＋ 3 本の独立実装に分かれた:
 
 | 骨格 | プロファイル | 特徴 |
 |---|---|---|
-| [`ansi.ts`](js/io/ddl/ansi.ts) | `postgresql` / `sql-standard` / `h2` | `ALTER TABLE ADD CONSTRAINT` ／ `COMMENT ON` ／ `"` |
-| [`mysql-style.ts`](js/io/ddl/mysql-style.ts) | **`mariadb` / `mysql`** | テーブル定義内のキー ／ `COMMENT` 属性 ／ `AUTO_INCREMENT` ／ `` ` `` |
+| [`ansi.ts`](frontend/js/io/ddl/ansi.ts) | `postgresql` / `sql-standard` / `h2` | `ALTER TABLE ADD CONSTRAINT` ／ `COMMENT ON` ／ `"` |
+| [`mysql-style.ts`](frontend/js/io/ddl/mysql-style.ts) | **`mariadb` / `mysql`** | テーブル定義内のキー ／ `COMMENT` 属性 ／ `AUTO_INCREMENT` ／ `` ` `` |
 | 独立 | `mssql` / `oracle` / `sqlite` | 6-8b 〜 6-8d で現代化 |
 
 **mariadb の出力はバイト単位で不変**（golden 7 本が 1 バイトも動いていない）。
@@ -4539,7 +4562,7 @@ ERROR 1064 (42000): ... right syntax to use near 'UUID(),
 MySQL 8.0.13 で入った**式デフォルト**の構文で、`DEFAULT (UUID())` と包む必要がある。
 **MariaDB は `DEFAULT UUID()` をそのまま受ける**ので、2 本の間の実際の差。
 
-規則は「**関数呼び出しだけ**を包む」にした（[`shared.ts`](js/io/ddl/shared.ts) の
+規則は「**関数呼び出しだけ**を包む」にした（[`shared.ts`](frontend/js/io/ddl/shared.ts) の
 `isFunctionCall` を切り出し、`MysqlDialect.parenthesizeFunctionDefaults` で切り替える）。
 `isSqlExpression` 全体ではないのは、**キーワードを包むと意味が変わる**ため ——
 MySQL の `DEFAULT CURRENT_TIMESTAMP` は TIMESTAMP 列の自動初期化で、
@@ -5698,7 +5721,7 @@ MySQL 向けの DDL を出す」が通る。6-8d が次段階への入力とし�
 
 読み込み時変換をやらないことで、次がすべて守られる:
 
-- [`js/io/json-parser.ts`](js/io/json-parser.ts) の db 照合はそのまま（4-2b の「型キーの安全性が
+- [`frontend/js/io/json-parser.ts`](frontend/js/io/json-parser.ts) の db 照合はそのまま（4-2b の「型キーの安全性が
   `db` 照合に依存」が生き続ける）。**設計 JSON の形式も `formatVersion` も 1 バイトも動かない**
 - 4-3b が却下した「パレットを取り直して開き直す」に触れない
 - 6-8d が却下した「`aka` を膨らませて黙って開けるようにする」にも触れない
@@ -5709,7 +5732,7 @@ MySQL 向けの DDL を出す」が通る。6-8d が次段階への入力とし�
 
 #### 決めたこと 3: 寄せ先の決め方は **4 段で、上ほど正確**
 
-[`js/io/convert.ts`](js/io/convert.ts) の `resolveType`:
+[`frontend/js/io/convert.ts`](frontend/js/io/convert.ts) の `resolveType`:
 
 1. **同じ `id`** —— 6-7 が「同じ意味の型には全プロファイルで同じ id を振る」と決めているので
    最も確か（PG の 24 型のうち h2 で 18 本、mysql で 15 本が当たる）。ただし
@@ -5806,7 +5829,7 @@ sql 名だけ見ると何が起きたのか分からない。いまは `INTEGER 
 
 #### 次段階への入力 —— 6-10b
 
-- **UI がまだ無い。** 出力先 db の select（[`js/io.ts`](js/io.ts) の `ormtarget` が型紙）と
+- **UI がまだ無い。** 出力先 db の select（[`frontend/js/io.ts`](frontend/js/io.ts) の `ormtarget` が型紙）と
   locale 1 キー、`Designer.toOrm(target, targetDb?)` への波及、`docs/TYPE-MAPPING.md`
   （kind × 8 プロファイルの表。6-7 が「この表そのものが公開プロダクトの価値情報」と書いて
   未処理のままの宿題）が 6-10b
@@ -8000,8 +8023,8 @@ DesignController の `ai = false` リテラル（「それまで嘘をつかな�
 5-6（introspection の変換層だけを先に足した）と同じ形で、先に backend を作ると
 「提案は来るが適用できない」半端な状態が develop に載る。
 
-入ったのは 2 本 —— [`js/io/ai/suggestion.ts`](js/io/ai/suggestion.ts)（提案と patch の型。
-型だけで emit 空）と [`js/io/ai/apply-patch.ts`](js/io/ai/apply-patch.ts)（`DesignModel` →
+入ったのは 2 本 —— [`frontend/js/io/ai/suggestion.ts`](frontend/js/io/ai/suggestion.ts)（提案と patch の型。
+型だけで emit 空）と [`frontend/js/io/ai/apply-patch.ts`](frontend/js/io/ai/apply-patch.ts)（`DesignModel` →
 `DesignModel` の純関数）。**LLM も HTTP も 1 バイトも関わらない。**
 
 **フロントは 0 行**（`src/app.ts` にも `js/io.ts` にも `locale/` にも触っていない）。
@@ -9148,7 +9171,7 @@ mount の右辺を変える ／ `${VAR:-}` 形式に戻す。
 
 付けずに叩くと curl は `application/x-www-form-urlencoded` を送り、**Tomcat が
 パラメータ解析で body を読み尽くす** —— **201 が返るのに 0 バイトのファイルが書かれた。**
-フロントは [`js/io.ts`](js/io.ts) が `application/json` を明示しているので実運用では起きない。
+フロントは [`frontend/js/io.ts`](frontend/js/io.ts) が `application/json` を明示しているので実運用では起きない。
 **2-4 の E2E はこれを踏む。**
 
 #### 申し送り
@@ -9198,7 +9221,7 @@ mount の右辺を変える ／ `${VAR:-}` 形式に戻す。
 4. **CDP の `Log.entryAdded`** が `stackTrace` を持っていて、`Request.a.onreadystatechange` の
    1 フレームだけを指した —— そこは `r.xml ? a.responseXML : a.responseText`
 
-**原因は [`js/io.ts`](js/io.ts) の `sendSave` が応答を `xml: true` で受けていたこと。**
+**原因は [`frontend/js/io.ts`](frontend/js/io.ts) の `sendSave` が応答を `xml: true` で受けていたこと。**
 save が返すのは **201 ＋ 空 body で `Content-Type` も付かない**ので、`responseXML` は
 **null にしかならない** —— にもかかわらず、**読むだけで Chrome が空の応答に HTML パーサを当て**、
 違反が 2 件出る。同じ XHR で `responseText` を読めば **0 件**（切り分けを実測で確認）。
@@ -9857,6 +9880,137 @@ Error: The updater encountered one or more errors.
 - **残るのは 2-6**（`frontend/` 集約。golden 114 本の無差分が成功判定）と **§6.4 の仕上げ**、
   **公開デモの外側 #84**
 
+### 2026-08-27 HANDOVER §2「配布」段階2-6 —— `frontend/` へ集約し、§2 を閉じた
+
+正本は [issue #107](https://github.com/propagandist/grabado/issues/107)。契約は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9。**4 か所で予約されていた集約**
+（段階3-1 / 4-0a / 4-1a / 5-0）を実行し、**§2 の分割表（#83）を閉じた**段階。
+
+#### 通った（2026-08-27 実測）
+
+| 検査 | 結果 |
+|---|---|
+| **★ golden 114 本** | **1 バイトも動いていない**（この段階の成功判定） |
+| `npm run typecheck` | 緑 |
+| `npm test` | **586 本** |
+| `npm run test:browser`（特性化） | **191 本** |
+| `npm run known-issues` | 1 本 |
+| `npm run test:dist` | **6 本** |
+| `npm run test:image` | **13 本** |
+
+**差分は 110 rename ＋ 36 modified。** 実装（`frontend/js/` の中身）は**移動しただけで 1 行も
+変わっていない**。
+
+#### 決めたこと 1: **案 B（部分集約）** —— `package.json` と `tests/` は root に残す（ユーザー判断）
+
+| 何 | どこへ |
+|---|---|
+| `index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/` | **`frontend/` へ**（110 ファイル） |
+| `package.json` / `package-lock.json` / `tsconfig.json` / `*.config.ts` / `tests/` / `scripts/` / `tools/` | **root のまま** |
+
+**HANDOVER §2.2 の骨格（`COPY frontend/package*.json`）にはならない。** それでも B にした理由:
+
+- **`tests/` を割らない** —— `tests/contract/` は **backend と共有**（`ci-server.yml` の paths）、
+  `tests/image/` は **root の `compose.yaml` を叩く**。骨格どおりに動かすと**この 2 つだけ root に
+  残り、tests が 2 か所に割れる**
+- **`npm test` の起動位置が変わらない** —— `package.json` が動くと、5 系統のテストの回し方・
+  `scripts/vitest.mjs` の cwd 正規化・CI の `working-directory` が一斉に動く。
+  **大移動に「テストの回し方の変更」を重ねない**
+- **集約の利益は「骨格との一致」と「`server/` との対称」で、機能上の改善は無い。**
+  **利益が薄いぶん、コストを最小の形に寄せる**
+
+#### 決めたこと 2: **URL 空間は 1 バイトも変えない**
+
+**これが golden 114 本の無差分を成立させている。** vite の `root` を `frontend` にすると、
+**ファイルシステム上の位置だけが動き、`/index.html` も `db/<db>/datatypes.xml` もそのまま**。
+
+その事実を**コードの形でも表した** —— `tests/node/harness.ts` の `readRepoFile()` は
+**URL パス → ファイルシステム**の写像なので、**呼び出し側は URL のまま**にして、
+**base を関数の中で 1 か所だけ `frontend/` にした**（呼び出し 3 箇所を書き換える形にしない）。
+
+#### ★ 実測 1: `viteStaticCopy` の `src` は **vite の root 基準**（cwd 基準ではない）
+
+**推測が外れた。** 「`src` はプロセスの cwd から解決される」と読んでいたので
+`{ src: "frontend/db" }` と書いたら、ビルドがこう落ちた:
+
+```
+[plugin vite-plugin-static-copy:build]
+Error: No file was found to copy on frontend/db src.
+```
+
+**root 基準なので、集約後も `{ src: "db" }` のままでよかった** —— **3 行は動いていない**。
+**推測で書いた行が、ビルド 1 回で否定された形。** コメントを実測に置き換えてある。
+
+#### ★ 実測 2: 機械置換から漏れる形が **2 つ**あった
+
+`../../js/` → `../../frontend/js/` の一括置換で 49 行が片付いたが、**2 つの形が漏れた**。
+**どちらもテストが赤くなって気づいた**（typecheck は通っていた）。
+
+| 漏れた形 | どこ | なぜ漏れたか |
+|---|---|---|
+| **変数経由の組み立て** | `tests/node/forbidden-api.test.ts`<br>`["js", "src"].flatMap((dir) => collectSources(join(REPO_ROOT, dir)))` | パスが**リテラルとして存在しない**。`join(REPO_ROOT, "js"` の形を探す grep に掛からない |
+| **URL → FS の写像** | `tests/node/harness.ts` の `readRepoFile("index.html")` | 引数は**URL パス**で、`js/` も `db/` も現れない。**呼び出し側を見ても分からない** |
+
+**★ 「パス文字列を grep して置換する」だけでは足りない。** 動かしたあとに**全系統を回す**ことが、
+この 2 つを見つける唯一の経路だった（`npm test` の 7 スイートが赤くなった）。
+
+#### 決めたこと 3: `dist` は **`frontend/dist/`**（root の外に出さない）
+
+vite の `outDir` は root 基準なので、`root: "frontend"` にした時点で自然に `frontend/dist` になる。
+**`../dist` で root の外へ出す案は採らない** —— `emptyOutDir` が root 外を消すことになり、
+**「出力先が root の外」という形そのものが事故のもと**。
+
+追随したのは 3 か所だけ: `.gitignore`（`/dist/` → `/frontend/dist/`）・`Dockerfile` の
+`COPY --from=web /web/frontend/dist`・`.dockerignore` の削り直し（`frontend/dist`）。
+**`playwright.dist.config.ts` は `vite preview` を使うので 1 行も変わらない。**
+
+#### 決めたこと 4: `.dockerignore` は **`!frontend` の 1 行に畳む**
+
+**親を除外したままだと配下の `!` が効かない**（2-0 の決めたこと 4 の記法）。
+`!index.html` `!src` `!js` `!styles` `!db` `!locale` `!images` の 7 行が **`!frontend` 1 行**になり、
+**ビルド出力だけを後勝ちで削る**（`frontend/dist`）—— **`server/` とまったく同じ形**に揃った。
+
+**CI の paths も同じく畳んだ**（`ci-frontend.yml` / `ci-image.yml` とも `frontend/**` の 1 行）。
+
+#### 検出が本物か確かめた
+
+**この段階の検出は「golden 114 本の無差分」そのもの。** 移動でどこかがずれていれば、
+**特性化テスト 191 本のどれかが赤くなる**（実際、途中で 7 スイートが赤くなり、実測 2 の
+2 つを見つけた）。**別途壊して確かめる必要が無い**のは、**成功判定が検出そのものだから**。
+
+#### 却下した案
+
+- **案 A（骨格どおり。`package.json` と `tests/` も `frontend/` へ）** —— 決めたこと 1。
+  **tests が 2 か所に割れる**
+- **案 C（予約を撤回してルート維持を確定）** —— 4 か所の予約を撤回することになる。
+  **2-0 が「Docker が動いたあとなら単独 PR で golden 無差分を成功判定にできる」と置いた条件が、
+  いま満たされていた**
+- **`dist` を `../dist`（root）へ出す** —— 決めたこと 3。`emptyOutDir` が root 外を消す形になる
+- **`.dockerignore` を 7 行のまま `!frontend/index.html` … と並べる** —— **親を除外したままだと
+  配下の `!` が効かない**。`!frontend` 1 行のほうが**記法の罠を踏まない**
+- **文書のリンク修正を別 PR にする** —— **移動と同じ diff でないと、途中のコミットで文書が壊れる**
+- **`CUSTOMIZATIONS.md` の本文表記（`js/` など）も一括で `frontend/js/` に直す** ——
+  **過去の記録は当時の記述**なので**本文は触らない**。**リンクとそのラベルだけ**直した
+  （リンクは実体を指すものなので、壊れたままにできない）
+- **`git mv` を使わずコピー＋削除** —— 履歴が切れる。**110 ファイルすべてが `R`（rename）**として
+  記録されている
+
+#### 申し送り
+
+- **★ §2 が閉じた。** 分割表（#83）の 2-0 〜 2-6 がすべて済んだ。**HANDOVER §9 の順序で残るのは
+  §6.4 の仕上げ**（locale の未訳もそこ）
+- **★ HANDOVER §2.2 の骨格とは、まだ 1 点違う** —— 骨格は `COPY frontend/package*.json` だが、
+  **実在は root の `package.json`**（決めたこと 1）。**注記は実在に合わせて直した**が、
+  **骨格そのものは当時の記録なので書き換えていない**
+- **★ この PR は CI を通していない** —— **GitHub Actions が major outage**（2026-08-26 15:11 UTC〜、
+  「issue with a database primary」）で、**#101 / #106 / 本 PR とも run が起動しないか失敗した**。
+  **手元で 7 系統すべてを回して緑**（上の表）。**障害の回復後に CI を確認すること**
+- **`ci-frontend.yml` / `ci-image.yml` の paths が `frontend/**` に畳まれた** ——
+  **フロントに何を足しても paths を直す必要が無くなった**。逆に言えば、
+  **`frontend/` の外にフロントの入力を置くと、静かに検査から漏れる**
+- **`tests/golden/README.md` と `tests/known-issues/README.md` のリンクも動いた**
+  （golden 本体 114 本は無差分）
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）
@@ -9866,13 +10020,13 @@ Error: The updater encountered one or more errors.
 | ~~PHP backend（`backend/php-*` 他）~~ | **段階5-2 で撤去**（15 実装 31 ファイル）。§0 実測完了（契約は ARCHITECTURE §4）→ **段階5-1b で Kotlin が実測契約を満たしたことを確かめてから消した**。1 行も触らないまま役目を終えている（4-6 の外部変更検知はフロント側の read-before-write、6-1 の dangling も放置のまま撤去） | **完了。旧実装は commit `7b3bb3d`**（`git show 7b3bb3d:backend/php-file/index.php`）。凍結コピーは置かない ——それ自体が二重管理になる |
 | ~~submodule `backend/php-s3/amazon-s3-php`~~ | **段階5-2 で削除**（`.gitmodules` ごと） | 完了 |
 | ~~XML 永続化（`toXML()` / `save` の body）~~ | **段階4-3b でユーザーに見える保存経路から撤去**し、**段階6-5a で残る 1 か所（DDL 入力）ごと撤去した**。`js/io/ddl-xml.ts` と `tests/golden/ddl-input/` の 7 本も同時に消えている | **完了。grabado に XML の書き出しは 1 つも無い**（読み込みは互換で残す。形式は中身で判別） |
-| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`js/io/ddl/`](js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`js/io/ddl/naming.ts`](js/io/ddl/naming.ts) と [`keywords.ts`](js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せた**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。**段階6-8a 〜 6-8d で既存 4 本（mysql / mssql / oracle / sqlite）を現代化し、6-5a が逐語で持ち込んだ粗さ 9 件 ＋ 6-6b の 1 件が尽きた**（#12 / #14 は 6-8b、#13 は 6-8d）。骨格は **ansi 3 本 / mysql-style 2 本 / 独立 3 本**に落ち着き、8 本とも §6.3 の規約に載っている。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
+| ~~DDL 生成 `db/<db>/output.xsl`（XSLT 1.0）~~ | **§7 で golden 固定**（`tests/golden/ddl/`）→ **段階6-1 で 9 本 → 5 本**（`cubrid` / `vfp9` / `web2py` / `sqlalchemy` を撤去。golden も 63 → 35 本）→ **段階6-5a で 5 本とも撤去し、[`frontend/js/io/ddl/`](frontend/js/io/ddl/) へ逐語移植**（golden 35 本は 1 バイトも動いていない） | **完了。`db/` に残るのは `datatypes.xml` だけ**。**段階6-5b で `postgresql` を §6.3 の規約へ寄せた**（命名・識別子の引用・known-issue #6 / #11。golden 5 本 31 行が動き、未現代化 4 本の 28 本は 0 バイト差）。規則は [`frontend/js/io/ddl/naming.ts`](frontend/js/io/ddl/naming.ts) と [`keywords.ts`](frontend/js/io/ddl/keywords.ts) にあり、**6-8 は `IdentifierRules` を 4 つ足すだけ**。**新設 3 本は TS 生成器の上に載せた**（6-7）。**撤去した `sqlalchemy` は 6-9 で ORM 出力として作り直す**。**段階6-8a 〜 6-8d で既存 4 本（mysql / mssql / oracle / sqlite）を現代化し、6-5a が逐語で持ち込んだ粗さ 9 件 ＋ 6-6b の 1 件が尽きた**（#12 / #14 は 6-8b、#13 は 6-8d）。骨格は **ansi 3 本 / mysql-style 2 本 / 独立 3 本**に落ち着き、8 本とも §6.3 の規約に載っている。**段階6-6b で非 PG の golden が初めて「その DB の DDL」になった**（入力が PG 用の型名でなくなったため。21 本が動き、6-8 の比較対象ができた） |
 | 型パレット `db/<db>/datatypes.xml` | **段階6-7a〜6-7c で新設 3 本（`sql-standard` / `h2` / `mariadb`）が入り、対応 DB 8 本がそろった**（3 本とも strict ＝ 最初から現代化済み。予約語と型は SQL:2016 の一次資料 / H2 2.4.240 / MariaDB 11.8.8 の実物から採取）。保持。**段階4-2b で全 9 本の `<type>` に安定 `id` を付与**（設計 JSON の型キー。`label` / `sql` とは独立）。**段階6-1 で 5 本に**（撤去 4 本ぶんが消えただけで、残る 5 本は 1 バイトも動いていない）。**段階6-2 で `postgresql` の `fk` 2 行を label 参照から id 参照へ**（それ以外は不変） | PostgreSQL 18 型パレットへ差し替え（**6-3**。案と移行表は段階6-0 の記録）。**uuid が無く house 既定の PK が INTEGER に落ちる**（known-issues #4）。差し替え時は同じ PR で設計ファイルを移行する（`docs/FORMAT.md`）。他プロファイルの現代化と `re` の是正（known-issues #10）は 6-8。**段階6-4 で `postgresql` に `<template>`（§6.2 初期テーブル）と `newrowtype` が入り、6-7a 〜 6-8d で 8 本すべてが持つようになった** —— 型 id 参照なので同じ `palette-id.test.ts` が実在を見る。**段階6-8d で最後の `sqlite` が strict になり、未現代化が 0 本に**（`re` を読むコードと先頭型フォールバックがリポジトリから消えた） |
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 | ~~`Dockerfile`（busybox httpd 11 行）~~ | **段階2-1 で置き換え**。`COPY . .` でリポジトリをそのまま配る作りで、`index.html` が `/src/main.ts` を読むので**起動しても動かなかった**（README にも「現在このイメージは動かない」と書いてあった）。`.dockerignore` の 4 行の拒否リストも同時に**許可リスト**へ | **完了。**3 ステージ（web / api / runtime）・digest ピン・非 root。契約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9、実測は段階2-1 の記録 |
 | ~~`README.md`（upstream の紹介文・PayPal 寄付ボタン・**2012 年からの News 10 本**）~~ | **2026-08-26 に全面書き換え**（#95）。`/js/*.js` を指す Code Style 表も落ちた（**`js/` に `.js` は 1 本も無い**。段階3-3b で尽きた）。**「現在このイメージは動かない」の注記**も 2-1 で実体が消えていたので落ちている | **完了。**公開の顔は英語 [`README.md`](README.md)、日本語版は [`README.ja.md`](README.ja.md)。**2 本は同じ構成を保つ**（片方だけ直さない。値は [`CLAUDE.md`](CLAUDE.md) の「文章の値」） |
 
-> 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`js/config.js`](js/config.js)（`CONFIG.*`）。
+> 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`frontend/js/config.js`](frontend/js/config.js)（`CONFIG.*`）。
 
 （以降、実装が進むたびに差分を追記する）

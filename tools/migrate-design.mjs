@@ -173,7 +173,7 @@ const TYPE_MIGRATIONS = {
  * @returns {{ db: string, labelToId: Map<string, string>, ids: Set<string> }}
  */
 export function readPalette(db) {
-    const path = join(REPO_ROOT, "db", db, "datatypes.xml");
+    const path = join(REPO_ROOT, "frontend", "db", db, "datatypes.xml");
     const xml = readFileSync(path, "utf8");
 
     const labelToId = new Map();

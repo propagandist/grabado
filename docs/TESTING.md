@@ -103,7 +103,8 @@ CI もワークフローを分けてある（`.github/workflows/ci-frontend.yml`
 
 `npm run test:browser` と `npm run known-issues` は **Vite dev server** を Playwright が勝手に起動する
 （[`../vite.config.ts`](../vite.config.ts)、127.0.0.1:4173）。手で立てる必要はない。
-root はリポジトリルートのままなので、`index.html` / `db/` / `locale/` / `styles/` の URL は
+**root は `frontend/`**（段階2-6 で集約）。**URL 空間は 1 バイトも変わっていない**ので、
+`index.html` / `db/` / `locale/` / `styles/` の URL は
 §3 段階1 以前の静的サーバ時代と同じ。
 
 ### `npm test` はラッパー経由（Windows の vitest バグ回避）
@@ -148,7 +149,7 @@ node -e "process.chdir('d:/projects/grabado'); require('child_process').spawnSyn
 
 **段階6-5a まではもう 1 つ理由があった** —— DDL 生成の実体が `db/<db>/output.xsl`（XSLT 1.0）を
 ブラウザの `XSLTProcessor` で適用したもので、Node に `XSLTProcessor` が無かった。
-生成が TS になった（[`../js/io/ddl/`](../js/io/ddl/)）ので、いま 2 系統を分ける理由は DOM だけ。
+生成が TS になった（[`../frontend/js/io/ddl/`](../frontend/js/io/ddl/)）ので、いま 2 系統を分ける理由は DOM だけ。
 
 そこで役割を分けた。
 
@@ -187,11 +188,11 @@ node -e "process.chdir('d:/projects/grabado'); require('child_process').spawnSyn
 
 **page 文脈（`test:browser` / `test:dist` / `known-issues`）は別経路**。`page.evaluate` は
 バンドルの外で走るので `import` に置き換えられず、`window` 越しのハンドルが要る。段階3-4b で
-`window.SQL.designer` から **[`../src/main.ts`](../src/main.ts) が置く `window.d`** に寄せた
+`window.SQL.designer` から **[`../frontend/src/main.ts`](../frontend/src/main.ts) が置く `window.d`** に寄せた
 （upstream 由来のデバッグハンドルを、そのままテスト API として使う）。型パレットの差し替えも
 **段階4-0b で `window.DATATYPES` から `window.d.palette.setRoot()` になった**ので、page 側が触る
 出荷コードの面は `d` だけになっている（node 側は `designer.palette`。実体は
-[`../js/io/palette.ts`](../js/io/palette.ts)）。
+[`../frontend/js/io/palette.ts`](../frontend/js/io/palette.ts)）。
 
 **この狙いは段階3-1 で実証された**。`js/oz.js` / `config.js` / `globals.js` が `.ts` になり
 `export` を持ったが、[`../tests/node/harness.ts`](../tests/node/harness.ts) の変更は
@@ -244,7 +245,7 @@ Node の素の indirect eval と `vm.runInContext` では同じコードが `Ref
 入り、**対応 DB 8 本がそろった**）。**段階6-8a 〜 6-8d で既存 4 本（`mysql` / `mssql` /
 `oracle` / `sqlite`）が現代化され、56 本すべてが「その DB の DDL」になった** ——
 それまでの非 PG の golden は upstream の XSLT を逐語移植した粗さを含んでいた。
-[js/io.ts](../js/io.ts) の `clientsql()` と同じ経路（`Designer.toDdl()` → `.trim()`）で採る。
+[js/io.ts](../frontend/js/io.ts) の `clientsql()` と同じ経路（`Designer.toDdl()` → `.trim()`）で採る。
 UI の `#textarea` に入る値と一致する。
 入力は**そのプロファイルの fixture**（`tests/fixtures/<db>/`。§6 段階6-6a）。
 
@@ -265,7 +266,7 @@ UI の `#textarea` に入る値と一致する。
 ```
 
 母集団の定義は [`../tests/support/fixtures.ts`](../tests/support/fixtures.ts) の
-`ormGoldenCases`、拡張子は [`../js/io/orm/generate.ts`](../js/io/orm/generate.ts) の
+`ormGoldenCases`、拡張子は [`../frontend/js/io/orm/generate.ts`](../frontend/js/io/orm/generate.ts) の
 `ORM_EXTENSIONS`。ORM が 4 本になっても 56 本で、DDL の 56 本と同じ桁に収まる。
 
 **`db/` にディレクトリを作っていない**のが要点 —— 作った瞬間 `DB_PROFILES` に入り、
@@ -285,7 +286,7 @@ ORM は下敷きの db プロファイルの上に乗る**別の軸**で、
 `convertGoldenCases`。採るのは [`../tests/browser/convert.spec.ts`](../tests/browser/convert.spec.ts)。
 
 **既存の DDL golden 56 本が 1 バイトも動かないこと**が本段階の完了判定で、根拠は
-[`../js/io/convert.ts`](../js/io/convert.ts) の `convertDesign` が**同じ db を恒等で返す**こと
+[`../frontend/js/io/convert.ts`](../frontend/js/io/convert.ts) の `convertDesign` が**同じ db を恒等で返す**こと
 （寄せ先の選び方を素直に通すと「同じ kind の先頭型」に寄って別の型になりうる）。
 
 ### 状態スナップショット golden — `tests/golden/state/<fixture>.json`
@@ -324,7 +325,7 @@ ORM は下敷きの db プロファイルの上に乗る**別の軸**で、
   （`toJson` → `fromJson`）で往復させ、`tests/support/state.ts` の状態スナップショットが
   バイト一致すること。7 fixture すべてで緑。どちらも「2 回目の読み込み」に揃えてあるので
   履歴依存（z-index 等）は相殺される。**差が出たらそれがそのまま「JSON が落とした情報」の一覧**になる。
-- **形式**: 2 スペース・末尾 LF 1 つ・キー順が [`../js/io/json-format.ts`](../js/io/json-format.ts) の
+- **形式**: 2 スペース・末尾 LF 1 つ・キー順が [`../frontend/js/io/json-format.ts`](../frontend/js/io/json-format.ts) の
   宣言順であること。`JSON.stringify(JSON.parse(actual), null, 2)` に戻して完全一致することで、
   2 スペース以外の加工が 1 つも入っていないことを見ている。
 - **diff フレンドリー**: テーブルを 1 つ足した設計を読み書きすると、既存部分が 1 バイトも動かず
@@ -353,7 +354,7 @@ serializer の出力と 1 バイトも違わなかった（**読み込み側と�
 
 | ファイル | 担当 |
 |---|---|
-| [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../js/io/palette.ts`](../js/io/palette.ts) と [`../js/io/xml-parser.ts`](../js/io/xml-parser.ts) を直に叩く（ハーネス不要。どちらも実行時 import 0 本なので `conflict.test.ts` と同じ立場）。**8 プロファイル × 全候補名を掃き、解決先が必ずその名前を `sql` か `aka` に持つ型であることを見る全数テスト**が主役（6-8d まで「旧規則の参照実装との差分テスト」だったものを、比較相手がコードから消えたので裏返した）。ほかに `aka` 照合（旧型名 → 新型の表をリテラルで固定）・`length` の契約・`fkIndexFor`・パレット差し替え後の追随・**撤去した legacy 規則の再発防止 3 本**（人工パレット） |
+| [`../tests/node/type-resolution.test.ts`](../tests/node/type-resolution.test.ts) | [`../frontend/js/io/palette.ts`](../frontend/js/io/palette.ts) と [`../frontend/js/io/xml-parser.ts`](../frontend/js/io/xml-parser.ts) を直に叩く（ハーネス不要。どちらも実行時 import 0 本なので `conflict.test.ts` と同じ立場）。**8 プロファイル × 全候補名を掃き、解決先が必ずその名前を `sql` か `aka` に持つ型であることを見る全数テスト**が主役（6-8d まで「旧規則の参照実装との差分テスト」だったものを、比較相手がコードから消えたので裏返した）。ほかに `aka` 照合（旧型名 → 新型の表をリテラルで固定）・`length` の契約・`fkIndexFor`・パレット差し替え後の追随・**撤去した legacy 規則の再発防止 3 本**（人工パレット） |
 | [`../tests/browser/types.spec.ts`](../tests/browser/types.spec.ts) | 実ブラウザ側。`BIGINT` の解決（known-issue #3 の移設先）・**`UUID` の解決と strict の例外**（#4 の移設先。6-3）・XML 往復の安定・**FK 自動生成**（`rowManager` の対話経路。6-2 まで自動テストが 1 本も通っていなかった面）・パレット差し替え後の FK 生成・**型セレクタの中身**（`Row.buildTypeSelect`。パレットを読む唯一の UI 面で golden に 1 ビットも写らない。6-3） |
 
 ### 初期テーブルテンプレート — golden に 1 ビットも写らない面（§6 段階6-4）
@@ -364,9 +365,9 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 
 | ファイル | 担当 |
 |---|---|
-| [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../js/io/template.ts`](../js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。**8 本すべてが `<template>` と `newrowtype` を持つこと**・`postgresql` / `sql-standard` / `sqlite` の 3 列がその DB で house 既定をどう表すか・`<template>` を持たないパレット（旧 XML 同梱）が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外 |
+| [`../tests/node/template.test.ts`](../tests/node/template.test.ts) | [`../frontend/js/io/template.ts`](../frontend/js/io/template.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。**8 本すべてが `<template>` と `newrowtype` を持つこと**・`postgresql` / `sql-standard` / `sqlite` の 3 列がその DB で house 既定をどう表すか・`<template>` を持たないパレット（旧 XML 同梱）が空を返すこと・`applyTemplate` が PRIMARY を先に作る順序・型 id が引けなければ例外 |
 | [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・**`sqlite` の 3 列**（PK が既定値を持てない側の例） |
-| [`../tests/node/identifier.test.ts`](../tests/node/identifier.test.ts) | [`../js/io/ddl/naming.ts`](../js/io/ddl/naming.ts) の識別子検査を直に叩く（ハーネス不要。段階6-9b）。**どの名前が・どのプロファイルで・なぜ使えないか**の 3 つ組。8 本の上限と単位の表（実測と一次資料の別つき）・**囲めば通るものは 1 件も警告しない**こと・known-issue #15 が直っていないこと |
+| [`../tests/node/identifier.test.ts`](../tests/node/identifier.test.ts) | [`../frontend/js/io/ddl/naming.ts`](../frontend/js/io/ddl/naming.ts) の識別子検査を直に叩く（ハーネス不要。段階6-9b）。**どの名前が・どのプロファイルで・なぜ使えないか**の 3 つ組。8 本の上限と単位の表（実測と一次資料の別つき）・**囲めば通るものは 1 件も警告しない**こと・known-issue #15 が直っていないこと |
 | [`../tests/browser/identifier.spec.ts`](../tests/browser/identifier.spec.ts) | 実ブラウザ側（段階6-9b）。**警告が画面に届いているか** —— 波線（`class="invalid"`）と理由の tooltip、テーブル名ではコメントと重ねること、**警告が出ても名前はモデルに入る**（止めない）こと |
 | [`../tests/node/orm.test.ts`](../tests/node/orm.test.ts) | ORM 出力（段階6-9d / 6-9e）。golden 14 本を読むほか、**golden から読み取れない規則**を近くで押さえる —— テーブル名 → クラス名（**単数化は英語の規則だけ。倒せない語はそのまま**）・Kotlin 識別子の 3 段（そのまま / バッククォート / `_` 置換）・8 プロファイルの全型が型注釈を持つこと・**JPA は逆参照を出さない**こと・**Prisma は出す**こと（形式が要求するため。自己参照の名前付き relation と、ASCII だけの識別子の一意化を含む） |
 | [`../tests/node/type-mapping.test.ts`](../tests/node/type-mapping.test.ts) | [`TYPE-MAPPING.md`](TYPE-MAPPING.md) の表を実装の出力と 1 セルずつ突き合わせる（段階6-10b）。**手で書いた表は必ず腐る**ので、パレットを触れば docs が赤くなる形にしてある |
@@ -408,7 +409,7 @@ known-issue #10（`re` の後勝ち）も #4（先頭型フォールバック）
 
 | ファイル | 担当 |
 |---|---|
-| [`../tests/node/apply-patch.test.ts`](../tests/node/apply-patch.test.ts) | [`../js/io/ai/apply-patch.ts`](../js/io/ai/apply-patch.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。**8 op の意味論**（rename の追随先 3 つ・`hasSize` に従う `size` の始末・キー名を空で入れること・FK は `relations` に入ること）・**18 の落ち方が例外ではなく理由になること**（全ケースでモデルが同一参照）・`applyPatches` が配列順の畳み込みで途中の失敗に中断しないこと・**固定の提案 JSON を丸ごと通した結果**が serializer と DDL 生成にそのまま乗ること |
+| [`../tests/node/apply-patch.test.ts`](../tests/node/apply-patch.test.ts) | [`../frontend/js/io/ai/apply-patch.ts`](../frontend/js/io/ai/apply-patch.ts) を直に叩く（ハーネス不要。実行時 import 0 本）。**8 op の意味論**（rename の追随先 3 つ・`hasSize` に従う `size` の始末・キー名を空で入れること・FK は `relations` に入ること）・**18 の落ち方が例外ではなく理由になること**（全ケースでモデルが同一参照）・`applyPatches` が配列順の畳み込みで途中の失敗に中断しないこと・**固定の提案 JSON を丸ごと通した結果**が serializer と DDL 生成にそのまま乗ること |
 
 入力は 3 つ —— `tests/fixtures/postgresql/relations.xml`（**rename の巻き込みすぎと取りこぼしが
 両方出る**唯一の fixture。自己参照 FK・複数 FK・多対多）、テスト内で組む小さな設計
@@ -475,7 +476,7 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 
 **golden はここを 1 ビットも押さえない。** golden 50 本（`ddl` 35 ＋ `json` 7 ＋ `state` 8）は
 すべて Designer のファサード（`toDdl` / `toJson` / `fromXML` / `fromJson`）経由で採るので
-[`../js/io.ts`](../js/io.ts) を通らず、**「UI が JSON に切り替わったこと」は golden 不変と
+[`../frontend/js/io.ts`](../frontend/js/io.ts) を通らず、**「UI が JSON に切り替わったこと」は golden 不変と
 両立してしまう**。だから 4-3b の完了判定は「golden 無差分」＋この 2 本の 2 本立てになっていた。
 
 | ファイル | 担当 |
@@ -486,7 +487,7 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 両方が押さえるのは「読み込みが JSON と XML の**両方**を受ける」ことと、「読めない入力で
 今開いている設計が壊れない」こと。特に**壊れた JSON を XML として読み直さない**（フォールバックが
 無い）ことを明示的に見ている —— あると例外が `Null document` に着地して位置情報が消える
-（[`../js/io/detect.ts`](../js/io/detect.ts)）。判別関数そのものは
+（[`../frontend/js/io/detect.ts`](../frontend/js/io/detect.ts)）。判別関数そのものは
 [`../tests/node/detect.test.ts`](../tests/node/detect.test.ts) が fixture と golden の実バイト列で見る。
 
 ボタンを押すのは `page.evaluate` の中（[`../tests/browser/harness.ts`](../tests/browser/harness.ts) の
@@ -537,7 +538,7 @@ Kotlin 実装と**同じ表**で検証する。挙動を変えるときは表を
 （採取当時の `toXML()` は非決定的だった。決定論になった段階4-4 以降も、
 測る対象で測る対象を作らないという理由で手書きのまま）。
 `<datatypes>` ブロックは持たせず、DB プロファイルはテスト側が型パレットの差し替えで与える
-（`dbResponse()` と同じ操作。[js/wwwsqldesigner.ts の dbResponse](../js/wwwsqldesigner.ts)）。
+（`dbResponse()` と同じ操作。[js/wwwsqldesigner.ts の dbResponse](../frontend/js/wwwsqldesigner.ts)）。
 差し替え口は段階4-0b から `palette.setRoot()`（page 側は `window.d.palette`、node 側は
 ハーネスが掴んでいる `designer.palette`）。
 
@@ -647,7 +648,7 @@ Node 側の [`ddl.test.ts`](../tests/node/ddl.test.ts) には、エンジンの�
 `& < >` を XML エスケープしてしまうこと。
 
 **DDL 生成が TS になり、その 3 つ（parity 例外・adapter 2 本・`xslt-processor` 依存）が
-まとめて消えた。** ブラウザと Node で同じ [`../js/io/ddl/`](../js/io/ddl/) が動くのでエンジン差が
+まとめて消えた。** ブラウザと Node で同じ [`../frontend/js/io/ddl/`](../frontend/js/io/ddl/) が動くのでエンジン差が
 存在しない。**`oracle` の 7 件が Node 回帰に復帰し、`npm test` の skipped は 0 になった。**
 
 段階6-1 で `sqlalchemy`（`position()` / `last()`）と `vfp9`（`substring($s, 2, -1)`）が
@@ -734,7 +735,7 @@ URL 往復と `%2F` の扱いが含まれ、どちらもサーブレットコン
 
 | ファイル | 走る条件 | 担当 |
 |---|---|---|
-| `ai/ReviewSchemaTest.kt` | **既定で走る** | structured outputs のスキーマが [`../js/io/ai/suggestion.ts`](../js/io/ai/suggestion.ts) と**同じ語彙**であること（`op` 8 語 / `keyType` 4 語 / `category` 7 語 / `severity` 3 語）＋ **スキーマ自身が Claude のサブセットに収まっていること**（全オブジェクトの `additionalProperties: false`・数値/文字列長の制約を使っていない・再帰していない） |
+| `ai/ReviewSchemaTest.kt` | **既定で走る** | structured outputs のスキーマが [`../frontend/js/io/ai/suggestion.ts`](../frontend/js/io/ai/suggestion.ts) と**同じ語彙**であること（`op` 8 語 / `keyType` 4 語 / `category` 7 語 / `severity` 3 語）＋ **スキーマ自身が Claude のサブセットに収まっていること**（全オブジェクトの `additionalProperties: false`・数値/文字列長の制約を使っていない・再帰していない） |
 | `ai/AnthropicIntegrationTest.kt` | **opt-in**（`ANTHROPIC_API_KEY` ＋ `GRABADO_IT_AI_MODEL`） | 実キーで 1 往復。house 既定から外れた設計に**実際の指摘が返る**こと・返った提案が enum の内側にあること・知らない `dialect` でも落ちないこと |
 
 **なぜ両方要るか。** スキーマ側だけだと「Claude はこのスキーマを受け付けるはずだ」という

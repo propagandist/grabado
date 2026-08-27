@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { TYPE_KINDS } from "../../js/io/palette.ts";
+import { TYPE_KINDS } from "../../frontend/js/io/palette.ts";
 import { DB_PROFILES, REPO_ROOT } from "../support/fixtures.ts";
 
 /*
@@ -34,7 +34,7 @@ interface PaletteType {
  * かつ XML の属性値に " が入らないため（tools/migrate-design.mjs と同じ判断）。
  */
 function readTypes(db: string): PaletteType[] {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     return (xml.match(/<type\s[^>]*?\/>/g) ?? []).map((tag, index) => ({
         index: index,
         id: /\sid="([^"]*)"/.exec(tag)?.[1],
@@ -53,7 +53,7 @@ function akaNames(t: PaletteType): string[] {
 
 /** そのプロファイルの datatypes.xml 全文（下の 2 本は <type> 以外も読む） */
 function readPalette(db: string): string {
-    return readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    return readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
 }
 
 /**
@@ -301,7 +301,7 @@ describe("型パレットの id 規則（段階4-2b）", () => {
          */
         const notStrict = DB_PROFILES.filter(
             (db) =>
-                !readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8").includes(
+                !readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8").includes(
                     'strict="1"',
                 ),
         );

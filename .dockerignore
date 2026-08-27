@@ -13,19 +13,19 @@
 *
 
 # --- web ステージ（vite build の入力）---
-# publicDir は使わない設定なので、db/ locale/ images/ は viteStaticCopy が dist へ運ぶ。
-# styles/ は index.html の <link> 経由で Rollup が拾う。
-!index.html
+# publicDir は使わない設定なので、frontend/db/ locale/ images/ は viteStaticCopy が dist へ運ぶ。
+# frontend/styles/ は index.html の <link> 経由で Rollup が拾う。
+#
+# ★ 段階2-6 で frontend/ へ集約した。**親を除外したままだと配下の `!` が効かない**ので、
+#   1 段目で frontend/ ごと戻し、要らないものを後勝ちで削る（server/ と同じ形）。
 !package.json
 !package-lock.json
 !tsconfig.json
 !vite.config.ts
-!src
-!js
-!styles
-!db
-!locale
-!images
+!frontend
+
+# frontend/ を丸ごと戻すとビルド出力まで入ってくる。**後勝ち**なので、ここで削り直す。
+frontend/dist
 
 # --- api ステージ（bootJar の入力）---
 !server

@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
-import { convertDesign } from "../../js/io/convert.ts";
-import { buildDdlModel } from "../../js/io/ddl/shared.ts";
-import type { DesignModel } from "../../js/io/model.ts";
-import { TypePalette } from "../../js/io/palette.ts";
-import { parseDesignXml } from "../../js/io/xml-parser.ts";
+import { convertDesign } from "../../frontend/js/io/convert.ts";
+import { buildDdlModel } from "../../frontend/js/io/ddl/shared.ts";
+import type { DesignModel } from "../../frontend/js/io/model.ts";
+import { TypePalette } from "../../frontend/js/io/palette.ts";
+import { parseDesignXml } from "../../frontend/js/io/xml-parser.ts";
 import { DB_PROFILES, REPO_ROOT } from "../support/fixtures.ts";
 
 /*
@@ -40,7 +40,7 @@ const HOUSE_TYPES: ReadonlyArray<{ readonly column: string; readonly datatype: s
     ]);
 
 function paletteOf(db: string): TypePalette {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     const palette = new TypePalette();
     palette.setRoot(
         parser.parseFromString(xml, "text/xml").documentElement as unknown as Element,

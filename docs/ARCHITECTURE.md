@@ -1134,7 +1134,7 @@ push 側を足すと同じ検査を 2 度払うことになる。
 
 | 時間で変わる層 | 何が見るか |
 |---|---|
-| ベースイメージ | **Dependabot `docker` entry**（weekly。digest を書き換える。§9.1） |
+| ベースイメージ | **Dependabot `docker` entry**（weekly。digest を書き換える。§9.1）＋ **PR が出たら `trivy image`**（下記） |
 | 依存の CVE | version updates 4 entry ＋ **security updates** —— **`server/` は `deps-submit.yml` が渡すグラフで初めて効く**（GitHub は `gradle.lockfile` を読めない） |
 
 **★ 前提: Dependency graph が有効であること**（**2026-08-26 に有効化**。それまで無効で、
@@ -1155,3 +1155,22 @@ push 側を足すと同じ検査を 2 度払うことになる。
 **CodeQL は「決めて外した」** —— public なので技術的には入る（2026-08-26 実測: `not-configured` /
 standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② まで**で、これは枠の話ではない。
 根拠と再考の条件は `CUSTOMIZATIONS.md` の段階2-5。
+
+**★★ Dependabot はベースイメージの「中身」を見ていない**（2026-08-27 実測）。
+`docker` entry がするのは **「上流のタグが指す digest が動いたら書き換える」だけ**で、
+**alpine のパッケージに何件の CVE があるかは `dependabot/alerts` に 1 件も出ない**。
+
+| 何を | Dependabot は |
+|---|---|
+| 上流が**直したこと**に追随する | **する**（digest が動けば PR） |
+| **いま何件あるか**を教える | **しない** |
+| 上流が**直さない**あいだ気づかせる | **しない** |
+
+**だから ① 層を「ベースを動かすとき」に紐づける** —— **`docker` entry の PR が出たら、
+マージ前に `trivy image` を回す**。上流が digest を動かすのは**たいてい中身を直したとき**なので、
+**そこが自然な棚卸しの契機**になる（時間で回すのではなく、**変更に紐づける**）。
+
+**初回の棚卸しは 2026-08-27 に済んでいる** —— **配布物に CRITICAL は 0**、HIGH は
+**openssl の 1 CVE が 3 パッケージに出ているだけ**（QUIC を使わないので到達しない。**上流待ち**）、
+**`app/grabado.jar` は 0 件**。**`node:24-alpine` の CRITICAL 1 件は web ステージにしか無く、
+配布物には入らない** —— 実測と切り分けは `CUSTOMIZATIONS.md` の同日の記録。

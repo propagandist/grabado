@@ -11,7 +11,7 @@ import java.nio.file.Path
  * structured outputs のスキーマが**フロントの型と同じ語彙**であることを見る（段階11-2b）。
  *
  * ★ **ここが赤くなる形にしておかないと、片方だけ動かせてしまう。** スキーマの `op` と
- *   `js/io/ai/suggestion.ts` の `AiPatch` がずれると「**上流は通すが `applyPatch` が
+ *   `frontend/js/io/ai/suggestion.ts` の `AiPatch` がずれると「**上流は通すが `applyPatch` が
  *   `patchmalformed` で落とす提案**」が生まれ、しかもテストは全部緑のまま。
  *   `type-mapping.test.ts` が `docs/TYPE-MAPPING.md` を実装と 1 セルずつ突き合わせているのと
  *   同じイディオムで、**手で書いた 2 つ目の写しは必ず腐る**という前提に立っている。
@@ -25,13 +25,22 @@ class ReviewSchemaTest {
     private val mapper = JsonMapper()
     private val schema: JsonNode = mapper.readTree(ReviewSchema.JSON)
 
-    /** `js/io/ai/suggestion.ts` の中身（型だけのファイルなので、正規表現で語を抜ける）。 */
+    /** `frontend/js/io/ai/suggestion.ts` の中身（型だけのファイルなので、正規表現で語を抜ける）。 */
     private val suggestionTs: String by lazy {
         val repoRoot = Path.of(
             System.getProperty("grabado.repoRoot")
                 ?: error("grabado.repoRoot が未設定（build.gradle.kts の test タスクを見ること）"),
         )
-        Files.readString(repoRoot.resolve("js").resolve("io").resolve("ai").resolve("suggestion.ts"))
+        /*
+         * ★ **フロントの実体は `frontend/` へ移った**（段階2-6 で集約）。ここは **Kotlin から
+         *   フロントのソースを読む唯一の箇所**で、**2-6 の移動で 1 度落ちた**
+         *   （`js/` のまま残っていた）。**このパスを変えるときは ci-server.yml の
+         *   paths も一緒に見ること** —— あちらがこのファイルを入力として列挙している。
+         */
+        Files.readString(
+            repoRoot.resolve("frontend").resolve("js").resolve("io").resolve("ai")
+                .resolve("suggestion.ts"),
+        )
     }
 
     /** `export type <name> = "a" | "b" | ...;` から語を抜く。 */
@@ -40,7 +49,7 @@ class ReviewSchemaTest {
             .find(suggestionTs)
             ?.groupValues
             ?.get(1)
-            ?: error("$typeName が js/io/ai/suggestion.ts に無い")
+            ?: error("$typeName が frontend/js/io/ai/suggestion.ts に無い")
         return Regex("\"([^\"]+)\"").findAll(body).map { it.groupValues[1] }.toList()
     }
 
@@ -66,7 +75,7 @@ class ReviewSchemaTest {
             .map { it.groupValues[1] }
             .toList()
 
-        assertThat(ops).describedAs("js/io/ai/suggestion.ts の AiPatch").hasSize(8)
+        assertThat(ops).describedAs("frontend/js/io/ai/suggestion.ts の AiPatch").hasSize(8)
         assertThat(ReviewSchema.OPS).isEqualTo(ops)
     }
 

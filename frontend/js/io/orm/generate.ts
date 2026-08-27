@@ -31,9 +31,14 @@ import { generatePrisma } from "./prisma.ts";
 /**
  * 出せるターゲット。**UI の select がここから作られる**（js/io.ts）。
  *
- * 6-0 が挙げた 4 本のうち 2 本。**SQLAlchemy は保留**（判断は CUSTOMIZATIONS.md の段階6-9e）。
- * どれも「正規型 -> 言語型」の表 1 つで書けるのが 6-9c を先にやった意味だが、
- * **Prisma だけは逆参照を形式が要求する**ので、そこだけ 6-9d の判断を決め直している。
+ * 6-0 が挙げた 4 本のうち **3 本で確定**。**SQLAlchemy は決めて外した**（2026-08-28。
+ * 理由と**再考の条件**は CUSTOMIZATIONS.md の同日の記録 —— **見直すなら「復活」ではなく
+ * 新規開発**である）。
+ *
+ * ★ **3 本の性質は揃っていない。**
+ *   - **Prisma だけは逆参照を形式が要求する**（6-9d の「出さない」を 6-9e で決め直した）
+ *   - **Drizzle だけは型の表が core ごとに要る**（6-9e の「表 1 つで書ける」という見立ては
+ *     6-9f の実測で外れた。pg / mysql / sqlite / mssql で関数名も表せる意味も変わる）
  */
 export const ORM_TARGETS = ["jpa", "prisma", "drizzle"] as const;
 

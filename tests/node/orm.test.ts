@@ -48,7 +48,7 @@ describe("ORM 出力（Node）", () => {
     }
 
     describe("ターゲットの登録", () => {
-        test("ORM_TARGETS は 3 本（jpa / prisma / drizzle）。SQLAlchemy は保留（段階6-9f）", () => {
+        test("ORM_TARGETS は 3 本で確定（jpa / prisma / drizzle）。SQLAlchemy は決めて外した", () => {
             expect(ORM_TARGETS).toEqual(["jpa", "prisma", "drizzle"]);
         });
 

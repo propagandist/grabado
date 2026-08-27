@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { beforeAll, describe, expect, test } from "vitest";
 import { JSDOM } from "jsdom";
 import { REPO_ROOT } from "../support/fixtures.ts";
-import { TypePalette } from "../../js/io/palette.ts";
-import { introspectionToModel } from "../../js/io/introspect-parser.ts";
-import type { IntrospectionResult } from "../../js/io/introspect-model.ts";
+import { TypePalette } from "../../frontend/js/io/palette.ts";
+import { introspectionToModel } from "../../frontend/js/io/introspect-parser.ts";
+import type { IntrospectionResult } from "../../frontend/js/io/introspect-model.ts";
 
 /*
  * introspection JSON -> DesignModel（HANDOVER §5.2 / 段階5-6）。
@@ -22,7 +22,7 @@ import type { IntrospectionResult } from "../../js/io/introspect-model.ts";
 const FIXTURE = join(REPO_ROOT, "tests", "fixtures", "introspection", "postgresql.json");
 
 function loadPalette(db: string): TypePalette {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     const doc = new JSDOM("", { contentType: "text/html" }).window.DOMParser;
     const parsed = new doc().parseFromString(xml, "text/xml");
     const palette = new TypePalette();

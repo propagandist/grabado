@@ -199,7 +199,7 @@ function v2(design: unknown): string {
 
 /** db/<db>/datatypes.xml の <type id="..."> が持つ length 属性（無ければ undefined） */
 function paletteLength(db: string, id: string): string | undefined {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     for (const tag of xml.match(/<type\s[^>]*?\/>/g) ?? []) {
         if (/\sid="([^"]*)"/.exec(tag)?.[1] === id) {
             return /\slength="([^"]*)"/.exec(tag)?.[1];

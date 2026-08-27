@@ -3,9 +3,10 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 
 // HANDOVER §3 段階1: 既存 JS を束ねるためのビルド基盤。
 //
-// root はリポジトリルートのまま（index.html / js/ / db/ / locale/ / styles/ を動かさない）。
-// URL 空間を現行と 1 バイトも変えないことが特性化テスト（HANDOVER §7）を無改修で通す条件で、
-// frontend/ への集約は §2 Docker 着手時に行う（CUSTOMIZATIONS.md の決定ログ）。
+// root は frontend/（段階2-6 で集約。それまではリポジトリルートだった）。
+// **URL 空間は 1 バイトも変わらない** —— root が動いても `/index.html` や
+// `db/<db>/datatypes.xml` はそのまま。だから特性化テスト（HANDOVER §7）の golden 114 本が
+// 無差分でいられる。**変わったのはファイルシステム上の位置だけ。**
 
 /** dev server。playwright.config.ts の webServer と共有する */
 export const DEV_PORT = 4173;
@@ -15,6 +16,10 @@ export const PREVIEW_PORT = 4174;
 export const SERVER_PORT = 8080;
 
 export default defineConfig({
+    // 段階2-6: フロントの実体は frontend/ に集約した（HANDOVER §2.2 の骨格に寄せた形）。
+    // **package.json と tests/ は root のまま** —— tests/contract/ は backend と共有し、
+    // tests/image/ は root の compose.yaml を叩くため（issue #107 の判断）。
+    root: "frontend",
     // db/ locale/ は OZ.Request が相対パスで fetch し、styles/ は index.html の <link> が読む。
     // publicDir は使わない（既存ディレクトリを移動すると backend の db/ 参照とテストのパス定数が割れる）。
     publicDir: false,
@@ -88,6 +93,10 @@ export default defineConfig({
     plugins: [
         viteStaticCopy({
             // 実行時に相対 URL で取りに行くもの。Rollup の依存グラフに乗らないので手でコピーする。
+            // ★ src は **vite の root 基準**（cwd 基準ではない。2026-08-27 実測 ——
+            //   段階2-6 で root を frontend/ にしたとき "frontend/db" と書いたら
+            //   `No file was found to copy on frontend/db src.` で落ちた）。
+            //   root が frontend/ なので、ここは集約前と同じ 3 行のままでよい。
             targets: [
                 { src: "db", dest: "." },
                 { src: "locale", dest: "." },

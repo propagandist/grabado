@@ -4,7 +4,7 @@ import {
     preconditionFor,
     verdictAfterConflict,
     type Baseline,
-} from "../../js/io/conflict.ts";
+} from "../../frontend/js/io/conflict.ts";
 
 /*
  * 条件付き更新の規則（HANDOVER §4 段階4-6 → §5 段階5-4b）。

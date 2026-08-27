@@ -2,8 +2,8 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { JSDOM } from "jsdom";
 import { describe, expect, test } from "vitest";
-import { TypePalette } from "../../js/io/palette.ts";
-import { parseDesignXml } from "../../js/io/xml-parser.ts";
+import { TypePalette } from "../../frontend/js/io/palette.ts";
+import { parseDesignXml } from "../../frontend/js/io/xml-parser.ts";
 import { DB_PROFILES, REPO_ROOT, fixtureDir } from "../support/fixtures.ts";
 
 /*
@@ -27,7 +27,7 @@ const dom = new JSDOM("");
 const parser = new dom.window.DOMParser();
 
 function paletteOf(db: string): TypePalette {
-    const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+    const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
     return paletteFromXml(xml);
 }
 
@@ -54,7 +54,7 @@ function candidateNames(): string[] {
     const names = new Set<string>();
 
     for (const db of DB_PROFILES) {
-        const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+        const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
         for (const tag of xml.match(/<type\s[^>]*?\/>/g) ?? []) {
             const sql = /\ssql="([^"]*)"/.exec(tag)?.[1];
             const re = /\sre="([^"]*)"/.exec(tag)?.[1];
@@ -293,7 +293,7 @@ describe("型解決（段階6-2 / 6-3）", () => {
 
         test("re 属性を持つパレットはもう 1 つも無い（#10 の実例が尽きた）", () => {
             const withRe = DB_PROFILES.filter((db) =>
-                readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8").includes(' re="'),
+                readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8").includes(' re="'),
             );
 
             expect(withRe).toEqual([]);
@@ -360,11 +360,11 @@ describe("型解決（段階6-2 / 6-3）", () => {
              */
             const palette = new TypePalette();
             const pgXml = readFileSync(
-                join(REPO_ROOT, "db", "postgresql", "datatypes.xml"),
+                join(REPO_ROOT, "frontend", "db", "postgresql", "datatypes.xml"),
                 "utf8",
             );
             const mysqlXml = readFileSync(
-                join(REPO_ROOT, "db", "mysql", "datatypes.xml"),
+                join(REPO_ROOT, "frontend", "db", "mysql", "datatypes.xml"),
                 "utf8",
             );
 

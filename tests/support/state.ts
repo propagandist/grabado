@@ -1,4 +1,4 @@
-import type { Designer } from "../../js/wwwsqldesigner.ts";
+import type { Designer } from "../../frontend/js/wwwsqldesigner.ts";
 
 /**
  * 読み込み後の「ライブツリー＋DOM」の状態スナップショット（HANDOVER §4 段階4-1b）。

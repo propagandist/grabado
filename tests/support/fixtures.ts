@@ -15,7 +15,7 @@ export const GOLDEN_DIR = join(REPO_ROOT, "tests", "golden");
  * その重複は段階6-1 の撤去で消えたが、実体を正とする判断は変えない）。
  */
 export const DB_PROFILES: readonly string[] = Object.freeze(
-    readdirSync(join(REPO_ROOT, "db"), { withFileTypes: true })
+    readdirSync(join(REPO_ROOT, "frontend", "db"), { withFileTypes: true })
         .filter((e) => e.isDirectory())
         .map((e) => e.name)
         .sort(),

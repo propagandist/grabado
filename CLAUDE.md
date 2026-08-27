@@ -7,6 +7,7 @@
 根拠は `HANDOVER.md`。ただし **HANDOVER は社内版前提のまま**（§2 配布・§2.3 Railway・§6.2/§6.3 の house 規約・§8 ドキュメント）。齟齬の一覧は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
 
 ## プロジェクト概要
+- **配置**（**2026-08-27。段階2-6 で集約**）: フロントの実体は **`frontend/`**（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/`）、backend は **`server/`**。**`package.json` と `tests/` は root のまま** —— `tests/contract/` は backend と共有し、`tests/image/` は root の `compose.yaml` を叩くため（#107）。**vite の root は `frontend/`、出力は `frontend/dist/`。URL 空間は集約の前後で 1 バイトも変わっていない。**
 - frontend: 描画エンジンを温存しつつ**完全 TypeScript 化**（Vite / strict）。
 - backend: PHP を廃し **Kotlin/Spring Boot**。save/load は**マウント済みファイルの I/O**、introspection は `information_schema`→JSON、AI proxy を提供。
 - 正本: **git 管理の JSON ファイル**（`/data/schema` に mount）。共有は PR。編集ストアは **DB レス**（ブラウザ内 / IndexedDB）。

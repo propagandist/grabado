@@ -91,7 +91,7 @@ describe("types-matrix の網羅（DB × 型）", () => {
 
     /** パレットの型（palette-id.test.ts と同じく属性だけを正規表現で読む） */
     function paletteTypes(db: string): PaletteType[] {
-        const xml = readFileSync(join(REPO_ROOT, "db", db, "datatypes.xml"), "utf8");
+        const xml = readFileSync(join(REPO_ROOT, "frontend", "db", db, "datatypes.xml"), "utf8");
         return (xml.match(/<type\s[^>]*?\/>/g) ?? []).map((tag) => {
             const sql = /\ssql="([^"]*)"/.exec(tag)?.[1] ?? "";
             const aka = /\saka="([^"]*)"/.exec(tag)?.[1]?.split("|") ?? [];

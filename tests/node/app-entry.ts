@@ -13,9 +13,9 @@
  * page 文脈（tests/browser / tests/dist / tests/known-issues）はバンドル外の
  * page.evaluate から触るのでこの経路が使えず、src/main.ts の window.d を見る。
  */
-import "../../src/app.ts";
-import { OZ } from "../../js/oz.ts";
-import { Designer } from "../../js/wwwsqldesigner.ts";
+import "../../frontend/src/app.ts";
+import { OZ } from "../../frontend/js/oz.ts";
+import { Designer } from "../../frontend/js/wwwsqldesigner.ts";
 
 /** window.eval したバンドルが載せる、ハーネス専用の面 */
 export interface GrabadoTestApi {

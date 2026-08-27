@@ -4,6 +4,7 @@
     <string name="addtable">テーブルを追加</string>
     <string name="edittable">テーブルを編集</string>
     <string name="removetable">テーブルを削除</string>
+    <string name="removetables">選択テーブルを削除</string>
     <string name="aligntables">テーブルを整列</string>
     <string name="cleartables">全テーブルを削除</string>
     <string name="confirmall">全テーブルを削除しますか</string>
@@ -79,8 +80,12 @@
     <string name="clientlocalsave">ブラウザに保存</string>
     <string name="clientlocalload">ブラウザから読込</string>
     <string name="clientlocallist">ブラウザの保存一覧</string>
+    <string name="clientcopy">出力をコピー</string>
+    <string name="clientpaste">クリップボードから貼付</string>
+    <string name="clientdownload">JSONをダウンロード</string>
+    <string name="clientloadfromfile">ファイルから読込</string>
     <string name="serversave">保存</string>
-    <string name="quicksave">Quicksave</string>
+    <string name="quicksave">クイック保存</string>
     <string name="serverload">読込</string>
     <string name="serverlist">一覧</string>
     <string name="serverimport">DBからインポート</string>
@@ -104,9 +109,9 @@
     <string name="patchrefexists">同じ参照が既にあります</string>
     <string name="patchemptyvalue">空の値は受け付けられません</string>
     <string name="patchmalformed">提案の形が壊れています</string>
-    <string name="importerror">Could not read the database structure</string>
+    <string name="importerror">データベース構造を読み取れませんでした。</string>
     <string name="httpresponse">サーバレスポンス</string>
-    <string name="http201">Saved</string>
+    <string name="http201">保存しました</string>
     <string name="http400">Bad Request</string>
     <string name="http403">Forbidden</string>
     <string name="http404">Not Found</string>

@@ -10484,6 +10484,148 @@ CodeQL と同じ形。** 「まだ決めていない」ではなく「**決め�
 
 ---
 
+### 2026-08-28 HANDOVER §6.4「その他」—— 公開の顔に名前を付け、`ja` の欠落を埋める
+
+正本は [issue #118](https://github.com/propagandist/grabado/issues/118)。**§6.4 は段階6-4（初期テーブル
+テンプレート）とは別物**で、HANDOVER の節番号のほう。**これで HANDOVER §9 の 9 項目が全部閉じる。**
+
+#### ★ 実測 1: 公開の顔に upstream の名前が出ていた（2026-08-28）
+
+**起票のために §6.4 の 4 項目を実測したら、2 つが想定と違っていた。**
+
+| §6.4 の項目 | 想定 | 実測 |
+|---|---|---|
+| ロゴ差し替え | ロゴ画像を置き換える | **★ `<title>` が `WWW SQL Designer` のまま**。**`dist` にも同じ文字列**が出ており、**イメージがそれを配っていた**。**favicon の宣言は 0 本** |
+| 初期ズーム | 既定値を変える | **★ 実装が 1 行も無い**（`frontend/js/` に `zoom` は 0 件）。**変える既定が存在しない** |
+| 初期スナップ | 同上 | **実装済み**。既定は `wwwsqldesigner.ts` の `case "snap": return 0` ＝ 無効 |
+| 日本語ロケール | 訳の調整 | **`ja.xml` に 5 キー欠落**（en 122 / ja 117）。**全 5 キーが実使用中** |
+
+**★ 「ロゴ差し替え」は仕上げではなかった。** 2026-08-26 に public にし（#95）、README 2 本は英語で
+書き換えたのに、**タブに出る名前は upstream のまま**だった。**#84 で `grabado.dev` に置けば、そこにも出る。**
+
+**★ もう 1 か所あった** —— `index.html` の docs ボタンが
+**`https://github.com/ondras/wwwsqldesigner/wiki`** を指していた。**#118 の対象範囲に挙げていなかった**が、
+**同じ「公開の顔に upstream が出ている」**なので同じ PR で直した（→ 決めたこと 5）。
+
+#### ★ 実測 2: `ja` の未訳は 5 キーだけではなかった。他言語が判断を分けた
+
+キーを埋めたあと、**値が ASCII のみのもの**を洗ったら 14 件出た。**全部訳すのは誤り**で、
+**`de` / `fr` を引いたら 2 群に割れた**:
+
+| キー | en | de | fr | 判断 |
+|---|---|---|---|---|
+| `quicksave` | Quicksave | **Schnellspeichern** | **Enregistrer rapidement** | **訳す**（ja だけ落ちていた） |
+| `http201` | Saved | **gespeichert** | **Sauvegardé** | **訳す**（同上） |
+| `http400` 他 8 件 | Bad Request | Bad Request | Bad Request | **訳さない** |
+| `importerror` | Could not read… | 英語のまま | 英語のまま | **訳す**（下記） |
+
+**★ `http4xx` / `5xx` を原語で残すのは、upstream 全体の扱いに合わせたから** ——
+**HTTP の reason phrase は番号とセットで意味を持つ**ので、報告や検索で原語のほうが通じる。
+**「英語が残っている」と「訳していない」を、この 2 群が分けている。**
+
+**`importerror` は de / fr も英語のまま**だが、**明確な文**（`Could not read the database structure`）で、
+**日本語 UI に英文が 1 つ出る**。**訳し漏れであって判断ではない**と読んで訳した。
+
+`notnull` / `null`（SQL キーワード）と `windowok`（OK）は触っていない。
+
+#### 決めたこと 1: ★ upstream の著作権表示は 1 バイトも触らない
+
+ライセンスは **BSD-3-Clause**（`license.txt`）で、**第 1 条がソース配布での著作権表示の保持を求めている**。
+`index.html` 冒頭のコメントは**義務**で、消せば違反になる。**変えたのは `<title>` とアイコンだけ。**
+
+**第 3 条も同じ向きに効く** —— 「Ondrej Zara の名を派生物の宣伝に使ってはならない」。
+**`WWW SQL Designer` を掲げたまま公開しないほうが、条項の趣旨に沿う。**
+
+**★ grabado の由来を説明する行も足していない** —— 足すなら英語（隣が英語）だが、
+`CLAUDE.md` の文章の値は「**`README.md` だけ英語**」。**義務の表示に手を入れず、範囲も広げない**を採った。
+
+#### 決めたこと 2: 初期ズームは「**決めて外す**」（再考の条件つき）
+
+**実装が 1 行も無いので、やるなら新規機能**になる。§6.4 は仕上げの枠なので、
+#83 の決めたこと 5（レジストリ）・段階2-5 の CodeQL・#117 の SQLAlchemy と同じ形で残す。
+
+**再考の条件**: 大きな設計で全体を見渡せないという要望が実際に出たとき。**そのときは新規開発。**
+
+#### 決めたこと 3: snap の既定は **`0` のまま**（ユーザー判断）
+
+変えると**新規テーブルの配置と、既存設計を動かしたときの座標が変わる**。
+**§6.4 は仕上げの枠で、挙動を変える判断には根拠が要る。**
+
+#### 決めたこと 4: favicon は **SVG 1 枚**。色は既存 UI から採る
+
+- **色は `styles/material-inspired.css` のアクセント `#de2665`** —— **新しいブランド色を作らない**
+  （作れば UI と favicon で色の正本が 2 つになる）
+- **図柄は 2 つの表とリレーション線**（ユーザー判断）。**16px で潰れない大きさと線幅**にした
+- **script を持たない** —— CSP は `img-src 'self' data:` のままで足りる（`SecurityHeadersFilter` 不変）
+- **★ `dist` に 2 つ出る**（`assets/favicon-<hash>.svg` と `images/favicon.svg`）。
+  `viteStaticCopy` が `images/` ごと写し、Vite が `index.html` の参照を別に処理するため。
+  **既存の `throbber.gif` と同じ性質**なので、この段階では触っていない
+
+#### 決めたこと 5: docs ボタンは直す。`docs/TYPE-MAPPING.md` の ORM 節は**外す**
+
+- **docs ボタン**は #118 の対象範囲外だったが、**同じ「公開の顔」**なので直した
+  （`https://github.com/propagandist/grabado#readme`）。`target="_blank"` に **`rel="noopener noreferrer"`** も足した
+- **★ ORM の型マッピング表は外した** —— 6-9f の申し送りで #118 の対象範囲に入れていたが、
+  **6-10b が「型マッピング表は手で書かない」と決めている**（`tests/node/type-mapping.test.ts` が
+  docs の表を読んで実際の出力と 1 セルずつ比べる）。**同じ形にするには ORM 生成器を読む
+  ハーネスが要り、仕上げの枠を超える。** **手書きの表を足すのは、その判断に反する**ので
+  **別 issue**。#118 にも記録した
+
+#### 検証（2026-08-28 実測）
+
+| | 結果 |
+|---|---|
+| `npm run typecheck` | 緑 |
+| `npm test` | **605 passed**（24 ファイル） |
+| `npm run test:browser` | **205 passed** |
+| `npm run test:dist` | 6 passed |
+| `npm run known-issues` | 1 passed |
+| `npm run test:image` | **手元では回せなかった**（下記） |
+| **golden** | **114 本が 1 バイトも動いていない**（`git status tests/golden/` が空） |
+| `dist` の `<title>` | **`grabado`**（favicon は `/assets/favicon-<hash>.svg`） |
+| `ja` / `en` のキー集合 | **122 = 122 で完全一致**（`comm` が両方向 0 行） |
+
+**変更は 3 ファイルだけ** —— `frontend/index.html` / `frontend/locale/ja.xml` / `frontend/images/favicon.svg`（新規）。
+
+**★ `test:image` は手元の 8080 が塞がっていて回せなかった**（2026-08-28）——
+listen していたのは**別プロジェクト（`D:\projects\recibir`）の Spring Boot**。
+**他プロジェクトの動作中プロセスは止めない**ので、**判定は `ci-image` に渡した**（PR で走る）。
+
+**★ もっとも、手元の image E2E は `ci-image` の代わりにならない。** #103 で分かったとおり
+**Docker Desktop for Windows は所有権を偽装する**ので、**ubuntu で出る欠陥をここでは踏まない**。
+**この段階の変更は静的資産（`<title>` / favicon / locale）**なので、
+**イメージが配るものは `dist` テスト（6 本・緑）が既に見ている。**
+
+**★ 2-4 が入れた案内がそのまま効いた** —— `compose.ts` の
+「8080 を別のコンテナが掴んでいないか確認する（`docker ps …`）」。
+**ただし掴んでいたのはコンテナではなくホストのプロセス**で、**`docker ps` には出なかった**
+（`Get-NetTCPConnection -LocalPort 8080` で特定）。**案内の文面が「コンテナ」に閉じている。**
+
+#### 却下した案
+
+- **`index.html` 冒頭の著作権コメントを消す／版表記を書き換える** —— **BSD-3-Clause 第 1 条**（決めたこと 1）
+- **19 言語を機械翻訳で埋める** —— **間違いに気づけない文字列がプロダクトに載る**。
+  6-9b / 6-10b の判断を維持する
+- **`http4xx` / `5xx` も訳す** —— 実測 2。**de / fr が原語で残している**
+- **favicon を `.ico` で置く** —— 32×32 の SVG 1 枚で足りる。**ラスタを 4 サイズ持つと更新点が増える**
+- **`<title>` を `grabado - ER design tool` にする** —— **タブに出るのは名前で、説明ではない**
+- **snap の既定を変える** —— 決めたこと 3（ユーザー判断）
+- **`frontend/favicon.svg`（root 直下）に置いて dist の二重を避ける** —— **画像は `images/` という
+  既存の置き方を崩す**ほうが高くつく。二重は `throbber.gif` から続く既存の性質（決めたこと 4）
+
+#### 申し送り
+
+- **★ HANDOVER §9 の 9 項目がこれで全部閉じた。** 残る作業はリポジトリの外側
+  （**#84** 公開デモ）と、**#105**（Dependabot alert 2 件）、**未起票の宿題 2 つ**
+  （Drizzle を `drizzle-kit` に通す検証 ／ Chromium キャッシュのキー設計）、
+  **本段階で外した ORM の型マッピング表**
+- **★ favicon の見え方は目でしか確かめられない。** 16px の実表示・ダークタブでの視認は
+  **自動テストが 1 本も見ていない**（`dist` テストが見るのは配られることだけ）
+- **`ja` 以外の 19 言語は英語のまま**（6-9b / 6-10b の判断を維持）。**`ja` だけが完全になった**
+- **`index.html` に残る upstream 参照は著作権コメントの 1 行だけ**になった（実測。義務のぶん）
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -10497,6 +10639,7 @@ CodeQL と同じ形。** 「まだ決めていない」ではなく「**決め�
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 | ~~`Dockerfile`（busybox httpd 11 行）~~ | **段階2-1 で置き換え**。`COPY . .` でリポジトリをそのまま配る作りで、`index.html` が `/src/main.ts` を読むので**起動しても動かなかった**（README にも「現在このイメージは動かない」と書いてあった）。`.dockerignore` の 4 行の拒否リストも同時に**許可リスト**へ | **完了。**3 ステージ（web / api / runtime）・digest ピン・非 root。契約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9、実測は段階2-1 の記録 |
 | ~~`README.md`（upstream の紹介文・PayPal 寄付ボタン・**2012 年からの News 10 本**）~~ | **2026-08-26 に全面書き換え**（#95）。`/js/*.js` を指す Code Style 表も落ちた（**`js/` に `.js` は 1 本も無い**。段階3-3b で尽きた）。**「現在このイメージは動かない」の注記**も 2-1 で実体が消えていたので落ちている | **完了。**公開の顔は英語 [`README.md`](README.md)、日本語版は [`README.ja.md`](README.ja.md)。**2 本は同じ構成を保つ**（片方だけ直さない。値は [`CLAUDE.md`](CLAUDE.md) の「文章の値」） |
+| ~~`index.html` の upstream 名（`<title>WWW SQL Designer` ／ docs ボタンが `ondras/wwwsqldesigner/wiki`）~~ | **2026-08-28 に書き換え**（#118）。**public 化（#95）で README 2 本は英語にしたのに、タブに出る名前は upstream のままだった** —— `dist` にも同じ文字列が出ており、**イメージがそれを配っていた**。favicon は**宣言が 0 本**だった | **完了。**`<title>grabado`、favicon は [`frontend/images/favicon.svg`](frontend/images/favicon.svg)（色は UI のアクセントから採り、新しいブランド色を作らない）。docs ボタンは README へ。**★ 冒頭の著作権コメントは残す** —— **BSD-3-Clause 第 1 条の義務**（実測と判断は §6.4 の記録） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`frontend/js/config.js`](frontend/js/config.js)（`CONFIG.*`）。
 

@@ -318,6 +318,12 @@ grabado に XML エスケープを持つ場所はもう無い。
 `url(../images/…)` のまま参照するので、いずれも Rollup の依存グラフに乗らない。
 [`../vite.config.ts`](../vite.config.ts) の `viteStaticCopy` がこの 3 つを dist へコピーしている。
 
+**★ `images/` には例外がある**（2026-08-28 実測。§6.4）—— **`index.html` から参照される画像は
+Rollup の依存グラフに乗る**。`images/favicon.svg`（`<link rel="icon">`）と
+`images/throbber.gif`（`<img>`）は **`dist/assets/<name>-<hash>.<ext>` にも出る**ので、
+**dist に 2 つある**（`viteStaticCopy` の写しと、ハッシュ付きの本体）。**ページが読むのは
+assets 側**で、`images/` 側は CSS の `url(../images/…)` が使う。
+
 ### 5.2 DDL 生成（段階6-5a で XSLT から TS へ）
 
 SQL 出力は [`../frontend/js/io/ddl/generate.ts`](../frontend/js/io/ddl/generate.ts) が組み立てる。入口は

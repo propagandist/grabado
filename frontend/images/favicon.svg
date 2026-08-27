@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="grabado">
+  <!--
+    grabado の favicon（§6.4）。2 つの表とリレーション線。
+    ★ 色は styles/material-inspired.css のアクセント（#de2665）から採った。
+      新しいブランド色を作っていない —— UI と favicon で色の正本が 2 つになる。
+    ★ 16px で潰れないよう、要素は 32 の格子に対して大きく、線幅は 1.6 以上にしてある。
+    ★ script を持たない（CSP の img-src 'self' で配る）。
+  -->
+  <rect width="32" height="32" rx="7" fill="#de2665"/>
+  <g fill="#fff">
+    <rect x="4.5" y="4" width="12" height="10" rx="1.5"/>
+    <rect x="15.5" y="18" width="12" height="10" rx="1.5"/>
+  </g>
+  <!-- 見出し帯は白を背景色で切って出す（帯を足すのではなく、抜く） -->
+  <g stroke="#de2665" stroke-width="1.6">
+    <path d="M4.5 7.7h12"/>
+    <path d="M15.5 21.7h12"/>
+  </g>
+  <!-- リレーション線 -->
+  <path d="M10.5 14v2.5h11V18" fill="none" stroke="#fff" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -323,7 +323,8 @@ TypeError: Cannot read properties of undefined (reading 'config')
 upstream: [vitest#10692](https://github.com/vitest-dev/vitest/issues/10692) /
 [#10812](https://github.com/vitest-dev/vitest/issues/10812) /
 [PR#10843](https://github.com/vitest-dev/vitest/pull/10843)（**いずれも未修正**。4.1.10 が最新で、
-v5.0.0-beta.7 でも同じエラーが報告されている）。
+v5.0.0-beta.7 でも同じエラーが報告されている ——**2026-08-11 時点の状態**。
+**最新版がどれかは腐る**ので、以後の観測は下の 4.1.11 の節が持つ）。
 
 **採った対策**: [`scripts/vitest.mjs`](scripts/vitest.mjs) が cwd を `fs.realpathSync.native` と
 一致する形に正規化してから vitest CLI を起動する。判定は [`scripts/canonical-cwd.mjs`](scripts/canonical-cwd.mjs)
@@ -371,6 +372,28 @@ vitest のバージョンを固定していて、**上げると必ず 1 回赤�
 
 **Linux では起きない**（`process.cwd()` が常に解決済みの物理パスを返すため）。HANDOVER §2 で
 主経路が Docker に移れば本件は消えるが、Windows でのローカル開発が続く限りラッパーは残す。
+
+#### ★ 4.1.11 で撤去条件 2 を実際に回した（2026-08-27）—— **まだ直っていない**
+
+Dependabot の [#100](https://github.com/propagandist/grabado/pull/100) が vitest を
+**4.1.10 → 4.1.11** に上げようとし、**`workarounds.test.ts` が設計どおり赤くなった**
+（`expected '4.1.11' to be '4.1.10'`）。**仕掛けが働いた形**なので、指示どおり棚卸しをした。
+
+`vitest.config.ts` のガードを外し、**小文字 cwd で `node_modules/vitest/vitest.mjs` を直に起動**:
+
+```
+ Test Files  24 failed (24)
+      Tests  no tests
+TypeError: Cannot read properties of undefined (reading 'config')
+```
+
+**症状がそのまま再現した。1 回目で落ちたので「20/20 緑」は満たさない**（20 回は回していない ——
+**1 回でも落ちれば条件は崩れる**）。よって**回避策は残し、`KNOWN_BROKEN_VITEST` を 4.1.11 へ**更新した。
+
+**★★ ガードを外さないと検証にならない。** 外さずに走らせると、**こちらの `assertCanonicalCwd` が
+先に止める** —— 落ちた理由が「vitest のバグ」なのか「自分のガード」なのか区別できず、
+**「まだ壊れている」と読み違える**。**実際、最初の 1 回はそれで誤読しかけた。**
+**次に版が上がったときも、まずガードを外すこと。**
 
 ### 2026-08-11 HANDOVER §3「フロント TS 化」段階3-0 — Node ハーネスを IIFE バンドルに載せ替えた
 

@@ -504,7 +504,8 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 
 **ライブ側は形式非依存なので一度だけ書く。形式が増えると形式側だけが増える。**
 JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済んだのが、この形の実利。
-**段階6-9d で ORM 出力（`orm/`）が 3 本目として入ったときも同じ** —— ライブ側にも
+**段階6-9d で ORM 出力（`orm/`）が 3 本目として入ったときも同じ**（ターゲットは
+6-9d の JPA・6-9e の Prisma・**6-9f の Drizzle** で 3 本）—— ライブ側にも
 設計 JSON の形式にも 1 行も触っていない。ORM は db プロファイルではなく**出力の別の軸**で、
 下敷きのプロファイルの上に乗る（同じ設計から DDL と ORM の両方が出せる）。
 型は正規型（`<type kind="...">`。段階6-9c）を介して写す。
@@ -518,6 +519,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 | [`extract.ts`](../frontend/js/io/extract.ts) | 出・ライブ | ライブツリー → `DesignModel`。描画エンジンを知っている唯一の出力側 |
 | [`json-serializer.ts`](../frontend/js/io/json-serializer.ts) | 出・形式 | `DesignModel` → 設計 JSON（決定論。書けない設計は 1 バイトも書かずに throw） |
 | [`ddl/`](../frontend/js/io/ddl/) | 出・形式 | `DesignModel` → **DDL**（段階6-5a）。`generate.ts` が入口、`shared.ts` が型解決と既定値の引用、残る 5 本がプロファイルごとの逐語移植 |
+| [`orm/`](../frontend/js/io/orm/) | 出・形式 | `DesignModel` → **ORM のモデル定義**（段階6-9d〜6-9f）。`generate.ts` が入口で `ORM_TARGETS` を持ち、`naming.ts` が言語に依らない名前の変換、`jpa.ts` / `prisma.ts` / `drizzle.ts` がターゲットごと。**db プロファイルではなく出力の別の軸**で、型は正規型（`kind`）を介して写す。**db を見るのは Prisma（provider）と Drizzle（core）だけ**で、理由も違う —— **Drizzle は型そのものが core 依存**なので表を 4 本持つ |
 | [`json-format.ts`](../frontend/js/io/json-format.ts) | 形式の定義 | 設計 JSON の形とキー順の契約（型だけ・emit 空）。散文は [`FORMAT.md`](FORMAT.md) |
 | [`model.ts`](../frontend/js/io/model.ts) | モデルの定義 | `DesignModel` の型（型だけ・emit 空）。上の格子の説明もここ |
 | [`palette.ts`](../frontend/js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |

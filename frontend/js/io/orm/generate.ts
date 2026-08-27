@@ -25,6 +25,7 @@ import { convertDesign } from "../convert.ts";
 import type { DesignModel } from "../model.ts";
 import type { TypePalette } from "../palette.ts";
 import { generateJpa } from "./jpa.ts";
+import { generateDrizzle } from "./drizzle.ts";
 import { generatePrisma } from "./prisma.ts";
 
 /**
@@ -34,7 +35,7 @@ import { generatePrisma } from "./prisma.ts";
  * どれも「正規型 -> 言語型」の表 1 つで書けるのが 6-9c を先にやった意味だが、
  * **Prisma だけは逆参照を形式が要求する**ので、そこだけ 6-9d の判断を決め直している。
  */
-export const ORM_TARGETS = ["jpa", "prisma"] as const;
+export const ORM_TARGETS = ["jpa", "prisma", "drizzle"] as const;
 
 export type OrmTarget = (typeof ORM_TARGETS)[number];
 
@@ -42,12 +43,15 @@ export type OrmTarget = (typeof ORM_TARGETS)[number];
 export const ORM_LABELS: Readonly<Record<OrmTarget, string>> = {
     jpa: "JPA (Kotlin)",
     prisma: "Prisma",
+    drizzle: "Drizzle",
 };
 
 /** golden の拡張子。**ターゲットの性質なのでここに置く**（tests/ に散らさない） */
 export const ORM_EXTENSIONS: Readonly<Record<OrmTarget, string>> = {
     jpa: "kt",
     prisma: "prisma",
+    /* Drizzle のスキーマは素の TypeScript */
+    drizzle: "ts",
 };
 
 export function isOrmTarget(target: string): target is OrmTarget {
@@ -78,11 +82,17 @@ export function generateOrm(
     const converted = convertDesign(model, palette, output);
     const tables = buildDdlModel(converted.model, output);
     /* trim するのは DDL 側（js/io/ddl/generate.ts）と同じ —— golden も同じ形になる */
+    /*
+     * **db を見るのは Prisma と Drizzle**（JPA は見ない）。ただし理由が違う ——
+     * Prisma は datasource の provider が要るだけだが、**Drizzle は型そのものが core 依存**
+     * （段階6-9f）。どちらも 8 本中 5 本にしか対応が無い。
+     */
     const body =
         target === "jpa"
             ? generateJpa(tables).trim()
-            : /* Prisma だけ db を見る —— datasource の provider が要る（8 本中 5 本にしかない） */
-              generatePrisma(tables, output.db()).trim();
+            : target === "prisma"
+              ? generatePrisma(tables, output.db()).trim()
+              : generateDrizzle(tables, output.db()).trim();
 
     if (body === "") {
         return body;

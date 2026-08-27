@@ -18,5 +18,10 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["frontend/js/**/*.ts", "frontend/src/**/*.ts", "tests/**/*.ts", "*.config.ts"]
+  "include": ["frontend/js/**/*.ts", "frontend/src/**/*.ts", "tests/**/*.ts", "*.config.ts"],
+  // ★ golden は**成果物であってソースではない**。段階6-9f で Drizzle が初めて `.ts` の
+  //   golden を作り、`tests/**/*.ts` に巻き込まれた（JPA は .kt、Prisma は .prisma なので
+  //   当たらなかった）。**中身は drizzle-orm を import するので、型検査に通す意味が無い**
+  //   ——依存を入れることになるうえ、固定したいのはバイト列であって型ではない。
+  "exclude": ["tests/golden/**"]
 }

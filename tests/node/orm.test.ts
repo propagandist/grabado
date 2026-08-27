@@ -48,8 +48,8 @@ describe("ORM 出力（Node）", () => {
     }
 
     describe("ターゲットの登録", () => {
-        test("ORM_TARGETS は 2 本（jpa / prisma）。SQLAlchemy は保留（段階6-9e）", () => {
-            expect(ORM_TARGETS).toEqual(["jpa", "prisma"]);
+        test("ORM_TARGETS は 3 本（jpa / prisma / drizzle）。SQLAlchemy は保留（段階6-9f）", () => {
+            expect(ORM_TARGETS).toEqual(["jpa", "prisma", "drizzle"]);
         });
 
         test("知らないターゲットは受け付けない", () => {
@@ -284,5 +284,55 @@ describe("ORM 出力（Node）", () => {
         h.loadFixture(readFixture("postgresql", "empty"));
         expect(h.toOrm("jpa")).toBe("");
         expect(h.toOrm("prisma")).toBe("");
+        expect(h.toOrm("drizzle")).toBe("");
+    });
+
+    /*
+     * Drizzle 固有の規則（段階6-9f）。**golden から読み取れないものだけ**を近くで押さえる ——
+     * 6-9e が Prisma でやったのと同じ立場。
+     */
+    describe("Drizzle の規則", () => {
+        test("**core ごとに違う型が出る**（同じ設計でも pg と sqlite で関数名が変わる）", () => {
+            const pg = readGolden(goldenPath("orm", "drizzle", "postgresql", "types-matrix.ts"));
+            const lite = readGolden(goldenPath("orm", "drizzle", "sqlite", "types-matrix.ts"));
+            expect(pg).toContain('from "drizzle-orm/pg-core"');
+            expect(lite).toContain('from "drizzle-orm/sqlite-core"');
+            /* pg にしか無い型（uuid / jsonb）は sqlite の出力に現れない */
+            expect(pg).toContain("uuid(");
+            expect(lite).not.toContain("uuid(");
+        });
+
+        test("**sqlite の mode が落ちていない**（落ちると型の意味が変わる）", () => {
+            const lite = readGolden(goldenPath("orm", "drizzle", "sqlite", "types-matrix.ts"));
+            expect(lite).toContain('{ mode: "bigint" }');
+        });
+
+        test("**逆参照を出さない**（Prisma と違い片側の references で成立する）", () => {
+            const rel = readGolden(goldenPath("orm", "drizzle", "postgresql", "relations.ts"));
+            expect(rel).toContain(".references(() =>");
+            /* Prisma が要求した名前付き relation / 逆参照フィールドは 1 つも出ない */
+            expect(rel).not.toContain("@relation");
+            expect(rel).not.toContain("relations(");
+        });
+
+        test("**core が無いプロファイルでも例外にせず、理由を書いて出す**", () => {
+            for (const db of ["h2", "oracle", "sql-standard"]) {
+                const out = readGolden(goldenPath("orm", "drizzle", db, "types-matrix.ts"));
+                expect(out).toContain("に対応する Drizzle の core は無い");
+                /* 読み替え先が分かる形で出ている（黙って動くように見せない） */
+                expect(out).toContain('from "drizzle-orm/pg-core"');
+            }
+        });
+
+        test("**import は使った型だけ**（未使用の型名を持ち込まない）", () => {
+            const min = readGolden(goldenPath("orm", "drizzle", "postgresql", "minimal.ts"));
+            const line = min.split("\n").find((l) => l.startsWith("import {"))!;
+            const names = line.slice(line.indexOf("{") + 1, line.indexOf("}")).split(",");
+            for (const raw of names) {
+                const name = raw.trim();
+                /* pgTable も含めて、名前が本文に現れること */
+                expect(min.split(name + "(").length).toBeGreaterThan(1);
+            }
+        });
     });
 });

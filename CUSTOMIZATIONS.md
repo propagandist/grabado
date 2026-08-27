@@ -10296,6 +10296,107 @@ org §0 の「**分類 B は ① を導入時に 1 回 ＋ ② で足りる**」
 - **`trivy` の `-` は「未走査」であって「0 件」ではない**（org §1.3 の★）。
   **今回は `app/grabado.jar` が `0`** と出ているので、**走査したうえで 0 件**である
 
+### 2026-08-27 HANDOVER §6「機能」段階6-9f —— ORM 出力に Drizzle を足す
+
+正本は [issue #114](https://github.com/propagandist/grabado/issues/114)。ORM の 3 本目。
+**既存の JPA / Prisma の golden 28 本は 1 バイトも動いていない。**
+
+#### 通った（2026-08-27 実測）
+
+| 確かめたこと | 結果 |
+|---|---|
+| `npm test` | **605 本**（586 → 605。Drizzle の golden 14 本ぶん） |
+| `npm run test:browser` | **205 本**（191 → 205） |
+| **既存 ORM golden（JPA / Prisma 28 本）** | **無差分** |
+| ORM golden の総数 | **42 本**（14 × 3 ターゲット） |
+| `npm run typecheck` / `known-issues` | 緑 |
+
+#### ★ 6-9e の見立てが外れた —— **型の表は core ごとに要る**
+
+段階6-9e は次段階への入力にこう書いていた:
+
+> **Prisma / Drizzle / SQLAlchemy は「正規型 → 言語型」の表 1 つで書ける**
+
+**Drizzle には当たらなかった。** 公式ドキュメントを読むと**型関数そのものが DB ごとに違う**:
+
+| core | 整数 | 真偽 | 日時 | UUID |
+|---|---|---|---|---|
+| `pg-core` | `integer` | `boolean` | `timestamp`（`withTimezone`） | **`uuid()` あり** |
+| `mysql-core` | `int` | `boolean`（TINYINT(1)） | `datetime` | **無い** |
+| `sqlite-core` | `integer`（**mode で真偽と日時を表す**） | `integer({mode:"boolean"})` | `integer({mode:"timestamp"})` | **無い** |
+| `mssql-core` | `int` | `bit` | `datetime2` / `datetimeoffset` | 明記なし |
+
+**Prisma のスカラーは 9 つで DB 非依存**（provider は `datasource` ブロックだけ）だったが、
+**Drizzle は型そのものが DB 依存**。**表は 1 本では足りず、4 本持っている。**
+
+**着手前に分かったのが大きい** —— 書き始めてから気づくと、1 本の表を 4 本に割る作り直しになった。
+
+#### 決めたこと 1: **逆参照を出さない**（JPA と同じ側へ戻る）
+
+Drizzle は `references(() => users.id)` の**片側だけでスキーマが成立する**。
+**両側を要求した Prisma のほうが例外**だった（6-9e が `collectBackRelations` を書いたのはそのため）。
+
+`relations()` ヘルパは**クエリ層の宣言**であってスキーマ定義ではないので出さない ——
+**grabado が出すのはテーブル定義**である。
+
+#### 決めたこと 2: **sqlite の `mode` は書く**
+
+`integer({ mode: "boolean" })` の mode を落とすと**真偽が数値になる**。
+**Prisma で `@db.*` を出さないと決めたのとは事情が違う** —— あちらは
+「provider ごとに別の表が要るうえ、無くてもスキーマは正しい」だったが、
+**こちらは無いと意味が変わる**。
+
+#### 決めたこと 3: 既定値は **`sql` テンプレート**で出す
+
+grabado が持っているのは DDL の既定値（`now()` のような式を含む）で、
+**リテラルとして書き直すと意味が変わりうる**。`.default(sql\`…\`)` の 1 つの形に揃えたので、
+**写したものがそのまま DB へ渡る**。`sql` の import は**使ったときだけ**出す。
+
+#### 決めたこと 4: core が無い 3 本は **pg-core の形で出し、理由を書く**
+
+`h2` / `oracle` / `sql-standard` に core は無い。**例外にせず、先頭のコメントで
+「対応する core は無い。pg-core の形で出しているので読み替えること」と言う** ——
+Prisma が provider 無しでモデルだけ出しているのと同じ立場で、**形が読めれば移せる**。
+
+#### ★ 実測: **型が表の網羅を保証した**
+
+`Record<TypeKind, DrizzleType | null>` にしてあるので、**表に余分なキーを書いた瞬間に
+typecheck が落ちた**（実際 1 回落ちた）。**21 種を書き漏らしてもコンパイルが通らない。**
+
+#### ★ 実測: **Drizzle が初めて `.ts` の golden を作った**
+
+`tsconfig.json` の `include` が `tests/**/*.ts` なので、**golden が型検査に巻き込まれた**
+（`Cannot find module 'drizzle-orm/pg-core'`）。**JPA は `.kt`、Prisma は `.prisma`
+だったので当たらなかった。**
+
+`exclude: ["tests/golden/**"]` を足した。**golden は成果物であってソースではない** ——
+固定したいのは**バイト列**であって型ではないし、通すには `drizzle-orm` を依存に入れることになる。
+
+#### 却下した案
+
+- **型の表を 1 本に括る** —— 上の★。**どの DB でもない型名になる**
+- **`relations()` も出す** —— スキーマ定義ではない
+- **`sqlite` の `mode` を省く** —— **型の意味が変わる**
+- **既定値をリテラルで書き直す** —— 式を含むので意味が変わりうる
+- **`uniqueNames` を `naming.ts` へ括る** —— prisma.ts と同じ形だが、
+  6-9e の「言語ごとの識別子の規則は各生成器が持つ」に沿って**各自に持たせた**。
+  **括ると、片方を直したときにもう片方の golden が動く**
+- **`drizzle-orm` を devDependency に入れて golden を型検査する** —— **固定したいのは
+  バイト列**。依存を増やしても、出力が Drizzle として通ることの証明にはならない（下の申し送り）
+
+#### 申し送り
+
+- **★ 出力が実際に Drizzle として通るかは検証していない。** golden はバイト列を固定するだけで、
+  **`drizzle-kit` に食わせる検査は無い**。**型関数名と import パスが正しいかは目で見た**だけ
+- **`docs/TYPE-MAPPING.md` に ORM の節は無い**（#114 の対象範囲に挙げたが、開いたら
+  DDL の型マッピングしか無かった）。**触っていない**
+- **`sqlite` の `boolean` / `timestamp` の mode は、この母集団には現れない** ——
+  sqlite の fixture は sqlite の実型で書かれている（6-6b）ので、型パレットに boolean 型が無い。
+  **mode が出るのは `bigint` の 1 件**で、他は**下敷きを変換したとき**（6-10a）に出る
+- **残るは SQLAlchemy**（6-0 が挙げた 4 本の最後）。**言語も生態系も違う**ので別段階
+- **`ARCHITECTURE.md` のファイル表に `orm/` の行が無かった**（格子の説明にはあった）。
+  **6-9d 以来の欠落**で、この段階で足した
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

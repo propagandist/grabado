@@ -15,7 +15,7 @@ Kotlin/Spring Boot に置き換え、**単一の Docker イメージ**として�
 
 - **描く** —— テーブル・列・キー・外部キー制約・インデックス・コメントをブラウザで
 - **DDL を出す** —— 1 つの設計から 8 プロファイル（下の表）
-- **ORM モデルを出す** —— JPA（Kotlin）と Prisma
+- **ORM モデルを出す** —— JPA（Kotlin）・Prisma・Drizzle
 - **既存の DB を読み取る** —— introspection が `information_schema` を読んで JSON で返す
 - **AI 提案** —— 任意・BYOK。提案は必ずレビューを経て、**適用は他と同じ決定論パスに合流する**。
   **自動適用はしない**

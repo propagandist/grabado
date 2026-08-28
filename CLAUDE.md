@@ -136,6 +136,10 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
     org 規約の「**新規ラベルを作らない**」は**人の側の規律**で、**bot が足すぶんは止まらない**。
     **選ぶときは 12 種から選ぶ**（依存の更新・脆弱性は `dependencies`）。
     **マイルストーンは引き続き運用していない**
+  - **★ 再訂正（2026-08-28。#120）—— 13 種になった。** `java` が増えている
+    （`dependencies` / `docker` / `javascript` に続く 4 本目の bot 産）。
+    **元の 12 種という数は消さない**（2026-08-26 時点の観測として正しい）。
+    **数を書いた時点で、bot が足した日に古くなる** —— 選ぶ前に `gh label list` を見ること
 - **本文の書式の見本は [#72](https://github.com/propagandist/grabado/issues/72)**
   （**2026-08-23 実測**。§11 段階11-2a の起票で、org 規約 §2 の 7 項目に沿った最初の 1 本。
   それまで issue は 1 本も無かった）

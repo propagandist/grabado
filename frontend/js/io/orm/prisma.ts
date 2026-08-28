@@ -321,10 +321,43 @@ function model(
     }
     block.push("  @@map(" + prismaString(table.name) + ")");
 
+    /*
+     * ★ **Prisma は unique criteria の無いモデルを受け付けない**（`P1012`。issue #120 の実測）。
+     *   PK の無いテーブルは設計として正当なので、**Prisma 自身の逃げ道に乗る** ——
+     *   introspection が同じ状況で出すのが `@@ignore` で、**付ければ validate は通り、
+     *   Client からそのモデルだけが外れる**。テーブルを消すわけではない。
+     */
+    if (!hasUniqueCriteria(table)) {
+        block.push("");
+        block.push("  // 一意に決まる列が無いので Prisma Client からは扱えない（@@ignore）");
+        block.push("  @@ignore");
+    }
+
     out.push("");
     out.push(...block);
     out.push("}");
     return out;
+}
+
+/**
+ * Prisma が要求する「**必須列だけからなる一意な組**」を持つか（`@id` / `@unique` /
+ * `@@id` / `@@unique` のどれかになりうるか）。
+ *
+ * **PK は問答無用で満たす** —— 主キーの列は定義上 NOT NULL だからである。
+ * **UNIQUE は列の nullable を見る** —— Prisma は「only required fields」を要求するので、
+ * nullable な列を含む UNIQUE では足りない。
+ */
+function hasUniqueCriteria(table: DdlTable): boolean {
+    const notNull = new Set(table.rows.filter((r) => !r.nullable).map((r) => r.name));
+    return table.keys.some((key) => {
+        if (key.parts.length === 0) {
+            return false;
+        }
+        if (key.type === "PRIMARY") {
+            return true;
+        }
+        return key.type === "UNIQUE" && key.parts.every((c) => notNull.has(c));
+    });
 }
 
 interface ModelContext {

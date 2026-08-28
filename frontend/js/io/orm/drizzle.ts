@@ -9,10 +9,14 @@
  *     pg-core      integer / text / boolean / timestamp(withTimezone) / uuid()
  *     mysql-core   int     / text / boolean / datetime               / uuid は無い
  *     sqlite-core  integer（**mode で真偽と日時を表す**）/ text      / uuid は無い
- *     mssql-core   int     / varchar / bit  / datetime2              / uuid は明記なし
  *
  *   **Prisma のスカラーは 9 つで DB 非依存**（provider は datasource ブロックだけ）だったが、
  *   **Drizzle は型そのものが DB 依存**。1 本に括ると「どの DB でもない型名」になる。
+ *
+ * ★ **core は 3 つしかない**（issue #120 の実測。drizzle-orm 0.45.2）。6-9f は
+ *   **`mssql-core` があるつもりで書いていたが、実在しない** —— Drizzle が持つのは
+ *   pg / mysql / sqlite / singlestore / gel で、**SQL Server 用の core は無い**。
+ *   `mssql` は h2 / oracle / sql-standard と同じ「対応する core が無い」側へ移した。
  *
  * ★ **逆参照は出さない**（6-9d の JPA と同じ側へ戻る）。Drizzle は
  *   `references(() => users.id)` の**片側だけでスキーマが成立する** —— 両側を要求した
@@ -29,22 +33,25 @@ import type { TypeKind } from "../palette.ts";
 import { camelCase, entityName } from "./naming.ts";
 
 /** Drizzle が core を分けている単位。**db プロファイルとは 1 対 1 ではない** */
-type DrizzleCore = "pg" | "mysql" | "sqlite" | "mssql";
+type DrizzleCore = "pg" | "mysql" | "sqlite";
 
 /**
- * db プロファイル -> core。**8 本のうち 5 本にしか対応が無い**（Prisma と同じ本数）。
+ * db プロファイル -> core。**8 本のうち 4 本にしか対応が無い。**
  *
  * `mariadb` に専用の core は無く、**`mysql-core` で扱う**（Prisma が mariadb を
- * mysql provider で扱っているのと同じ判断）。`h2` / `oracle` / `sql-standard` は
+ * mysql provider で扱っているのと同じ判断）。`h2` / `mssql` / `oracle` / `sql-standard` は
  * 対応が無いので、**理由を先頭のコメントで言う** —— 黙って pg-core と書くと、
  * 動かないスキーマを動くように見せることになる。
+ *
+ * ★ **`mssql` は 6-9f では core を持っていた**が、**`drizzle-orm/mssql-core` は実在しない**
+ * （issue #120 の実測。`TS2307: Cannot find module`）。**Prisma とは本数が違う** ——
+ * あちらは `sqlserver` provider を持つので 5 本。
  */
 const DRIZZLE_CORES: Readonly<Record<string, DrizzleCore>> = {
     postgresql: "pg",
     mysql: "mysql",
     mariadb: "mysql",
     sqlite: "sqlite",
-    mssql: "mssql",
 };
 
 /** core -> import するパッケージ */
@@ -52,7 +59,6 @@ const CORE_PACKAGES: Readonly<Record<DrizzleCore, string>> = {
     pg: "drizzle-orm/pg-core",
     mysql: "drizzle-orm/mysql-core",
     sqlite: "drizzle-orm/sqlite-core",
-    mssql: "drizzle-orm/mssql-core",
 };
 
 /** core -> テーブルを作る関数名 */
@@ -60,7 +66,19 @@ const CORE_TABLE_FN: Readonly<Record<DrizzleCore, string>> = {
     pg: "pgTable",
     mysql: "mysqlTable",
     sqlite: "sqliteTable",
-    mssql: "mssqlTable",
+};
+
+/**
+ * core -> 列の型名（**自己参照 FK の戻り型注釈**に要る）。
+ *
+ * ★ **注釈が無いと `tsc --strict` が通らない** —— `references(() => employees.id)` は
+ * 自分自身の初期化子を参照するので、**戻り型を推論できず TS7022/TS7024 になる**
+ * （issue #120 の実測）。**他テーブルへの参照では要らない**ので、自己参照のときだけ出す。
+ */
+const CORE_COLUMN_TYPE: Readonly<Record<DrizzleCore, string>> = {
+    pg: "AnyPgColumn",
+    mysql: "AnyMySqlColumn",
+    sqlite: "AnySQLiteColumn",
 };
 
 /**
@@ -71,15 +89,25 @@ interface DrizzleType {
     readonly fn: string;
     /** `text("name", { … })` の第 2 引数。空なら出さない */
     readonly args?: string;
+    /**
+     * **その core に組み込みの型関数が無いので、`customType` で定義してから使う**もの。
+     * 埋まっていると、ファイル先頭に定義を 1 つ出し、import には `fn` ではなく
+     * `customType` を足す。`sqlType` が DB 側の型名、`tsType` が値の型。
+     *
+     * ★ **基準は「組み込みで正規型の意味を表せるか」**（issue #120）。表せるなら組み込みを使う
+     * ——`customType` は出力が膨らむので、避けられるなら避ける。
+     */
+    readonly custom?: { readonly sqlType: string; readonly tsType: string };
 }
 
 /**
  * 正規型 -> core ごとの型（段階6-9f）。**`null` は対応が無い**（コメントを残して text に丸める）。
  *
  * ★ 丸めどころが core で違う:
- *   - **uuid は pg にしか無い**。mysql / sqlite / mssql では文字列に落ちる
+ *   - **uuid は pg にしか無い**。mysql / sqlite では文字列に落ちる
  *   - **sqlite は 5 型しか無い**ので、真偽も日時も `integer` の mode で表す
- *   - **tz の有無**は pg（`withTimezone`）と mssql（`datetimeoffset`）だけが表せる
+ *   - **tz を表せるのは pg だけ**（`withTimezone`）
+ *   - **binary は pg / mysql とも組み込みが無い**ので `customType`（下の★）
  */
 const DRIZZLE_TYPES: Readonly<Record<DrizzleCore, Readonly<Record<TypeKind, DrizzleType | null>>>> =
     {
@@ -92,7 +120,8 @@ const DRIZZLE_TYPES: Readonly<Record<DrizzleCore, Readonly<Record<TypeKind, Driz
             float32: { fn: "real" },
             float64: { fn: "doublePrecision" },
             string: { fn: "text" },
-            binary: { fn: "bytea" },
+            /* ★ pg-core に bytea の型関数は無い（binary 系は bit と customType だけ。#120 の実測） */
+            binary: { fn: "bytea", custom: { sqlType: "bytea", tsType: "Uint8Array" } },
             boolean: { fn: "boolean" },
             date: { fn: "date" },
             time: { fn: "time" },
@@ -115,7 +144,12 @@ const DRIZZLE_TYPES: Readonly<Record<DrizzleCore, Readonly<Record<TypeKind, Driz
             float32: { fn: "float" },
             float64: { fn: "double" },
             string: { fn: "text" },
-            binary: { fn: "blob" },
+            /*
+             * ★ mysql-core に blob の型関数は無い（あるのは binary / varbinary。#120 の実測）。
+             *   **varbinary に落とすと上限が 4GB から 64KB に狭まる**ので customType にする ——
+             *   パレットの `bytea` は LONGBLOB で、DDL 側も「上限が広がる（安全側）」で選んでいる。
+             */
+            binary: { fn: "longblob", custom: { sqlType: "longblob", tsType: "Uint8Array" } },
             boolean: { fn: "boolean" },
             date: { fn: "date" },
             time: { fn: "time" },
@@ -152,29 +186,6 @@ const DRIZZLE_TYPES: Readonly<Record<DrizzleCore, Readonly<Record<TypeKind, Driz
             interval: null,
             uuid: null,
             json: { fn: "text", args: '{ mode: "json" }' },
-            xml: null,
-            geometry: null,
-            other: null,
-        },
-        mssql: {
-            int8: { fn: "tinyint" },
-            int16: { fn: "smallint" },
-            int32: { fn: "int" },
-            int64: { fn: "bigint", args: '{ mode: "bigint" }' },
-            decimal: { fn: "decimal" },
-            float32: { fn: "real" },
-            float64: { fn: "float" },
-            string: { fn: "nvarchar", args: "{ length: 4000 }" },
-            binary: { fn: "varbinary" },
-            boolean: { fn: "bit" },
-            date: { fn: "date" },
-            time: { fn: "time" },
-            time_tz: null,
-            timestamp: { fn: "datetime2" },
-            timestamp_tz: { fn: "datetimeoffset" },
-            interval: null,
-            uuid: null,
-            json: null,
             xml: null,
             geometry: null,
             other: null,
@@ -236,7 +247,6 @@ const AUTO_INCREMENT: Readonly<Record<DrizzleCore, string | null>> = {
     pg: ".generatedAlwaysAsIdentity()",
     mysql: ".autoincrement()",
     sqlite: null,
-    mssql: ".identity()",
 };
 
 /** テーブル名 -> export する変数名（`articles` -> `articles`。**複数形のまま**） */
@@ -273,6 +283,10 @@ export function generateDrizzle(tables: readonly DdlTable[], db: string | null):
 
     const bodies: string[] = [];
     const used = new Set<string>([CORE_TABLE_FN[effective]]);
+    /* `customType` で定義してから使う型（関数名 -> 定義）。**使ったものだけ出す** */
+    const customs = new Map<string, { sqlType: string; tsType: string }>();
+    /* 自己参照 FK の戻り型注釈に要る型名。**出したときだけ import する** */
+    let needsColumnType = false;
     let needsSql = false;
 
     /* 1 周目: 名前を決める（references が他テーブルのプロパティ名を引くため） */
@@ -297,8 +311,12 @@ export function generateDrizzle(tables: readonly DdlTable[], db: string | null):
                 propOf: propOf,
                 pkColumnOf: pkColumnOf,
                 used: used,
+                customs: customs,
                 markSql: () => {
                     needsSql = true;
+                },
+                markColumnType: () => {
+                    needsColumnType = true;
                 },
             }),
         );
@@ -308,7 +326,7 @@ export function generateDrizzle(tables: readonly DdlTable[], db: string | null):
     const head: string[] = [
         "// grabado が生成した Drizzle のスキーマ。",
         "//",
-        "// **型は core ごとに違う** —— pg / mysql / sqlite / mssql で関数名も表せる意味も",
+        "// **型は core ごとに違う** —— pg / mysql / sqlite で関数名も表せる意味も",
         "// 変わるので、正規型からの表を core ごとに持っている（段階6-9f）。",
         "//",
         "// **TypeScript の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で",
@@ -325,14 +343,33 @@ export function generateDrizzle(tables: readonly DdlTable[], db: string | null):
     }
     head.push("");
 
+    const pkg = tsString(CORE_PACKAGES[effective]);
+    if (needsColumnType) {
+        head.push("import type { " + CORE_COLUMN_TYPE[effective] + " } from " + pkg + ";");
+    }
     const imports = [...used].sort();
-    head.push(
-        "import { " + imports.join(", ") + " } from " + tsString(CORE_PACKAGES[effective]) + ";",
-    );
+    head.push("import { " + imports.join(", ") + " } from " + pkg + ";");
     if (needsSql) {
         head.push('import { sql } from "drizzle-orm";');
     }
     head.push("");
+
+    /*
+     * `customType` の定義（**使ったものだけ・名前順**）。core に組み込みが無い型はここで作る
+     * —— 存在しない関数名を import すると、**そもそも読み込めないスキーマになる**（#120）。
+     */
+    for (const fn of [...customs.keys()].sort()) {
+        const def = customs.get(fn)!;
+        head.push(
+            "/** " + effective + "-core に " + def.sqlType + " の型関数は無いので自分で定義する */",
+        );
+        head.push("const " + fn + " = customType<{ data: " + def.tsType + " }>({");
+        head.push("    dataType() {");
+        head.push("        return " + tsString(def.sqlType) + ";");
+        head.push("    },");
+        head.push("});");
+        head.push("");
+    }
 
     return head.concat(bodies).join("\n");
 }
@@ -345,7 +382,10 @@ interface BlockContext {
     readonly pkColumnOf: ReadonlyMap<string, string>;
     /** import に集める関数名。**呼ぶたびに足す**（使ったものだけを import する） */
     readonly used: Set<string>;
+    /** `customType` で定義してから使う型。**呼ぶたびに足す** */
+    readonly customs: Map<string, { sqlType: string; tsType: string }>;
     readonly markSql: () => void;
+    readonly markColumnType: () => void;
 }
 
 /** `export const users = pgTable("users", { … });` 1 つぶん */
@@ -369,7 +409,15 @@ function tableBlock(table: DdlTable, ctx: BlockContext): string[] {
     );
 
     for (const row of table.rows) {
-        out.push(...columnLines(row, props.get(row.name)!, singlePk && pk.parts[0] === row.name, ctx));
+        out.push(
+            ...columnLines(
+                row,
+                props.get(row.name)!,
+                singlePk && pk.parts[0] === row.name,
+                table.name,
+                ctx,
+            ),
+        );
     }
 
     out.push("});");
@@ -377,7 +425,13 @@ function tableBlock(table: DdlTable, ctx: BlockContext): string[] {
 }
 
 /** 列 1 本ぶん（コメント行を含む） */
-function columnLines(row: DdlRow, prop: string, isSinglePk: boolean, ctx: BlockContext): string[] {
+function columnLines(
+    row: DdlRow,
+    prop: string,
+    isSinglePk: boolean,
+    tableName: string,
+    ctx: BlockContext,
+): string[] {
     const out: string[] = [];
 
     if (row.comment) {
@@ -397,7 +451,13 @@ function columnLines(row: DdlRow, prop: string, isSinglePk: boolean, ctx: BlockC
         );
     }
     const type = mapped ?? { fn: "text" };
-    ctx.used.add(type.fn);
+    if (type.custom === undefined) {
+        ctx.used.add(type.fn);
+    } else {
+        /* 定義するものは import しない —— **import すると存在しない名前を要求することになる** */
+        ctx.used.add("customType");
+        ctx.customs.set(type.fn, type.custom);
+    }
 
     const args = [tsString(row.name)];
     if (type.args !== undefined) {
@@ -443,7 +503,17 @@ function columnLines(row: DdlRow, prop: string, isSinglePk: boolean, ctx: BlockC
             out.push("    // 参照先 " + rel.table + "." + rel.row + " が設計に無い");
             continue;
         }
-        expr += ".references(() => " + target + "." + targetProp + ")";
+        /*
+         * ★ **自己参照だけ戻り型を注釈する**（#120 の実測）。自分自身の初期化子を参照するので、
+         *   注釈が無いと **TS7022/TS7024（暗黙の any・循環推論）** で型検査が通らない。
+         *   他テーブルへの参照では推論できるので付けない —— 全部に付けると読みにくくなる。
+         */
+        const self = rel.table === tableName;
+        if (self) {
+            ctx.markColumnType();
+        }
+        const arrow = self ? "(): " + CORE_COLUMN_TYPE[ctx.core] + " => " : "() => ";
+        expr += ".references(" + arrow + target + "." + targetProp + ")";
     }
 
     out.push("    " + prop + ": " + expr + ",");

@@ -23,6 +23,11 @@
  *   Prisma のほうが例外だった。`relations()` ヘルパは**クエリ層の宣言**であって
  *   スキーマ定義ではないので出さない（grabado が出すのはテーブル定義）。
  *
+ * ★ **キー（複合 PK / UNIQUE / INDEX）はテーブル設定に出す**（issue #123）。6-9f は
+ *   **単一列 PK しか見ておらず、3 種とも落としていた** —— JPA と Prisma は同じ設計から
+ *   3 種とも出しているので、**Drizzle だけが情報を落としていた**。型検査では捕まらない
+ *   （複合 PK が無くても TypeScript としては妥当）ので、#120 の道具も PASS していた。
+ *
  * ★ **sqlite の `mode` は書く。** `integer({ mode: "boolean" })` の mode を落とすと
  *   **真偽が数値になる** —— Prisma で `@db.*` を出さないと決めたのとは事情が違う。
  *   あちらは「無くてもスキーマは正しい」だったが、こちらは**無いと意味が変わる**。
@@ -420,7 +425,57 @@ function tableBlock(table: DdlTable, ctx: BlockContext): string[] {
         );
     }
 
-    out.push("});");
+    /*
+     * ★ **キーはテーブル設定（第 3 引数）に出す**（issue #123）。**1 つも無ければ第 3 引数ごと
+     *   出さない** —— 空の配列を渡す形は Drizzle として無意味で、キーを持たないテーブルの
+     *   出力が動く理由も無い。
+     */
+    const config = tableConfigLines(table, ctx);
+    if (config.length === 0) {
+        out.push("});");
+    } else {
+        out.push("}, (t) => [");
+        out.push(...config);
+        out.push("]);");
+    }
+    return out;
+}
+
+/**
+ * テーブル設定（`pgTable` の第 3 引数）に出すキー（issue #123）。
+ *
+ * ★ **単一列 PK はここに来ない** —— 列修飾子 `.primaryKey()` で出しているので、
+ *   複合 PK のときだけ `primaryKey({ columns: [...] })` を出す。
+ *
+ * ★ **形は配列を返すコールバック**（drizzle-orm 0.45.2 の現行。オブジェクトを返す形は
+ *   deprecated）。列は**プロパティ名**で参照するので、`propOf` がそのまま使える。
+ *
+ * ★ **PK の制約名は出さない。** Drizzle は `primaryKey({ name, columns })` を許すが、
+ *   **JPA（`@IdClass`）も Prisma（`@@id` に `map` 無し）も落としている** —— Drizzle だけ
+ *   出すと非対称になる。**UNIQUE / INDEX の名前は 3 本とも出しているので出す。**
+ */
+function tableConfigLines(table: DdlTable, ctx: BlockContext): string[] {
+    const props = ctx.propOf.get(table.name)!;
+    const ref = (col: string): string => "t." + (props.get(col) ?? col);
+    const out: string[] = [];
+
+    const pk = primaryKeyOf(table);
+    if (pk !== null && pk.parts.length > 1) {
+        ctx.used.add("primaryKey");
+        out.push("    primaryKey({ columns: [" + pk.parts.map(ref).join(", ") + "] }),");
+    }
+
+    /* PRIMARY / UNIQUE 以外は index（DDL 側の CREATE INDEX と同じ振り分け。JPA も同じ） */
+    for (const key of table.keys) {
+        if (key.parts.length === 0 || key.type === "PRIMARY") {
+            continue;
+        }
+        const fn = key.type === "UNIQUE" ? "unique" : "index";
+        ctx.used.add(fn);
+        /* 名前が無ければ引数を省く（Drizzle は `unique()` を許す。空文字を渡さない） */
+        const named = key.name === "" ? "" : tsString(key.name);
+        out.push("    " + fn + "(" + named + ").on(" + key.parts.map(ref).join(", ") + "),");
+    }
     return out;
 }
 

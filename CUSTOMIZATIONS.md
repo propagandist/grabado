@@ -10831,6 +10831,108 @@ h2 / oracle / sql-standard は `datasource` も `generator` も持たない（go
 - **複合 PK の脱落（#123）は未着手。** 型検査では捕まらない軸なので、
   **`tests/node/orm.test.ts` に 3 ターゲット横断の検査を 1 本**入れるのが本題
 
+### 2026-08-28 Drizzle 出力からキーが落ちていた —— 検査を 3 ターゲット横断で書く
+
+正本は [issue #123](https://github.com/propagandist/grabado/issues/123)。**段階に属さない**
+（#117 / #118 / #120 と同じ）。**#120 の申し送りが「本題」と名指ししていた 1 本**で、
+見つけたのも #120 の実測中だった。
+
+#### ★ 実測 1: 落ちていたのは複合 PK だけではなかった（着手前に読み直して分かった）
+
+| キー | JPA | Prisma | **Drizzle** |
+|---|---|---|---|
+| 複合 PK | `@IdClass` | `@@id([...])` | **無し** |
+| UNIQUE | `@Table(uniqueConstraints = [...])` | `@@unique([...], map: ...)` | **無し** |
+| INDEX | `@Table(indexes = [...])` | `@@index([...], map: ...)` | **無し** |
+
+[`drizzle.ts`](frontend/js/io/orm/drizzle.ts) が `table.keys` を読むのは `primaryKeyOf` の
+**ただ 1 か所**で、そこも単一列 PK にしか触れていない ——**キーを扱う経路そのものが無かった**。
+issue 本文は複合 PK だけを挙げていたが、**同じ形の脱落が 3 種あった**（記録は同 issue のコメント）。
+
+#### 決めたこと 1: キー 3 種すべてを直す（ユーザー判断）
+
+**#123 を #120 から分けたのとは向きが逆になる。** 分けない理由:
+
+- **実装箇所が同じ** —— 3 種とも `pgTable` の第 3 引数（テーブル設定）に出る
+- **動く golden も同じ 2 本** —— ORM golden 14 本のうち複合 PK を含むのは 2 件、UNIQUE を
+  含むのは 1 件（どちらも postgresql）。**UNIQUE を足しても動くファイルは増えない**
+- **本題が半分にならない** —— 検査を複合 PK だけに絞ると、**UNIQUE の脱落は緑のまま残る**
+
+#### 決めたこと 2: 単一列 PK は 1 バイトも動かさない
+
+複合 PK のときだけ第 3 引数に `primaryKey({ columns: [...] })` を出し、**単一列は列修飾子
+`.primaryKey()` のまま**。**キーが 1 つも無ければ第 3 引数ごと出さない** —— 空の配列を渡す形は
+無意味で、キーを持たないテーブルの出力が動く理由も無い（実際 **41 本が 0 バイト差**）。
+
+#### 決めたこと 3: PK の制約名は出さない（**3 本共通の脱落**として残す）
+
+Drizzle は `primaryKey({ name, columns })` を許すが、**JPA も Prisma も PK 名を落としている**
+（`pk_article_tags` はどの出力にも残らない）。**Drizzle だけ出すと非対称になる。**
+UNIQUE / INDEX の名前は 3 本とも出しているので出す。**#123 の射程外**（申し送り）。
+
+#### 決めたこと 4: 検査は**ターゲットを跨ぐ 1 本**
+
+[`tests/node/orm.test.ts`](tests/node/orm.test.ts) に `KEY_MARKERS`（ターゲット × キー種別の表）を
+置き、`ORM_TARGETS` を回す。**Drizzle だけの検査にしない** —— 4 本目の ORM を足した日に
+**足し忘れても緑のまま**になる。`Record<OrmTarget, ...>` なので、**ターゲットが増えると表を
+埋めるまで型検査が通らない**。
+
+**両方向で見る** —— fixture が該当キーを持つ ⇔ golden に印が出ている。持たない設計に印が
+出ていないことも見る（偽陽性を防ぐ）。**母集団が空でないことも主張する**（0 件だと黙って
+緑になる）が、**数は焼き込まない**。
+
+**★ 単一列 PK と混ざらない印を選ぶ** —— Drizzle の複合の印は `primaryKey({`。
+単一列は `.primaryKey()` なので一致しない。
+
+#### ★ 実測 2: 3 core とも実在した —— **golden に出ない 2 core は手で確かめた**
+
+`npm run test:orm-tools` は **39 本走って 0 FAIL・3 SKIP**（#120 の基準線のまま）。
+**ただしそれで通ったのは pg-core だけ** —— ORM golden の構造ケースは postgresql しか無く、
+**mysql-core / sqlite-core のキー出力は 1 本も golden に現れない**。
+
+そこで **mysql / mariadb / sqlite の `house-defaults` を一時的に出力し**（fixture は 8 本とも
+複合 PK と UNIQUE を持つ）、**INDEX を手で足した版**と合わせて 7 本を同じ使い捨てコンテナの
+`tsc --strict` に通した。**7 本とも PASS** —— `primaryKey` / `unique` / `index` は
+**pg / mysql / sqlite の 3 core とも実在し**、**コールバックが配列を返す形も 0.45.2 で通る**
+（オブジェクトを返す形は deprecated）。
+
+**#120 の「目で見ただけ」を繰り返さないための実測。** INDEX は fixture に 1 件も無いので
+golden では守れず、**ここでしか確かめられない**。
+
+#### 検証（2026-08-28 実測）
+
+| 何を | 結果 |
+|---|---|
+| `npm run typecheck` | 緑 |
+| `npm test` | **612 本**（611 ＋ 横断検査 1 本）が緑 |
+| 検査が効くか | `KEY_MARKERS.drizzle.compositePk` を壊すと **2 件を名指しで**赤くなることを確認し、戻した |
+| `npm run test:browser` | **205 本**が緑（golden の権威側） |
+| `npm run test:orm-tools` | **3 道具とも OK。39 本走って 0 FAIL、3 SKIP** |
+| golden の差分 | **Drizzle の 2 本だけ**（`house-defaults.ts` / `relations.ts`）。**他 41 本は 0 バイト差** |
+
+#### 却下した案
+
+- **複合 PK だけ直す**（issue 本文の範囲）—— 決めたこと 1
+- **Drizzle だけの検査にする** —— 4 本目の ORM で足し忘れる（issue 本文も却下している）
+- **型検査を強めて捕まえる** —— **原理的に無理**。複合 PK が無くても TypeScript としては妥当で、
+  #120 の検査は実際に PASS していた
+- **ORM golden の母集団に mysql / sqlite の `house-defaults` を足す**（キー出力を golden で守る）
+  —— 母集団の切り方（「**構造の側はプロファイルに依らない**」。[`fixtures.ts`](tests/support/fixtures.ts)）を
+  変えることになり **6 本増える**。**Drizzle だけは構造も core に依る**ので理はあるが、
+  今回は実測 2 で足りた ——**足すなら別に決める**（申し送り）
+
+#### 申し送り
+
+- **PK の制約名は 3 本とも落ちている**（決めたこと 3）。直すなら **3 本同時**で、別の判断
+- **mysql-core / sqlite-core のキー出力は、いま golden が 1 本も持っていない。**
+  実測 2 は**手で 1 回やっただけ**で、**回り続ける検査ではない** —— core の版が上がって
+  `unique` / `index` の形が変わっても、**気づくのは誰かが同じことを手でやったとき**
+- **INDEX を持つ fixture は 1 件も無い**（キー種別は **PRIMARY 80 / UNIQUE 8**）。
+  横断検査はキー種別を回すので、**INDEX の fixture が入った日に自動で効く**
+- **import する名前が 3 つ増えた**（`primaryKey` / `unique` / `index`）。**テーブル変数名が
+  これらと同じだと二重宣言になる** —— ただしこれは型関数名（`text` など）で**元からある形**で、
+  増えたのは語数だけ。**未実測**（確かめるにはその名前のテーブルを持つ fixture が要る）
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

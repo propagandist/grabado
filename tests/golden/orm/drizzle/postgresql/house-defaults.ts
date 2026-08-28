@@ -6,7 +6,7 @@
 // **TypeScript の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で
 // 一意化してある。**元の名前は型関数の第 1 引数に必ず残る**。
 
-import { boolean, date, integer, jsonb, numeric, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /** ユーザー */
@@ -20,7 +20,9 @@ export const users = pgTable("users", {
     preferences: jsonb("preferences").notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+    unique("users_email_key").on(t.email),
+]);
 
 /** 記事 */
 export const articles = pgTable("articles", {
@@ -42,4 +44,6 @@ export const articleTags = pgTable("article_tags", {
     articleId: uuid("article_id").notNull().references(() => articles.id),
     tag: text("tag").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().default(sql`now()`),
-});
+}, (t) => [
+    primaryKey({ columns: [t.articleId, t.tag] }),
+]);

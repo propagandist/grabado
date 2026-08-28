@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { className, fieldName, kotlinIdentifier } from "../../frontend/js/io/orm/jpa.ts";
+import type { OrmTarget } from "../../frontend/js/io/orm/generate.ts";
 import { ORM_EXTENSIONS, ORM_TARGETS, isOrmTarget } from "../../frontend/js/io/orm/generate.ts";
 import { DB_PROFILES, ormGoldenCases, readFixture } from "../support/fixtures.ts";
 import { goldenPath, readGolden } from "../support/golden.ts";
@@ -333,6 +334,106 @@ describe("ORM 出力（Node）", () => {
                 /* pgTable も含めて、名前が本文に現れること */
                 expect(min.split(name + "(").length).toBeGreaterThan(1);
             }
+        });
+    });
+
+    /*
+     * キーの表現（**3 ターゲット横断**。issue #123）。
+     *
+     * ★ **ターゲットごとに書かない。** Drizzle だけの検査にすると、4 本目の ORM を足した日に
+     *   **足し忘れても緑のまま**になる。表を 1 つ持って ORM_TARGETS を回すので、
+     *   **ターゲットが増えると KEY_MARKERS を埋めるまで型検査が通らない**。
+     *
+     * ★ **#120 の道具（npm run test:orm-tools）では原理的に捕まらない軸。** あちらは
+     *   「そのバイト列が実物の道具に受け付けられるか」で、**複合 PK が無くても TypeScript
+     *   としては妥当**だから PASS する。ここが見るのは「**設計の情報が出力に残っているか**」。
+     */
+    describe("キーの表現（3 ターゲット横断）", () => {
+        const KEY_KINDS = ["compositePk", "unique", "index"] as const;
+        type KeyKind = (typeof KEY_KINDS)[number];
+
+        /**
+         * 「そのキーが出ている」印。**Record が網羅を強制する**（上の★）。
+         *
+         * ★ **単一列 PK と混ざらない印を選ぶ** —— Drizzle の単一列 PK は列修飾子
+         *   `.primaryKey()` なので、複合の印は `primaryKey({` にしてある。
+         */
+        const KEY_MARKERS: Readonly<Record<OrmTarget, Readonly<Record<KeyKind, string>>>> = {
+            jpa: {
+                compositePk: "@IdClass(",
+                unique: "UniqueConstraint(name = ",
+                index: "Index(name = ",
+            },
+            prisma: { compositePk: "@@id([", unique: "@@unique([", index: "@@index([" },
+            drizzle: { compositePk: "primaryKey({", unique: "unique(", index: "index(" },
+        };
+
+        /** fixture がそのキーを持つか。**golden ではなく入力の側**を見る */
+        function fixtureHasKey(xml: string, kind: KeyKind): boolean {
+            const doc = new h.window.DOMParser().parseFromString(xml, "text/xml");
+            for (const key of Array.from(doc.getElementsByTagName("key"))) {
+                const parts = key.getElementsByTagName("part").length;
+                const type = key.getAttribute("type") ?? "";
+                if (parts === 0) {
+                    continue;
+                }
+                if (kind === "compositePk" && type === "PRIMARY" && parts > 1) {
+                    return true;
+                }
+                if (kind === "unique" && type === "UNIQUE") {
+                    return true;
+                }
+                /* PRIMARY / UNIQUE 以外は index（DDL 側の CREATE INDEX と同じ振り分け） */
+                if (kind === "index" && type !== "PRIMARY" && type !== "UNIQUE") {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        test("**複合 PK / UNIQUE / INDEX が 3 ターゲットとも出ている**（持たない設計では出ない）", () => {
+            /* **両方向で見る** —— 出るべきものが出ているかと、出ないはずのものが出ていないか */
+            const mismatches: string[] = [];
+            const seen: Record<KeyKind, number> = { compositePk: 0, unique: 0, index: 0 };
+
+            for (const one of ormGoldenCases(DB_PROFILES)) {
+                const xml = readFixture(one.db, one.fixture);
+                for (const kind of KEY_KINDS) {
+                    const expected = fixtureHasKey(xml, kind);
+                    if (expected) {
+                        seen[kind] += 1;
+                    }
+                    for (const target of ORM_TARGETS) {
+                        const out = readGolden(
+                            goldenPath(
+                                "orm",
+                                target,
+                                one.db,
+                                `${one.fixture}.${ORM_EXTENSIONS[target]}`,
+                            ),
+                        );
+                        if (out.includes(KEY_MARKERS[target][kind]) !== expected) {
+                            mismatches.push(
+                                `${target}/${one.db}/${one.fixture}: ${kind} は` +
+                                    (expected ? "出るはず" : "出ないはず"),
+                            );
+                        }
+                    }
+                }
+            }
+            expect(mismatches).toEqual([]);
+
+            /*
+             * **母集団が空だと、この検査は黙って緑になる。** 数は焼き込まない —— fixture が
+             * 増えた日に赤くするための検査で、赤くする理由が「数が変わった」では困る。
+             *
+             * ★ **index だけは 0 件**（2026-08-28 実測。fixture 全体のキー種別は
+             *   PRIMARY 80 / UNIQUE 8 で、**INDEX は 1 件も無い**）。生成器の側は 3 本とも
+             *   出せるようにしてあるので、**INDEX を持つ fixture が入った日に自動で効く**。
+             */
+            expect(seen.compositePk).toBeGreaterThan(0);
+            expect(seen.unique).toBeGreaterThan(0);
+            expect(seen.index).toBe(0);
         });
     });
 });

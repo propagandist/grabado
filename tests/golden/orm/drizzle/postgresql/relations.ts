@@ -7,7 +7,7 @@
 // 一意化してある。**元の名前は型関数の第 1 引数に必ず残る**。
 
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import { integer, pgTable, text } from "drizzle-orm/pg-core";
+import { integer, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
 
 export const employees = pgTable("employees", {
     id: integer("id").primaryKey(),
@@ -31,4 +31,6 @@ export const teams = pgTable("teams", {
 export const employeeProjects = pgTable("employee_projects", {
     employeeId: integer("employee_id").notNull().references(() => employees.id),
     projectId: integer("project_id").notNull().references(() => projects.id),
-});
+}, (t) => [
+    primaryKey({ columns: [t.employeeId, t.projectId] }),
+]);

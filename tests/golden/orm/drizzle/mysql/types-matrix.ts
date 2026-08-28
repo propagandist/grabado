@@ -1,12 +1,19 @@
 // grabado が生成した Drizzle のスキーマ。
 //
-// **型は core ごとに違う** —— pg / mysql / sqlite / mssql で関数名も表せる意味も
+// **型は core ごとに違う** —— pg / mysql / sqlite で関数名も表せる意味も
 // 変わるので、正規型からの表を core ごとに持っている（段階6-9f）。
 //
 // **TypeScript の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で
 // 一意化してある。**元の名前は型関数の第 1 引数に必ず残る**。
 
-import { bigint, blob, boolean, date, datetime, decimal, double, float, int, json, mysqlTable, smallint, text, time, timestamp, tinyint } from "drizzle-orm/mysql-core";
+import { bigint, boolean, customType, date, datetime, decimal, double, float, int, json, mysqlTable, smallint, text, time, timestamp, tinyint } from "drizzle-orm/mysql-core";
+
+/** mysql-core に longblob の型関数は無いので自分で定義する */
+const longblob = customType<{ data: Uint8Array }>({
+    dataType() {
+        return "longblob";
+    },
+});
 
 export const typeSamples = mysqlTable("type_samples", {
     cInteger: int("c_integer"),
@@ -21,9 +28,9 @@ export const typeSamples = mysqlTable("type_samples", {
     cChar: text("c_char"),
     cVarchar: text("c_varchar"),
     cText: text("c_text"),
-    cBytea: blob("c_bytea"),
-    cBinary: blob("c_binary"),
-    cVarbinary: blob("c_varbinary"),
+    cBytea: longblob("c_bytea"),
+    cBinary: longblob("c_binary"),
+    cVarbinary: longblob("c_varbinary"),
     cBoolean: boolean("c_boolean"),
     cDate: date("c_date"),
     cTime: time("c_time"),

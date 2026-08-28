@@ -20,4 +20,7 @@ model Thing {
   id Int
 
   @@map("things")
+
+  // 一意に決まる列が無いので Prisma Client からは扱えない（@@ignore）
+  @@ignore
 }

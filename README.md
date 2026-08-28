@@ -16,7 +16,7 @@ PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a
 
 - **Draw** — tables, columns, keys, foreign key constraints, indexes and comments, in the browser
 - **Export DDL** — eight database profiles from one design (see the table below)
-- **Export ORM models** — JPA (Kotlin) and Prisma
+- **Export ORM models** — JPA (Kotlin), Prisma and Drizzle
 - **Import an existing database** — introspection reads `information_schema` and returns JSON
 - **AI suggestions** — optional, bring your own key. Suggestions are reviewed and applied through
   the same deterministic path as everything else; **nothing is applied automatically**

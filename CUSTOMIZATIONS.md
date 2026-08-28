@@ -10651,6 +10651,186 @@ listen していたのは**別プロジェクト（`D:\projects\recibir`）の S
 - **`ja` 以外の 19 言語は英語のまま**（6-9b / 6-10b の判断を維持）。**`ja` だけが完全になった**
 - **`index.html` に残る upstream 参照は著作権コメントの 1 行だけ**になった（実測。義務のぶん）
 
+### 2026-08-28 ORM 出力 3 本を実物の道具に通す —— 通す一覧を先に決める
+
+正本は [issue #120](https://github.com/propagandist/grabado/issues/120)。**段階に属さない**
+（6-9f の後で、§6 の分割表に行が無い。#117 / #118 と同じ）。**HANDOVER §9 が全部閉じた後の
+最初の作業**で、選んだ理由は「成果物の正しさに直結する未検査がここだけ残っていた」。
+
+#### ★ 実測 1: 42 本のうち 9 本が、実物の道具に受け付けられなかった（2026-08-28）
+
+**使い捨てコンテナで 3 本とも走らせた。** issue 本文は「golden は 24 本」と書いていたが
+**実際は 42 本**（14 本 × 3 ターゲット）。
+
+| 道具 | 版 | イメージ | PASS | FAIL | SKIP |
+|---|---|---|---|---|---|
+| JPA | kotlinc 2.4.10 ＋ jakarta.persistence-api 3.2.0 | `eclipse-temurin:25-jdk` | **13** | 0 | 1 |
+| Prisma | prisma 6.19.1 | `node:24` | 12 | **1** | 1 |
+| Drizzle | drizzle-orm 0.45.2 ＋ typescript 5.9.3 | `node:24` | 5 | **8** | 1 |
+
+SKIP はいずれも `postgresql/empty`（**3 本とも 0 バイト**＝道具に渡すものが無い）。
+
+**Drizzle が落ちた 8 本は 4 種類:**
+
+| エラー | 本数 | 何が起きていたか |
+|---|---|---|
+| `TS2305 ... 'drizzle-orm/pg-core' has no exported member 'bytea'` | 4 | **pg-core に `bytea` は無い。** binary 系の export は `bit` と `customType` だけ |
+| `TS2305 ... 'drizzle-orm/mysql-core' has no exported member 'blob'` | 2 | **mysql-core に `blob` は無い。** あるのは `binary` / `varbinary` |
+| `TS2307: Cannot find module 'drizzle-orm/mssql-core'` | 1 | **★ Drizzle に mssql core は存在しない。** 実在するのは pg / mysql / sqlite / singlestore / gel |
+| `TS7022` / `TS7024` | 1 | 自己参照 FK。**戻り型の注釈が無いと循環推論で落ちる** |
+
+**Prisma は `postgresql/minimal.prisma` の 1 本**（`P1012`。`model Thing` に `@id` も
+`@unique` も無い）。**JPA は 0 本** —— `quotes-i18n.kt` のバッククォート識別子内の `"`
+（``var `say "hi"` ``）も通った。
+
+**6-9f の申し送り「型関数名と import パスが正しいかは目で見ただけ」が、そのまま当たった。**
+6-8a の `DEFAULT (UUID())` と同じ形で、**実物に流さなければ golden は緑のまま
+壊れた出力を固定していた**。
+
+#### ★ 実測 2: 検証環境の不備を 2 度、欠陥と読み違えかけた
+
+1 度目 —— golden を `/golden` に、`node_modules` を `/work` に置いたので、**全 13 本が
+`TS2307 Cannot find module 'drizzle-orm'` で落ちた**。`drizzle-orm` 自体が見つかっていない
+のだから道具の問題ではない。**golden を作業領域へ写してから検査する**のが正しい。
+
+2 度目 —— `jar xf` で Kotlin コンパイラを展開したら**実行ビットが落ち**、全 13 本が
+`Permission denied` で落ちた（`chmod +x` が要る。`unzip` は temurin に入っていない）。
+
+**どちらも「13 本中 13 本が落ちる」という形**だった。**一様に落ちたら、まず検証側を疑う** ——
+本当の欠陥は 8 / 13 のように偏る。
+
+#### 決めたこと 1: 粒度は**構文・型検査どまり**（ユーザー判断）
+
+Drizzle=`tsc --strict --skipLibCheck`／Prisma=`prisma validate`／JPA=`kotlinc`。
+**`drizzle-kit generate` / `prisma migrate diff` はやらない** —— 設定ファイルと接続情報が要り、
+**使い捨てで完結しなくなる**。issue 本文の「検証の粒度も未決」への回答。
+
+**`--strict` は必須。** off にすると自己参照 FK が暗黙 `any` に落ちて **TS7022 が出ず、
+検査が素通りする** —— いちばん見つけたい類の欠陥が見えなくなる。
+
+#### 決めたこと 2: 「通す一覧」を先に決める（issue 本文の候補 a。ユーザー判断）
+
+**known-issue には落とさない** —— あそこは「**直すべき不具合**」の置き場所で、
+「その組み合わせが存在しない」を混ぜると「直る予定」の列が書けなくなる。
+候補 (c)（生成器の出力を減らす）は採らない。
+
+**★ ただし実測の結果、「対応する概念が無いから通らない」は 1 件も無かった。**
+issue 本文が例に挙げた h2 × Drizzle は、**pg-core の形で出している以上、pg-core の
+TypeScript としては妥当であるべき**で、落ちた理由は `bytea` という**存在しない名前**だった。
+**「core が無い」は型検査の合否と無関係。** `EXCLUSIONS` は **0 件**で始まる。
+
+#### 決めたこと 3: 除外は**理由が型で必須**。0 バイトは計算で出す
+
+[`tests/orm-tools/cases.ts`](tests/orm-tools/cases.ts) の `Exclusion` が `reason` を要求する。
+**0 バイトの golden は除外リストに書かない** ——「空なら道具に渡すものが無い」は**規則であって
+一覧ではない**。`empty` の出力規則が変わった日に、書いた一覧は黙って腐る。
+[`fixtures.ts`](tests/support/fixtures.ts) の「リストは人が書き写すもので実体とずれうる」と同じ立場。
+
+#### 決めたこと 4: 落ちた 9 本は**全部直した**
+
+| 落ちたもの | どう直したか |
+|---|---|
+| pg-core の `bytea` | **`customType` で定義して出す**（Drizzle 公式の方法）。丸めると bytea という実型の情報が落ちる |
+| mysql-core の `blob` | **`customType` で `longblob`。** `varbinary` に落とすと**上限が 4GB から 64KB に狭まる** —— パレットの `bytea` は LONGBLOB で、DDL 側も「上限が広がる（安全側）」で選んでいる |
+| `drizzle-orm/mssql-core` | **`DRIZZLE_CORES` から `mssql` を外した。** h2 / oracle / sql-standard と同じ「対応する core が無い」扱いになり、**理由が先頭コメントに出る**。**出力自体はやめない**（`CLAUDE.md` の「対応 DB を絞る判断はしない」） |
+| 自己参照 FK の TS7022 | **自己参照のときだけ** `.references((): AnyPgColumn => ...)` の戻り型を注釈する。他テーブルへの参照では推論できるので付けない |
+| Prisma の P1012 | **Prisma 自身に倣って `@@ignore`。** introspection が同じ状況で出すのがこれで、**道具自身が持っている逃げ道には grabado も乗る** |
+
+**★ 基準は「組み込みで正規型の意味を表せるか」。** 表せるなら組み込みを使う ——
+`customType` は出力が膨らむので、避けられるなら避ける（sqlite の `blob` は組み込みのまま）。
+
+#### 決めたこと 5: `devDependencies` は増やさない・**CI にも載せない**
+
+検証は [`tests/orm-tools/`](tests/orm-tools/) に置き、`npm run test:orm-tools` で手元から回す。
+**`test:all` にも足さない**（`test:image` も入っていない＝「Docker が要る層は入れない」が既に効いている）。
+
+**ただし「通す一覧」の整合検算は `npm test` に載せた**（ユーザー判断）——
+[`tests/node/orm-tools.test.ts`](tests/node/orm-tools.test.ts)。**Docker を 1 秒も使わず
+ファイルを読むだけ**で、`fixture-set.test.ts` と同じ役割。issue 本文が禁じているのは
+**道具を走らせること**なので、射程の外と読んだ。**回さない日が続けば除外の表は黙って腐る。**
+
+#### 決めたこと 6: Prisma の provider 無し 3 本は**検証時だけ prelude を足す**（ユーザー判断）
+
+h2 / oracle / sql-standard は `datasource` も `generator` も持たない（golden のヘッダが
+「使うときは自分で足すこと」と言っている）。**golden は 1 バイトも変えず**、検証時に
+`datasource` を**末尾へ連結**する。**末尾にするのは、エラーの行番号が golden の行番号のまま
+読めるから**（先頭に足すとずれる）。
+
+**provider は `postgresql` 固定でよい** —— 6-9c が native type 属性を出さないと決めているので
+**Prisma のスカラーは provider 非依存**。**実測でも 3 本とも PASS した。**
+
+#### 決めたこと 7: `server/` の Gradle は使わない・repo に golden 用 tsconfig を置かない
+
+**Gradle に載せると golden が `./gradlew build` の入力になり、`ci-server.yml` がそれを回す**
+＝「CI に載せない」に自動的に違反する。加えて `TypeSample` が 8 ファイルで重複し、
+`dependencyLocking` が配布物のビルド入力を動かす。**独立した使い捨てコンテナにした。**
+
+**golden 用の `tsconfig.json` も repo に置かない** —— 置いた瞬間 `npm run typecheck` が
+`drizzle-orm` への依存を要求する。[`tsconfig.json`](tsconfig.json) の
+`exclude: ["tests/golden/**"]`（「golden は成果物であってソースではない」）を崩さない。
+**検証用の設定はコンテナ内の CLI フラグとしてしか存在しない。**
+
+**イメージはタグ止め・道具の版はピン止め・digest は毎回印字。** `Dockerfile` が digest ピン
+なのは**配布物を作るから**（org `security-baseline.md` §5.1）で、このコンテナは何も生み出さない。
+
+#### ★ この検査が捕まえないもの —— 別 issue [#123](https://github.com/propagandist/grabado/issues/123)
+
+構文・型検査どまりなので、**「情報が落ちている」は 1 つも捕まらない**。実測で 1 件見つかった ——
+**Drizzle が複合 PK を出していない**（`house-defaults` の `article_tags` は
+`(article_id, tag)` の複合 PK を持つが `primaryKey()` が出ていない。生成器の `primaryKeyOf`
+が単一列 PK にしか触れていない）。**Prisma は `@@id([...])`、JPA は `@IdClass` を出している
+のに、Drizzle だけが落としていた。**
+
+**型検査は通る**（複合 PK が無くても TypeScript としては妥当）ので、**#120 の検査では
+原理的に捕まらない**。粒度が違うので別 issue に切った。**書き残さないと
+「3 本とも検証済み」が実態より強く読まれる。**
+
+#### ★ ついでに直した: 文書のずれ 3 件
+
+**どれも #120 の作業中に実物を読んで気づいたもの**で、#117 の「入口が古くなる」と同じ形:
+
+- [`tests/golden/README.md`](tests/golden/README.md) の一覧が **`jpa=.kt / prisma=.prisma`
+  のままで drizzle が無かった**（6-9f の更新漏れ）。本数も「28 本」のままだった
+- [`docs/TESTING.md`](docs/TESTING.md) が known-issue の収録を「**2 本**」と書いていたが、
+  [`tests/known-issues/README.md`](tests/known-issues/README.md) は「**残るのは 1 本**」
+  （#9 は直って移設済み）。**訂正を追記し、元の記述は消していない**
+- [`CLAUDE.md`](CLAUDE.md) のラベルが「12 種」だったが**実測 13 種**（`java` が増えていた。
+  `dependencies` / `docker` / `javascript` に続く 4 本目の bot 産）。
+  **数を書いた時点で、bot が足した日に古くなる** —— 選ぶ前に `gh label list` を見る
+
+#### 検証（2026-08-28 実測）
+
+| 何を | 結果 |
+|---|---|
+| `npm run typecheck` | 緑（新スクリプト 2 本が strict を通る） |
+| `npm test` | **611 本**（605 ＋ 検算 6 本）が緑 |
+| 検算が効くか | `EXCLUSIONS` にでたらめな 1 行を足すと**名指しで赤くなる**ことを手で確認し、戻した |
+| `npm run test:orm-tools` | **3 道具とも OK。39 本走らせて 0 FAIL、3 本 SKIP**（`empty`） |
+| golden の差分 | **14 ファイル**（Drizzle 13 ＋ Prisma 1）。**JPA は 0 件**＝触っていないことの裏取り |
+| `devDependencies` | **増えていない**（`package.json` の差分は script 1 行だけ） |
+
+#### 却下した案
+
+- **`drizzle-kit` / `prisma` を devDependencies に足す** ／ **CI に載せる** ／
+  **golden を目で読む**（issue 本文の 4 つ。**6-9f がそれをやって「目で見ただけ」と書いた**）
+- **Prisma の provider 無し 3 本を「除外」にする** —— **型写像の軸が 8 プロファイル中 3 つ
+  未検査になる**。prelude を足せば通ることが実測で分かった
+- **prelude をファイルの先頭に足す** —— 行番号がずれてエラーが読めなくなる
+- **mysql の binary を `varbinary` に落とす** —— 組み込みがあるので楽だが、
+  **上限が 4GB から 64KB に狭まる**（意味が変わる）
+- **mssql の Drizzle 出力をやめる** —— 出力自体を減らすことになる。
+  h2 / oracle / sql-standard と同じ「読み替え前提」に揃えた
+
+#### 申し送り
+
+- **`EXCLUSIONS` が 0 件であることに意味がある** —— 落ちたものを除外で黙らせていない
+- **この検査は手元でしか回らない**（要 Docker ＋ ネットワーク）。**回さない日が続いても
+  整合検算だけは `npm test` が見る**が、**道具の版が上がって落ちるようになったかは分からない**
+- **道具の版はピン止めしてある。** 上げるときは `cases.ts` の `versions` を動かし、
+  **落ちたものが「版差」か「grabado の欠陥」か**を切り分けること（README の判定木 ①）
+- **複合 PK の脱落（#123）は未着手。** 型検査では捕まらない軸なので、
+  **`tests/node/orm.test.ts` に 3 ターゲット横断の検査を 1 本**入れるのが本題
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

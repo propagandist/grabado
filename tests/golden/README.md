@@ -8,7 +8,8 @@
 
 ```
 ddl/<db>/<fixture>.sql       Designer.toDdl() の出力。8 DB × 7 fixture
-orm/<target>/<db>/<f>.<ext>  Designer.toOrm() の出力（§6 段階6-9d で追加。jpa=.kt / prisma=.prisma）
+orm/<target>/<db>/<f>.<ext>  Designer.toOrm() の出力（§6 段階6-9d で追加。
+                             jpa=.kt / prisma=.prisma / drizzle=.ts）
 state/<fixture>.json         fromXML() 後のライブツリー＋DOM の状態（§4 段階4-1b で追加）
 json/<fixture>.json          Designer.toJson() の出力（§4 段階4-2 で追加）
 ```
@@ -165,9 +166,12 @@ SQL 型名も識別子の引用も通らない）。母集団は 2 つで足り�
 構造       postgresql × 残り 6 本           複合 PK・自己参照 FK・identity・日本語識別子
 ```
 
-ターゲット 1 本につき **14 本**（6-9e で Prisma が入って 28 本）。ORM が 4 本になっても 56 本で、
-DDL の 56 本と同じ桁に収まる。母集団の定義は
+ターゲット 1 本につき **14 本**（6-9e で Prisma、**6-9f で Drizzle** が入って 42 本）。
+ORM が 4 本になっても 56 本で、DDL の 56 本と同じ桁に収まる。母集団の定義は
 [`../support/fixtures.ts`](../support/fixtures.ts) の `ormGoldenCases`。
+
+**★ このバイト列を実物の道具が受け付けるかは、別の層が見る**（issue #120）——
+`npm run test:orm-tools`。運用は [`../orm-tools/README.md`](../orm-tools/README.md)。
 
 **`db/` にディレクトリを作っていない**のが要点 —— 作った瞬間 `DB_PROFILES` に入り、
 ORM が型パレットの契約（`strict` / `<template>` / `newrowtype` / 全型網羅）を背負うことになる。

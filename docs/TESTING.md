@@ -84,6 +84,22 @@ cd server && \
 ... GRABADO_IT_WRITE_FIXTURE=1 ./gradlew test --tests '*CatalogIntegrationTest*'
 ```
 
+**ORM 出力を実物の道具に通す**（issue #120）。**要 Docker ＋ ネットワーク** ——
+使い捨てコンテナに `kotlinc` / `prisma` / `drizzle-orm` を都度入れる（`devDependencies` は
+増やさない）。**`npm test` にも CI にも入らない。**
+
+```bash
+npm run test:orm-tools             # 3 本とも
+npm run test:orm-tools -- drizzle  # 1 本だけ
+```
+
+**確かめるのは構文と型だけ** —— JPA は Kotlin コンパイラ、Prisma は `prisma validate`、
+Drizzle は `drizzle-orm` の型定義に照らした `tsc --strict`。**`drizzle-kit generate` /
+`prisma migrate diff` は走らせない**（設定と接続情報が要り、使い捨てで完結しなくなる）。
+
+**★ 型検査が緑でも「出力が十分」の証明にはならない** —— 複合 PK が欠けていても型は通る
+（issue #123）。運用と落ちたときの切り分けは `tests/orm-tools/README.md`。
+
 **なぜ 2 層なのか** —— 純粋なフィクスチャだけで写像を試すと速くて依存も 0 だが、
 **フィクスチャは「PG18 はこう返すはずだ」という信念を符号化したもの**でしかない。
 信念が間違っていればテストは緑のまま本番が壊れる（`ARCHITECTURE.md` §4.6 の 2 不具合が
@@ -273,6 +289,11 @@ UI の `#textarea` に入る値と一致する。
 ORM が型パレットの契約（`strict` / `<template>` / `newrowtype` / 全型網羅）を背負うことになる。
 ORM は下敷きの db プロファイルの上に乗る**別の軸**で、
 **同じ設計から DDL と ORM の両方が出せる**（それを見るテストが `tests/browser/orm.spec.ts` に 1 本ある）。
+
+**★ golden が固定するのはバイト列だけで、そのバイト列を道具が受け付けるかは別の層が見る**
+（issue #120）。**2026-08-28 まで 1 度も確かめていなかった** —— 確かめたら Drizzle の 13 本中
+8 本が落ちた（存在しない `bytea` / `blob` を import し、実在しない `mssql-core` を指していた）。
+走らせ方は上の「走らせ方」、運用は [`../tests/orm-tools/README.md`](../tests/orm-tools/README.md)。
 
 ### プロファイル変換 golden — `tests/golden/convert/<from>-<to>/<fixture>.sql`（§6 段階6-10a で新設）
 
@@ -632,6 +653,10 @@ npm test                  # Node 側も新しい golden で緑になるか
 どちらも §6 の型パレット / DDL 生成の話ではないので、**この隔離は §6 の残りを
 もう 1 つも指していない**。
 
+**★ 訂正（issue #120 の作業中に気づいた）—— いま生きているのは 1 本**（#15 だけ）。
+**#9 は直って移設済み**で、[`tests/known-issues/README.md`](../tests/known-issues/README.md)
+の収録表がそう書いている。**元の記述は消さない**（6-8d 時点の観測として正しい）。
+
 なお正常系の入力でも現行の欠陥はそのまま出力に出る（`UUID` → `INTEGER` など）。
 golden に写り込んでいる癖の一覧は [`tests/golden/README.md`](../tests/golden/README.md)。
 
@@ -678,6 +703,8 @@ tests/
                  ブラウザ → proxy → Kotlin → fs ／ AI は上流まで（opt-in）
   image/         配布イメージの E2E（§2 段階2-4）。**要 Docker**。
                  compose で起こして通しで叩く ／ READONLY で起こし直してもう一巡
+  orm-tools/     ORM 出力を実物の道具に通す（issue #120）。**要 Docker ＋ ネットワーク**。
+                 使い捨てコンテナで kotlinc / prisma validate / tsc に golden を食わせる
 
 server/src/test/kotlin/io/propagandist/grabado/
   api/BackendContractTest.kt    tests/contract/ の表を実 HTTP に流す

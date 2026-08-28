@@ -1,6 +1,6 @@
 // grabado が生成した Drizzle のスキーマ。
 //
-// **型は core ごとに違う** —— pg / mysql / sqlite / mssql で関数名も表せる意味も
+// **型は core ごとに違う** —— pg / mysql / sqlite で関数名も表せる意味も
 // 変わるので、正規型からの表を core ごとに持っている（段階6-9f）。
 //
 // **TypeScript の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で
@@ -9,7 +9,14 @@
 // **oracle に対応する Drizzle の core は無い。** pg-core の形で出しているので、
 // 使うときは対応する core へ読み替えること（型名が変わる）。
 
-import { bigint, boolean, bytea, doublePrecision, interval, jsonb, numeric, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, boolean, customType, doublePrecision, interval, jsonb, numeric, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+
+/** pg-core に bytea の型関数は無いので自分で定義する */
+const bytea = customType<{ data: Uint8Array }>({
+    dataType() {
+        return "bytea";
+    },
+});
 
 export const typeSamples = pgTable("type_samples", {
     cNumber: numeric("c_number").primaryKey(),

@@ -90,8 +90,8 @@ grabado は同じ設計から **JPA (Kotlin) / Prisma / Drizzle** のモデル�
 | `UUID` | `UUID` | `String` | `uuid()` | `text()` | `text()` |
 | `TEXT` | `String` | `String` | `text()` | `text()` | `text()` |
 | `NUMERIC(12,2)` | `BigDecimal` | `Decimal` | `numeric()` | `decimal()` | `text()` |
-| `INTEGER` | `Int` | `Int` | `integer()` | `int()` | `blob({ mode: "bigint" })` |
-| `BOOLEAN` | `Boolean` | `Boolean` | `boolean()` | `boolean()` | `blob({ mode: "bigint" })` |
+| `INTEGER` | `Int` | `Int` | `integer()` | `int()` | `integer()` |
+| `BOOLEAN` | `Boolean` | `Boolean` | `boolean()` | `boolean()` | `integer()` |
 | `DATE` | `LocalDate` | `DateTime` | `date()` | `date()` | `text()` |
 | `TIMESTAMPTZ` | `OffsetDateTime` | `DateTime` | `timestamp({ withTimezone: true })` | `timestamp()` | `text()` |
 | `JSONB` | `String` | `Json` | `jsonb()` | `json()` | `text()` |
@@ -135,9 +135,15 @@ pg-core の形で出しているので読み替えること」と出る。黙っ
 - **JPA の `JSONB` が `String` になる**のは、JPA の標準に json 型が無いため（Hibernate の
   拡張なら書けるが標準ではない）。**丸めた列には理由のコメントが付く**
 - **`uuid()` を持つのは pg-core だけ。** mysql / sqlite では文字列になる
-- **sqlite の `INTEGER` 列が `blob` で出るのは既知の課題**
-  （[issue #126](https://github.com/propagandist/grabado/issues/126)）。同じ設計から出した
-  DDL は `INTEGER` なので**列型が食い違う**。表がそれを映している
+- **sqlite の整数は JS では number（53 bit）に丸まる。** SQLite の `INTEGER` は 64 bit だが、
+  **drizzle-orm の sqlite-core に bigint モードが無い** —— 公式が案内する
+  `blob({ mode: "bigint" })` は**BLOB 列を作る**ので、DDL 出力の `INTEGER` と食い違う。
+  **grabado が出すのはテーブル定義なので列型の一致を採った**
+  （[issue #126](https://github.com/propagandist/grabado/issues/126)）。53 bit を超える整数を
+  扱うなら、アプリ側で変換すること
+- **sqlite では `BOOLEAN` も `integer()` になる**（`{ mode: "boolean" }` は付かない）。
+  上の DDL の表のとおり **sqlite に真偽型が無く `INTEGER` に写る**ためで、
+  **その時点で「真偽」という情報が設計から消えている**
 
 > この表も手で書いていない。[`../tests/node/type-mapping.test.ts`](../tests/node/type-mapping.test.ts)
 > が**出荷されるバイト列そのもの**（生成器の出力）から型を抜いて 1 セルずつ突き合わせる。

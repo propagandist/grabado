@@ -175,7 +175,21 @@ const DRIZZLE_TYPES: Readonly<Record<DrizzleCore, Readonly<Record<TypeKind, Driz
             int8: { fn: "integer" },
             int16: { fn: "integer" },
             int32: { fn: "integer" },
-            int64: { fn: "blob", args: '{ mode: "bigint" }' },
+            /*
+             * ★ **int64 も `integer`**（issue #126）。**6-9f は `blob({ mode: "bigint" })` を
+             *   出していた** —— drizzle-orm 公式が BigInt を扱う方法として案内しているのが
+             *   これだからだが、**それは BLOB 列を作る**。sqlite プロファイルの `INTEGER` は
+             *   `kind="int64"`（SQLite の INTEGER は 64 bit なので正しい）なので、
+             *   **house 既定の `INTEGER` も `BOOLEAN` も blob になり、DDL 出力の `INTEGER` と
+             *   食い違っていた**（#122 の型マッピング表を作って見つけた）。
+             *
+             *   **grabado が出すのはテーブル定義**なので、**列型の一致を優先する**。
+             *   代わりに **JS 側は number（53 bit）に丸まる** —— sqlite-core の `integer` に
+             *   bigint モードは無い（`mode` は number / boolean / timestamp / timestamp_ms）。
+             *   **注意は docs/TYPE-MAPPING.md に書く。生成物には出さない** ——
+             *   列型は正しく、丸まるのは値の表現のほうだから（型が落ちたわけではない）。
+             */
+            int64: { fn: "integer" },
             decimal: { fn: "numeric" },
             float32: { fn: "real" },
             float64: { fn: "real" },

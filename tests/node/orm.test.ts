@@ -303,9 +303,26 @@ describe("ORM 出力（Node）", () => {
             expect(lite).not.toContain("uuid(");
         });
 
-        test("**sqlite の mode が落ちていない**（落ちると型の意味が変わる）", () => {
+        test("**mode が落ちていない**（落ちると型の意味が変わる）", () => {
+            /* 64 bit 整数は JS の number に収まらない。mode を落とすと黙って精度が落ちる */
+            const pg = readGolden(goldenPath("orm", "drizzle", "postgresql", "types-matrix.ts"));
+            expect(pg).toContain('bigint("c_bigint", { mode: "bigint" })');
+
+            /*
+             * ★ **sqlite からは mode 付きの型に到達しない**（issue #126 で分かった）。
+             *   6-9f はここで `{ mode: "bigint" }` が出ていることを主張していたが、それは
+             *   **int64 -> `blob({ mode: "bigint" })` という #126 で直した欠陥そのもの**を
+             *   固定していた。**sqlite パレットが持つ kind は 5 種**（int64 / float64 /
+             *   string / binary / other）で、**mode を使う型（boolean / timestamp / json）へ
+             *   の経路が無い**。
+             *
+             *   **DRIZZLE_TYPES の該当エントリは消していない** —— パレットに boolean kind が
+             *   入った日に効く。ここが押さえるのは「**いま到達しない**」という事実のほう。
+             */
             const lite = readGolden(goldenPath("orm", "drizzle", "sqlite", "types-matrix.ts"));
-            expect(lite).toContain('{ mode: "bigint" }');
+            expect(lite).not.toContain("mode:");
+            /* 整数は blob ではなく integer（#126。DDL 出力の INTEGER と列型が一致する） */
+            expect(lite).toContain('integer("c_integer")');
         });
 
         test("**逆参照を出さない**（Prisma と違い片側の references で成立する）", () => {

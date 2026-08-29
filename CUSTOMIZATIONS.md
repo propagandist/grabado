@@ -11026,6 +11026,102 @@ golden では守れず、**ここでしか確かめられない**。
   「8 プロファイル × 3 ORM」にはしていない（**出発点を 1 つに固定すれば写像の全体は覆える**
   という 6-10a の判断に乗っている）
 
+### 2026-08-29 sqlite の Drizzle が INTEGER を blob で出していた —— 列型の一致を採る
+
+正本は [issue #126](https://github.com/propagandist/grabado/issues/126)。**段階に属さない**。
+**#122 の型マッピング表を作る途中で見つけた** —— **表が実装を映す形になった初日に、
+その表が欠陥を 1 件出した**。
+
+#### ★ 何が起きていたか
+
+`frontend/db/sqlite/datatypes.xml` の `INTEGER` は **`kind="int64"`**（SQLite の INTEGER は
+64 bit なので正しい）。[`drizzle.ts`](frontend/js/io/orm/drizzle.ts) の
+`DRIZZLE_TYPES.sqlite.int64` が **`blob({ mode: "bigint" })`** を返していたので、
+**house 既定の `INTEGER` も `BOOLEAN` も blob になり**、同じ設計から出した DDL の `INTEGER` と
+**列型が食い違っていた**。**sqlite で設計する利用者はほぼ必ず踏む**。
+
+**型検査では捕まらない**（#123 と同じ軸）—— blob でも TypeScript としては妥当で、
+#120 の `test:orm-tools` は PASS していた。
+
+#### 決めたこと 1: **列型の一致を採る**
+
+| | 列型 | 値 |
+|---|---|---|
+| `blob({ mode: "bigint" })`（6-9f） | **BLOB。DDL と食い違う** | 64 bit を正確に持てる |
+| `integer()`（採用） | **INTEGER。DDL と一致する** | **JS の number（53 bit）に丸まる** |
+
+**drizzle-orm 0.45.2 の sqlite-core に integer の bigint モードは無い**（`mode` は
+number / boolean / timestamp / timestamp_ms）。公式が BigInt の扱いとして案内するのが
+`blob({ mode: "bigint" })` だが、**それは BLOB 列を作る**。
+
+**grabado が出すのはテーブル定義**なので、**列型の一致を優先する**。値の表現はアプリ側で
+決められるが、**列型が違えばスキーマそのものが違う**。
+
+#### 決めたこと 2: 53 bit の注意は **docs に書き、生成物には出さない**
+
+**列型は正しく、丸まるのは値の表現のほう** —— 型が落ちたわけではない。生成物のコメントは
+「**その core に対応が無いので丸めた**」ときに出す仕組みなので、そこへ混ぜると
+**丸めが起きたと読めてしまう**。[`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) の ORM 節に
+2 行足した（#122 が置いた「ORM 側で知っておくこと」）。
+
+#### ★ 実測 1: **sqlite からは mode 付きの型に到達しない**
+
+`frontend/db/sqlite/datatypes.xml` が持つ kind は **5 種だけ**
+（`int64` / `float64` / `string` / `binary` / `other`）。**mode を使う型
+（boolean / timestamp / json）への経路が無い。**
+
+6-9f の「**sqlite の mode は書く。落とすと真偽が数値になる**」という判断は正しいが、
+**sqlite プロファイルからは効いていない** —— 真偽も日時も**パレットの段階で
+`INTEGER` / `TEXT` に写っており**、その時点で kind が落ちている。
+
+**そして [`orm.test.ts`](tests/node/orm.test.ts) の「sqlite の mode が落ちていない」は、
+今回直した欠陥そのものを固定していた** —— `{ mode: "bigint" }` を探しており、
+**それは blob の引数だった**。**pg 側で mode を見る形に書き直し**、sqlite 側は
+「**到達しない**」ことを主張する検査にした。
+
+**`DRIZZLE_TYPES.sqlite` の該当エントリは消していない** —— パレットに boolean kind が
+入った日に効く。**消すと、その日に黙って text へ落ちる**。
+
+#### ★ 実測 2: #122 の仕組みが効いた
+
+生成器を直した瞬間に、**docs の 2 セルが名指しで赤くなった**:
+
+```
+Drizzle sqlite-core / INTEGER: expected 'blob({ mode: "bigint" })' to be 'integer()'
+```
+
+**手で直す前に、どこが古いかを機械が言った。** 6-10b の「手で書いた表は必ず腐る」に対する
+回答が、**入れた翌日に 1 度目の仕事をした**。
+
+#### 検証（2026-08-29 実測）
+
+| 何を | 結果 |
+|---|---|
+| `npm run typecheck` | 緑 |
+| `npm test` | **620 本**が緑（本数は変わらない。1 本を書き直しただけ） |
+| `npm run test:browser` / `known-issues` | 205 本 / 1 本が緑 |
+| **`npm run test:orm-tools`** | **3 道具とも OK。39 本走って 0 FAIL、3 SKIP** —— `integer("c_integer").primaryKey()` が実物の `tsc --strict` を通った |
+| golden の差分 | **1 本だけ**（`drizzle/sqlite/types-matrix.ts`）。**他 41 本は 0 バイト差** |
+| docs の差分 | 表の **2 セル**（`INTEGER` / `BOOLEAN` の sqlite 列）と散文 2 項目 |
+
+#### 却下した案
+
+- **`blob` のままにする** —— DDL と食い違ったまま残る
+- **`sqlite/datatypes.xml` の `INTEGER` を `kind="int32"` にする** —— **SQLite の INTEGER は
+  64 bit** なので嘘になる。他 DB の `BIGINT` を sqlite へ写す経路も同時に壊れる
+- **`integer({ mode: "number" })` と明示する** —— `mode` の既定が `number` なので**同じ意味**。
+  出力が長くなるだけ
+- **生成物にコメントを出す** —— 決めたこと 2
+
+#### 申し送り
+
+- **sqlite では `BOOLEAN` も `integer()` になる**（`{ mode: "boolean" }` は付かない）。
+  **真偽という情報はパレット変換の時点で消えている。** Drizzle の boolean mode を活かすには
+  **sqlite パレットに boolean kind の型が要る** —— そこは 6-8d が「**STRICT が受け付ける
+  型名だけ**」と決めたところなので、**パレット側の判断**になる
+- **`DRIZZLE_TYPES.sqlite` の boolean / date / time / time_tz / timestamp / timestamp_tz / json は
+  いま到達不能**（実測 1）。**消していない**が、**golden では 1 バイトも守られていない**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

@@ -79,6 +79,72 @@ house 標準が `timestamptz` 固定なのでここは必ず踏む。**UTC で�
 
 ---
 
+## ORM 3 本での写り方
+
+grabado は同じ設計から **JPA (Kotlin) / Prisma / Drizzle** のモデル定義も出せる。ORM は
+**DB プロファイルとは別の軸**で（「どの言語で出すか」と「どの DB を下敷きにするか」）、
+8 プロファイルのどれで設計していても 3 本とも出せる。
+
+| 設計（postgresql） | JPA (Kotlin) | Prisma | Drizzle pg-core | Drizzle mysql-core | Drizzle sqlite-core |
+|---|---|---|---|---|---|
+| `UUID` | `UUID` | `String` | `uuid()` | `text()` | `text()` |
+| `TEXT` | `String` | `String` | `text()` | `text()` | `text()` |
+| `NUMERIC(12,2)` | `BigDecimal` | `Decimal` | `numeric()` | `decimal()` | `text()` |
+| `INTEGER` | `Int` | `Int` | `integer()` | `int()` | `blob({ mode: "bigint" })` |
+| `BOOLEAN` | `Boolean` | `Boolean` | `boolean()` | `boolean()` | `blob({ mode: "bigint" })` |
+| `DATE` | `LocalDate` | `DateTime` | `date()` | `date()` | `text()` |
+| `TIMESTAMPTZ` | `OffsetDateTime` | `DateTime` | `timestamp({ withTimezone: true })` | `timestamp()` | `text()` |
+| `JSONB` | `String` | `Json` | `jsonb()` | `json()` | `text()` |
+
+**Drizzle の 3 列は「PG の設計をそのプロファイルへ写してから出したもの」。** 上の DDL の表が
+先に効いていて、たとえば `TIMESTAMPTZ` が sqlite で `TEXT` になるのは Drizzle の都合ではなく
+**SQLite に時刻型が無いから**。列名は表から落としてある（実際の出力は `text("created_at")`）。
+
+### JPA と Prisma は 1 列で足りる
+
+**どちらも下敷きの DB に依らない。** JPA は Kotlin の型、Prisma はスカラー 9 つで、
+**provider は `datasource` ブロックにしか現れない**。だから mysql 向けに出しても mssql 向けに
+出しても、この列は 1 文字も変わらない。
+
+### Drizzle の core は 4 プロファイルにしかない
+
+**Drizzle は型そのものが core 依存**なので、下敷きのプロファイルで出力が変わる。
+
+| db プロファイル | Drizzle の core |
+|---|---|
+| h2 | 無い（pg-core で出す） |
+| mariadb | mysql-core |
+| mssql | 無い（pg-core で出す） |
+| mysql | mysql-core |
+| oracle | 無い（pg-core で出す） |
+| postgresql | pg-core |
+| sql-standard | 無い（pg-core で出す） |
+| sqlite | sqlite-core |
+
+**対応する core が無いプロファイルでも出力はする** —— 生成物の先頭に「その core は無い。
+pg-core の形で出しているので読み替えること」と出る。黙って動くように見せることはしない。
+
+### ORM 側で知っておくこと
+
+- **サイズは 3 本とも出さない。** `NUMERIC(12,2)` は `numeric()` / `Decimal` / `BigDecimal` に
+  なり、**桁数は落ちる**。Prisma は native type 属性（`@db.*`）を出さないと決めていて
+  （[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階6-9c）、JPA と Drizzle も同じ扱いに
+  揃えてある。**DDL 側には桁数が出る**ので、スキーマの正本はそちら
+- **null 許容は表に出していない。** 実際には JPA が `String?`、Prisma が `String?` を出す
+  （Drizzle は `.notNull()` の有無で表す）。表は NOT NULL の列で採っている
+- **JPA の `JSONB` が `String` になる**のは、JPA の標準に json 型が無いため（Hibernate の
+  拡張なら書けるが標準ではない）。**丸めた列には理由のコメントが付く**
+- **`uuid()` を持つのは pg-core だけ。** mysql / sqlite では文字列になる
+- **sqlite の `INTEGER` 列が `blob` で出るのは既知の課題**
+  （[issue #126](https://github.com/propagandist/grabado/issues/126)）。同じ設計から出した
+  DDL は `INTEGER` なので**列型が食い違う**。表がそれを映している
+
+> この表も手で書いていない。[`../tests/node/type-mapping.test.ts`](../tests/node/type-mapping.test.ts)
+> が**出荷されるバイト列そのもの**（生成器の出力）から型を抜いて 1 セルずつ突き合わせる。
+> core の対応表も同じく、出力の `import` 行から読んでいる。
+
+---
+
 関連: [`FORMAT.md`](FORMAT.md)（正規型 `kind` の語彙）／
 [`ARCHITECTURE.md`](ARCHITECTURE.md) §5.6（`js/io/` の構成）／
 [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)（段階6-10a / 6-10b の決定ログ）

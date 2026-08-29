@@ -11122,6 +11122,74 @@ Drizzle sqlite-core / INTEGER: expected 'blob({ mode: "bigint" })' to be 'intege
 - **`DRIZZLE_TYPES.sqlite` の boolean / date / time / time_tz / timestamp / timestamp_tz / json は
   いま到達不能**（実測 1）。**消していない**が、**golden では 1 バイトも守られていない**
 
+### 2026-08-29 Dependabot alert 2 件は**安定版を待つ** —— 待ち方を決めて放置と分ける
+
+正本は [issue #105](https://github.com/propagandist/grabado/issues/105)。**段階に属さない**。
+段階2-5（#98）で Dependency graph を有効化した日に 0 件 → 2 件になったもので、
+**#98 は「拾える状態にする」までで閉じ、出てきた CVE をどうするかは別の判断**として残していた。
+
+#### ★ 実測 1: RC2 が既に出ており、**過去 2 回は RC2 から 7 日で stable**
+
+`gh api repos/JetBrains/kotlin/releases` の実測（2026-08-29）:
+
+| 版 | RC2 | stable | 間隔 |
+|---|---|---|---|
+| 2.4.0 | 2026-05-27 | 2026-06-03 | **7 日** |
+| 2.4.10 | 2026-07-07 | 2026-07-14 | **7 日** |
+| **2.4.20** | **2026-08-26** | **未** | —— |
+
+**2.4.20-RC2 は issue の起票と同じ日に出ていた**（起票時点では Beta1 しか無かった）。
+同じ周期なら **stable は 2026-09-02 前後**。現在は `kotlin = "2.4.10"`。
+
+#### ★ 実測 2: **待つことは仕組みで担保されている**
+
+[`.github/dependabot.yml`](.github/dependabot.yml) の gradle entry が **`/server` を
+weekly ＋ cooldown 7 日**で見ており、[`libs.versions.toml`](server/gradle/libs.versions.toml) の
+冒頭が「**Dependabot の gradle ecosystem がこのファイルを読む**」と書いている。
+**2.4.20 stable が出れば、cooldown 7 日の後に更新 PR が自動で来る**（09-09 前後）。
+
+**これが「待つ」と「放置」の差** —— issue 本文が「**いつまで待つかを決めないと放置と
+区別が付かない**」と書いていた点への回答で、**人が思い出す必要が無い**形になっている。
+
+#### 決めたこと: **案 A（安定版を待つ）**（ユーザー判断）
+
+**B（RC2 へ即上げ）を採らない理由**:
+
+- **配布物のビルド入力を 2 回動かすことになる** —— いま上げても 1 週間後に stable へ上げ直す
+- **CVE の影響はビルド環境に限定**（#105 の実測: 2 件とも `gradle.lockfile` に無く、
+  マルチステージの runtime に残らない）。**数日の待ちに見合う危険が無い**
+- **配布物を作る道具を RC にする**ことになる
+
+**C（dismiss）を採らない理由**: **数日待てば直るものを受容する**ことになる。dismiss の記録は
+GitHub 側にしか残らず、**受容したのか忘れたのかが後から分からない**。
+
+**D（`commons-lang3` だけ constraint で上書き）を採らない理由**: 1 件しか閉じないうえ、
+**Gradle の解決に手を入れる**。Kotlin を上げれば推移的に直る見込みのものに、恒久の細工を残さない。
+
+#### ★ 見直しの契機は **issue が持つ**（ここには書かない）
+
+**これからやることの backlog は GitHub Issues が唯一**（org `work-conventions.md` §0 / §2）。
+**期限（2026-09-20）と、PR が来たときの手順**は [#105 のコメント](https://github.com/propagandist/grabado/issues/105#issuecomment-5461906970)に置いた。
+**ここに書くと、やった日に嘘になる。**
+
+#### 検証（2026-08-29 実測）
+
+| 何を | 結果 |
+|---|---|
+| open な alert | **2 件のまま**（`kotlin-gradle-plugin` / `commons-lang3`。どちらも medium） |
+| 触ったファイル | **`CUSTOMIZATIONS.md` だけ** —— 依存も設定も 1 バイトも動かしていない |
+| Kotlin の版 | `2.4.10` のまま（`libs.versions.toml`） |
+
+#### 申し送り
+
+- **この判断は 2026-09-20 で期限が切れる。** それまでに更新 PR が来なければ、
+  **見込みが外れている**（RC が長引いたか、Dependabot が拾わなかったか）
+- **更新 PR は CI で落ちる** —— `gradle.lockfile` を Dependabot が更新できないため。
+  手元で `./gradlew dependencies --write-locks` を回して push する
+  （`dependabot.yml` の★。**落ちること自体がロックを更新し忘れていない証拠**）
+- **`commons-lang3` が Kotlin 2.4.20 で直るかは未確認。** 推移的依存なので一緒に上がる見込みだが、
+  **確かめるのは PR が来たとき**（`gh api .../dependabot/alerts` が 0 件になるかで見る）
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

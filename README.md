@@ -147,7 +147,7 @@ golden はツールが**実際に吐いているバイト列**を固定してい
 
 ## 由来とライセンス
 
-**BSD-3-Clause**（upstream から継承。[`license.txt`](license.txt)）。grabado は
+**BSD-3-Clause**（upstream から継承。[`LICENSE`](LICENSE)）。grabado は
 **upstream に追従しない**。差分は生じたその都度 [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) に記録する。
 
 ---

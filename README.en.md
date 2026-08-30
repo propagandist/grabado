@@ -148,7 +148,7 @@ or a decision that has to be recorded — see [`docs/TESTING.md`](docs/TESTING.m
 
 ## Origin and license
 
-BSD-3-Clause, inherited from upstream — see [`license.txt`](license.txt). grabado does not follow
+BSD-3-Clause, inherited from upstream — see [`LICENSE`](LICENSE). grabado does not follow
 upstream; every difference is recorded in [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) as it is made.
 
 ---

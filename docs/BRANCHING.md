@@ -51,7 +51,17 @@ git checkout -b release/0.1.0 develop
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
 # release を develop にも戻す（PR or マージ）
+
+# リリースノートを出す（#150）。まず --draft で描画を見てから publish する。
+# assets は付けない（イメージはレジストリで配らない）。変更を列挙しない（正本は git log）。
+gh release create v0.1.0 --draft --title "v0.1.0 — <到達点の名前>" --notes-file <file>
+gh release edit v0.1.0 --draft=false
 ```
+
+**タグを打って終わりにしない。** org `repo-surface-baseline.md` §3.7 の確かめ方は
+**リポジトリの右柱**で、**タグだけでは右柱に何も出ない**。ノートの値（日本語・assets なし・
+変更を列挙しない）は [`../CLAUDE.md`](../CLAUDE.md) の「作業の型」、判断は
+[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の 2026-08-30「版 v0.1.0」の訂正。
 
 ## hotfix
 

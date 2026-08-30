@@ -4,7 +4,17 @@ import { describe, expect, test } from "vitest";
 import { REPO_ROOT } from "../support/fixtures.ts";
 
 /*
- * 配布物と CI が**同じツールチェーンの版**で動いていることを固定する（issue #134）。
+ * **版の写しが揃っていること**を固定する。**軸は 2 つある。**
+ *
+ * 1. **ツールチェーンの版**（issue #134）—— 配布物と CI が同じ Node / Java で動いているか
+ * 2. **製品の版**（issue #155）—— `package.json` / `package-lock.json` /
+ *    `server/build.gradle.kts` が同じ `version` を名乗っているか
+ *
+ * **1 は壊れるずれ、2 は壊れないずれ。** 分けて読むこと —— 下の describe が 2 つあるのはそのため。
+ *
+ * ---
+ *
+ * **軸 1: 配布物と CI が同じツールチェーンの版で動いていること**（issue #134）。
  *
  * Dockerfile の web ステージは「版は ci-frontend.yml の `node-version` に揃える。
  * **CI と違うもので配布物を作らない**」と書いているが、**2026-08-30 まで、それを見る機械が
@@ -27,6 +37,30 @@ import { REPO_ROOT } from "../support/fixtures.ts";
  *   - `tests/orm-tools/cases.ts` の `node:24` —— **使い捨てコンテナで tsc を回すだけ**で、
  *     配布物のビルド入力ではない。`npm test` にも CI にも入らない層（そのファイルの★）。
  */
+
+/*
+ * **軸 2: 製品の版が 3 か所で揃っていること**（issue #155）。
+ *
+ * ★ **こちらは「壊れないずれ」を止める。** `version` はどこからも読まれていない
+ *   （2026-08-30 実測。`archiveFileName` は `grabado.jar` で固定、フロントも参照しない）ので、
+ *   **ずれても出力は 1 バイトも変わらない**。それでも止めるのは、**版は名前**であり、
+ *   **`gh release` とタグは 1 つしか無い**から —— **成果物の外では 1 つの版に見える**のに、
+ *   リポジトリの中で 2 つの名前を名乗るのは、記録として嘘になる。
+ *
+ * ★ **「赤は直せるものに限る」は、ここには当たらない。** あの判断
+ *   （org security-baseline §3.12 / ci-strategy）が避けているのは**直せない赤**（上流の CVE 等）で、
+ *   **この赤は片方の数字を直せば消える**。
+ *
+ * ★ **`package-lock.json` を含めるのは二重ではない**（**2026-08-30 実測**）——
+ *   **`npm ci` はルートの `version` のずれを捕まえない**。lock を `0.9.9` /
+ *   `package.json` を `0.1.0` にして `npm ci --dry-run` を回したところ、
+ *   **116 packages を入れて exit 0** で通った。**見ているのは依存の整合だけ。**
+ *
+ * ★ **版番号そのものはここに書かない**（軸 1 と同じ理由）。確かめるのは**一致だけ**で、
+ *   **どの版にするかは `docs/BRANCHING.md` のリリース手順が決める**。
+ */
+const PACKAGE_JSON = "package.json";
+const PACKAGE_LOCK = "package-lock.json";
 
 const CI_FRONTEND = ".github/workflows/ci-frontend.yml";
 const CI_SERVER = ".github/workflows/ci-server.yml";
@@ -57,6 +91,39 @@ function version(rel: string, what: string, pattern: RegExp): number {
 /** 正本: ci-frontend.yml の `node-version`（Dockerfile が名指ししている先）。 */
 const nodeSource = (): number =>
     version(CI_FRONTEND, "node-version", /^[ \t]+node-version: (\d+)$/gm);
+
+/**
+ * [version] の文字列版（軸 2）。**版番号は数値にならない**（`0.1.0`）ので別に持つ。
+ * **空振りを緑にしない**のは同じ。
+ */
+function versionStrings(rel: string, what: string, pattern: RegExp): string[] {
+    const hits = [...read(rel).matchAll(pattern)];
+    expect(hits.length, `${rel} の ${what} が、ちょうど 1 か所で読めること`).toBe(1);
+    return hits.map((hit) => hit[1]!);
+}
+
+/**
+ * JSON は `JSON.parse` で読む（軸 2）。**正規表現で読まない** —— lock は依存にも
+ * `"version"` を持つので、**インデントでは根と依存を区別できない**。
+ *
+ * ★ **書式が壊れたときは parse エラーで落ちる。** 軸 1 の [version] が
+ *   「ちょうど 1 か所で読めること」を要求しているのと**同じ役目**を、こちらは parse が担う
+ *   ——**読み取りが壊れたまま緑になる検査は、無いのと同じ。**
+ */
+function json(rel: string): Record<string, unknown> {
+    return JSON.parse(read(rel)) as Record<string, unknown>;
+}
+
+/**
+ * 版番号を 1 つ取り出す。**`undefined` 同士が一致して緑になるのを防ぐ**ため、
+ * **必ず「読めたこと」を先に主張する** —— キーが消えた lock で
+ * `undefined === undefined` が通ると、**検査があるのに何も見ていない**状態になる。
+ */
+function productVersion(value: unknown, where: string): string {
+    expect(value, `${where} の version が読めること`).toEqual(expect.any(String));
+    expect(value as string, `${where} の version が空でないこと`).not.toBe("");
+    return value as string;
+}
 
 /** 正本: build.gradle.kts の `jvmToolchain`（**実際にコンパイルするのがここだから**）。 */
 const javaSource = (): number =>
@@ -112,5 +179,51 @@ describe("ツールチェーンの版の一致（issue #134）", () => {
                 "ずれている。**jar を作った JDK より古い JRE で起こすと起動時に落ちる。**",
             ].join("\n"),
         ).toBe(javaSource());
+    });
+});
+
+describe("製品の版の一致（issue #155）", () => {
+    /** 正本: `package.json` の `version`（**リリース手順が最初に動かすのがここだから**）。 */
+    const source = (): string =>
+        productVersion(json(PACKAGE_JSON)["version"], PACKAGE_JSON);
+
+    test("package-lock.json のルートが、package.json の version に揃っている", () => {
+        expect(
+            productVersion(json(PACKAGE_LOCK)["version"], `${PACKAGE_LOCK} のルート`),
+            [
+                "package-lock.json のルートと package.json の version がずれている。",
+                "**npm ci はこのずれを捕まえない**（2026-08-30 実測: 0.9.9 と 0.1.0 で exit 0）。",
+                "版を上げるときは docs/BRANCHING.md の「リリース」節のとおり 3 ファイルを動かすこと。",
+            ].join("\n"),
+        ).toBe(source());
+    });
+
+    test("package-lock.json の自己記述が、package.json の version に揃っている", () => {
+        /*
+         * `packages[""]` は lock が持つ**自分自身の記述**。ルートの `version` とは別に持つので、
+         * **片方だけ直すと静かにずれる** —— 2026-08-30 に手で 2 か所を直したときの実体がこれ。
+         */
+        const packages = json(PACKAGE_LOCK)["packages"] as Record<string, { version?: unknown }>;
+        expect(packages, `${PACKAGE_LOCK} に packages があること`).toBeTypeOf("object");
+        expect(
+            productVersion(packages[""]?.version, `${PACKAGE_LOCK} の packages[""]`),
+            'package-lock.json の packages[""] と package.json の version がずれている。',
+        ).toBe(source());
+    });
+
+    test("server/build.gradle.kts が、package.json の version に揃っている", () => {
+        const [copy] = versionStrings(
+            BUILD_GRADLE,
+            "version",
+            /^version = "([^"]+)"$/gm,
+        );
+        expect(
+            copy,
+            [
+                "server/build.gradle.kts と package.json の version がずれている。",
+                "**出力は変わらない**（archiveFileName は grabado.jar で固定）が、",
+                "**タグと gh release は 1 つしか無い** —— 2 つの名前を名乗ると記録が嘘になる。",
+            ].join("\n"),
+        ).toBe(source());
     });
 });

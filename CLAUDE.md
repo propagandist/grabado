@@ -15,6 +15,7 @@
 - 配布: マルチステージ Docker（フロント dist を Spring Boot static に同梱）。app 単一コンテナ＋mount。
 - **対応 DB は 8 本**: `postgresql`（house 標準）/ `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` は撤去（6-1）。決定は `CUSTOMIZATIONS.md` の段階6-0。
 - 公開デモ（grabado.dev）は **`READONLY=true` 一択** — AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。編集体験はブラウザ内ストアで成立する。
+- **★ 公開デモの外側は決まった**（**2026-08-30**。#84）—— 置き場所は **Railway**（PRO 契約済み。`Dockerfile` から GitHub 連携でビルドし、**ワークフローを足さない**）、配るのは **`main`**（版 v0.1.0 を切る。作業は別 issue）、**TLS は Let's Encrypt**（実測）、**CAA は置く**（ただし**証明書が出てから** —— 間違えると発行が黙って止まる）、**HSTS はアプリが `GRABADO_HSTS=true` のときだけ出す**（`preload` は付けない）。構成の契約は `docs/ARCHITECTURE.md` §9.7、判断は `CUSTOMIZATIONS.md` の同日。**`grabado.dev` は取得済み**（Porkbun）。
 
 ## 絶対に守る制約（Hard Constraints）
 1. **特性化テストが緑であることが移植の前提**。DDL golden ＋ serializer round-trip/決定論テストを先に用意し、挙動不変を保証してから内部を作り替える。半移行を放置しない。

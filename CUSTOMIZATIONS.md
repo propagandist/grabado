@@ -11641,6 +11641,225 @@ PR そのもの ／ **過去の closed issue**。**属さないなら付けな�
 
 ---
 
+### 2026-08-30 公開デモの外側 —— 置き場所・TLS・CAA・HSTS・費用を決める
+
+正本は [issue #84](https://github.com/propagandist/grabado/issues/84)。**段階に属さない**
+（`docs/HANDOVER.md` §9 の 9 項目は #118 で尽きている）。マイルストーン
+**`公開デモを立てる`** に入っている唯一の issue で、**その 1 本目の作業**。
+
+#### 発端
+
+**2026-08-24 の段階2-0（決めたこと 6）で、公開デモのスコープを絞った。** §2 に入れるのは
+「**同じイメージが `READONLY=true` で正しく動くこと**」までで、**その外側——ドメイン・TLS・
+CAA・HSTS・課金——は §2 から外して #84 に預けた**。§2 は 2026-08-27 の段階2-6 で閉じている。
+
+**外したときの観測は「確認していない」が 3 つ**だった —— `grabado.dev` の取得状況・Railway の
+プロジェクトの有無・CAA の有無。段階2-0 の申し送りは「**#84 は `grabado.dev` を『取得済みか
+どうか確認していない』と書いているが、HANDOVER の冒頭は『取得済み』としている —— 確かめ先が
+1 つある**」と書いていた。
+
+#### 実測 1: 3 つの「確認していない」を潰した（2026-08-30）
+
+| 見たもの | 結果 |
+|---|---|
+| `grabado.dev` の NS | **4 本**（`curitiba` / `fortaleza` / `salvador` / `maceio`、すべて `.ns.porkbun.com`）—— **取得済み。** HANDOVER 冒頭（2026-08-09 の記述）が正しかった |
+| 同 A | `207.207.210.107` / `207.207.210.229` —— **Porkbun のパーキング** |
+| `www.grabado.dev` | `pixie.porkbun.com.` へ CNAME —— **同じくパーキング** |
+| 同 **CAA** | **無い**（レコード未設定） |
+| 同 TXT | **無い**（SPF も無い） |
+| `origin/main`...`origin/develop` | **`0  110`**（main 独自 0） |
+| `git tag -l` / `gh release list` | **0 本 / 0 本**（#141 の 2026-08-30 と変わらず） |
+
+★ **`nslookup` は CAA を引けない**（Windows。`unknown query type: CAA`）。**DoH で引いた:**
+
+```bash
+curl -s -H 'accept: application/dns-json' \
+  'https://cloudflare-dns.com/dns-query?name=grabado.dev&type=CAA'
+```
+
+★ **Answer 節が無いことを「引けなかった」と読まない。** `Status: 0`（NOERROR）＋ Authority に
+SOA が返るのは、**「そのレコード型が無い」**の形。`security-verification.md` §1.3 の
+「`-` は 0 件ではなく未走査」と**同じ取り違えの裏返し** —— あちらは未走査を 0 と読む誤りで、
+こちらは**0 を未走査と読む誤り**。
+
+#### 決めたこと 1: 置き場所は **Railway**（ユーザー判断。PRO 契約済み）
+
+`docs/HANDOVER.md` §2.3 は Railway を挙げていたが「**任意**」としか書いておらず、
+**判断は 1 度も下されていなかった**（#84 の発端そのもの）。**2026-08-30 に下した。**
+
+料金は同日に各社のページで確認した。**Railway PRO は $20/月**（workspace あたり。**$20 の
+利用クレジット込み**・カスタムドメイン **20 本**）で、資源は **RAM $10/GB/月・CPU $20/vCPU/月**。
+**512MB 常時稼働は RAM だけで $5/月相当**なので、クレジットの内側に収まる。
+
+**選んだ決め手は費用ではなく、ワークフローを 1 本も足さないこと** —— Railway は GitHub 連携で
+`Dockerfile` から直接ビルドする。org `ci-strategy.md` はワークフローを増やすことに慎重で、
+**このリポジトリは 3 本 ＋ 提出 1 本**（`CLAUDE.md`）。
+
+#### 決めたこと 2: **静的配信では成立しない**（測って落ちた）
+
+**「backend を捨てて静的配信にすれば $0 になる」は成り立たない。**
+
+[`frontend/js/io.ts`](frontend/js/io.ts) の `requestCapabilities` は**引けなければ何も隠さない**
+設計で（段階5-5。「引けないのは『機能が無い』ではなく『サーバがいない』」）、backend が居なければ
+**保存ボタンが押せたまま 404 になる**。#84 の受け入れ基準「**`capabilities` が `false` を返す**」も、
+返す主体ごと消える。
+
+**費用を比べる前に、成立しないほうが落ちた。** 段階5-5 の「引けなければ何も隠さない」は
+手元の `npm run dev` を不便にしないための判断だったが、**そこが公開の形も決めていた**。
+
+#### 決めたこと 3: **`PORT` をアプリに実装しない。Railway 側の target port を 8080 にする**
+
+Railway は `PORT` を注入し**アプリがそれを listen することを期待する**が、
+**service settings で target port を明示する口もある**（公式。2026-08-30 確認）。**後者を採る。**
+
+- **8080 は既に写しを持つ** —— `Dockerfile` の `EXPOSE` / `compose.yaml` の `ports` と
+  `healthcheck` / `README` / `docs` / `tests`。**`PORT` を足すと、ポートの決め方が 2 つになる**
+- **`PORT` は裸の一般語。** `application.yaml` の冒頭が `SCHEMA_DIR` について
+  「**公開 OSS のコンテナ env として危うい**（base image や他プロセスと衝突しうる）」と
+  書いているのと、**同じ形の危うさ**にあたる
+- **配布の形をホスティングの都合で曲げない** —— `compose.e2e.yaml` が
+  「配布の形をテストの都合で曲げない」と書いているのと同じ判断
+- ★ **忘れると `Application Failed to Respond`** になる（Railway の公式が名指ししている症状）
+
+#### 決めたこと 4: **HSTS はアプリが出す。env で明示的に立てる**
+
+**`GRABADO_HSTS`**（既定 `false`）。値は **`max-age=31536000; includeSubDomains`**。
+**`preload` は付けない。** 実装は
+[`SecurityHeadersFilter`](server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt)。
+
+- **`request.isSecure` で判断しない** —— **前段が TLS を終端して平文で渡してくる**ので、
+  アプリから見た口はいつも http。**条件にならない**
+- **`X-Forwarded-Proto` も見ない** —— **クライアントが送れるヘッダ**なので、前段を信頼する設定
+  （`server.forward-headers-strategy`）とセットでなければ意味を持たない。しかも
+  **その設定の有無は、env が 1 本立っているかより読みにくい**
+- **`SecurityHeadersFilter.HEADERS` の 5 本に入れない。** あれは「**どこで動いても同じ**」もので、
+  `vite.config.ts` が写しを持っている（`vite preview` は http）。HSTS は**デプロイの条件で変わる**
+  —— **`Cache-Control` を経路で変わるからと別に持ったのと、同じ構造**
+- **既定で出すと手元が壊れる。** 段階2-2 の KDoc が書いていたとおりで、**その観測は今も正しい**
+  —— `http://localhost:8080` を 1 度開いたブラウザが**以後 localhost を https へ強制**し、
+  **消すには利用者がブラウザの設定を触るしかない**。**HSTS はホスト名に効き IP には効かない**ので
+  `127.0.0.1` は無事だが、README も docs も案内しているのは `localhost` のほう
+- **`preload` を付けない根拠は org security-baseline §4.3**（「取り消しに数か月かかる」）。
+  **付けなくても常時 HTTPS になる** —— **`.dev` は TLD ごとプリロード済み**で、ブラウザは
+  grabado の応答を 1 度も見ずに https へ倒す。**`preload` は利益が無く、代償だけがある**
+- **`includeSubDomains` は `.dev` では重複した保険。** それでも付けるのは、**値が `.dev` の
+  性質に依存しない形であるべき**だから —— 別のドメインへ載せ替えた日に、ここを直さないと
+  守る範囲が黙って狭まる
+
+#### 決めたこと 5: **CAA を置く。値は Let's Encrypt。ただし証明書が出てから**
+
+org security-baseline §4.2 は「置くかどうかは各リポジトリの判断だが、**判断した記録が要る**」と
+明記している（cartera の実測で `cartera.id` に CAA が無く、それは「壊れている」ではなく
+「置いていない」だった、という形）。**置く**（ユーザー判断）。
+
+**Railway の証明書は Let's Encrypt** —— 2026-08-30 に実際の証明書を見た:
+
+```
+$ echo | openssl s_client -connect up.railway.app:443 -servername up.railway.app 2>/dev/null \
+    | openssl x509 -noout -issuer -subject
+issuer=C=US, O=Let's Encrypt, CN=YE1
+subject=CN=*.up.railway.app
+```
+
+`railway.com` 自身も `issuer=C=US, O=Let's Encrypt, CN=YR1`。**Railway の公式ドキュメントは
+「Free SSL certificates automatically provisioned and renewed」としか書いておらず、
+発行者を名指ししていない**（同日確認）—— **だから実測した。**
+
+★ **順序が要る。CAA を先に置かない。** CAA を間違えると**証明書の発行が黙って止まる**。
+**DNS を Railway へ向ける → 発行させる → issuer を実見する → CAA を置く**の順にする。
+**発行者を推測で書く経路を作らない** —— これは org `ci-strategy.md` §7 の
+「実走していないものを書かない」を、**DNS レコードに適用した形**にあたる。
+
+#### 決めたこと 6: **版 v0.1.0 を切って `main` から配る**（別 issue に切り出す）
+
+ユーザー判断。`docs/BRANCHING.md` は **`main` ＝ リリース済み・タグで版管理**と定めており、
+`docs/HANDOVER.md` §2.3 の「git（`main`）下流の共有ビューア」もそれに乗っている。
+**`main` が 110 遅れなのは、リリースが 1 度も無いから**であって、ブランチ運用が壊れているのではない。
+
+**#84 に含めない。**
+
+- リリース運用の立ち上げ（`release/0.1.0` → `main` → タグ）は **#84 の受け入れ基準の
+  どれにも現れない**。#84 が求めているのは「**公開しているものが `main` 下流であり、正本が
+  git のまま**（split-brain を作っていない）」で、**版を切ることはその手段**
+- **#141 の申し送りが既に予約していた** ——「`公開デモを立てる` を閉じるときに、版を切るかを
+  判断する。タグ 0 本・`version` が `0.0.0` 2 か所・`main` が 109 遅れ・`protected: false` は
+  **そのとき一緒に見る**」。**判断はここで下し、作業は別 issue が持つ**
+- **同じマイルストーンに入れる** —— 到達点に属する（#141 の決めたこと 2 が「入れない」と
+  名指しした 4 つのどれでもない）
+
+#### 決めたこと 7: **費用の監視は入れない（READONLY のあいだ）**
+
+段階11-5 の申し送りは「**費用の監視は入れていない。** 上限（レート制限・入力サイズ）はサーバが
+持つが、**使った総額を数える仕組みは無い**。公開する形が変われば要る」と書いていた。
+
+**READONLY のあいだは要らない。** AI サービスの Bean が**そもそも登録されない**
+（段階11-0 の決めたこと 10）ので、**公開デモから API 課金が発生する経路が無い**。
+introspection も同じ形で落ちる。**残るのはホスティング費だけ**で、それは Railway の
+workspace 単位で見える。
+
+**`READONLY` を外す判断をするなら、この行に戻る**（#84 の本文も同じことを書いている）。
+
+#### 通った（2026-08-30 実測）
+
+| 検査 | 結果 |
+|---|---|
+| `cd server && ./gradlew test` | **230 本**（HSTS の 4 本を含む） |
+| `npm test` | **624 本** |
+| `npm run typecheck` | 緑 |
+
+**HSTS の 4 本の分かれ方**（**同じことを 2 か所で見ない**）:
+
+| どこ | 何を見る |
+|---|---|
+| `HstsTest`（純粋） | **値そのもの** —— `preload` が無い ／ `max-age` が 1 年ある ／ **共通の 5 本に入っていない** |
+| `HstsEnabledTest`（起こす） | **`GRABADO_HSTS=true` で実 HTTP に載る** ／ 404 にも付く ／ **5 本を追い出していない** |
+| `BackendBehaviourTest`（起こす） | **既定では出ない** —— 手元を壊す変更を赤くする側 |
+
+#### 却下した案
+
+- **静的配信（Cloudflare Pages / GitHub Pages）で $0 にする** —— 決めたこと 2。**成立しない**
+- **Fly.io** —— shared-cpu-1x 512MB 常時稼働で **≒ $3.32/月**、証明書 10 本まで無料
+  （2026-08-30 実測）。**Railway より安いが、デプロイが `fly deploy`** なので
+  **GitHub Actions を 1 本足すか、手で回す**ことになる。**ワークフローを増やさない側**を採った
+- **Cloud Run** —— **scale-to-zero なら無料枠内**（2M req ／ 240,000 vCPU 秒 ／ 450,000 GiB 秒。
+  同日実測）だが、**JVM のコールドスタートが手元実測で 18 秒**（段階2-3 の記録）。
+  **常時稼働にすると無料枠を大きく超える**（512MB × 1 か月 ≒ 130 万 GiB 秒 ＞ 45 万）。
+  **ブランディングとして公開するもの**（`CLAUDE.md` の冒頭）が、初回アクセスで 18 秒待たせる形にしない
+- **Railway の Free プラン** —— $0 ＋ **月 $1** のクレジット・RAM 上限 0.5GB。
+  **512MB 常時稼働は RAM だけで $5/月相当**なので、**構造的にクレジットへ収まらない**
+- **`PORT` をアプリで読む** —— 決めたこと 3
+- **HSTS に `preload` を付ける** —— org security-baseline §4.3 が名指しで止めている。
+  **`.dev` では利益も無い**（TLD ごとプリロード済み）
+- **`X-Forwarded-Proto` で HSTS を自動判定する** —— 決めたこと 4
+- **公開デモを編集可（`READONLY=false`）で出す** —— 2026-08-15 の決定を覆すことになる。
+  AI は API 費用が自社負担、introspection は SSRF の踏み台になる
+- **サブドメイン（`view.grabado.dev`）に置く** —— #84 の目指す状態はどちらでもよいとしているが、
+  **apex がブランディングの面**で、別に置く landing page の計画が無い。
+  **Porkbun は ALIAS を持つ**ので apex に CNAME 相当を置ける
+- **CAA を先に置いてから DNS を向ける** —— 決めたこと 5 の★。**発行が黙って止まる**
+- **`tests/image/` に `GRABADO_HSTS=true` の回を足す** —— **compose を `http` で叩く E2E**
+  なので、**「HTTPS で出ている」ことは 1 バイトも確かめられない**。
+  確かめられるのは「env を立てるとヘッダが増える」だけで、**それは `HstsEnabledTest` が
+  Spring を起こして見ている**。**同じことを 2 か所で見ない**（READONLY を 5 本に絞ったのと同じ判断）
+
+#### 申し送り
+
+- **リポジトリの外側（Railway と Porkbun）は人の操作。** 構成の契約は
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9.7、**確かめ方も同節**。
+  **やった日に、この節へ実測を追記する**（証明書の issuer ／ CAA の応答 ／ `curl -sSI` の
+  ヘッダ）—— **書いてから確かめない**
+- **CAA は証明書が出てから置く**（決めたこと 5 の★）
+- **`schema/` は空**（`.gitkeep` だけ）。**READONLY のデモは `list` が 0 件を返す** ——
+  ブラウザ内ストアで編集体験は成立するが、**「開いた瞬間に何か見える」形ではない**。
+  **デモに載せる設計を用意するかは、#84 の受け入れ基準には無い** ので別に判断する
+- **About 欄の `website` は空のまま**（段階2-5 の申し送りが「`grabado.dev` の取得状況が
+  未確認（#84）」を理由にしていた）—— **取得済みだと分かったので、理由は変わった。
+  埋めるのはデモが立った日**
+- **タブに出る名前** —— 段階2-6 の申し送りが「**#84 で `grabado.dev` に置けば、そこにも出る**」と
+  書いている。**立った日に見る**
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

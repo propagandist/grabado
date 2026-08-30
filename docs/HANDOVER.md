@@ -30,6 +30,7 @@
 - **backend**: Kotlin + Spring Boot。save/load をマウント済みファイルの I/O として実装。introspection と AI proxy を担う。
 - **frontend**: 完全 TypeScript 化（Vite / strict）。描画エンジンは温存し model/IO/DDL 層を型付きで巻く（Tier 2）。UI framework 全面移行は今回スコープ外。
 - **Railway**: 任意・従。同一イメージを読み取り専用ビューアとして立てられる（§2.3）。編集の正本にはしない。
+  （**2026-08-30 に「任意」を外した** —— 置き場所として決まった。§2.3 の注記）
 - **upstream**: 非追従。
 
 ### 保持する資産 / 捨てる負債
@@ -79,6 +80,15 @@ ENTRYPOINT ["java","-jar","app.jar"]
 ```
 
 ### 2.3 Railway（任意・読み取り専用ビューア）
+
+> **注記（2026-08-30 / issue #84）**: **「任意」ではなくなった。** 公開デモの置き場所は
+> **Railway に決まり**（既に PRO 契約済み）、`grabado.dev` は **取得済み**であることを
+> DNS で確かめた（Porkbun の NS 4 本）。**TLS は Let's Encrypt**（Railway のホストの
+> 証明書を実際に見た）で、**CAA はそれに合わせて置く**。**HSTS はアプリが出す**
+> （`GRABADO_HSTS=true`。`preload` は付けない）。
+> **判断と実測の正は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の
+> 「2026-08-30 公開デモの外側」**、契約は [`ARCHITECTURE.md`](ARCHITECTURE.md) §7.3 / §9.4
+> （HANDOVER = 入口 / CUSTOMIZATIONS = 正）。**以下の 4 行は着手時の要件のまま。**
 - 同一イメージを `READONLY=true` で起動し、git（main）下流の**共有ビューア**として最新スキーマを URL 閲覧に供する。
 - 編集・保存・introspection の副作用は無効化。**正本は git のまま**、split-brain を作らない。
 - 「Railway = ステートレス app + 外部 PG を編集主経路にする」旧案は不採用（正本二重化を招くため）。

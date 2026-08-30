@@ -674,6 +674,7 @@ SQL 型情報を返し、型 id への解決はフロントの `TypePalette` が
 |---|---|---|
 | `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ） |
 | `GRABADO_READONLY`（`READONLY` も読む） | `false` | save を **403** にする（段階5-3 で実装）。introspection は 5-7、AI は §11 で同じ扱いになる。**公開デモは `true` 一択** —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。READONLY のときは正本ディレクトリの**書き込み可能性を要求しない**（読み取り専用マウントでも起動する） |
+| `GRABADO_HSTS` | `false` | `Strict-Transport-Security` を出す（issue #84）。**TLS の後ろに置いたデプロイだけ `true`** —— TLS を終端するのは前段（公開デモは Railway）で、アプリが見る口はいつも平文なので `request.isSecure` では判断できない。**既定で出すと手元が壊れる**（`http://localhost:8080` を開いたブラウザが以後 localhost を https へ強制し、消すにはブラウザの設定を触るしかない） |
 | introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする）。**入るのは 5-7** |
 
 ### 7.4 走らせ方
@@ -943,7 +944,7 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 `.env` は 3 本のうち 2 本が無関係な秘密だった）。列挙は [`../.env.example`](../.env.example) と
 **1 本ずつ対応**し、ずれると
 [`../tests/node/env-contract.test.ts`](../tests/node/env-contract.test.ts) が赤くなる。
-案内するのは `GRABADO_` 前綴りと `ANTHROPIC_API_KEY` の **12 本**で、
+案内するのは `GRABADO_` 前綴りと `ANTHROPIC_API_KEY` の **13 本**で、
 **裸の互換名（`SCHEMA_DIR` / `READONLY`）は外向きの一覧に出さない**（互換で読むことは変えない）。
 
 **★ 空文字は既定に倒れない。** `${VAR:-}` 形式で未設定の env を渡すと空文字が入り、
@@ -1000,8 +1001,20 @@ material-inspired の svg（CSS ソースに元からある）。
 `preview.headers` が**同じ値の写し**を出し、[`../tests/node/csp.test.ts`](../tests/node/csp.test.ts)
 がずれを赤くする。**dev server には出さない**（HMR が inline script を使う）。
 
-**HSTS はここに入れない** —— 公開デモの外側（[issue #84](https://github.com/propagandist/grabado/issues/84)）。
-**ローカルは `http://localhost:8080`** で動くので、壊してはいけない。
+**HSTS は `GRABADO_HSTS=true` のときだけ 6 本目として出る**（issue #84）。
+値は `max-age=31536000; includeSubDomains` で、**`preload` は付けない**
+（org security-baseline §4.3 が「取り消しに数か月かかる」と名指しで止めている。
+**付けなくても `.dev` は TLD ごとプリロード済み**なので常時 HTTPS になる）。
+**上の 5 本には入れない** —— あれは「どこで動いても同じ」もので、HSTS は
+**デプロイの条件で変わる**（`Cache-Control` が経路で変わるのと同じ理由）。
+**`vite preview` にも写していない**（`vite preview` は http）。
+
+- **訂正の元**: 段階2-2 の時点では「**HSTS はここに入れない。ローカルは
+  `http://localhost:8080` で動くので、壊してはいけない**」だった。**壊れるという観測は
+  正しい**（既定で出せば今も壊れる）。**変わったのは、置き場所が決まって「TLS の後ろに
+  いるデプロイ」を名指しできるようになったこと**だけである
+- 出る側は `HstsEnabledTest`、**既定で出ない側は `BackendBehaviourTest`** が見る。
+  値そのもの（`preload` 無し・`max-age` を短くしない）は `HstsTest`
 
 **`Cache-Control` だけは経路で値が変わる**（段階2-4）。だから上の 5 本とは別に持ち、
 **`vite preview` には写していない** —— 静的サーバの固定ヘッダでは経路別を表せないので、
@@ -1188,3 +1201,47 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 **openssl の 1 CVE が 3 パッケージに出ているだけ**（QUIC を使わないので到達しない。**上流待ち**）、
 **`app/grabado.jar` は 0 件**。**`node:24-alpine` の CRITICAL 1 件は web ステージにしか無く、
 配布物には入らない** —— 実測と切り分けは `CUSTOMIZATIONS.md` の同日の記録。
+
+### 9.7 公開デモ（Railway。issue #84）
+
+**判断と実測の正は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の「2026-08-30 公開デモの外側」**
+（**理由をここへ写さない**）。ここが持つのは**構成の契約**だけ。
+
+**リポジトリの外側の状態**（Railway の設定と Porkbun の DNS）に依存する唯一の節なので、
+**確かめ方が他と違う** —— org `security-verification.md` の 3 層のうち、**手元でも既存ジョブでもない層**。
+
+| 決めたもの | 値 | なぜ |
+|---|---|---|
+| 置き場所 | **Railway**（PRO 契約済み） | GitHub 連携で `Dockerfile` から直接ビルドする —— **ワークフローを 1 本も足さない**。§2.3 の「任意」は 2026-08-30 に外れた |
+| ビルド元 | **`main`** | `BRANCHING.md` の `main` ＝ リリース済み。**正本は git のまま**で、デモは下流（`HANDOVER.md` §2.3） |
+| ポート | **8080**（Railway 側の target port で指定） | `PORT` をアプリに実装しない —— **ポートの決め方を 2 つにしない**（8080 は既に `Dockerfile` / `compose.yaml` / docs / tests に写しを持つ） |
+| env | **`GRABADO_READONLY=true`** ＋ **`GRABADO_HSTS=true`** の 2 本だけ | READONLY は一択（§7.3）。HSTS は**TLS の後ろにいるデプロイだけ**が立てる（§9.4） |
+| mount | **無し** | READONLY なので `/data/schema` は書けなくてよい（イメージが作って所有権を渡している。§9.1）。**`list` は 0 件を返す** |
+| ドメイン | **`grabado.dev`**（apex） | 公開の顔。**Porkbun は ALIAS を持つ**ので apex に CNAME 相当を置ける |
+| TLS | **Railway が発行**（Let's Encrypt。2026-08-30 に証明書を実見） | `.dev` は **TLD ごと HSTS プリロード済み**＝常時 HTTPS 強制 |
+| CAA | **置く**（`issue "letsencrypt.org"` ＋ `iodef`） | org security-baseline §4.2。**判断した記録が要る**ほうの要件 |
+
+**★ CAA は証明書が出てから置く。** 発行者を推測で書くと、**間違えたときに発行が黙って止まる**。
+**DNS を Railway へ向ける → 発行させる → issuer を実見する → CAA を置く**の順。
+
+#### 確かめ方（機械で見える 4 つ）
+
+```bash
+curl -sSI https://grabado.dev/ | grep -i strict-transport-security   # preload が無いこと
+curl -s https://grabado.dev/backend/file/?action=capabilities        # 3 つとも false
+curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+  -H 'Content-Type: application/json' -d '{}' \
+  'https://grabado.dev/backend/file/?action=save&keyword=x.json'     # 403
+curl -s -H 'accept: application/dns-json' \
+  'https://cloudflare-dns.com/dns-query?name=grabado.dev&type=CAA'   # Answer 節に出ること
+```
+
+★ **`nslookup` は CAA を引けない**（Windows。`unknown query type: CAA`）。**DoH で引く。**
+**Answer 節が無いのは「引けなかった」ではなく「そのレコード型が無い」** ——
+`Status: 0`（NOERROR）＋ Authority に SOA、の形で返る（2026-08-30 実測）。
+
+★ **HSTS が出ていることは、既存ジョブでは見えない。** `tests/image/` は compose を
+`http://127.0.0.1:8080` で叩くので、**`GRABADO_HSTS` を立てない**。
+**アプリが出すこと自体は `HstsEnabledTest` が見る**（§9.4）が、
+**公開 URL に載っていることは上の `curl` でしか分からない。**
+

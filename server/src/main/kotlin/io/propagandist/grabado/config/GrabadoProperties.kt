@@ -20,11 +20,19 @@ import java.time.Duration
  *   落ちるのはその 3 つだけで、`list` / `load` は生きている（読み取りビューア）。
  *   編集ストアはブラウザ内なので、READONLY でも「読んで・描いて・DDL を出す」体験は
  *   完全に提供できる。
+ * @property hsts `Strict-Transport-Security` を出すか（issue #84）。**既定は `false`。**
+ *   TLS を終端するのは前段（公開デモは Railway）で、**アプリが見るのは平文の口**だから
+ *   —— `request.isSecure` では判断できない。**「このデプロイは TLS の後ろにいる」と
+ *   人が宣言する env** にしてある。既定で出すと、手元の `http://localhost:8080` を
+ *   1 度開いたブラウザが**以後 localhost を https へ強制する**（HSTS はホスト名に効く。
+ *   IP には効かない）—— 消すには利用者が自分でブラウザの設定を触るしかない。
+ *   値と `preload` を付けない理由は [SecurityHeadersFilter.HSTS] にある。
  */
 @ConfigurationProperties("grabado")
 data class GrabadoProperties(
     val schemaDir: Path,
     val readonly: Boolean = false,
+    val hsts: Boolean = false,
     val introspect: IntrospectProperties = IntrospectProperties(),
     val ai: AiProperties = AiProperties(),
 )

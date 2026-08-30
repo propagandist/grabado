@@ -208,6 +208,18 @@ class BackendBehaviourTest {
         ).hasValue(SecurityHeadersFilter.NO_STORE)
     }
 
+    /*
+     * HSTS は**既定では出ない**（issue #84）。手元は `http://localhost:8080` で動くので、
+     * 出た瞬間に**ブラウザが以後 localhost を https へ強制する** —— 消すには利用者が
+     * 自分でブラウザの設定を触るしかない。**出る側は `HstsEnabledTest` が起こして見る。**
+     */
+    @Test
+    fun `既定のデプロイは HSTS を出さない`() {
+        assertThat(get("list", null).headers().firstValue(SecurityHeadersFilter.STRICT_TRANSPORT_SECURITY))
+            .describedAs("TLS の後ろにいないデプロイが HSTS を出した")
+            .isEmpty()
+    }
+
     /** 正本（SecurityHeadersFilter.HEADERS）の 5 本が、この応答に 1 本残らず付いていること */
     private fun assertSecurityHeaders(response: HttpResponse<ByteArray>) {
         SecurityHeadersFilter.HEADERS.forEach { (name, value) ->

@@ -110,9 +110,54 @@ jobs:
       #   **2 run では 69〜85 秒**で、**動いたのはこの取得だけ**（他のステップは 2 回とも同じ）——
       #   **遅さの原因も、ぶれの原因もここ**。
       #   残りは npm ci 3 / 型検査 3 / vitest 11 / 実ブラウザ 12 / known-issues 3 / dist 5 秒。
-      #   **それでも足さない** —— キャッシュのキーを Playwright の版に結び付け損ねると、
+      #   ~~**それでも足さない**~~ —— キャッシュのキーを Playwright の版に結び付け損ねると、
       #   **古いブラウザのまま緑になる**（検査が静かに嘘をつく側の失敗）。足すなら
       #   **キーの設計を先に決める**別 issue で。ci-image.yml も同じ 39 秒を払っている。
+      # ★ **足した**（2026-08-30。issue #121）—— **キーは Playwright の版そのもの**で、
+      #   **`restore-keys` は置かない**。上の懸念（古いブラウザのまま緑）は
+      #   **前方一致を許さないこと**と**版が読めなければ落とすこと**の 2 つで塞いだ。
+      #   **元の記述は消さない** —— 39 秒という観測も、足さなかった理由も、判断の履歴である。
+      # ★ **効いた幅は 39 秒ではない**（同日実測。ジョブ合計 **70 → 58 秒**）——
+      #   **このステップの残りは `--with-deps` の apt** で、`~/.cache/ms-playwright` の**外**に
+      #   入るのでキャッシュできない。**ヒット時のログは `Installing dependencies...` だけ**で、
+      #   **ダウンロードは実際に飛んでいる**。**削れるのはダウンロードのぶんだけ。**
+      # ★ **キャッシュのキーは Playwright の版そのもの**（issue #121）。
+      #   `@playwright/test` は `playwright` を、`playwright` は `playwright-core` を
+      #   **厳密な版で固定している**（2026-08-30 実測。lock の `dependencies` が
+      #   `"playwright": "1.62.1"` / `"playwright-core": "1.62.1"`）ので、
+      #   **ブラウザのリビジョンが動くなら、必ずこの版も動く**。
+      #
+      # ★ **空振りを緑にしない。** 出力の書式が変わって版が読めなくなったら、
+      #   **キーが `-playwright--chromium` に落ちて全版で衝突する** —— それは
+      #   「古いブラウザのまま緑」そのもの。**読めなければ落とす。**
+      - name: Playwright の版を読む（キャッシュのキー）
+        id: playwright
+        run: |
+          version="$(npx playwright --version | awk '{print $2}')"
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "playwright --version が読めない: '$version'" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # ★ **`restore-keys` を置かない。** あれは**前方一致で古いキャッシュに当たる**ので、
+      #   版を上げても `Linux-X64-playwright-` が古いブラウザを復元してしまう ——
+      #   **この issue が避けようとしている失敗そのもの**。**完全一致だけを許す。**
+      # ★ **キーは 2 本のワークフローで同じ。** 片方が温めたものをもう片方が使う
+      #   （揃わないと 2 本ぶん保存され、容量も食う）。
+      - name: Chromium のキャッシュ
+        id: chromium-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}-chromium
+
+      # ★ **ヒットしても素通りさせない。** `--with-deps` が入れる OS パッケージは
+      #   `~/.cache/ms-playwright` の**外**にあり、キャッシュには入らない。
+      #   `playwright install` は**ブラウザが既にあれば取得を飛ばす**ので、
+      #   **省いたぶんはダウンロードだけ**で、正しさは毎回確かめられる
+      #   （復元が壊れていれば取り直す）。**#121 が「未確認」としていた点は、
+      #   「省かない」と決めることで消した。**
       - name: Chromium の取得
         run: npx playwright install --with-deps chromium
 

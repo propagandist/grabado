@@ -1,152 +1,155 @@
 # grabado
 
-**grabado** is a browser-based ER diagram and database design tool. Draw a schema, export DDL for
-eight database profiles, or point it at an existing database and get the diagram back. A design is
-a plain JSON file that lives in your git repository — there is no database behind the editor.
+**grabado** はブラウザで動く ER 設計ツール。スキーマを描いて **8 つの DB プロファイル**へ DDL を
+出し、既存の DB を読み取って図に戻せる。**設計は git 管理の JSON ファイルが正本**で、
+エディタの裏に DB は無い。
 
-It is a fork of [ondras/wwwsqldesigner](https://github.com/ondras/wwwsqldesigner) by Ondrej Zara
-(BSD-3-Clause). The drawing engine is kept; everything around it was rewritten in TypeScript, the
-PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a single Docker image.
+Ondrej Zara の [ondras/wwwsqldesigner](https://github.com/ondras/wwwsqldesigner)（BSD-3-Clause）
+由来。描画エンジンは温存し、その周りを TypeScript で書き直した。PHP backend は
+Kotlin/Spring Boot に置き換え、**単一の Docker イメージ**として配る。
 
-> **The documentation is written in Japanese.** This README is the only English document —
-> everything under [`docs/`](docs/), [`CLAUDE.md`](CLAUDE.md) and [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md)
-> is Japanese. 日本語版 README は [`README.ja.md`](README.ja.md)。
+> 英語版は [`README.en.md`](README.en.md)。**それ以外の文書はすべて日本語**
+> （[`docs/`](docs/)・[`CLAUDE.md`](CLAUDE.md)・[`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md)）。
 
-## What it does
+## できること
 
-- **Draw** — tables, columns, keys, foreign key constraints, indexes and comments, in the browser
-- **Export DDL** — eight database profiles from one design (see the table below)
-- **Export ORM models** — JPA (Kotlin), Prisma and Drizzle
-- **Import an existing database** — introspection reads `information_schema` and returns JSON
-- **AI suggestions** — optional, bring your own key. Suggestions are reviewed and applied through
-  the same deterministic path as everything else; **nothing is applied automatically**
-- **Designs are files** — deterministic JSON (stable key and array order, one table per block),
-  so a schema change is a readable diff and sharing is a pull request
+- **描く** —— テーブル・列・キー・外部キー制約・インデックス・コメントをブラウザで
+- **DDL を出す** —— 1 つの設計から 8 プロファイル（下の表）
+- **ORM モデルを出す** —— JPA（Kotlin）・Prisma・Drizzle
+- **既存の DB を読み取る** —— introspection が `information_schema` を読んで JSON で返す
+- **AI 提案** —— 任意・BYOK。提案は必ずレビューを経て、**適用は他と同じ決定論パスに合流する**。
+  **自動適用はしない**
+- **設計はファイル** —— 決定論 JSON（キー順・配列順が安定、1 テーブル＝独立ブロック）なので
+  スキーマの変更が読める diff になり、共有は PR で行う
 
-## Supported databases
+## 対応 DB
 
-| Profile | DDL export | Introspection |
+| プロファイル | DDL 出力 | introspection |
 |---|---|---|
-| `postgresql` | yes | yes |
-| `mysql` | yes | yes |
-| `mariadb` | yes | yes |
-| `h2` | yes | yes |
-| `mssql` | yes | — |
-| `oracle` | yes | — |
-| `sqlite` | yes | — |
-| `sql-standard` | yes | — |
+| `postgresql` | ○ | ○ |
+| `mysql` | ○ | ○ |
+| `mariadb` | ○ | ○ |
+| `h2` | ○ | ○ |
+| `mssql` | ○ | — |
+| `oracle` | ○ | — |
+| `sqlite` | ○ | — |
+| `sql-standard` | ○ | — |
 
-PostgreSQL 18 is the default palette: designs are drawn with PostgreSQL types and converted at
-export time, so the saved file is identical whichever profile you export to.
-[`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) shows what each type becomes in every profile —
-that table is generated from the implementation and verified by a test, not written by hand.
+既定のパレットは **PostgreSQL 18**。設計は PG の型で描き、**出力の直前に変換する**ので、
+どのプロファイルへ出しても保存されるファイルは同じ。型ごとの写り方は
+[`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) —— **あの表は手で書いていない**。実装の出力と
+1 セルずつ突き合わせるテストが持っている。
 
-## Designs are files, not rows in a database
+## 設計は DB の行ではなくファイル
 
-The editor keeps its working state in the browser. Saving writes through to a mounted directory,
-so the source of truth is the JSON file in your repository — reviewed and merged like code.
-The format is documented in [`docs/FORMAT.md`](docs/FORMAT.md). XML designs from upstream
-wwwsqldesigner can still be read; grabado only writes JSON.
+編集中の状態はブラウザ内に持ち、保存はマウント済みディレクトリへ write-through する。
+**正本はリポジトリの JSON ファイル**で、コードと同じようにレビューしてマージする。
+形式は [`docs/FORMAT.md`](docs/FORMAT.md)。upstream の XML 設計は**読み込みだけ**できる
+（grabado が書き出すのは JSON のみ）。
 
-## Quick start
+## 起動
 
-The image is not published to any registry — **build it yourself**.
+**イメージはレジストリで配らない。各自が build する。**
 
-### With Docker Compose
+### compose
 
 ```bash
-cp .env.example .env      # uncomment only the lines you need; it starts with none of them
+cp .env.example .env      # 要る行だけコメントを外す。何も外さなくても起動する
 docker compose up --build
 ```
 
-Then open <http://127.0.0.1:8080>.
+<http://127.0.0.1:8080> を開く。
 
-- Designs are written to `schema/` on the host. To put them somewhere else, change the **left**
-  side of the mount in [`compose.yaml`](compose.yaml)
-- `.env` is **not** copied into the container. Only the variables listed under `environment:` in
-  [`compose.yaml`](compose.yaml) are passed through (`env_file:` is not used)
-- **Do not leave a key with an empty value** in `.env`. An empty string does not fall back to the
-  default — it is passed through and the container fails to start (e.g. `GRABADO_READONLY=`)
+- 設計 JSON はホストの `schema/` に書かれる。置き場所を変えるなら
+  [`compose.yaml`](compose.yaml) の mount の**左側**
+- **`.env` がコンテナへ丸ごと入るわけではない。** [`compose.yaml`](compose.yaml) の
+  `environment:` が列挙した env だけが渡る（`env_file:` は使っていない）
+- **`=` の右を空にした行を残さない。** 空文字は既定に倒れず、そのまま渡って**起動を落とす**
+  （例: `GRABADO_READONLY=`）
 
-### Without Compose
+### compose を使わない
 
 ```bash
 docker build -t grabado .
 docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado
 ```
 
-The left side of `-v` is the host directory holding your design files.
+`-v` の左側は**設計 JSON を置くホスト側のディレクトリ**。
 
-### Read-only mode
+### 読み取り専用
 
 ```bash
 GRABADO_READONLY=true docker compose up
 ```
 
-Saving, introspection and AI are disabled; listing and loading still work. This is the mode a
-public demo runs in — AI calls cost money and introspection is an SSRF pivot, so neither belongs
-on a deployment strangers can reach.
+保存・introspection・AI が止まる（`list` / `load` は生きている）。**公開デモはこの一択** ——
+AI は API 費用が自社負担、introspection は SSRF の踏み台になるので、
+**知らない人が触れる所には置けない**。
 
-### Note for Linux hosts
+### Linux ホストでの注意
 
-**It just works.** The container figures out who owns the mount at startup and drops to that
-user, so files it writes are owned by you — you can `git add` your designs directly.
+**そのまま動く。** コンテナは**起動時に mount 先の所有者を見て、そこへ降りる** ——
+書かれたファイルはあなたの所有になるので、**設計をそのまま `git add` できる**。
 
-Details are in `docker-entrypoint.sh`. Nothing to configure; `docker compose up` is enough.
+仕組みと分岐は [`docker-entrypoint.sh`](docker-entrypoint.sh) の冒頭。**設定は要らない**
+（`docker compose up` だけでよい）。
 
-### Local development
+### ローカル開発
 
 ```bash
 npm install
 npm run dev               # Vite dev server
 ```
 
-Then open <http://127.0.0.1:4173/index.html>. To check the built assets, `npm run build`
-(produces `dist/`) followed by `npm run preview` (<http://127.0.0.1:4174>).
+<http://127.0.0.1:4173/index.html> を開く。配布物を確かめるときは `npm run build`
+（`dist/` が出る）→ `npm run preview`（<http://127.0.0.1:4174>）。
 
-## Configuration
+## 設定
 
-Every variable is listed with a one-line description in [`.env.example`](.env.example);
-the contract is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §7.3 (backend), §8.4 (AI) and §9.3
-(image). The defaults live in `server/src/main/resources/application.yaml` — they are deliberately
-not repeated anywhere else.
+env の一覧は [`.env.example`](.env.example)（キー名と 1 行の用途）。契約は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §7.3（backend）／ §8.4（AI）／ §9.3（イメージ）。
+**既定値の正本は `server/src/main/resources/application.yaml` の 1 か所**で、他へ写していない。
 
-Two things are worth knowing before you start:
+始める前に知っておくとよいのは 2 つ。
 
-- **AI is off unless both an API key and a model name are set.** The key is injected as an
-  environment variable into your own container; it is never stored in the browser
-- **Introspection targets are named in configuration, never sent in a request.** There is no way
-  to hand grabado a JDBC URL from the outside
+- **AI はキーとモデル名が両方そろって初めて有効になる。** キーは各自のコンテナへ env で
+  注入するもので、**ブラウザには保存しない**
+- **introspection の接続先は設定で名前を付けて列挙する。リクエストでは受けない** ——
+  外から JDBC URL を渡す経路がそもそも無い
 
-## Documentation
+## 文書
 
-| Document | What it holds |
+| 文書 | 何を持つか |
 |---|---|
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layout, backend and AI contracts, the image |
-| [`docs/FORMAT.md`](docs/FORMAT.md) | The design JSON format |
-| [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | What each type becomes in each profile |
-| [`docs/TESTING.md`](docs/TESTING.md) | Test layout and how to run it |
-| [`docs/BRANCHING.md`](docs/BRANCHING.md) | Branching model |
-| [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) | Every decision made since the fork, with its reasoning |
-| [`CLAUDE.md`](CLAUDE.md) | Working rules and hard constraints |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 構成、backend と AI の契約、イメージ |
+| [`docs/FORMAT.md`](docs/FORMAT.md) | 設計 JSON の形式 |
+| [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | house 既定が各 DB で何になるか |
+| [`docs/TESTING.md`](docs/TESTING.md) | テストの構成と走らせ方 |
+| [`docs/BRANCHING.md`](docs/BRANCHING.md) | ブランチ運用 |
+| [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) | fork 以降の決定と、その理由のすべて |
+| [`CLAUDE.md`](CLAUDE.md) | 作業ルールと Hard Constraints |
 
-## Tests
+## テスト
 
 ```bash
 npm ci
-npx playwright install chromium   # first time only
+npx playwright install chromium   # 初回のみ
 
-npm test              # Node side (jsdom). Fast; this is the everyday one
-npm run test:browser  # Real browser (Chromium). The authority for the DDL golden files
-npm run known-issues  # Reproduces known defects on purpose
-npm run test:server   # Kotlin backend over real HTTP
-npm run test:image    # Builds the image, starts the container and drives it end to end
+npm test              # Node 側（jsdom）。速い。日常はこれ
+npm run test:browser  # 実ブラウザ（Chromium）。DDL golden の権威
+npm run known-issues  # 既知の不具合の再現確認
+npm run test:server   # Kotlin backend を実 HTTP で
+npm run test:image    # イメージを build してコンテナを起こし、通しで叩く
 ```
 
-The golden files pin the bytes the tool actually emits. A change that moves them is either a bug
-or a decision that has to be recorded — see [`docs/TESTING.md`](docs/TESTING.md).
+golden はツールが**実際に吐いているバイト列**を固定している。動いたなら、それは不具合か、
+記録すべき決定のどちらか —— [`docs/TESTING.md`](docs/TESTING.md)。
 
-## Origin and license
+## 由来とライセンス
 
-BSD-3-Clause, inherited from upstream — see [`license.txt`](license.txt). grabado does not follow
-upstream; every difference is recorded in [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) as it is made.
+**BSD-3-Clause**（upstream から継承。[`LICENSE`](LICENSE)）。grabado は
+**upstream に追従しない**。差分は生じたその都度 [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) に記録する。
+
+---
+
+Issue / PR は受け付けるが、対応は保証しない。

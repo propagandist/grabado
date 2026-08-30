@@ -58,7 +58,7 @@ server/                   ★ §5 段階5-1b で追加。Kotlin / Spring Boot 4�
   gradle.lockfile           依存ロック（org security-baseline §3.12）
 package.json              ★ root のまま（`tests/` も。理由は §9.1 と issue #107）
 tests/                    5 系統（走らせ方は TESTING.md）
-license.txt               BSD License（保持必須）
+LICENSE                   BSD License（保持必須。upstream 全文 ＋ 自社追記）
 Dockerfile                ★ §2 段階2-1 で置換。マルチステージ 3 段（web / api / runtime）
 ```
 

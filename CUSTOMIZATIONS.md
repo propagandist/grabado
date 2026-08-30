@@ -11300,6 +11300,25 @@ All rights reserved.
 （**2026-08-30 実測**。`PUT .../topics` の応答が `database-design, docker, er-diagram, kotlin,
 spring-boot, typescript` の順で返った）。§3.4 の記述が実測で裏付いた。
 
+##### ★★ 訂正（2026-08-30 実測）—— 上の「裏付いた」は成り立たない。**測ったものが違う**
+
+**元の記述は消さない。** `pdfjig` の topics を **1 個だけ入れ替えた**ときに崩れた。
+
+| 何を呼んだか | 返った順 |
+|---|---|
+| `PUT /repos/{o}/{r}/topics` の応答 | `desktop-app, document-processing, javafx, pdf, pdfbox, java` |
+| `GET /repos/{o}/{r}/topics` の `.names` | **同じ**（差し替えた 1 個が末尾） |
+| `GET /repos/{o}/{r}` の `.topics` | `desktop-app, document-processing, java, javafx, pdf, pdfbox`（**アルファベット順**） |
+
+- **同じ時点で、2 つのエンドポイントが違う順を返す。** どちらか一方だけを見て
+  「GitHub はソートする／しない」とは言えない
+- **grabado で「アルファベット順で返った」ように見えたのは、6 個を全入れ替えしたから**であって、
+  **API がソートしたからではない**
+- **★ §3.4 が言っているのは画面での表示順**で、**API の応答からは分からない**。
+  **裏付けたつもりで、別のものを測っていた**
+- **★ この形の誤りは「数字と測り方を離さない」の裏返し**（`ci-strategy.md` §7）——
+  **数字は正しく、測り方も書いたが、その測り方では主張を支えられなかった**
+
 #### 検証（2026-08-30 実測。`gh api` のみで run は立てていない）
 
 | 何を | 結果 |

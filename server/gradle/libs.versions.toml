@@ -9,7 +9,7 @@ kotlin = "2.4.10"
 springBoot = "4.1.1"
 # Anthropic の公式 Java SDK（段階11-2b）。**BOM の管理外**なので版をここに書く。
 # Kotlin は Java SDK を使う（専用の Kotlin SDK は無い）。
-anthropic = "2.55.0"
+anthropic = "2.57.0"
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

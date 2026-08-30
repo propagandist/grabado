@@ -33,6 +33,13 @@
 #   「入力が変わらなければ出力も変わらない」に反する。
 #   **テストが読む repo ルートのファイルを増やしたら、ここに足すこと。**
 #
+# ★ **足した**（2026-08-30。issue #134）—— `Dockerfile` / `server/build.gradle.kts` /
+#   `ci-server.yml` は **toolchain.test.ts の入力**（配布物と CI が同じ Node / Java で
+#   動いていることを見る）。**一致検査は、正本と写しのどちらが動いても走らないと意味が無い**
+#   ので、**このワークフローの守備範囲が server/ 側と Docker 側へ 3 ファイルぶん広がる**のは
+#   意図した代償である。**`server/**` とは書かない** —— Kotlin を 1 行直しただけの PR で
+#   フロントの検査を回す理由は無い（ci-server.yml の★と同じ線引き）。
+#
 # 判断規約: propagandist/.github の docs/ci-strategy.md
 name: CI (frontend)
 
@@ -55,6 +62,11 @@ on:
       - 'package-lock.json'
       - 'tsconfig.json'
       - '*.config.ts'
+      # toolchain.test.ts の入力（issue #134）。正本 2 本（下の ci-frontend.yml の
+      # `node-version` と build.gradle.kts の `jvmToolchain`）と写し 3 か所。
+      - 'Dockerfile'
+      - 'server/build.gradle.kts'
+      - '.github/workflows/ci-server.yml'
       - '.github/workflows/ci-frontend.yml'
 
 # 既定に頼らず最小を明示する。checkout してテストを回すだけなら write は要らない。

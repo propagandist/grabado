@@ -12,6 +12,20 @@
 #   `./gradlew dependencies --write-locks` を回して push すること
 #   （落ちること自体が「ロックを更新し忘れていない」証拠になる）。
 #
+# ★ **訂正（2026-08-30 実測。issue #134）—— Dependabot は `gradle.lockfile` を更新する。**
+#   #101（`d928a55`）も #132（`7fa30eb`）も、**dependabot のコミット 1 本**で
+#   `libs.versions.toml` と `gradle.lockfile` の両方が動いており、`git diff --exit-code` は
+#   緑だった。**上の「落ちるので手元で回す」は起きない。元の記述は消さない**（判断の履歴）。
+#   —— **別件と混ぜないこと**: `security_update_dependency_not_found`（`deps-submit` が
+#   提出したグラフにしか無い依存は**拾えるが直せない**。CLAUDE.md の「セキュリティ」）は
+#   **軸が違う**。あちらは実測どおりで、訂正の対象ではない。
+#
+# ★ **group に major を入れない**（2026-08-30。issue #134）—— #131 は
+#   「Bump the frontend group with 3 updates」の顔で **`typescript` 5 → 7** を運んでいた
+#   （`npm run typecheck` は主要ゲート）。#130 も node のメジャー。**差分を毎回人が読まないと
+#   気付けない形そのものを畳む。** `update-types` から外れた更新は**個別 PR で来る**ので、
+#   更新が落ちるわけではない。
+#
 # ★ cooldown は 7 日（段階2-1 で 4 entry すべてに付けた）。**悪意ある版は公開から数時間〜
 #   数日で発見・撤回される**ので、その窓の中でマージしてしまう経路を構造で塞ぐ設定であって、
 #   更新を遅らせるためのものではない。**security updates には効かない**（CVE 修正は即座に来る）。
@@ -30,6 +44,7 @@ updates:
     groups:
       actions:
         patterns: ['*']
+        update-types: ['minor', 'patch']
 
   - package-ecosystem: gradle
     directory: /server
@@ -41,6 +56,7 @@ updates:
     groups:
       server:
         patterns: ['*']
+        update-types: ['minor', 'patch']
 
   - package-ecosystem: npm
     directory: /
@@ -52,6 +68,7 @@ updates:
     groups:
       frontend:
         patterns: ['*']
+        update-types: ['minor', 'patch']
 
   # 配布イメージのベース（段階2-1）。Dockerfile の 3 本を digest ごと書き換える
   # ——**ピンは Dependabot とセットで初めて安全**で、凍結したまま放置すると浮動タグより悪い。
@@ -68,3 +85,4 @@ updates:
     groups:
       images:
         patterns: ['*']
+        update-types: ['minor', 'patch']

@@ -21,6 +21,9 @@
 # 1) web —— フロントを束ねる（vite build -> /web/frontend/dist。root は frontend/。段階2-6）
 #
 # ★ 版は ci-frontend.yml の `node-version: 24` に揃える。**CI と違うもので配布物を作らない。**
+#   **揃っていることは tests/node/toolchain.test.ts が見る**（issue #134）——
+#   2026-08-30 まで**この一文しか無く**、Dependabot が片側だけ動かしても全ジョブ緑だった。
+#   版そのものを上げる判断は docs/HANDOVER.md §2.2（着手時に**最新 LTS** 確認）。
 # ---------------------------------------------------------------------------
 FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS web
 
@@ -47,6 +50,10 @@ RUN npm run build
 #   ——タスクにすると手元の `./gradlew bootJar` が Node のビルドを要求し、開発時の 2 プロセスと
 #   `npm run test:server` が壊れる。代償として**手元の jar に static は入らない**ので、
 #   **イメージの検証はイメージでやる**（2-4）。
+#
+# ★ temurin の版は **server/build.gradle.kts の `jvmToolchain` が正本**（実際にコンパイルする
+#   のがそこだから）。**このステージと下の runtime、そして ci-server.yml の `java-version` が
+#   その写し**で、**揃っていることは tests/node/toolchain.test.ts が見る**（issue #134）。
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:25-jdk-alpine@sha256:09349d79941fd53bb3d487b393ca118d8853c08c09193f416fe6a8718df9e732 AS api
 

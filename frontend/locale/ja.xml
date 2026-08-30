@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<locale>
+    <!-- table management -->
+    <string name="addtable">テーブルを追加</string>
+    <string name="edittable">テーブルを編集</string>
+    <string name="removetable">テーブルを削除</string>
+    <string name="removetables">選択テーブルを削除</string>
+    <string name="aligntables">テーブルを整列</string>
+    <string name="cleartables">全テーブルを削除</string>
+    <string name="confirmall">全テーブルを削除しますか</string>
+    <string name="newtable">新規テーブル</string>
+    <string name="addpending">テーブルを配置</string>
+    <string name="tablenamelabel">テーブル名</string>
+    <string name="tablecommentlabel">コメント</string>
+
+    <!-- row management -->
+    <string name="addrow">列を追加</string>
+    <string name="editrow">列を編集</string>
+    <string name="removerow">列を削除</string>
+    <string name="uprow">上に</string>
+    <string name="downrow">下に</string>
+    <string name="newrow">新規列</string>
+    <string name="foreigncreate">外部キーとして移動</string>
+    <string name="foreignpending">対象テーブルを選択</string>
+    <string name="foreignconnect">外部キーを接続</string>
+    <string name="foreignconnectpending">対象列を選択</string>
+    <string name="foreigndisconnect">外部キーを削除</string>
+    <string name="confirmtable">テーブルを削除しますか</string>
+    <string name="confirmrow">列を削除しますか</string>
+
+    <!-- row edit -->
+    <string name="name">列名</string>
+    <string name="type">型</string>
+    <string name="size">サイズ</string>
+    <string name="def">デフォルト値</string>
+    <string name="notnull">NOT NULL</string>
+    <string name="null">NULL</string>
+    <string name="ai">自動採番</string>
+    <string name="comment">コメントを編集</string>
+    <string name="commenttext">列のコメントを入力</string>
+
+    <!-- windows & options -->
+    <string name="windowok">OK</string>
+    <string name="windowcancel">キャンセル</string>
+    <string name="throbber">しばらくお待ちください...</string>
+    <string name="options">オプション</string>
+    <string name="language">言語</string>
+    <string name="db">新しい設計で使用するデータベース</string>
+    <string name="optionsnotice">印は再読込後に反映されるオプションです。これらを動作させるにはクッキーを有効にしてください。</string>
+    <string name="snap">テーブルのスナップ単位</string>
+    <string name="optionsnapnotice">ピクセル（0 = スナップ無効）</string>
+    <string name="pattern">外部キーの命名規則</string>
+    <string name="optionpatternnotice">%T = 親テーブル, %R = プライマリーキー, %t = 子テーブル</string>
+    <string name="hide">テーブルをドラッグ中は線を隠す</string>
+    <string name="vector">滑らかな線を使う（要ブラウザのサポート）</string>
+    <string name="showsize">フィールドサイズを表示</string>
+    <string name="showtype">フィールドタイプを表示</string>
+    <string name="style">スタイル</string>
+
+    <!-- keys -->
+    <string name="tablekeys">キーの設定</string>
+    <string name="keyslistlabel">テーブル"%s"のキー</string>
+    <string name="keytypelabel">種類:</string>
+    <string name="keynamelabel">キー名:</string>
+    <string name="keyfieldslabel">キーの対象列</string>
+    <string name="keyavaillabel">選択可能な列</string>
+    <string name="keyedit">キーを編集</string>
+    <string name="keyadd">キーを追加</string>
+    <string name="keyremove">キーを削除</string>
+
+    <!-- io -->
+    <string name="saveload">保存／読み込み</string>
+    <string name="empty">下の入出力欄にJSONデータを貼りつけてから実行してください。</string>
+    <string name="client">クライアント</string>
+    <string name="server">サーバ</string>
+    <string name="output">入出力欄</string>
+    <string name="clientsave">JSONを出力</string>
+    <string name="clientload">JSONを読込</string>
+    <string name="clientsql">SQLを生成</string>
+    <string name="clientlocalsave">ブラウザに保存</string>
+    <string name="clientlocalload">ブラウザから読込</string>
+    <string name="clientlocallist">ブラウザの保存一覧</string>
+    <string name="clientcopy">出力をコピー</string>
+    <string name="clientpaste">クリップボードから貼付</string>
+    <string name="clientdownload">JSONをダウンロード</string>
+    <string name="clientloadfromfile">ファイルから読込</string>
+    <string name="serversave">保存</string>
+    <string name="quicksave">クイック保存</string>
+    <string name="serverload">読込</string>
+    <string name="serverlist">一覧</string>
+    <string name="serverimport">DBからインポート</string>
+    <string name="serverloadprompt">読み込む設計名を入力してください:</string>
+    <string name="serversaveprompt">保存する設計名を入力してください:</string>
+    <string name="serverimportprompt">インポートするDB名を入力してください:</string>
+    <string name="aireview">AI レビュー</string>
+    <string name="aireviewconfirm">これがそのまま AI に送られます。送信しますか？</string>
+    <string name="aireviewbroken">AI の応答を読み取れませんでした。</string>
+    <string name="aiapply">AI 提案を適用</string>
+    <string name="aiapplyprompt">適用する提案の番号（all / 1,3,5）:</string>
+    <string name="aiapplynone">適用できる提案がありません。先に AI レビューを実行してください。</string>
+    <string name="patchnopatch">この提案には機械的に当てられる変更がありません</string>
+    <string name="patchtablemissing">そのテーブルが設計にありません</string>
+    <string name="patchcolumnmissing">その列が設計にありません</string>
+    <string name="patchtargetcolumn">対象の列が指定されていません</string>
+    <string name="patchnametaken">その名前は既に使われています</string>
+    <string name="patchunknowntype">その型は今のパレットにありません</string>
+    <string name="patchkeyexists">同じキーが既にあります</string>
+    <string name="patchrefmissing">参照先が設計にありません</string>
+    <string name="patchrefexists">同じ参照が既にあります</string>
+    <string name="patchemptyvalue">空の値は受け付けられません</string>
+    <string name="patchmalformed">提案の形が壊れています</string>
+    <string name="importerror">データベース構造を読み取れませんでした。</string>
+    <string name="httpresponse">サーバレスポンス</string>
+    <string name="http201">保存しました</string>
+    <string name="http400">Bad Request</string>
+    <string name="http403">Forbidden</string>
+    <string name="http404">Not Found</string>
+    <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
+    <string name="http500">Internal Server Error</string>
+    <string name="http501">Not Implemented</string>
+    <string name="http503">Service Unavailable</string>
+    <string name="saveconflict">このファイルは読み込んだ後にサーバ側で変更されています（他の誰かが保存したか、新しい版を pull しています）。読み直してから編集し直してください。
+
+それでも上書きしますか？</string>
+    <string name="saveexists">このファイルはサーバ上に既にあります（このセッションでは読み込んでいません）。
+
+上書きしますか？</string>
+
+    <!-- misc -->
+    <string name="xmlerror">XMLエラー</string>
+    <string name="jsonerror">JSONエラー</string>
+    <string name="unknownformat">読み取れないデータです。設計JSON（{...}）かXML（&lt;sql&gt;...）を入れてください。</string>
+    <string name="docs">ドキュメント</string>
+
+    <!-- identifier warnings (grabado) -->
+    <string name="identifierempty">識別子が空です</string>
+    <string name="identifiertoolong">識別子が長すぎます</string>
+    <string name="identifierforbidden">識別子に使えない文字があります</string>
+    <string name="identifiertruncated">黙って切られます</string>
+    <!-- profile conversion (grabado) -->
+    <string name="outputdblabel">出力先</string>
+    <string name="outputdbsame">設計と同じ</string>
+
+    <!-- orm output (grabado) -->
+    <string name="clientorm">ORM 出力</string>
+
+</locale>

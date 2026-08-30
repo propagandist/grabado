@@ -1,96 +1,155 @@
-WWW SQL Designer allows users to create database designs, which can be saved/loaded and exported to SQL scripts. Various databases and languages are supported. Ability to import existing database design.
+# grabado
 
-[YouTube video](http://www.youtube.com/watch?v=hCQzJx9AKhU), [User manual](https://github.com/ondras/wwwsqldesigner/wiki/Manual)
+**grabado** はブラウザで動く ER 設計ツール。スキーマを描いて **8 つの DB プロファイル**へ DDL を
+出し、既存の DB を読み取って図に戻せる。**設計は git 管理の JSON ファイルが正本**で、
+エディタの裏に DB は無い。
 
-# About
+Ondrej Zara の [ondras/wwwsqldesigner](https://github.com/ondras/wwwsqldesigner)（BSD-3-Clause）
+由来。描画エンジンは温存し、その周りを TypeScript で書き直した。PHP backend は
+Kotlin/Spring Boot に置き換え、**単一の Docker イメージ**として配る。
 
-Hi and welcome to WWW SQL Designer! This tool allows you to draw and create database schemas (E-R diagrams) directly in browser, without the need for any external programs (flash). You only need JavaScript enabled.
-The Designer works perfectly in Chrome, Mozilla (Firefox, Seamonkey), Internet Explorer, MS Edge, Safari and Opera.
+> 英語版は [`README.en.md`](README.en.md)。**それ以外の文書はすべて日本語**
+> （[`docs/`](docs/)・[`CLAUDE.md`](CLAUDE.md)・[`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md)）。
 
-Many database features are supported, such as keys, foreign key constraints, comments and indexes. You can either save your design (for further loading & modifications), print it or export as SQL script. It is possible to retrieve (import) schema from existing database.
+## できること
 
-WWW SQL Designer was created by [Ondrej Zara](http://ondras.zarovi.cz/) and is built atop the [oz.js](http://code.google.com/p/oz-js/) JavaScript module. It is distributed under New BSD license.
+- **描く** —— テーブル・列・キー・外部キー制約・インデックス・コメントをブラウザで
+- **DDL を出す** —— 1 つの設計から 8 プロファイル（下の表）
+- **ORM モデルを出す** —— JPA（Kotlin）・Prisma・Drizzle
+- **既存の DB を読み取る** —— introspection が `information_schema` を読んで JSON で返す
+- **AI 提案** —— 任意・BYOK。提案は必ずレビューを経て、**適用は他と同じ決定論パスに合流する**。
+  **自動適用はしない**
+- **設計はファイル** —— 決定論 JSON（キー順・配列順が安定、1 テーブル＝独立ブロック）なので
+  スキーマの変更が読める diff になり、共有は PR で行う
 
-If you wish to support this project, <a href='https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=3340079'><img src='https://www.paypal.com/en_GB/i/btn/btn_donate_LG.gif' alt='Donate at PayPal' title='Donate at PayPal' /></a> at PayPal!
+## 対応 DB
 
-# Quick Start
+| プロファイル | DDL 出力 | introspection |
+|---|---|---|
+| `postgresql` | ○ | ○ |
+| `mysql` | ○ | ○ |
+| `mariadb` | ○ | ○ |
+| `h2` | ○ | ○ |
+| `mssql` | ○ | — |
+| `oracle` | ○ | — |
+| `sqlite` | ○ | — |
+| `sql-standard` | ○ | — |
 
-## Local Installation:
+既定のパレットは **PostgreSQL 18**。設計は PG の型で描き、**出力の直前に変換する**ので、
+どのプロファイルへ出しても保存されるファイルは同じ。型ごとの写り方は
+[`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) —— **あの表は手で書いていない**。実装の出力と
+1 セルずつ突き合わせるテストが持っている。
 
-1. `npm install http-server -g`
-2. Run `http-server` in the root of this repo to start a simple http server
-3. Visit http://127.0.0.1:8080
+## 設計は DB の行ではなくファイル
 
-## Docker Installation:
+編集中の状態はブラウザ内に持ち、保存はマウント済みディレクトリへ write-through する。
+**正本はリポジトリの JSON ファイル**で、コードと同じようにレビューしてマージする。
+形式は [`docs/FORMAT.md`](docs/FORMAT.md)。upstream の XML 設計は**読み込みだけ**できる
+（grabado が書き出すのは JSON のみ）。
 
-1. Build `docker build -t wwwsqldesigner .`
-2. Run   `docker run -d -p 8080:8080 wwwsqldesigner`
-3. Visit http://127.0.0.1:8080
+## 起動
 
-## Code Style
-Please use the following auto formatters to maintain the code style
+**イメージはレジストリで配らない。各自が build する。**
 
-| File            | Remarks           | Formatter                                                                        |
-|-----------------|-------------------|----------------------------------------------------------------------------------|
-| `/index.html`   |                   | VSCode built-in formatter                                                        |
-| `/js/*.js`      | 4 spaces for tabs | https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode    |
-| `/styles/*.css` |                   | https://marketplace.visualstudio.com/items?itemName=aeschli.vscode-css-formatter |
-| `/locale/*.xml` |                   | https://marketplace.visualstudio.com/items?itemName=DotJoshJohnson.xml           |
+### compose
 
-# News
+```bash
+cp .env.example .env      # 要る行だけコメントを外す。何も外さなくても起動する
+docker compose up --build
+```
 
-## Moved to GitHub
+<http://127.0.0.1:8080> を開く。
 
-Google Code is closing down, we are now completely migrated to GitHub.
+- 設計 JSON はホストの `schema/` に書かれる。置き場所を変えるなら
+  [`compose.yaml`](compose.yaml) の mount の**左側**
+- **`.env` がコンテナへ丸ごと入るわけではない。** [`compose.yaml`](compose.yaml) の
+  `environment:` が列挙した env だけが渡る（`env_file:` は使っていない）
+- **`=` の右を空にした行を残さない。** 空文字は既定に倒れず、そのまま渡って**起動を落とす**
+  （例: `GRABADO_READONLY=`）
 
-## Experimental real-time collaboration version
+### compose を使わない
 
-Thanks to Bharat Patil: http://bharat.whiteboard.jit.su/
+```bash
+docker build -t grabado .
+docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado
+```
 
-## New release
+`-v` の左側は**設計 JSON を置くホスト側のディレクトリ**。
 
-Version 2.7 was released on 3.8.2012. This is mainly a bugfix release, although several new features (most notable localStorage support) are present.
+### 読み取り専用
 
-## Release
+```bash
+GRABADO_READONLY=true docker compose up
+```
 
-Version 2.6 was released on 22.9.2011. Several new translations (pt\_BR, sv, ar) added; VML removed; new visualization options available (show length and datatype); new DBs and backends; support for touch devices...
+保存・introspection・AI が止まる（`list` / `load` は生きている）。**公開デモはこの一択** ——
+AI は API 費用が自社負担、introspection は SSRF の踏み台になるので、
+**知らない人が触れる所には置けない**。
 
-## Experimental clone with deletion of saved designs
+### Linux ホストでの注意
 
-http://code.google.com/r/charlieyouakim-wwwsqldesigner-deleteadd/
+**そのまま動く。** コンテナは**起動時に mount 先の所有者を見て、そこへ降りる** ——
+書かれたファイルはあなたの所有になるので、**設計をそのまま `git add` できる**。
 
-## New optional patch
+仕組みと分岐は [`docker-entrypoint.sh`](docker-entrypoint.sh) の冒頭。**設定は要らない**
+（`docker compose up` だけでよい）。
 
-A new patch, which enable optional display of field details, was submitted by Wilson Oliveira. While this code is not ready yet to be commited into repository, everyone can download it from http://ondras.zarovi.cz/sql/wwwsqldesigner-inline_field_details_patch.zip.
+### ローカル開発
 
+```bash
+npm install
+npm run dev               # Vite dev server
+```
 
-## Support for CUBRID
+<http://127.0.0.1:4173/index.html> を開く。配布物を確かめるときは `npm run build`
+（`dist/` が出る）→ `npm run preview`（<http://127.0.0.1:4174>）。
 
-WWW SQL Designer now supports the [CUBRID database](http://www.cubrid.org/): both as a backend (using PHP) as well as datatype definition set.
+## 設定
 
+env の一覧は [`.env.example`](.env.example)（キー名と 1 行の用途）。契約は
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §7.3（backend）／ §8.4（AI）／ §9.3（イメージ）。
+**既定値の正本は `server/src/main/resources/application.yaml` の 1 か所**で、他へ写していない。
 
-## Release
+始める前に知っておくとよいのは 2 つ。
 
-Version 2.5 was released on 18.6.2010. Many new features were added (hiding of sidebar, colored relation, multi-selection and multi-drag, ...), tons of bugs were fixed.
+- **AI はキーとモデル名が両方そろって初めて有効になる。** キーは各自のコンテナへ env で
+  注入するもので、**ブラウザには保存しない**
+- **introspection の接続先は設定で名前を付けて列挙する。リクエストでは受けない** ——
+  外から JDBC URL を渡す経路がそもそも無い
 
-## Release
+## 文書
 
-Version 2.4 was released on 5.11.2009. Several outstanding issues were fixed and new locales added.
+| 文書 | 何を持つか |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | 構成、backend と AI の契約、イメージ |
+| [`docs/FORMAT.md`](docs/FORMAT.md) | 設計 JSON の形式 |
+| [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | house 既定が各 DB で何になるか |
+| [`docs/TESTING.md`](docs/TESTING.md) | テストの構成と走らせ方 |
+| [`docs/BRANCHING.md`](docs/BRANCHING.md) | ブランチ運用 |
+| [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) | fork 以降の決定と、その理由のすべて |
+| [`CLAUDE.md`](CLAUDE.md) | 作業ルールと Hard Constraints |
 
-## Release
+## テスト
 
-Version 2.3.3 was released on 28.7.2009. This long-awaited release includes numerous fixes, compatibility improvements, new locales, backends and DB datatypes.
+```bash
+npm ci
+npx playwright install chromium   # 初回のみ
 
-## Release
+npm test              # Node 側（jsdom）。速い。日常はこれ
+npm run test:browser  # 実ブラウザ（Chromium）。DDL golden の権威
+npm run known-issues  # 既知の不具合の再現確認
+npm run test:server   # Kotlin backend を実 HTTP で
+npm run test:image    # イメージを build してコンテナを起こし、通しで叩く
+```
 
-Version 2.3.2 was released on 8.1.2009. Apart from some traditional bugfixes and locales, a new functionality is introduced - the ability to mark foregin keys between existing table fields!
+golden はツールが**実際に吐いているバイト列**を固定している。動いたなら、それは不具合か、
+記録すべき決定のどちらか —— [`docs/TESTING.md`](docs/TESTING.md)。
 
-## Google Code
+## 由来とライセンス
 
-The project was recently moved to Google Code hosting, which (amongst many other things) introduces Subversion hosting. Enjoy! (The old website, http://ondras.zarovi.cz/sql/, will still exist for some time.)
+**BSD-3-Clause**（upstream から継承。[`LICENSE`](LICENSE)）。grabado は
+**upstream に追従しない**。差分は生じたその都度 [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) に記録する。
 
-## 2.0 is here
+---
 
-Good news: A new version of WWW SQL Designer, rewritten from scratch, is now available. It has many new features, including bezier connectors, support for various customizations, localization, options and more.
-
-Bad news: This new version is not backwards compatible with 1.x, so all old localizations and XSLT templates won't work with 2.x. Sorry for inconvenience :/
+Issue / PR は受け付けるが、対応は保証しない。

@@ -1,0 +1,56 @@
+// grabado が生成した Prisma のスキーマ。
+//
+// **native type 属性（@db.Uuid / @db.VarChar）は出さない** —— provider ごとに別の表が
+// 要り、正規型 1 段で写すという設計（段階6-9c）と噛み合わないため。uuid は String に、
+// date / time / timestamp は DateTime に丸まる。丸めた列にはその旨のコメントが付く。
+//
+// **Prisma の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で
+// 一意化してある。**元の名前は @@map / @map に必ず残る**。
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model TypeSample {
+  cInteger Int? @map("c_integer")
+  cSmallint Int? @map("c_smallint")
+  cTinyint Int? @map("c_tinyint")
+  cMediumint Int? @map("c_mediumint")
+  cBigint BigInt? @map("c_bigint")
+  cBigintIdentity BigInt @id @default(autoincrement()) @map("c_bigint_identity")
+  cDecimal Decimal? @map("c_decimal")
+  cFloat Float? @map("c_float")
+  cDouble Float? @map("c_double")
+  cChar String? @map("c_char")
+  cVarchar String? @map("c_varchar")
+  cText String? @map("c_text")
+  cBytea Bytes? @map("c_bytea")
+  cBinary Bytes? @map("c_binary")
+  cVarbinary Bytes? @map("c_varbinary")
+  cBoolean Boolean? @map("c_boolean")
+  cDate DateTime? @map("c_date")
+  cTime DateTime? @map("c_time")
+  cDatetime DateTime? @map("c_datetime")
+  cTimestamp DateTime? @map("c_timestamp")
+  // other: Prisma のスカラーに対応が無いので String で出す（YEAR）
+  cYear String? @map("c_year")
+  cUuid String? @map("c_uuid")
+  // other: Prisma のスカラーに対応が無いので String で出す（INET4）
+  cInet4 String? @map("c_inet4")
+  // other: Prisma のスカラーに対応が無いので String で出す（INET6）
+  cInet6 String? @map("c_inet6")
+  cJson Json? @map("c_json")
+  // other: Prisma のスカラーに対応が無いので String で出す（ENUM('draft','published')）
+  cEnum String? @map("c_enum")
+  // other: Prisma のスカラーに対応が無いので String で出す（SET('a','b')）
+  cSet String? @map("c_set")
+  // other: Prisma のスカラーに対応が無いので String で出す（BIT(8)）
+  cBit String? @map("c_bit")
+
+  @@map("type_samples")
+}

@@ -1,0 +1,813 @@
+{
+  "contractVersion": 1,
+  "_comment": [
+    "backend の HTTP 契約を、**言語に依存しない 1 つの表**にしたもの（段階5-1b）。",
+    "散文の正は docs/ARCHITECTURE.md の §4（実測・旧 PHP）と §7（Kotlin の到達点）。",
+    "",
+    "読み手は 2 つ:",
+    "  1. Kotlin  — server/src/test/kotlin/io/propagandist/grabado/api/BackendContractTest.kt が",
+    "               @ParameterizedTest で全ケースを MockMvc に流す",
+    "  2. TypeScript — tests/node/ の仮想 backend（tests/node/harness.ts）に virtual:true の",
+    "               ケースを流す。これで仮想 backend が『サーバについての手書きの推測』から",
+    "               『同じ表で検証された第 2 実装』になる（配線は段階5-1c）",
+    "",
+    "virtual:false は仮想 backend では再現できないケース（Map であってファイルシステムでは",
+    "ないので、パス解決や dotfile の扱いを模せない）。**模せる範囲を表の中で宣言する**ことで、",
+    "harness がどこまでサーバなのかが文書ではなくデータになる。",
+    "",
+    "フィールド:",
+    "  seed          事前に正本ディレクトリへ置くファイル（名前 -> 内容）。省略は空",
+    "  request.method GET / POST",
+    "  request.action ?action= の値。null なら action を付けない",
+    "  request.keyword ?keyword= の値。null なら付けない（省略時の 400 を試すため）",
+    "  request.body   POST の body",
+    "  request.backend パスの <backend名>。省略時は file（段階5-5 でフロントが固定した値）。",
+    "                サーバはこの値を読まないので、何を入れても同じ結果になる",
+    "  request.trailingSlash パス末尾の / の有無。省略時 true（実測 URL の形）",
+    "  request.ifMatch     If-Match ヘッダ（段階5-4）。値は固定文字列しか書けないので、",
+    "                      『一致する etag を送る』側は BackendBehaviourTest が持つ",
+    "  request.ifNoneMatch If-None-Match ヘッダ（段階5-4）。* だけを使う",
+    "  request.contentType Content-Type ヘッダ（段階11-5）。**ブラウザが送る application/json で",
+    "                415 にならないことを固定する** —— 実 HTTP の E2E で踏んだ",
+    "  request.path   /api/ 系の絶対パス（段階11-2a）。**あれば <backend名>/?action= を組まずにこれを使う**。",
+    "                request.action / keyword / backend / trailingSlash は無視される",
+    "  serverMode    'readonly' なら GRABADO_READONLY=true、'ai' なら AI を有効にして起動したサーバに",
+    "                流す（段階11-2a。キーとモデル名の env ＋ テスト用の SuggestionSource が入る）。省略時は通常",
+    "  expect.status  必須",
+    "  expect.body    省略時は検査しない。\"\" は空 body を要求する",
+    "  expect.headers 省略時は検査しない"
+  ],
+  "cases": [
+    {
+      "id": "list-empty",
+      "note": "空の正本ディレクトリ。PHP の glob は 0 件で何も echo しないので 0 バイト（改行 1 個ではない）",
+      "request": {
+        "method": "GET",
+        "action": "list"
+      },
+      "expect": {
+        "status": 200,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "list-two-ascending",
+      "note": "名前を \\n 区切り、**末尾にも改行**（実測）。並びは昇順で固定する（PHP は fs 順＝未規定だった）",
+      "seed": {
+        "b.json": "{}",
+        "a.json": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list"
+      },
+      "expect": {
+        "status": 200,
+        "body": "a.json\nb.json\n"
+      },
+      "virtual": true
+    },
+    {
+      "id": "list-skips-dotfiles",
+      "note": "PHP の glob も dotfile を返さない。save の一時ファイル（.grabado-*.tmp）が見える窓も同時に塞がる",
+      "seed": {
+        "visible.json": "{}",
+        ".hidden.json": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list"
+      },
+      "expect": {
+        "status": 200,
+        "body": "visible.json\n"
+      },
+      "virtual": false
+    },
+    {
+      "id": "list-only-json",
+      "note": "段階5-2: 正本ディレクトリは *.json だけを設計として扱う。README や .gitattributes が同居していても一覧に出さない。拡張子の判定は大小無視",
+      "seed": {
+        "legacy": "<sql/>",
+        "README.md": "# schema",
+        "a.json": "{}",
+        "B.JSON": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list"
+      },
+      "expect": {
+        "status": 200,
+        "body": "B.JSON\na.json\n"
+      },
+      "virtual": false
+    },
+    {
+      "id": "save-created",
+      "note": "201 Created・body 空。locale の http201 が Saved で 21 言語訳済みなので 200 に倒さない",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{\"formatVersion\":2}\n"
+      },
+      "expect": {
+        "status": 201,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-overwrites",
+      "note": "既存があっても 201。upsert であることは実測どおり",
+      "seed": {
+        "orders.json": "{\"old\":true}\n"
+      },
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{\"new\":true}\n"
+      },
+      "expect": {
+        "status": 201,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-missing-keyword",
+      "note": "php-file は 200 + PHP の Fatal error 本文を返していた。移植先では 400（ARCHITECTURE §4.3 の申し送り）",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": null,
+        "body": "{}"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "save-rejects-non-json-extension",
+      "note": "段階5-2: 正本ディレクトリに設計以外を作らせない。フロントは jsonKeyword() が必ず .json を付けるので到達しない（＝ UI から見た挙動は変わらない）",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.txt",
+        "body": "{}"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "save-rejects-extensionless",
+      "note": "php-file 時代の data/default のような拡張子なしファイルは、もう作れない",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "default",
+        "body": "{}"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "save-accepts-uppercase-extension",
+      "note": "jsonKeyword() は .JSON を二重付与しないので、大文字のまま届く経路が実在する。拡張子の判定は大小無視",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "Orders.JSON",
+        "body": "{}"
+      },
+      "expect": {
+        "status": 201
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-rejects-windows-reserved-name",
+      "note": "段階5-2: 開発機が Windows でも動く。ここを通すと FileDesignStore が OS 依存の例外で 500 になる",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "CON.json",
+        "body": "{}"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "save-rejects-too-long-name",
+      "note": "段階5-2: UTF-8 で 255 バイト超は ext4 / NTFS の上限。ここで弾かないと IOException が 500 になる（この名前は 260 バイト）",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json",
+        "body": "{}"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "load-roundtrip",
+      "note": "保存したバイト列と 1 バイト同一。backend は内容を一切解釈しない",
+      "seed": {
+        "orders.json": "{\"formatVersion\":2,\"db\":\"postgresql\"}\n"
+      },
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "orders.json"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{\"formatVersion\":2,\"db\":\"postgresql\"}\n",
+        "headers": {
+          "Content-Type": "application/octet-stream",
+          "X-Content-Type-Options": "nosniff"
+        }
+      },
+      "virtual": true
+    },
+    {
+      "id": "load-legacy-xml",
+      "note": "段階4-3b 以前に保存された XML も読める（フロントは中身の先頭 1 文字で判別する）",
+      "seed": {
+        "old.json": "<?xml version=\"1.0\"?><sql db=\"mysql\"/>"
+      },
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "old.json"
+      },
+      "expect": {
+        "status": 200,
+        "body": "<?xml version=\"1.0\"?><sql db=\"mysql\"/>"
+      },
+      "virtual": true
+    },
+    {
+      "id": "load-missing",
+      "note": "404。プリフライト load（段階4-6）の正常系なので、フロントは check() に通さない",
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "nope.json"
+      },
+      "expect": {
+        "status": 404,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "load-missing-keyword",
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": null
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "load-japanese-keyword",
+      "note": "URL エンコードで往復し、ファイル名も UTF-8 のまま（実測）。Unicode 正規化はしない",
+      "seed": {
+        "受注.json": "{\"ja\":true}\n"
+      },
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "受注.json"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{\"ja\":true}\n"
+      },
+      "virtual": true
+    },
+    {
+      "id": "load-uppercase-extension",
+      "note": "jsonKeyword() は .JSON を二重付与しない（tests/node/io-ui.test.ts が契約として固定）。大文字も届く",
+      "seed": {
+        "Orders.JSON": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "Orders.JSON"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{}"
+      },
+      "virtual": true
+    },
+    {
+      "id": "load-traversal",
+      "note": "php-file は basename() で黙って書き換えていた。移植先は 400 で拒む（Baseline.name とファイル名がずれないため）",
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "../../etc/passwd"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "load-rejects-non-json-extension",
+      "note": "段階5-2: 読み出しにも同じ規則を掛ける。正本ディレクトリに同居する README や .gitattributes を API から読めないようにする",
+      "seed": {
+        "README.md": "# schema"
+      },
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "README.md"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "save-traversal",
+      "note": "書き込み側も同じ。正本ディレクトリの外にファイルを作らせない",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "../escaped.json",
+        "body": "{}"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "capabilities-defaults",
+      "note": "段階5-5: フロントが起動時に 1 回引き、できないことのボタンを隠す。introspection は 5-7、ai は §11 でそれぞれ true になりうる",
+      "request": {
+        "method": "GET",
+        "action": "capabilities"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{\"readonly\":false,\"introspection\":false,\"ai\":false}",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "virtual": true
+    },
+    {
+      "id": "readonly-capabilities",
+      "note": "READONLY のデプロイでは readonly:true。フロントはこれを見て保存ボタンを隠す（403 を押してから知るのではなく、押せなくする）",
+      "serverMode": "readonly",
+      "request": {
+        "method": "GET",
+        "action": "capabilities"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{\"readonly\":true,\"introspection\":false,\"ai\":false}"
+      },
+      "virtual": false
+    },
+    {
+      "id": "import-without-sources-is-not-found",
+      "note": "段階5-7a: introspection の実装は入ったが、接続先は env に列挙したものしか使えない。1 つも設定されていなければ 404 —— 「設定していない」と「その名前が無い」を外から区別させない",
+      "request": {
+        "method": "GET",
+        "action": "import"
+      },
+      "expect": {
+        "status": 404,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "remove-not-implemented",
+      "note": "remove は実在しない（フロントに削除 UI も無い）。**作らない**と決めてある",
+      "request": {
+        "method": "GET",
+        "action": "remove"
+      },
+      "expect": {
+        "status": 501,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "unknown-action",
+      "note": "未知の action は一律 501。仮想 backend は 404 を返していた（php-file の fs 解決の副産物）ので、5-1c で直す",
+      "request": {
+        "method": "GET",
+        "action": "frobnicate"
+      },
+      "expect": {
+        "status": 501,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "no-action",
+      "request": {
+        "method": "GET",
+        "action": null
+      },
+      "expect": {
+        "status": 501,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "method-mismatch-save-via-get",
+      "note": "PHP は method を見ていなかったので、これは強化（意図した挙動変更）",
+      "request": {
+        "method": "GET",
+        "action": "save",
+        "keyword": "orders.json"
+      },
+      "expect": {
+        "status": 405
+      },
+      "virtual": false
+    },
+    {
+      "id": "method-mismatch-list-via-post",
+      "request": {
+        "method": "POST",
+        "action": "list",
+        "body": ""
+      },
+      "expect": {
+        "status": 405
+      },
+      "virtual": false
+    },
+    {
+      "id": "no-trailing-slash",
+      "note": "実測 URL は末尾に / が付く。Spring Boot 3 以降は trailing slash match が既定 off なので両方を登録した",
+      "seed": {
+        "a.json": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list",
+        "trailingSlash": false
+      },
+      "expect": {
+        "status": 200,
+        "body": "a.json\n"
+      },
+      "virtual": false
+    },
+    {
+      "id": "backend-segment-is-ignored",
+      "note": "段階5-5 でセレクタは消えフロントは backend/file/ に固定したが、サーバは <backend名> を読まないままにしてある —— 古い URL（php-mysql 時代のブックマーク）がそのまま動く",
+      "seed": {
+        "a.json": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list",
+        "backend": "php-mysql"
+      },
+      "expect": {
+        "status": 200,
+        "body": "a.json\n"
+      },
+      "virtual": true
+    },
+    {
+      "id": "backend-segment-encoded-slash-is-rejected",
+      "note": "実測: Tomcat はパスに %2F を含むリクエストを既定で 400 で拒む。つまり <backend名> にエンコードされたスラッシュを入れる経路は、アプリに届く前にサーブレットコンテナの段階で閉じている（当初 200 を期待して書いたが、実測が 400 だったので実測に合わせた）",
+      "seed": {
+        "a.json": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list",
+        "backend": "..%2F..%2Fetc"
+      },
+      "expect": {
+        "status": 400
+      },
+      "virtual": false
+    },
+    {
+      "id": "save-with-stale-if-match-is-rejected",
+      "note": "段階5-4: 観測した版と違えば 412。これで read-before-write に残っていた TOCTOU の窓（load と save の間に他者が書くと勝つ）が閉じる",
+      "seed": {
+        "orders.json": "{\"v\":1}\n"
+      },
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{\"v\":2}\n",
+        "ifMatch": "\"0000000000000000000000000000000000000000000000000000000000000000\""
+      },
+      "expect": {
+        "status": 412,
+        "body": ""
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-with-if-match-star-overwrites",
+      "note": "If-Match: * は RFC どおり『存在すれば無条件で上書き』。意図的に上書きしたい CLI 利用者の逃げ道として残す",
+      "seed": {
+        "orders.json": "{\"v\":1}\n"
+      },
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{\"v\":2}\n",
+        "ifMatch": "*"
+      },
+      "expect": {
+        "status": 201
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-with-if-match-star-on-absent-is-rejected",
+      "note": "If-Match: * は『存在すれば』なので、無ければ 412（RFC 9110）",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "nope.json",
+        "body": "{}",
+        "ifMatch": "*"
+      },
+      "expect": {
+        "status": 412
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-with-if-none-match-star-on-absent",
+      "note": "段階5-4: フロントが『新規のつもり』で送る形。不在なら通る",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "fresh.json",
+        "body": "{}",
+        "ifNoneMatch": "*"
+      },
+      "expect": {
+        "status": 201
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-with-if-none-match-star-on-existing-is-rejected",
+      "note": "『新規のつもり』だったのに実在した＝ 412。フロントはこれを受けて load し直し、confirm に流す（段階5-4b）",
+      "seed": {
+        "orders.json": "{\"v\":1}\n"
+      },
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{\"v\":2}\n",
+        "ifNoneMatch": "*"
+      },
+      "expect": {
+        "status": 412
+      },
+      "virtual": true
+    },
+    {
+      "id": "save-without-precondition-still-overwrites",
+      "note": "段階5-4a は backend 先行なので、条件ヘッダを送らない既存フロントは今までどおり上書きできる。ここを 428 に締めるのは 5-4b（フロントが送るようになってから）",
+      "seed": {
+        "orders.json": "{\"v\":1}\n"
+      },
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{\"v\":2}\n"
+      },
+      "expect": {
+        "status": 201
+      },
+      "virtual": true
+    },
+    {
+      "id": "readonly-save-is-forbidden",
+      "note": "段階5-3: GRABADO_READONLY=true では保存の副作用を止める。501（実装が無い）でも 503（一時的に不能）でもなく 403（このデプロイでは禁止）—— 501 に寄せると『READONLY だから save できない』と『サーバが壊れている』が同じ画面になる",
+      "serverMode": "readonly",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "orders.json",
+        "body": "{}"
+      },
+      "expect": {
+        "status": 403,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "readonly-list-still-works",
+      "note": "READONLY で落ちるのは保存・introspection・AI の 3 つだけ。読み取りビューアとして list / load は生きている",
+      "serverMode": "readonly",
+      "seed": {
+        "a.json": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list"
+      },
+      "expect": {
+        "status": 200,
+        "body": "a.json\n"
+      },
+      "virtual": false
+    },
+    {
+      "id": "readonly-load-still-works",
+      "note": "編集ストアはブラウザ内なので、READONLY でも「読んで・描いて・DDL を出す」体験は完全に提供できる",
+      "serverMode": "readonly",
+      "seed": {
+        "orders.json": "{\"formatVersion\":2}\n"
+      },
+      "request": {
+        "method": "GET",
+        "action": "load",
+        "keyword": "orders.json"
+      },
+      "expect": {
+        "status": 200,
+        "body": "{\"formatVersion\":2}\n"
+      },
+      "virtual": false
+    },
+    {
+      "id": "readonly-import-is-forbidden",
+      "note": "READONLY では IntrospectionService の Bean ごと存在しない（外部到達性を持つ唯一の経路をまるごと消す）。403",
+      "serverMode": "readonly",
+      "request": {
+        "method": "GET",
+        "action": "import"
+      },
+      "expect": {
+        "status": 403,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "backend-segment-dots-are-ignored",
+      "note": "エンコードしない .. を含む名前は普通のパスセグメントとして届く。<backend名> は読まないので正本ディレクトリは動かない",
+      "seed": {
+        "a.json": "{}"
+      },
+      "request": {
+        "method": "GET",
+        "action": "list",
+        "backend": "dots..here"
+      },
+      "expect": {
+        "status": 200,
+        "body": "a.json\n"
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-disabled",
+      "note": "キーもモデル名も env に無い通常起動。403（このデプロイでは禁止）であって 501 でも 503 でもない",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"employees\",\"columns\":[{\"name\":\"id\",\"sqlType\":\"INTEGER\",\"nullable\":false,\"default\":\"\"}],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 403,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-readonly",
+      "note": "READONLY では AiReviewService の Bean ごと存在しない。落ちる副作用の 3 つ目（保存・introspection・AI）",
+      "serverMode": "readonly",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"employees\",\"columns\":[{\"name\":\"id\",\"sqlType\":\"INTEGER\",\"nullable\":false,\"default\":\"\"}],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 403,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-review-ok",
+      "note": "提案の配列がそのまま返る。backend は中身を 1 フィールドも解釈しないので、スタブの応答がバイト列で通る",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"employees\",\"columns\":[{\"name\":\"id\",\"sqlType\":\"INTEGER\",\"nullable\":false,\"default\":\"\"}],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 200,
+        "body": "[{\"category\":\"missing_pk\",\"severity\":\"error\",\"target\":{\"table\":\"employees\"},\"rationale\":\"テスト用の固定応答（段階11-2a）\"}]",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-bad-version",
+      "note": "aiRequestVersion が 1 でない。400（壊れている）で、403（禁止）とは別物",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":2,\"dialect\":\"postgresql\",\"tables\":[]}"
+      },
+      "expect": {
+        "status": 400,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-not-json",
+      "note": "JSON として読めない。message は body に出さない（入力の断片が載りうる）",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "not json"
+      },
+      "expect": {
+        "status": 400,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-too-many-tables",
+      "note": "テーブル数の上限超。AiContractTest は max-tables=2 で起動するので 3 件で落ちる。413 ではなく 400（check() は 413 を持たない）",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"a\"},{\"name\":\"b\"},{\"name\":\"c\"}]}"
+      },
+      "expect": {
+        "status": 400,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-review-json-content-type",
+      "note": "ブラウザは Content-Type: application/json を送る。415 にしない（段階11-5 の E2E で踏んだ）",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "contentType": "application/json",
+        "body": "{\"aiRequestVersion\":1,\"dialect\":\"postgresql\",\"tables\":[{\"name\":\"ct\",\"columns\":[],\"keys\":[]}]}"
+      },
+      "expect": {
+        "status": 200
+      },
+      "virtual": false
+    }
+  ]
+}

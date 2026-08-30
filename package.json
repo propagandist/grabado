@@ -1,0 +1,36 @@
+{
+  "name": "grabado",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "grabado — ER 設計ツール（wwwsqldesigner 由来）。HANDOVER §7 特性化テストと §3 フロント TS 化の基盤。",
+  "license": "BSD-3-Clause",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node scripts/vitest.mjs run",
+    "test:browser": "playwright test --project=characterization",
+    "test:dist": "playwright test --config=playwright.dist.config.ts",
+    "build:server": "node scripts/build-server.mjs",
+    "test:server": "npm run build:server && playwright test --config=playwright.server.config.ts",
+    "test:image": "playwright test --config=playwright.image.config.ts",
+    "test:orm-tools": "node tests/orm-tools/verify.ts",
+    "test:all": "npm run test:browser && npm run test",
+    "golden:update": "cross-env UPDATE_GOLDEN=1 playwright test --project=characterization",
+    "known-issues": "playwright test --project=known-issues",
+    "typecheck": "tsc --noEmit",
+    "migrate:design": "node tools/migrate-design.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.2.0",
+    "cross-env": "^10.1.0",
+    "jsdom": "^30.0.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vite-plugin-static-copy": "^4.1.1",
+    "vitest": "^4.1.10"
+  }
+}

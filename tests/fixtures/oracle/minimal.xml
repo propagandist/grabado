@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: 1 テーブル / 1 カラム（最小）。
+
+  **INTEGER と書いても NUMBER に解決される**（known-issue #10）—— number の re="INT" が
+  integer の sql 完全一致を後勝ちで上書きするため、oracle のパレットで integer 型には
+  どう書いても到達できない。golden にはその結果が出る。直すのは 6-8。
+-->
+<sql>
+<table x="10" y="20" name="things">
+<row name="id" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+</row>
+</table>
+</sql>

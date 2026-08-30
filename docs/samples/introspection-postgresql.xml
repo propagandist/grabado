@@ -1,0 +1,89 @@
+<?xml version="1.0"?>
+
+<sql db="postgresql">
+<datatypes db="postgresql">
+
+	<group label="Numeric" color="rgb(238,238,170)">
+
+		<type label="Integer" length="0" sql="INTEGER" re="INT" quote="" />
+
+		<type label="Small Integer" length="0" sql="SMALLINT" quote="" />
+
+		<type label="Big Integer" length="0" sql="BIGINT" quote="" />
+
+		<type label="Decimal" length="1" sql="DECIMAL" re="numeric" quote="" />
+
+		<type label="Serial" length="0" sql="SERIAL" re="SERIAL4" fk="Integer" quote="" />
+
+		<type label="Big Serial" length="0" sql="BIGSERIAL" re="SERIAL8" fk="Big Integer" quote="" />
+
+		<type label="Real" length="0" sql="BIGINT" quote="" />
+
+		<type label="Single precision" length="0" sql="FLOAT" quote="" />
+
+		<type label="Double precision" length="0" sql="DOUBLE" re="DOUBLE" quote="" />
+
+	</group>
+
+
+
+	<group label="Character" color="rgb(255,200,200)">
+
+		<type label="Char" length="1" sql="CHAR" quote="'"/>
+
+		<type label="Varchar" length="1" sql="VARCHAR" re="CHARACTER VARYING" quote="'"/>
+
+		<type label="Text" length="0" sql="TEXT" quote="'"/>
+
+		<type label="Binary" length="1" sql="BYTEA" quote="'"/>
+
+		<type label="Boolean" length="0" sql="BOOLEAN" quote="'"/>
+
+	</group>
+
+
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+
+		<type label="Date" length="0" sql="DATE" quote="'" />
+
+		<type label="Time" length="1" sql="TIME" quote="'" />
+
+		<type label="Time w/ TZ" length="0" sql="TIME WITH TIME ZONE" quote="'" />
+
+		<type label="Interval" length="1" sql="INTERVAL" quote="'" />
+
+		<type label="Timestamp" length="1" sql="TIMESTAMP" quote="'" />
+
+		<type label="Timestamp w/ TZ" length="0" sql="TIMESTAMP WITH TIME ZONE" quote="'" />
+
+		<type label="Timestamp wo/ TZ" length="0" sql="TIMESTAMP WITHOUT TIME ZONE" quote="'" />
+
+	</group>
+
+
+
+	<group label="Miscellaneous" color="rgb(200,200,255)">
+
+		<type label="XML" length="1" sql="XML" quote="'" />
+
+		<type label="Bit" length="1" sql="BIT" quote="'" />
+
+		<type label="Bit Varying" length="1" sql="VARBIT" re="BIT VARYING" quote="'" />
+
+		<type label="Inet Host Addr" length="0" sql="INET" quote="'" />
+
+		<type label="Inet CIDR Addr" length="0" sql="CIDR" quote="'" />
+
+		<type label="Geometry" length="0" sql="GEOMETRY" quote="'" />
+
+        <type label="JSON" length="0" sql="JSON" quote="'" />
+
+        <type label="JSONB" length="0" sql="JSONB" quote="'" />
+
+	</group>
+
+</datatypes>
+
+<table name="article_tags"><comment>記事とタグの対応</comment><row name="article_id" null="0" autoincrement="0"><datatype>UUID</datatype><default></default><relation table="articles" row="id" /></row><row name="tag" null="0" autoincrement="0"><datatype>TEXT</datatype><default></default></row><row name="created_at" null="0" autoincrement="0"><datatype>TIMESTAMP WITH TIME ZONE</datatype><default>now()</default></row><key name="pk_article_tags" type="PRIMARY"><part>article_id</part><part>tag</part></key></table><table name="articles"><comment>記事</comment><row name="id" null="0" autoincrement="0"><datatype>UUID</datatype><default>uuidv7()</default></row><row name="author_id" null="0" autoincrement="0"><datatype>UUID</datatype><default></default><comment>執筆者 (users.id)</comment><relation table="users" row="id" /></row><row name="title" null="0" autoincrement="0"><datatype>TEXT</datatype><default></default></row><row name="body" null="1" autoincrement="0"><datatype>TEXT</datatype><default></default></row><row name="tags" null="1" autoincrement="0"><datatype>ARRAY</datatype><default></default></row><row name="view_count" null="0" autoincrement="0"><datatype>INTEGER</datatype><default>0</default></row><row name="price" null="1" autoincrement="0"><datatype>NUMERIC</datatype><default></default><comment>有料記事の価格。money ではなく numeric を使う</comment></row><row name="published_on" null="1" autoincrement="0"><datatype>DATE</datatype><default></default></row><row name="created_at" null="0" autoincrement="0"><datatype>TIMESTAMP WITH TIME ZONE</datatype><default>now()</default></row><row name="updated_at" null="0" autoincrement="0"><datatype>TIMESTAMP WITH TIME ZONE</datatype><default>now()</default></row><key name="articles_pkey" type="PRIMARY"><part>id</part></key></key></key></key></table><table name="users"><comment>ユーザー</comment><row name="id" null="0" autoincrement="0"><datatype>UUID</datatype><default>uuidv7()</default></row><row name="email" null="0" autoincrement="0"><datatype>TEXT</datatype><default></default><comment>ログイン用メールアドレス</comment></row><row name="display_name" null="0" autoincrement="0"><datatype>TEXT</datatype><default></default></row><row name="is_active" null="0" autoincrement="0"><datatype>BOOLEAN</datatype><default>true</default></row><row name="preferences" null="0" autoincrement="0"><datatype>JSONB</datatype><default>'{}'::jsonb</default><comment>UI 設定などの任意項目</comment></row><row name="created_at" null="0" autoincrement="0"><datatype>TIMESTAMP WITH TIME ZONE</datatype><default>now()</default></row><row name="updated_at" null="0" autoincrement="0"><datatype>TIMESTAMP WITH TIME ZONE</datatype><default>now()</default></row><key name="users_email_key" type="UNIQUE"><part>email</part></key></key></key></key><key name="users_pkey" type="PRIMARY"><part>id</part></key></key></key></table>
+</sql>

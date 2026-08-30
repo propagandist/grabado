@@ -1,0 +1,3 @@
+CREATE TABLE "things" (
+  "id" INTEGER NOT NULL
+);

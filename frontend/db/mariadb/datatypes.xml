@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MariaDB 11 型パレット（HANDOVER §6 / 段階6-7c で新設）。
+
+  **MySQL のコピーではない。** 6-7 の設計（2026-08-16）の決めたこと 2 のとおり、MariaDB だけが
+  持つ型が house 既定に直接効く:
+    uuid  -> **UUID**（10.7+。MySQL には無く CHAR(36) / BINARY(16) 運用になる）
+    inet  -> **INET4（10.5+）/ INET6（10.10+）**（MySQL には無い）
+
+  属性の契約は docs/FORMAT.md（db/postgresql/datatypes.xml の頭に一覧がある）。
+  strict="1" は「現代化済み」の印。**未現代化の db/mysql/datatypes.xml とは別物**で、
+  こちらが 6-8 で mysql を現代化するときの型紙になる。
+
+  **型は MariaDB 11.8.8 の実物に聞いて確かめた** —— 候補ごとに CREATE TABLE t(c <型>) を
+  流し、通った型と実際の格納型を INFORMATION_SCHEMA.COLUMNS で読んでいる:
+
+    docker の mariadb:11 を使い捨てで起動し、候補の型を並べたスクリプトを流している。
+    **コマンドそのものは CUSTOMIZATIONS.md の段階6-7c**（XML コメントには連続ハイフンを
+    書けないので、docker のオプションをここに写せない）。採取日 2026-08-21 / MariaDB 11.8.8。
+
+  **house 既定が MariaDB で失うもの**（実測。CUSTOMIZATIONS.md 段階6-7c）:
+    timestamptz  -> **無い**。TIMESTAMP は UTC 変換のみで tz を保持しない
+    jsonb        -> JSON は **longtext のエイリアス**（COLUMN_TYPE が longtext と答える）
+    boolean      -> BOOLEAN は **tinyint(1) のエイリアス**
+    uuidv7()     -> UUID() は v4（時系列の順序性を失う）
+
+  **TIMESTAMPTZ / TIMESTAMP WITH TIME ZONE を timestamp の aka に入れない。**
+  入れると PG で書いた設計を読んだときに tz が黙って落ちる。読めないほうが安全。
+
+  xml / interval は MariaDB に無い（実測で確認）。xml は text（LONGTEXT）が aka で受ける。
+-->
+<datatypes db="mariadb" strict="1" newrowtype="varchar">
+	<!--
+	  §6.2 初期テーブルテンプレート。**uuid はネイティブ**なので PK は PG と同じ形に置ける。
+	  生成関数は UUID()（v4）で、監査列は CURRENT_TIMESTAMP。
+	  tz を保持しないことだけが house 既定との差（上の一覧）。
+	-->
+	<template>
+		<row name="id" type="uuid" null="0" default="UUID()" key="PRIMARY" />
+		<row name="created_at" type="timestamp" null="0" default="CURRENT_TIMESTAMP" />
+		<row name="updated_at" type="timestamp" null="0" default="CURRENT_TIMESTAMP" />
+	</template>
+
+	<group label="Numeric" color="rgb(238,238,170)">
+		<type id="integer" label="Integer" length="0" sql="INT" kind="int32" aka="INTEGER|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" kind="int16" aka="INT2" quote="" />
+		<type id="tinyint" label="Tiny Integer" length="0" sql="TINYINT" kind="int8" quote="" />
+		<type id="mediumint" label="Medium Integer" length="0" sql="MEDIUMINT" kind="int32" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" kind="int64" aka="INT8" quote="" />
+		<type id="bigint_identity" label="Big Integer (auto)" length="0" sql="BIGINT AUTO_INCREMENT" kind="int64" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
+		<type id="decimal" label="Decimal" length="1" sql="DECIMAL" kind="decimal" aka="NUMERIC|DEC" quote="" />
+		<type id="float" label="Single precision" length="0" sql="FLOAT" kind="float32" aka="REAL" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE" kind="float64" aka="DOUBLE PRECISION" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="char" label="Char" length="1" sql="CHAR" kind="string" aka="CHARACTER" quote="'" />
+		<type id="varchar" label="Varchar" length="1" sql="VARCHAR" kind="string" aka="CHARACTER VARYING" quote="'" />
+		<type id="text" label="Text" length="0" sql="LONGTEXT" kind="string" aka="TEXT|CLOB|CHARACTER LARGE OBJECT|XML" quote="'" />
+		<type id="bytea" label="Binary (BLOB)" length="0" sql="LONGBLOB" kind="binary" aka="BLOB|BYTEA|BINARY LARGE OBJECT" quote="'" />
+		<type id="binary" label="Binary (fixed)" length="1" sql="BINARY" kind="binary" quote="'" />
+		<type id="varbinary" label="Varbinary" length="1" sql="VARBINARY" kind="binary" quote="'" />
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" kind="boolean" aka="BOOL" quote="'" />
+	</group>
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+		<type id="date" label="Date" length="0" sql="DATE" kind="date" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" kind="time" quote="'" />
+		<type id="datetime" label="Datetime" length="1" sql="DATETIME" kind="timestamp" quote="'" />
+		<type id="timestamp" label="Timestamp (UTC)" length="1" sql="TIMESTAMP" kind="timestamp_tz" quote="'" />
+		<type id="year" label="Year" length="0" sql="YEAR" kind="other" quote="" />
+	</group>
+
+	<group label="Miscellaneous" color="rgb(200,200,255)">
+		<type id="uuid" label="UUID" length="0" sql="UUID" kind="uuid" quote="'" />
+		<type id="inet4" label="IPv4 Address" length="0" sql="INET4" kind="other" quote="'" />
+		<type id="inet6" label="IPv6 Address" length="0" sql="INET6" kind="other" quote="'" />
+		<type id="jsonb" label="JSON" length="0" sql="JSON" kind="json" aka="JSONB" quote="'" />
+		<type id="enum" label="ENUM" length="1" sql="ENUM" kind="other" quote="" />
+		<type id="set" label="SET" length="1" sql="SET" kind="other" quote="" />
+		<type id="bit" label="Bit" length="1" sql="BIT" kind="other" quote="" />
+	</group>
+</datatypes>

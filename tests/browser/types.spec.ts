@@ -1,0 +1,267 @@
+import { test, expect, type Page } from "@playwright/test";
+import { readFixture, readKnownIssueFixture, SERIALIZER_DB } from "../support/fixtures.ts";
+import { generateDdl, loadFixture, openDesigner, toJson, useDatatypes } from "./harness.ts";
+
+/**
+ * 型解決の特性化（HANDOVER §6 段階6-2 / 6-3）。
+ *
+ * serialize.spec.ts が読込互換と形式非依存の性質を、json.spec.ts が正本フォーマットを見るのに対し、
+ * ここは**型パレットを引く経路**だけを見る。tests/known-issues/ にあった #3（6-2）と
+ * #4（6-3・PG 分）の「直った後の挙動」の受け皿でもある（README の運用 3）。
+ *
+ * FK 自動生成（rowManager 経由）は 6-2 まで**どのテストも通っていなかった**。fixture 読込は
+ * 経路が違い、リレーションを対話的に張る操作が要るため。段階6-2 が触る面なのでここで塞いだ。
+ */
+let page: Page;
+
+test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+    await openDesigner(page);
+});
+
+test.afterAll(async () => {
+    await page.close();
+});
+
+/** 先頭テーブルの先頭行を親にして FK を 1 本張り、生えた子行の型 id を返す */
+function createFkChildId(page: Page, parentTypeId: string): Promise<string | null> {
+    return page.evaluate((typeId) => {
+        const d = window.d!;
+        const parentIndex = d.palette.indexOfId(typeId);
+        if (parentIndex === -1) {
+            throw new Error(`型 ${typeId} が現在のパレットに無い`);
+        }
+
+        const t1 = d.tables[0]!;
+        const r1 = t1.rows[0]!;
+        r1.update({ type: parentIndex });
+
+        /* rowManager.tableClick は「行を選んで creating 中に別テーブルを叩く」実経路 */
+        const t2 = d.addTable("fk_probe_target", 500, 500);
+        d.rowManager.select(r1);
+        d.rowManager.creating = true;
+        d.rowManager.tableClick({ target: t2, data: null });
+
+        const child = t2.rows[t2.rows.length - 1]!;
+        return d.palette.idAt(child.data.type);
+    }, parentTypeId);
+}
+
+test.describe("型解決（段階6-2 / 6-3）", () => {
+    test("BIGINT は Big Integer に解決される（known-issue #3 が直った後の挙動）", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readKnownIssueFixture("bigint-drift"));
+
+        const id = await page.evaluate(
+            () => window.d!.palette.idAt(window.d!.tables[0]!.rows[0]!.data.type),
+        );
+
+        /*
+         * 6-2 まで db/postgresql/datatypes.xml は sql="BIGINT" を bigint と x_real の 2 か所に
+         * 持ち、後勝ちで Real に化けていた。6-2 が sql 完全一致を先勝ちにして直し、
+         * **6-3 が x_real の entry ごと撤去した**ので、いまは重複そのものが無い
+         * （palette-id.test.ts の「sql がパレット内で重複しない」が再発を止める）。
+         *
+         * label ではなく id で見るのは 6-3 から —— label は §6 が自由に動かしてよい表示名で、
+         * ファイルとの契約は id だけ（docs/FORMAT.md の規則3）。
+         * fixture は tests/known-issues/ に置いたまま（正常系へ昇格させると DDL golden の
+         * 母集団が動く。判断は tests/support/fixtures.ts）。
+         */
+        expect(id).toBe("bigint");
+    });
+
+    test("UUID が uuid に解決される（known-issue #4 が直った後の挙動・PG）", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture(SERIALIZER_DB, "house-defaults"));
+
+        /*
+         * 6-3 まで PG パレットに uuid が無く、house 既定の PK（uuidv7）が黙って先頭型の
+         * INTEGER に落ちていた —— #4 の実害そのもの。golden にも
+         * `id INTEGER NOT NULL DEFAULT uuidv7()` として焼かれていた。
+         */
+        const ids = await page.evaluate(() =>
+            window.d!.tables[0]!.rows.map((r) => window.d!.palette.idAt(r.data.type)),
+        );
+
+        expect(ids[0]).toBe("uuid");
+        /* 監査列は timestamptz（sql は TIMESTAMPTZ だが aka で標準名も受ける） */
+        expect(ids[ids.length - 1]).toBe("timestamp_with_time_zone");
+    });
+
+    test("strict なパレットでは未知の型が例外になる（#4 の再発防止）", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
+
+        /*
+         * 黙って先頭型に落ちないこと。ここが緑である限り、パレットから型を落としたときに
+         * 「設計が別の型で開く」事故は起きない（設計 JSON 側は 4-2b から同じ立場）。
+         * 落ちても**今開いている設計は変わらない**ことを同時に見る。
+         */
+        const before = await toJson(page);
+        const result = await page.evaluate(() => {
+            const xml =
+                `<sql><table x="0" y="0" name="t">` +
+                `<row name="c" null="1" autoincrement="0"><datatype>MEDIUMTEXT</datatype></row>` +
+                `</table></sql>`;
+            try {
+                window.d!.fromXML(new DOMParser().parseFromString(xml, "text/xml").documentElement);
+                return "例外が出なかった";
+            } catch (e) {
+                return (e as Error).message;
+            }
+        });
+
+        expect(result).toContain('型 "MEDIUMTEXT" が現在の型パレット（db=postgresql）に無い');
+        expect(await toJson(page)).toBe(before);
+    });
+
+    /*
+     * **「未現代化のプロファイルでは従来どおり先頭型に落ちる」は段階6-8d で消えた。**
+     * 寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動き、8 本すべてが
+     * strict になって尽きた。反転版（strict 属性を持たないパレットでも例外になる）は
+     * tests/node/type-resolution.test.ts に人工パレットで置いてある —— ブラウザ側に
+     * 人工パレットの注入口を作るとハーネスの面が増えるため、そちらに寄せた。
+     */
+
+    test("型セレクタが新しいパレットの 24 型を出す（golden が張らない UI の面）", async () => {
+        /*
+         * Row.buildTypeSelect は **パレットを読む唯一の UI 面**で、golden には 1 ビットも
+         * 写らない（golden はすべて toDdl / toJson 経由で採るため）。6-3 は label を動かし
+         * 型を 5 本減らしたので、ここが動いたことに気づける経路を 1 本だけ置く。
+         * マウス操作の経路そのものは今も誰も張っていない（docs/TESTING.md）。
+         */
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
+
+        const menu = await page.evaluate(() => {
+            const row = window.d!.tables[0]!.rows[0]!;
+            row.expand();
+            const select = row.dom.type;
+            return {
+                options: select.options.length,
+                groups: select.getElementsByTagName("optgroup").length,
+                labels: [...select.options].map((o) => o.textContent),
+            };
+        });
+
+        expect(menu.options).toBe(24);
+        expect(menu.groups).toBe(4);
+        /* 6-3 で足した 2 型 */
+        expect(menu.labels).toContain("UUID");
+        expect(menu.labels).toContain("Big Integer (identity)");
+        /* 撤去した型はユーザーが選べない（HANDOVER §6.1「パレットから外す」の実体） */
+        expect(menu.labels).not.toContain("Serial");
+        expect(menu.labels).not.toContain("Char");
+        expect(menu.labels).not.toContain("JSON");
+    });
+
+    test("size 欄は型がサイズを取るときだけ開く（段階6-9a）", async () => {
+        /*
+         * 6-3 が `length` を読む契約にしたのは**読み込み側だけ**で、UI は型と無関係に
+         * size を打てるままだった（`db/postgresql/datatypes.xml` の頭が「全プロファイルが
+         * strict になる 6-8 まで片側だけ閉じる形になる」と送っていた項目）。
+         * 6-8d が DDL 側を塞ぎ、6-9a でここを閉じて 3 経路（読み込み・DDL・UI）が
+         * 同じ `TypePalette.hasSize` を共有する形になった。
+         *
+         * ここも golden に 1 ビットも写らない UI の面。
+         */
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
+
+        const result = await page.evaluate(() => {
+            const d = window.d!;
+            const row = d.tables[0]!.rows[0]!;
+            const indexOf = (id: string) => d.palette.indexOfId(id);
+
+            row.expand();
+            const select = row.dom.type;
+            const size = row.dom.size;
+
+            /* varchar は length="1"。打てて、値も残る */
+            select.selectedIndex = indexOf("varchar");
+            select.dispatchEvent(new Event("change"));
+            const openForVarchar = !size.disabled;
+            size.value = "10";
+
+            /* uuid は length="0"。閉じて、打ってあった値も捨てる */
+            select.selectedIndex = indexOf("uuid");
+            select.dispatchEvent(new Event("change"));
+            const closedForUuid = size.disabled;
+            const clearedValue = size.value;
+
+            row.collapse();
+            return {
+                openForVarchar,
+                closedForUuid,
+                clearedValue,
+                storedSize: row.data.size,
+            };
+        });
+
+        expect(result).toEqual({
+            openForVarchar: true,
+            closedForUuid: true,
+            clearedValue: "",
+            storedSize: "",
+        });
+    });
+
+    test("XML を読み直しても型がドリフトしない", async () => {
+        /*
+         * 段階6-5a まで「toXML -> fromXML -> toXML」の往復で見ていた。XML の書き出しが
+         * 消えたので、同じ XML を 2 回読んで生成 DDL の型名が動かないことを見る。
+         * ドリフトは**読み込み時の型解決**の問題なので、観測面が <datatype> から
+         * DDL の型名に変わっても主張は同じ。
+         */
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readKnownIssueFixture("bigint-drift"));
+
+        const first = await generateDdl(page, SERIALIZER_DB);
+        await loadFixture(page, readKnownIssueFixture("bigint-drift"));
+        const second = await generateDdl(page, SERIALIZER_DB);
+
+        /* 6-2 以前は BIGINT -> Real(BIGINT) と 1 回化けてから収束していた */
+        expect(first).toContain("BIGINT");
+        expect(second).toBe(first);
+    });
+
+    test("FK 自動生成は fk 属性の id に従う", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
+
+        /*
+         * db/postgresql/datatypes.xml: bigint_identity -> fk="bigint"。
+         * 6-3 で serial（fk="integer"）と bigserial（fk="bigint"）が
+         * bigint_identity 1 本にまとまった —— identity 列を参照する FK は BIGINT でなければ
+         * ならないので、これが唯一の fk になる。
+         */
+        expect(await createFkChildId(page, "bigint_identity")).toBe("bigint");
+        /* fk を持たない型は親と同じ型のまま */
+        expect(await createFkChildId(page, "text")).toBe("text");
+        expect(await createFkChildId(page, "uuid")).toBe("uuid");
+    });
+
+    test("パレットを差し替えた後の FK 自動生成は新しいパレットに従う", async () => {
+        await useDatatypes(page, SERIALIZER_DB);
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
+        /* ここで旧実装は Designer.fkTypeFor を postgresql の内容で焼いていた */
+        expect(await createFkChildId(page, "bigint_identity")).toBe("bigint");
+
+        await useDatatypes(page, "sqlite");
+        await loadFixture(page, readFixture(SERIALIZER_DB, "minimal"));
+
+        /*
+         * sqlite は fk 属性を 1 つも持たないので、FK 子行は親と同じ型でなければならない。
+         * 旧実装では postgresql の fkTypeFor[5]=2 が残り、BIGINT の FK が **SMALLINT** に
+         * なっていた（実測は CUSTOMIZATIONS.md の段階6-2）。差し替えでキャッシュが
+         * 捨てられないことが原因で、キャッシュごと廃止して塞いだ。
+         *
+         * **寄せ先は 6-8a で mysql -> oracle、6-8c で oracle -> sqlite と動き、6-8d の
+         * パレット差し替えでも動かなくて済んだ** —— SQLite に identity 型が無く
+         * AUTOINCREMENT は列の属性なので、fk を持つ型が 1 つも要らない。
+         * 見る型 id は 6-8d のパレットに合わせて numeric -> any に替えてある。
+         */
+        expect(await createFkChildId(page, "any")).toBe("any");
+        expect(await createFkChildId(page, "text")).toBe("text");
+    });
+});

@@ -1,0 +1,88 @@
+# SHA ピンは Dependabot とセットで初めて安全になる。**凍結したまま放置すると、
+# セキュリティ修正が降りてこないぶん浮動タグより悪い。**
+#
+# ★ 更新 PR も CI を消費する（枠は org 全体で 2,000 分/月の共有）。だから
+#   - 頻度は weekly（daily にしない）
+#   - open-pull-requests-limit を絞る
+#   - grouped update で 1 PR にまとめる（PR 1 本 = CI 1 回）
+#
+# ★ Gradle の依存を上げた PR は `gradle.lockfile` の更新が要る。Dependabot は
+#   ロックファイルを更新できないので、**その PR は ci-server.yml の
+#   「追跡ファイルが動いていないこと」で落ちる**。落ちたら手元で
+#   `./gradlew dependencies --write-locks` を回して push すること
+#   （落ちること自体が「ロックを更新し忘れていない」証拠になる）。
+#
+# ★ **訂正（2026-08-30 実測。issue #134）—— Dependabot は `gradle.lockfile` を更新する。**
+#   #101（`d928a55`）も #132（`7fa30eb`）も、**dependabot のコミット 1 本**で
+#   `libs.versions.toml` と `gradle.lockfile` の両方が動いており、`git diff --exit-code` は
+#   緑だった。**上の「落ちるので手元で回す」は起きない。元の記述は消さない**（判断の履歴）。
+#   —— **別件と混ぜないこと**: `security_update_dependency_not_found`（`deps-submit` が
+#   提出したグラフにしか無い依存は**拾えるが直せない**。CLAUDE.md の「セキュリティ」）は
+#   **軸が違う**。あちらは実測どおりで、訂正の対象ではない。
+#
+# ★ **group に major を入れない**（2026-08-30。issue #134）—— #131 は
+#   「Bump the frontend group with 3 updates」の顔で **`typescript` 5 → 7** を運んでいた
+#   （`npm run typecheck` は主要ゲート）。#130 も node のメジャー。**差分を毎回人が読まないと
+#   気付けない形そのものを畳む。** `update-types` から外れた更新は**個別 PR で来る**ので、
+#   更新が落ちるわけではない。
+#
+# ★ cooldown は 7 日（段階2-1 で 4 entry すべてに付けた）。**悪意ある版は公開から数時間〜
+#   数日で発見・撤回される**ので、その窓の中でマージしてしまう経路を構造で塞ぐ設定であって、
+#   更新を遅らせるためのものではない。**security updates には効かない**（CVE 修正は即座に来る）。
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+# 供給網の基準: 同 docs/security-baseline.md §5.1
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: gradle
+    directory: /server
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      server:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      frontend:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+
+  # 配布イメージのベース（段階2-1）。Dockerfile の 3 本を digest ごと書き換える
+  # ——**ピンは Dependabot とセットで初めて安全**で、凍結したまま放置すると浮動タグより悪い。
+  #
+  # ★ 書き換えたとき、末尾コメントの版表記も一緒に更新される。**消さないこと**
+  #   （消すと、どの版を焼いているか Dockerfile から読めなくなる）。
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      images:
+        patterns: ['*']
+        update-types: ['minor', 'patch']

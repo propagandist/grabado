@@ -1,0 +1,137 @@
+# grabado フロントエンドの検査。**軽い検査を 1 ジョブにまとめる**型
+# （propagandist/.github の workflow-templates/ci-light）。
+#
+# ★ なぜ 1 ジョブにまとめるのか
+#   課金は **ジョブ単位で 1 分未満切り上げ**。手元実測は typecheck 数秒 / vitest 14 秒 /
+#   playwright 23 秒 / known-issues 1.3 秒 / dist 7 秒 で、**どれも 1 分未満**。
+#   分ければ本数ぶん課金され、まとめれば 1 回で済む。
+#   1 分を大きく超える検査（§5-7 の実 DB を要する introspection 統合テスト、§2 の Docker
+#   ビルド）が入るのは後段なので、**そのときに ci-heavy 型の別ワークフローへ出す**。
+#
+# ★ なぜ push では回さないのか
+#   `main` / `develop` への直接 push は `.githooks/pre-push` が禁じており、`develop` が動くのは
+#   PR の squash merge だけ。`pull_request` イベントは **PR ブランチと base のマージ結果**に
+#   対して走るので、「マージしたらどうなるか」は PR の時点で検査済み。push 側を足すと
+#   PR 1 本あたりの消費が倍になる。**枠は org 全体で共有（2,000 分/月）で、枯らすと
+#   他リポジトリの本番デプロイまで止まる。**
+#
+# ★ 訂正（2026-08-26 実測。段階2-5）—— **public にした日に、上の「枠」の根拠は効かなくなった。**
+#   public の標準ランナーは org の 2,000 分を消費しない（org ci-strategy §1）。
+#   **元の記述は消さない**（判断の履歴なので）。**`paths` と `pull_request` 限定は維持する**
+#   —— 根拠が「枠」から「**入力が変わらなければ出力も変わらない**」と待ち時間へ
+#   置き換わっただけで、結論は動かない。
+#
+# ★ paths は「この検査の入力」だけを列挙する
+#   テストが `tests/` の外を読む面は実際に確かめた —— `tools/`（migrate-design.test.ts が
+#   import）、`scripts/`（`npm test` のラッパ）、`db/` `locale/` `index.html`（harness が読む
+#   静的資産）、`docs/TYPE-MAPPING.md`（type-mapping.test.ts が実装と 1 セルずつ突き合わせる）、
+#   `SecurityHeadersFilter.kt`（csp.test.ts が**ヘッダの正本**と vite.config.ts の写しを
+#   突き合わせる。段階2-2）、`application.yaml` / `compose.yaml` / `.env.example`
+#   （env-contract.test.ts が **env の正本**と 2 つの写しを突き合わせる。段階2-3）。
+#   **段階2-6 で js/ src/ styles/ db/ locale/ images/ index.html は `frontend/**` 1 行に畳んだ。**
+#   **`docs/` をまるごとは入れない** —— 文書だけの PR（段階5-0 のような）で数分使うのは、
+#   「入力が変わらなければ出力も変わらない」に反する。
+#   **テストが読む repo ルートのファイルを増やしたら、ここに足すこと。**
+#
+# ★ **足した**（2026-08-30。issue #134）—— `Dockerfile` / `server/build.gradle.kts` /
+#   `ci-server.yml` は **toolchain.test.ts の入力**（配布物と CI が同じ Node / Java で
+#   動いていることを見る）。**一致検査は、正本と写しのどちらが動いても走らないと意味が無い**
+#   ので、**このワークフローの守備範囲が server/ 側と Docker 側へ 3 ファイルぶん広がる**のは
+#   意図した代償である。**`server/**` とは書かない** —— Kotlin を 1 行直しただけの PR で
+#   フロントの検査を回す理由は無い（ci-server.yml の★と同じ線引き）。
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+name: CI (frontend)
+
+on:
+  pull_request:
+    branches: [develop, main]
+    paths:
+      # 段階2-6: フロントの実体は frontend/ に集約した（js / src / styles / db / locale /
+      # images / index.html がここに入る）。**package.json と tests/ は root のまま。**
+      - 'frontend/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - 'docs/TYPE-MAPPING.md'
+      - 'server/src/main/kotlin/io/propagandist/grabado/config/SecurityHeadersFilter.kt'
+      - 'server/src/main/resources/application.yaml'
+      - 'compose.yaml'
+      - '.env.example'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - '*.config.ts'
+      # toolchain.test.ts の入力（issue #134）。正本 2 本（下の ci-frontend.yml の
+      # `node-version` と build.gradle.kts の `jvmToolchain`）と写し 3 か所。
+      - 'Dockerfile'
+      - 'server/build.gradle.kts'
+      - '.github/workflows/ci-server.yml'
+      - '.github/workflows/ci-frontend.yml'
+
+# 既定に頼らず最小を明示する。checkout してテストを回すだけなら write は要らない。
+permissions:
+  contents: read
+
+# 同じブランチに push が続いたら古い run は捨てる（後勝ちでよい）。
+concurrency:
+  group: ci-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: 検査
+    runs-on: ubuntu-latest
+    # ハングした run が既定の 6 時間まわり続けて枠を溶かすのを防ぐ。必ず付ける。
+    timeout-minutes: 15
+
+    steps:
+      # ★ action は SHA でピンする。**末尾コメントの版表記を消さないこと**
+      #   —— Dependabot が SHA と一緒に書き換える対象で、消すとどの版か読めなくなる。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 依存の取得
+        run: npm ci
+
+      # Playwright の 3 系統（characterization / known-issues / dist）が同じ Chromium を使う。
+      # ★ ブラウザのキャッシュはまだ足さない —— 規約 §3③「高速化は最後。しかも実測してから」。
+      #   内訳は `gh api repos/{owner}/{repo}/actions/runs/{run_id}/jobs` の steps[] の時刻差で採る。
+      # ★ **採った**（2026-08-26。段階2-5）—— ジョブ **85 秒**のうち **Chromium の取得が 39 秒（46%）**。
+      #   **2 run では 69〜85 秒**で、**動いたのはこの取得だけ**（他のステップは 2 回とも同じ）——
+      #   **遅さの原因も、ぶれの原因もここ**。
+      #   残りは npm ci 3 / 型検査 3 / vitest 11 / 実ブラウザ 12 / known-issues 3 / dist 5 秒。
+      #   **それでも足さない** —— キャッシュのキーを Playwright の版に結び付け損ねると、
+      #   **古いブラウザのまま緑になる**（検査が静かに嘘をつく側の失敗）。足すなら
+      #   **キーの設計を先に決める**別 issue で。ci-image.yml も同じ 39 秒を払っている。
+      - name: Chromium の取得
+        run: npx playwright install --with-deps chromium
+
+      # **軽い検査は 1 ステップにまとめず、1 ジョブの中の複数ステップにする。**
+      # ステップは何本あっても課金は変わらず、どこで落ちたかは画面で分かる。
+      - name: 型検査
+        run: npm run typecheck
+
+      - name: 高速回帰（Node / jsdom）
+        run: npm test
+
+      # golden の唯一の正はこちら（実ブラウザ）。UPDATE_GOLDEN を渡さないので読むだけ。
+      - name: 特性化テスト（実ブラウザ）
+        run: npm run test:browser
+
+      - name: 既知の不具合（「現在こう壊れている」を固定する）
+        run: npm run known-issues
+
+      - name: 配布物のスモーク（vite build -> preview）
+        run: npm run test:dist
+
+      # ここまでで追跡ファイルが動いていたら、テストが副作用を持っているか
+      # golden が書き換わっている（どちらも見逃してはいけない）。
+      - name: 作業ツリーが動いていないこと
+        run: git diff --exit-code

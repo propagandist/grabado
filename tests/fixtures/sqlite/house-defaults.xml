@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: house 既定（HANDOVER §6）を SQLite の STRICT テーブルで表したもの。
+  postgresql 版と同じスキーマ（tests/fixtures/postgresql/house-defaults.xml）を、
+  db/sqlite/datatypes.xml に実在する 5 型だけで書き直してある。
+
+  **house 既定が SQLite で失うもの**（記録は CUSTOMIZATIONS.md 段階6-6b / 6-8d）:
+    - uuid         -> TEXT。**生成関数が無いので既定値そのものを持てない**
+                      （アプリ側で採番する。8 本のうち sql-standard とここだけ）
+    - timestamptz  -> TEXT ＋ CURRENT_TIMESTAMP（tz どころか日時型そのものが無い）
+    - jsonb        -> TEXT（JSON1 の**関数**はあるが型は無い）
+    - boolean      -> INTEGER（0 / 1）
+    - date         -> TEXT
+    - numeric(p,s) -> **TEXT**（段階6-8d で NUMERIC から変えた）。STRICT に NUMERIC は無く、
+                      REAL は二進浮動小数なので 10 進の桁が壊れる —— CLAUDE.md の
+                      「numeric（not money）」を守るには文字列で持つか最小単位の整数にするしかない
+
+  **複合 PRIMARY KEY（article_tags）は 6-8d で PRIMARY KEY のまま出るようになった**
+  （known-issue #13。6-8c までは UNIQUE に落ちて PRIMARY KEY が消えていた）。
+-->
+<sql>
+<table x="20" y="20" name="users">
+<row name="id" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="email" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<comment>ログイン用メールアドレス</comment>
+</row>
+<row name="display_name" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="is_active" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+<default>1</default>
+</row>
+<row name="preferences" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<default>{}</default>
+<comment>UI 設定などの任意項目</comment>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<row name="updated_at" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="users_pkey">
+<part>id</part>
+</key>
+<key type="UNIQUE" name="users_email_key">
+<part>email</part>
+</key>
+<comment>ユーザー</comment>
+</table>
+<table x="420" y="20" name="articles">
+<row name="id" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="author_id" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<relation table="users" row="id" />
+<comment>執筆者 (users.id)</comment>
+</row>
+<row name="title" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="body" null="1" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="view_count" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+<default>0</default>
+</row>
+<row name="price" null="1" autoincrement="0">
+<datatype>TEXT</datatype>
+<comment>有料記事の価格。STRICT に NUMERIC は無く REAL では桁が壊れるので文字列で持つ</comment>
+</row>
+<row name="published_on" null="1" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<row name="updated_at" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="articles_pkey">
+<part>id</part>
+</key>
+<comment>記事</comment>
+</table>
+<table x="820" y="20" name="article_tags">
+<row name="article_id" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<relation table="articles" row="id" />
+</row>
+<row name="tag" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TEXT</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="pk_article_tags">
+<part>article_id</part>
+<part>tag</part>
+</key>
+<comment>記事とタグの対応</comment>
+</table>
+</sql>

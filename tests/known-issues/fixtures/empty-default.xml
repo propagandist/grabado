@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  既知の不具合 #5: 空の <default></default> で ` DEFAULT ` だけが残る壊れた SQL が出る。
+
+  これはアプリの toXML() が作る形ではなく、現行 introspection（backend/php-postgresql の
+  import）が返す形。docs/ARCHITECTURE.md §4.5 のとおり、値の無いカラムでも
+  <default></default> を必ず出力する。そのまま XSLT に食わせると PG は
+  `<xsl:if test="default">` が真になり、値の無い DEFAULT を出す。
+  そのため app 経由ではなく XSLT へ直接食わせて固定する。
+-->
+<sql>
+<table x="10" y="10" name="imported">
+<row name="id" null="0" autoincrement="0">
+<datatype>UUID</datatype><default>uuidv7()</default>
+</row>
+<row name="note" null="1" autoincrement="0">
+<datatype>TEXT</datatype><default></default>
+</row>
+</table>
+</sql>

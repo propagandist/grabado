@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SQLite 3.51 STRICT 型パレット（HANDOVER §6.1 / 段階6-8d で現代化）。
+
+  6-8d まで upstream の 5 型（text / numeric / integer / real / none）のままで、strict も
+  aka も <template> も持たない**最後の未現代化プロファイル**だった（known-issues #4 / #13）。
+
+  属性の契約は docs/FORMAT.md（一覧は db/postgresql/datatypes.xml の頭）。
+
+  **STRICT テーブルを出す**（段階6-8d の決めたこと 1）。したがってパレットは「型親和性の
+  5 つ」ではなく **STRICT が受け付ける型名そのもの**になる。SQLite 3.51.2 の実測:
+
+    受ける      INT / INTEGER / REAL / TEXT / BLOB / ANY —— **この 6 語だけ**
+    拒む        NUMERIC / VARCHAR / BOOLEAN / DATE / DATETIME / DECIMAL / DOUBLE /
+                BIGINT / JSON / UUID ほかすべて（unknown datatype for <t>.<c>）
+    **括弧も拒む** TEXT(255) も INT(11) も BLOB(16) も unknown datatype になる
+                -> **全型が length="0"**。8 本のうち size を 1 つも取らないのはここだけ
+
+  **INT は型に入れず aka で受ける。** STRICT の INT と INTEGER は格納も親和性も同じで、
+  違うのは「INTEGER PRIMARY KEY だけが rowid の別名になり AUTOINCREMENT を付けられる」
+  1 点（実測: INT PRIMARY KEY AUTOINCREMENT は AUTOINCREMENT is only allowed on an
+  INTEGER PRIMARY KEY）。同じ意味の型を 2 つ並べる理由が無い。
+
+  **aka は SQLite 自身の affinity 決定規則（5 規則）の展開にしてある。** 規則が一次資料な
+  ので機械的に決まり、6-8c が oracle で re を捨てて列挙に移したのと同じ形になる:
+
+    規則1 INT を含む            -> integer
+    規則2 CHAR / CLOB / TEXT    -> text
+    規則3 BLOB または型名なし   -> blob（**別綴りが存在しない**ので aka を持たない）
+    規則4 REAL / FLOA / DOUB    -> real
+    規則5 それ以外（NUMERIC 親和性）-> any
+
+  規則5 は「それ以外」なので原理的に無限にある。**列挙するのは SQLite 公式が例示表に
+  載せている 5 つ**（NUMERIC / DECIMAL / BOOLEAN / DATE / DATETIME）＋ 撤去した旧 sql の
+  NONE だけにした。
+
+  **PG 固有の綴り（UUID / JSONB / TIMESTAMPTZ / INET / XML）は入れない。** SQLite が名前と
+  して認めていないものを aka で受けると、PG の設計が sqlite で**黙って開けてしまう** ——
+  失われる情報（uuid も timestamptz も jsonb も無い）が可視化されない。読めずに例外に
+  なるのが正しい。プロファイル間の変換が要るなら、それは 6-9 の変換層の仕事。
+
+  旧 id からの移行表は tools/migrate-design.mjs（numeric / none -> any、text は size を落とす）。
+-->
+<datatypes db="sqlite" strict="1" newrowtype="text">
+	<!--
+	  §6.2 初期テーブルテンプレート（段階6-4）。type は id 参照。
+
+	  **PK が既定値を持てないのは sql-standard に続く 2 本目。** SQLite に uuid 生成関数は
+	  無い（実測: select uuid() -> no such function）。hex(randomblob(16)) は版・変種ビットを
+	  持たず UUID ではないので採らない —— **採番はアプリ側**（6-6b の判断を引き継ぐ）。
+
+	  監査列は TEXT ＋ CURRENT_TIMESTAMP。SQLite の CURRENT_TIMESTAMP は UTC の
+	  'YYYY-MM-DD HH:MM:SS' で tz 表記も秒未満も持たないが、STRICT に日時型がそもそも
+	  無い以上これが上限（mysql / mariadb / h2 のテンプレートと同じ綴りになる）。
+	-->
+	<template>
+		<row name="id" type="text" null="0" key="PRIMARY" />
+		<row name="created_at" type="text" null="0" default="CURRENT_TIMESTAMP" />
+		<row name="updated_at" type="text" null="0" default="CURRENT_TIMESTAMP" />
+	</template>
+
+	<group label="Numeric" color="rgb(238,238,170)">
+		<type id="integer" label="Integer" length="0" sql="INTEGER" kind="int64" aka="INT|INT2|INT8|TINYINT|SMALLINT|MEDIUMINT|BIGINT|UNSIGNED BIG INT" quote="" />
+		<type id="real" label="Real" length="0" sql="REAL" kind="float64" aka="FLOAT|DOUBLE|DOUBLE PRECISION" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="text" label="Text" length="0" sql="TEXT" kind="string" aka="CHAR|CHARACTER|VARCHAR|VARYING CHARACTER|NCHAR|NATIVE CHARACTER|NVARCHAR|CLOB" quote="'" />
+	</group>
+
+	<group label="Miscellaneous" color="rgb(200,200,255)">
+		<type id="blob" label="Blob" length="0" sql="BLOB" kind="binary" quote="'" />
+		<type id="any" label="Any" length="0" sql="ANY" kind="other" aka="NUMERIC|DECIMAL|BOOLEAN|DATE|DATETIME|NONE" quote="'" />
+	</group>
+</datatypes>

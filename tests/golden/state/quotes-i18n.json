@@ -1,0 +1,132 @@
+{
+  "tables": [
+    {
+      "title": "顧客",
+      "x": 20,
+      "y": 20,
+      "zIndex": 1,
+      "comment": "顧客マスタ。'仮登録' の状態も含む",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "20px",
+        "styleTop": "20px",
+        "styleZIndex": "1",
+        "titleHtml": "顧客",
+        "titleTooltip": "顧客マスタ。'仮登録' の状態も含む",
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "氏名",
+          "type": 8,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "姓と名は分けない",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "姓と名は分けない",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "氏名",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "say \"hi\"",
+          "type": 8,
+          "size": "",
+          "def": "",
+          "nll": true,
+          "ai": false,
+          "comment": "識別子に \" が入る場合の属性エスケープ確認",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "識別子に \" が入る場合の属性エスケープ確認",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "say \"hi\"",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "メモ",
+          "type": 8,
+          "size": "",
+          "def": "",
+          "nll": true,
+          "ai": false,
+          "comment": "顧客の'愛称'をここに書く",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "顧客の'愛称'をここに書く",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "メモ",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "顧客_pkey",
+          "parts": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "area": [
+    "svg",
+    "div.table"
+  ],
+  "svg": [],
+  "minimap": [
+    "div.port",
+    "div.mini"
+  ]
+}

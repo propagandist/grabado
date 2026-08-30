@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: db/oracle/datatypes.xml の型パレットを網羅する（23 型）。
+  サイズ付き（length="1"）の型は括弧つきで書き、Row.fromXML のサイズ抽出も通す。
+
+  **1 列 = パレットの 1 型**で、書く型名はパレットの sql 属性そのもの。
+  網羅は tests/node/fixture-set.test.ts が機械的に見る。
+
+  **書いてある型はすべて Oracle 23ai の実物に聞いて通ることを確かめてある**
+  （db/oracle/datatypes.xml の頭）。**6-8c で c_integer が INTEGER のまま出るようになった** ——
+  6-8c まで known-issue #10 で NUMBER に化けており、integer 型に到達する書き方が無かった。
+
+  TIMESTAMP WITH TIME ZONE にサイズを書かないのは、Oracle の構文がサイズを型名の途中に
+  置く（TIMESTAMP(6) WITH TIME ZONE）ため。パレットで length="0" にしてある。
+-->
+<sql>
+<table x="20" y="20" name="type_samples">
+<row name="c_number" null="0" autoincrement="0">
+<datatype>NUMBER(10)</datatype>
+</row>
+<row name="c_integer" null="1" autoincrement="0">
+<datatype>INTEGER</datatype>
+</row>
+<row name="c_decimal" null="1" autoincrement="0">
+<datatype>DECIMAL(12,2)</datatype>
+</row>
+<row name="c_float" null="1" autoincrement="0">
+<datatype>FLOAT(10)</datatype>
+</row>
+<row name="c_binary_float" null="1" autoincrement="0">
+<datatype>BINARY_FLOAT</datatype>
+</row>
+<row name="c_binary_double" null="1" autoincrement="0">
+<datatype>BINARY_DOUBLE</datatype>
+</row>
+<row name="c_char" null="1" autoincrement="0">
+<datatype>CHAR(10)</datatype>
+</row>
+<row name="c_varchar2" null="1" autoincrement="0">
+<datatype>VARCHAR2(255)</datatype>
+</row>
+<row name="c_nchar" null="1" autoincrement="0">
+<datatype>NCHAR(10)</datatype>
+</row>
+<row name="c_nvarchar2" null="1" autoincrement="0">
+<datatype>NVARCHAR2(255)</datatype>
+</row>
+<row name="c_clob" null="1" autoincrement="0">
+<datatype>CLOB</datatype>
+</row>
+<row name="c_nclob" null="1" autoincrement="0">
+<datatype>NCLOB</datatype>
+</row>
+<row name="c_boolean" null="1" autoincrement="0">
+<datatype>BOOLEAN</datatype>
+</row>
+<row name="c_date" null="1" autoincrement="0">
+<datatype>DATE</datatype>
+</row>
+<row name="c_timestamp" null="1" autoincrement="0">
+<datatype>TIMESTAMP(6)</datatype>
+</row>
+<row name="c_timestamp_tz" null="1" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+</row>
+<row name="c_interval_ym" null="1" autoincrement="0">
+<datatype>INTERVAL YEAR TO MONTH</datatype>
+</row>
+<row name="c_interval_ds" null="1" autoincrement="0">
+<datatype>INTERVAL DAY TO SECOND</datatype>
+</row>
+<row name="c_raw" null="1" autoincrement="0">
+<datatype>RAW(16)</datatype>
+</row>
+<row name="c_blob" null="1" autoincrement="0">
+<datatype>BLOB</datatype>
+</row>
+<row name="c_json" null="1" autoincrement="0">
+<datatype>JSON</datatype>
+</row>
+<row name="c_xml" null="1" autoincrement="0">
+<datatype>XMLTYPE</datatype>
+</row>
+<row name="c_rowid" null="1" autoincrement="0">
+<datatype>ROWID</datatype>
+</row>
+<key type="PRIMARY" name="type_samples_pkey">
+<part>c_number</part>
+</key>
+</table>
+</sql>

@@ -12,7 +12,8 @@
 本書のパス・backend の action 名・レスポンス形式は現行 `wwwsqldesigner` の典型構成に基づく**未検証の目安**。着手時に必ず以下を行う。
 
 1. `ondras/wwwsqldesigner` を fork → clone。
-2. `php -S localhost:8000` で現行 backend を起動し、DevTools で **save / load / list / remove / connect(introspection)** の実通信をキャプチャ（action 名・パラメータ・body・Content-Type・本文、特に introspection の構造）。
+2. `php -S localhost:8000` で現行 backend を起動し、DevTools で **save / load / list / import(introspection)** の実通信をキャプチャ（action 名・パラメータ・body・Content-Type・本文、特に introspection の構造）。
+   → **実施済み。実在する action は `list` / `save` / `load` / `import` の 4 つだけで、未知の action は一律 501。`remove` は実在せず（フロントに削除 UI も無い）、introspection の action 名は `connect` ではなく `import` だった**（本書の初版はここを誤っていた）。**契約の正は [`ARCHITECTURE.md`](ARCHITECTURE.md) §4**（Kotlin 実装の到達点は同 §7）。
 3. **特性化テスト（§7）を先に組む**。現行が吐く DDL・シリアライズ結果をスナップショット固定してから移植に入る。
 4. 実測を `ARCHITECTURE.md` に、本書との差分を `CUSTOMIZATIONS.md` 冒頭に記録。
 
@@ -29,6 +30,7 @@
 - **backend**: Kotlin + Spring Boot。save/load をマウント済みファイルの I/O として実装。introspection と AI proxy を担う。
 - **frontend**: 完全 TypeScript 化（Vite / strict）。描画エンジンは温存し model/IO/DDL 層を型付きで巻く（Tier 2）。UI framework 全面移行は今回スコープ外。
 - **Railway**: 任意・従。同一イメージを読み取り専用ビューアとして立てられる（§2.3）。編集の正本にはしない。
+  （**2026-08-30 に「任意」を外した** —— 置き場所として決まった。§2.3 の注記）
 - **upstream**: 非追従。
 
 ### 保持する資産 / 捨てる負債
@@ -46,6 +48,13 @@
 - **DB コンテナは既定で無し**。app 単一イメージ。
 
 ### 2.2 マルチステージ Dockerfile（骨格・版は着手時に最新 LTS 確認）
+
+> **注記（2026-08-24 / 段階2-0）**: この骨格は `frontend/` / `backend/` を前提にしているが、
+> **実在は `frontend/`（フロント。ただし `package.json` と `tests/` は root）と `server/`（backend）**なので読み替えが要る。
+> 集約は §2 の最後（2-6）に独立段階で行う。**決定と §2 の分割は
+> [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階2-0、契約は
+> [`ARCHITECTURE.md`](ARCHITECTURE.md) §9**（HANDOVER = 入口 / CUSTOMIZATIONS = 正）。
+
 ```dockerfile
 # 1) frontend (TS/Vite)
 FROM node:22-alpine AS web
@@ -71,6 +80,15 @@ ENTRYPOINT ["java","-jar","app.jar"]
 ```
 
 ### 2.3 Railway（任意・読み取り専用ビューア）
+
+> **注記（2026-08-30 / issue #84）**: **「任意」ではなくなった。** 公開デモの置き場所は
+> **Railway に決まり**（既に PRO 契約済み）、`grabado.dev` は **取得済み**であることを
+> DNS で確かめた（Porkbun の NS 4 本）。**TLS は Let's Encrypt**（Railway のホストの
+> 証明書を実際に見た）で、**CAA はそれに合わせて置く**。**HSTS はアプリが出す**
+> （`GRABADO_HSTS=true`。`preload` は付けない）。
+> **判断と実測の正は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の
+> 「2026-08-30 公開デモの外側」**、契約は [`ARCHITECTURE.md`](ARCHITECTURE.md) §7.3 / §9.4
+> （HANDOVER = 入口 / CUSTOMIZATIONS = 正）。**以下の 4 行は着手時の要件のまま。**
 - 同一イメージを `READONLY=true` で起動し、git（main）下流の**共有ビューア**として最新スキーマを URL 閲覧に供する。
 - 編集・保存・introspection の副作用は無効化。**正本は git のまま**、split-brain を作らない。
 - 「Railway = ステートレス app + 外部 PG を編集主経路にする」旧案は不採用（正本二重化を招くため）。
@@ -103,6 +121,12 @@ ENTRYPOINT ["java","-jar","app.jar"]
 
 ## 5. backend（Kotlin / Spring Boot）— ファイル I/O 中心
 
+> **実装済み（2026-08-23）。** 段階5-0 〜 5-9 で完了し、実体は [`../server/`](../server/)。
+> **契約の正は [`ARCHITECTURE.md`](ARCHITECTURE.md) §7**（機械可読な表は
+> [`../tests/contract/backend-cases.json`](../tests/contract/backend-cases.json)）で、
+> 決定と根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階5-0 以降にある。
+> 以下は着手時の要件で、**到達点との差分は §7 の表**を見ること。
+
 ### 5.1 保存/読込/一覧（PG CRUD → ファイル I/O）
 - `/data/schema` を正本ディレクトリとして扱う。
   - `list` → `schema/*.json` 列挙。
@@ -111,9 +135,14 @@ ENTRYPOINT ["java","-jar","app.jar"]
 - **DB レス既定**。永続 PG は持たない（編集中状態はフロント側）。
 - レスポンス形式は §0 実測に合わせ、フロント通信を最小変更に保つ。CSRF 除外等も実測で確認。
 
-### 5.2 introspection（connect）
+### 5.2 introspection（`import`）
 - 既存 DB を読んでスキーマ化する機能は据え置き。`information_schema` を読む Kotlin 実装で **JSON を返す**（現行 XML から置換）。外部 DB への到達性が要る唯一の経路。
 - `READONLY=true`（Railway ビューア）では無効化。
+
+> **実装済み。対応は 4 本**（postgresql / mysql / mariadb / h2）。段階5-8b で閉じた ——
+> mssql / oracle は JDBC ドライバのライセンス確認が要り、sqlite はサーバ接続の概念が無い。
+> **接続先は env に列挙した名前だけ**が使える（ホスト名はクライアントから渡らないので
+> SSRF が不可能）。§4.6 の 2 不具合は**再現しない**（構造的に起こらない形にしてある）。
 
 ---
 
@@ -185,6 +214,17 @@ enum: 参照テーブル/CHECK 既定、native enum は例外。
 ---
 
 ## 11. AI リファクタ提案機能
+
+> **実装済み**（段階11-0 〜 11-5。2026-08-24）。**到達点は [`ARCHITECTURE.md`](ARCHITECTURE.md) §8**、
+> 決定と根拠は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階11-x が持つ。
+> 本節は**着手時の要件**のまま残してある（§5 と同じ形で、**HANDOVER = 入口 /
+> CUSTOMIZATIONS = 正**）。実装との差分は 4 つ:
+>
+> - **URL は `POST /api/ai/review`**（§11.2 の `/api/refactor/suggest` から改名。11-0）
+> - **構造化出力は structured outputs**（§11.3 の tool use から。手段であって目的ではない）
+> - **プライバシーは素のまま送る＋送信前プレビュー**（§11.5 が「着手時に確定」としていた点。
+>   匿名化すると判定基準の中心＝名前そのものが死ぬ）
+> - **`patch.op` は閉じた 8 種で、`drop-table` / `drop-column` を作らない**（§11.4 の補強）
 
 ### 11.1 位置づけ
 - **入力＝スキーマの JSON モデル**（§4 serializer 出力をそのまま利用）。

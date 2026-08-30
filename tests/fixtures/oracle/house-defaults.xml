@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: house 既定（HANDOVER §6）を Oracle の型パレットで表したもの。
+  postgresql 版と同じスキーマ（tests/fixtures/postgresql/house-defaults.xml）を、
+  db/oracle/datatypes.xml に実在する型だけで書き直してある。
+
+  **house 既定が Oracle で失うもの**（記録は CUSTOMIZATIONS.md 段階6-6b）:
+    - uuid         -> RAW(16) ＋ SYS_GUID()（v4 相当。uuidv7 の順序性は失う）
+    - timestamptz  -> **TIMESTAMP WITH TIME ZONE**（6-8c でパレットに入った。tz を保つ）
+    - jsonb        -> **JSON**（21c から。6-8c でパレットに入った）
+    - boolean      -> **BOOLEAN**（**23ai からネイティブ**。6-8c まで NUMBER(1) だった）
+
+  email と tag が VARCHAR2 なのは Oracle の制約 —— CLOB には UNIQUE も PRIMARY KEY も
+  張れない。「その DB で普通に書く形」を採っている。
+
+  **view_count の INTEGER が INTEGER のまま出る** —— 6-8c まで known-issue #10 で NUMBER に
+  化けていた（number の re="INT" が integer の sql 完全一致を上書きしていた）。
+  strict なパレットは re を見ないので、このプロファイルで #10 が消えた。
+-->
+<sql>
+<table x="20" y="20" name="users">
+<row name="id" null="0" autoincrement="0">
+<datatype>RAW(16)</datatype>
+<default>SYS_GUID()</default>
+</row>
+<row name="email" null="0" autoincrement="0">
+<datatype>VARCHAR2(255)</datatype>
+<comment>ログイン用メールアドレス</comment>
+</row>
+<row name="display_name" null="0" autoincrement="0">
+<datatype>VARCHAR2(255)</datatype>
+</row>
+<row name="is_active" null="0" autoincrement="0">
+<datatype>BOOLEAN</datatype>
+<default>TRUE</default>
+</row>
+<row name="preferences" null="0" autoincrement="0">
+<datatype>JSON</datatype>
+<comment>UI 設定などの任意項目</comment>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>SYSTIMESTAMP</default>
+</row>
+<row name="updated_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>SYSTIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="users_pkey">
+<part>id</part>
+</key>
+<key type="UNIQUE" name="users_email_key">
+<part>email</part>
+</key>
+<comment>ユーザー</comment>
+</table>
+<table x="420" y="20" name="articles">
+<row name="id" null="0" autoincrement="0">
+<datatype>RAW(16)</datatype>
+<default>SYS_GUID()</default>
+</row>
+<row name="author_id" null="0" autoincrement="0">
+<datatype>RAW(16)</datatype>
+<relation table="users" row="id" />
+<comment>執筆者 (users.id)</comment>
+</row>
+<row name="title" null="0" autoincrement="0">
+<datatype>VARCHAR2(255)</datatype>
+</row>
+<row name="body" null="1" autoincrement="0">
+<datatype>CLOB</datatype>
+</row>
+<row name="view_count" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+<default>0</default>
+</row>
+<row name="price" null="1" autoincrement="0">
+<datatype>DECIMAL(12,2)</datatype>
+<comment>有料記事の価格。浮動小数ではなく decimal を使う</comment>
+</row>
+<row name="published_on" null="1" autoincrement="0">
+<datatype>DATE</datatype>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>SYSTIMESTAMP</default>
+</row>
+<row name="updated_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>SYSTIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="articles_pkey">
+<part>id</part>
+</key>
+<comment>記事</comment>
+</table>
+<table x="820" y="20" name="article_tags">
+<row name="article_id" null="0" autoincrement="0">
+<datatype>RAW(16)</datatype>
+<relation table="articles" row="id" />
+</row>
+<row name="tag" null="0" autoincrement="0">
+<datatype>VARCHAR2(64)</datatype>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>SYSTIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="pk_article_tags">
+<part>article_id</part>
+<part>tag</part>
+</key>
+<comment>記事とタグの対応</comment>
+</table>
+</sql>

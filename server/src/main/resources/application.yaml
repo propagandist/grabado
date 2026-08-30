@@ -1,0 +1,72 @@
+# 外向きの env 名は HANDOVER §2.4 のものを保ち、内側では型付きの
+# @ConfigurationProperties で受ける（テストが値をコンストラクタで作れる＝
+# Spring を起動せずに store をテストできる）。
+#
+# GRABADO_ 前綴りを正とし、裸の一般語（SCHEMA_DIR）も互換で読む。裸の名前だけに
+# するのは公開 OSS のコンテナ env として危うい（base image や他プロセスと衝突しうる）。
+grabado:
+  schema-dir: ${GRABADO_SCHEMA_DIR:${SCHEMA_DIR:/data/schema}}
+  # 副作用（保存・introspection・AI）を止める。**公開デモは true 一択**
+  # —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。
+  # 落ちるのはその 3 つだけで、list / load は生きている（読み取りビューア）。
+  readonly: ${GRABADO_READONLY:${READONLY:false}}
+
+  # Strict-Transport-Security を出すか（issue #84）。**既定は false。**
+  # TLS を終端するのは前段（公開デモは Railway）で、アプリが見る口はいつも平文 ——
+  # だから「このデプロイは TLS の後ろにいる」と人が宣言する env にしてある。
+  # 既定で出すと、手元の http://localhost:8080 を開いたブラウザが以後 localhost を
+  # https へ強制する。値と preload を付けない理由は SecurityHeadersFilter.HSTS。
+  hsts: ${GRABADO_HSTS:false}
+
+  # introspection の接続先（段階5-7a）。**既定は空＝無効。**
+  #
+  # ★ ここに列挙したものしか使えない。`?action=import&database=shop` の `shop` が選ぶのは
+  #   このキーだけで、**ホスト名はクライアントから 1 バイトも渡らない** ——
+  #   SSRF が「対策」ではなく**不可能**になる。
+  #
+  # 設定するときは env 経由で（秘密をイメージに焼かない。CLAUDE.md 制約5）:
+  #
+  #   grabado:
+  #     introspect:
+  #       sources:
+  #         shop:
+  #           url: ${SHOP_JDBC_URL}
+  #           user: ${SHOP_DB_USER}
+  #           password: ${SHOP_DB_PASSWORD}
+  #           schema: public
+  introspect:
+    sources: {}
+
+  # AI proxy（段階11-2a）。**既定は空＝無効。**
+  #
+  # ★ キーとモデル名が両方そろって初めて有効になる。**モデル名に既定値を置かない** ——
+  #   置けばそれが事実上の焼き込みで、書いた日から古くなる（段階11-0 の決めたこと 7）。
+  #   選び方は docs/ARCHITECTURE.md §8.4 のリンクから引く。
+  #
+  # ★ 上限はサーバが持つ。API の費用が自社負担なので、クライアントの自己申告を上限にしない。
+  #   既定値の根拠は GrabadoProperties の AiProperties に書いてある。
+  #   **タイムアウトと effort はここに無い** —— 実測が要るので上流を実際に叩く 11-2b が決める。
+  ai:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${GRABADO_AI_MODEL:}
+    max-tables: ${GRABADO_AI_MAX_TABLES:100}
+    max-request-bytes: ${GRABADO_AI_MAX_REQUEST_BYTES:262144}
+    rate-per-minute: ${GRABADO_AI_RATE_PER_MINUTE:10}
+    max-concurrent: ${GRABADO_AI_MAX_CONCURRENT:2}
+    cache-entries: ${GRABADO_AI_CACHE_ENTRIES:64}
+    cache-ttl: ${GRABADO_AI_CACHE_TTL:1h}
+    # 上流 1 回あたりの制限時間（段階11-2b）。**SDK 既定の 10 分は長すぎる。**
+    timeout: ${GRABADO_AI_TIMEOUT:120s}
+    # 思考の深さ（low / medium / high / xhigh / max）。**コストの主要な変数。**
+    # 空なら上流の既定に任せる。既定値をここに置かないのはモデル名と同じ理由。
+    effort: ${GRABADO_AI_EFFORT:}
+
+server:
+  tomcat:
+    # 日本語の keyword が URL エンコードで往復するのは実測契約（ARCHITECTURE §4.3）。
+    # 既定に任せず明示する。
+    uri-encoding: UTF-8
+
+spring:
+  application:
+    name: grabado

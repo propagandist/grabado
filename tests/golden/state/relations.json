@@ -1,0 +1,442 @@
+{
+  "tables": [
+    {
+      "title": "employees",
+      "x": 20,
+      "y": 20,
+      "zIndex": 1,
+      "comment": "",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "20px",
+        "styleTop": "20px",
+        "styleZIndex": "1",
+        "titleHtml": "employees",
+        "titleTooltip": null,
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "name",
+          "type": 8,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "name",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "manager_id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": true,
+          "ai": false,
+          "comment": "直属の上長（自己参照）",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "直属の上長（自己参照）",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "manager_id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "employees_pkey",
+          "parts": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "projects",
+      "x": 360,
+      "y": 20,
+      "zIndex": 2,
+      "comment": "",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "360px",
+        "styleTop": "20px",
+        "styleZIndex": "2",
+        "titleHtml": "projects",
+        "titleTooltip": null,
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "title",
+          "type": 8,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "title",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "owner_id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "owner_id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "team_id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": true,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "team_id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "projects_pkey",
+          "parts": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "teams",
+      "x": 700,
+      "y": 20,
+      "zIndex": 3,
+      "comment": "",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "700px",
+        "styleTop": "20px",
+        "styleZIndex": "3",
+        "titleHtml": "teams",
+        "titleTooltip": null,
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "name",
+          "type": 8,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "name",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "teams_pkey",
+          "parts": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "employee_projects",
+      "x": 360,
+      "y": 320,
+      "zIndex": 4,
+      "comment": "",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "360px",
+        "styleTop": "320px",
+        "styleZIndex": "4",
+        "titleHtml": "employee_projects",
+        "titleTooltip": null,
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "employee_id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "employee_id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "project_id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "project_id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "employee_projects_pkey",
+          "parts": [
+            "employee_id",
+            "project_id"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "parent": [
+        0,
+        0
+      ],
+      "child": [
+        0,
+        2
+      ]
+    },
+    {
+      "parent": [
+        0,
+        0
+      ],
+      "child": [
+        1,
+        2
+      ]
+    },
+    {
+      "parent": [
+        2,
+        0
+      ],
+      "child": [
+        1,
+        3
+      ]
+    },
+    {
+      "parent": [
+        0,
+        0
+      ],
+      "child": [
+        3,
+        0
+      ]
+    },
+    {
+      "parent": [
+        1,
+        0
+      ],
+      "child": [
+        3,
+        1
+      ]
+    }
+  ],
+  "area": [
+    "svg",
+    "div.table",
+    "div.table",
+    "div.table",
+    "div.table"
+  ],
+  "svg": [
+    "path",
+    "path",
+    "path",
+    "path",
+    "path"
+  ],
+  "minimap": [
+    "div.port",
+    "div.mini",
+    "div.mini",
+    "div.mini",
+    "div.mini"
+  ]
+}

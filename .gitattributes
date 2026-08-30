@@ -1,0 +1,43 @@
+# git hook / シェルスクリプトは LF 固定（Windows でも shebang を壊さない）
+.githooks/** text eol=lf
+scripts/*.sh text eol=lf
+# ★ コンテナの entrypoint（issue #103）。CRLF だと shebang が壊れて起動しない
+docker-entrypoint.sh text eol=lf
+
+# PowerShell は Windows ネイティブなので CRLF
+scripts/*.ps1 text eol=crlf
+
+# 特性化テスト（HANDOVER §7）の入力 fixture と golden は LF 固定。
+# バイト一致で比較するため、チェックアウト時の改行変換を絶対に許さない。
+tests/fixtures/** text eol=lf
+tests/golden/**   text eol=lf
+
+# db/ は段階6-5a で datatypes.xml だけになった（output.xsl は TS 生成器 js/io/ddl/ へ）。
+# それまで -text だったのは「xsl:text 内の改行がそのまま生成 SQL に出る」ため
+# ——つまり db/ の改行コードが DDL golden のバイト列を左右していた。生成が TS に移って
+# その経路が無くなり、いま db/ が持つのは属性を読むだけの XML なので、他の text ファイルと
+# 同じ LF 固定に揃える（5 本とも既に LF でコミットされているのでバイト列は動かない）。
+db/**     text eol=lf
+
+# locale/ko.xml は今も CRLF。こちらは実体に合わせて変換しないままにする。
+locale/** -text
+
+# Gradle wrapper（段階5-1b）。gradlew は sh、gradlew.bat は cmd が読むので、
+# それぞれ LF / CRLF で固定する。**ここが抜けると Windows で clone した人の
+# ./gradlew が `bad interpreter` で起動しない**（.githooks/** と同じ問題）。
+# jar はテキスト変換の対象外。
+server/gradlew                       text eol=lf
+server/gradlew.bat                   text eol=crlf
+server/gradle/wrapper/*.jar          binary
+server/**/*.kt                       text eol=lf
+server/**/*.kts                      text eol=lf
+server/**/*.yaml                     text eol=lf
+server/gradle/wrapper/*.properties   text eol=lf
+
+# 契約表（段階5-1b）。Kotlin と TS の両方が同じバイト列を読む。
+tests/contract/** text eol=lf
+
+# 配布イメージ（段階2-1）。RUN の行継続に \r が混ざると alpine の sh が壊れるので LF 固定
+# （.githooks/** と scripts/*.sh を LF にしているのと同じ理由）。
+Dockerfile    text eol=lf
+.dockerignore text eol=lf

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: db/h2/datatypes.xml の型パレットを網羅する（22 型）。
+  サイズ付き（length="1"）の型は括弧つきで書き、Row.fromXML のサイズ抽出も通す。
+
+  **1 列 = パレットの 1 型**で、書く型名はパレットの sql 属性そのもの。
+  網羅は tests/node/fixture-set.test.ts が機械的に見る。
+
+  **書いてある型はすべて H2 2.4.240 の実物に聞いて通ることを確かめてある**
+  （db/h2/datatypes.xml の頭に採取手順）。**単独の INTERVAL 型が無い**ので
+  interval の列が無いのが sql-standard との差 —— H2 は INTERVAL YEAR のように
+  単位が要り、<type> の列挙では表せない。
+-->
+<sql>
+<table x="20" y="20" name="type_samples">
+<row name="c_integer" null="1" autoincrement="0">
+<datatype>INTEGER</datatype>
+</row>
+<row name="c_smallint" null="1" autoincrement="0">
+<datatype>SMALLINT</datatype>
+</row>
+<row name="c_tinyint" null="1" autoincrement="0">
+<datatype>TINYINT</datatype>
+</row>
+<row name="c_bigint" null="1" autoincrement="0">
+<datatype>BIGINT</datatype>
+</row>
+<row name="c_bigint_identity" null="0" autoincrement="0">
+<datatype>BIGINT GENERATED ALWAYS AS IDENTITY</datatype>
+</row>
+<row name="c_decimal" null="1" autoincrement="0">
+<datatype>NUMERIC(12,2)</datatype>
+</row>
+<row name="c_float" null="1" autoincrement="0">
+<datatype>REAL</datatype>
+</row>
+<row name="c_double" null="1" autoincrement="0">
+<datatype>DOUBLE PRECISION</datatype>
+</row>
+<row name="c_decfloat" null="1" autoincrement="0">
+<datatype>DECFLOAT(20)</datatype>
+</row>
+<row name="c_char" null="1" autoincrement="0">
+<datatype>CHARACTER(10)</datatype>
+</row>
+<row name="c_varchar" null="1" autoincrement="0">
+<datatype>CHARACTER VARYING(255)</datatype>
+</row>
+<row name="c_text" null="1" autoincrement="0">
+<datatype>CHARACTER LARGE OBJECT</datatype>
+</row>
+<row name="c_bytea" null="1" autoincrement="0">
+<datatype>BINARY LARGE OBJECT</datatype>
+</row>
+<row name="c_varbinary" null="1" autoincrement="0">
+<datatype>BINARY VARYING(255)</datatype>
+</row>
+<row name="c_boolean" null="1" autoincrement="0">
+<datatype>BOOLEAN</datatype>
+</row>
+<row name="c_date" null="1" autoincrement="0">
+<datatype>DATE</datatype>
+</row>
+<row name="c_time" null="1" autoincrement="0">
+<datatype>TIME(3)</datatype>
+</row>
+<row name="c_time_tz" null="1" autoincrement="0">
+<datatype>TIME WITH TIME ZONE</datatype>
+</row>
+<row name="c_timestamp_tz" null="1" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+</row>
+<row name="c_uuid" null="1" autoincrement="0">
+<datatype>UUID</datatype>
+</row>
+<row name="c_json" null="1" autoincrement="0">
+<datatype>JSON</datatype>
+</row>
+<row name="c_geometry" null="1" autoincrement="0">
+<datatype>GEOMETRY</datatype>
+</row>
+<key type="PRIMARY" name="type_samples_pkey">
+<part>c_bigint_identity</part>
+</key>
+</table>
+</sql>

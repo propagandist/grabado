@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  既知の不具合 #11: 既定値を型の quote で囲むとき、値の中の ' がエスケープされない。
+
+  正しくは 'O''Brien'（SQL 標準は ' を 2 つ重ねる）。js/io/ddl-xml.ts は quote 属性を
+  前後に足すだけなので 'O'Brien' になり、構文として壊れた DDL が出る。
+
+  **段階6-4 が作った欠陥ではない** —— 囲む側の規則は upstream からのもので、6-4 が
+  足したのは「式なら囲まない」という逆側の判定だけ（uuidv7() / now() はこの fixture に
+  入れていない。それらは 6-4 以降 囲まれないので #11 に当たらない）。
+  直すのは 6-5（output.xsl の TS 生成器化）で、そのとき囲む側の規則ごと設計し直す。
+-->
+<sql>
+<table x="10" y="10" name="quoted">
+<row name="owner" null="0" autoincrement="0">
+<datatype>TEXT</datatype><default>O'Brien</default>
+</row>
+</table>
+</sql>

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: 引用符と多言語。
+    - コメント内のシングルクォート -> 生成器の replaceSubstring（'' への二重化）
+    - カラム名の二重引用符       -> Row.toXML の " -> &quot; 置換（属性値のみ）
+    - 日本語のテーブル名・カラム名・コメント（UTF-8 の往復）
+  & と < は現行 XML を壊すため、正常系ではなく tests/known-issues/ に置いている。
+
+  **構造は全プロファイルで同じ。型だけ SQL Server のもの**（段階6-6b）——
+  識別子の囲い方はプロファイルごとに違う（SQL Server は角かっこ）ので、
+  同じ入力から採った 5 本の golden がそのまま比較表になる。
+-->
+<sql>
+<table x="20" y="20" name="顧客">
+<row name="id" null="0" autoincrement="0">
+<datatype>int</datatype>
+</row>
+<row name="氏名" null="0" autoincrement="0">
+<datatype>nvarchar(255)</datatype>
+<comment>姓と名は分けない</comment>
+</row>
+<row name="say &quot;hi&quot;" null="1" autoincrement="0">
+<datatype>nvarchar(255)</datatype>
+<comment>識別子に " が入る場合の属性エスケープ確認</comment>
+</row>
+<row name="メモ" null="1" autoincrement="0">
+<datatype>nvarchar(4000)</datatype>
+<comment>顧客の'愛称'をここに書く</comment>
+</row>
+<key type="PRIMARY" name="顧客_pkey">
+<part>id</part>
+</key>
+<comment>顧客マスタ。'仮登録' の状態も含む</comment>
+</table>
+</sql>

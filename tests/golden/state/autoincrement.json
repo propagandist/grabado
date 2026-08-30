@@ -1,0 +1,110 @@
+{
+  "tables": [
+    {
+      "title": "counters",
+      "x": 20,
+      "y": 20,
+      "zIndex": 1,
+      "comment": "",
+      "selected": false,
+      "dom": {
+        "containerClass": "table",
+        "styleLeft": "20px",
+        "styleTop": "20px",
+        "styleZIndex": "1",
+        "titleHtml": "counters",
+        "titleTooltip": null,
+        "miniClass": "mini"
+      },
+      "rows": [
+        {
+          "title": "id",
+          "type": 0,
+          "size": "",
+          "def": "",
+          "nll": false,
+          "ai": true,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [
+            0
+          ],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title primary key",
+            "titleHtml": "id",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "label",
+          "type": 7,
+          "size": "64",
+          "def": "",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(255, 200, 200)",
+            "borderColor": "rgb(255, 200, 200)",
+            "titleClass": "title",
+            "titleHtml": "label",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        },
+        {
+          "title": "hits",
+          "type": 0,
+          "size": "",
+          "def": "0",
+          "nll": false,
+          "ai": false,
+          "comment": "",
+          "selected": false,
+          "expanded": false,
+          "keys": [],
+          "dom": {
+            "containerClass": "",
+            "containerTooltip": "",
+            "backgroundColor": "rgb(238, 238, 170)",
+            "borderColor": "rgb(238, 238, 170)",
+            "titleClass": "title",
+            "titleHtml": "hits",
+            "typehint": "",
+            "selectedDisplay": "none"
+          }
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "counters_pkey",
+          "parts": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "area": [
+    "svg",
+    "div.table"
+  ],
+  "svg": [],
+  "minimap": [
+    "div.port",
+    "div.mini"
+  ]
+}

@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MySQL 8 型パレット（HANDOVER §6 / 段階6-8a で現代化）。
+
+  6-8a まで upstream の 23 型のままで、strict を持たず re の後勝ちで解決していた
+  （known-issues #4 / #10）。**db/mariadb/datatypes.xml（6-7c）が型紙**で、MySQL に無い
+  UUID / INET4 / INET6 を落とし、JSON をネイティブ型として持つ形にしてある。
+
+  属性の契約は docs/FORMAT.md（db/postgresql/datatypes.xml の頭に一覧がある）。
+  strict="1" は「現代化済み」の印 —— 照合は sql / aka の大小無視の完全一致だけになり、
+  一致しない型は先頭型に落ちず例外になる。
+
+  **型は MySQL 8.4.11 の実物に聞いて確かめた**（採取手順は CUSTOMIZATIONS.md の段階6-8a）:
+    UUID / INET4      **無い**（構文エラー。MariaDB との最大の差）
+    JSON              **ネイティブ**（COLUMN_TYPE が json。MariaDB は longtext のエイリアス）
+    BOOLEAN           tinyint(1) のエイリアス
+    TIMESTAMP         tz を保持しない（UTC 変換のみ）
+
+  **移行表（6-8a で撤去した 3 型）**。設計 JSON の型キーが変わるので、
+  tools/migrate-design.mjs と同じ規則で読み替える:
+
+    int        -> integer   MySQL の INTEGER は INT の別名で**同じ型**。id を 1 つに統合した
+    mediumtext -> text      **上限が 16MB から 4GB に広がる**（安全側）。house は text 優先
+    blob       -> bytea     **上限が 64KB から 4GB に広がる**（安全側）
+
+  追加した 3 型: bigint_identity（AUTO_INCREMENT）/ boolean / jsonb。どれも house 既定に要る。
+
+  **TIMESTAMPTZ を timestamp の aka に入れない**（6-7c の mariadb と同じ判断）——
+  入れると PG で書いた設計を読んだときに tz が黙って落ちる。読めないほうが安全。
+-->
+<datatypes db="mysql" strict="1" newrowtype="varchar">
+	<!--
+	  §6.2 初期テーブルテンプレート。**MySQL に UUID 型が無い**ので PK は CHAR(36)。
+	  生成関数 UUID() は v4 で、house 既定の uuidv7() が持つ時系列の順序性は失う。
+	  監査列は tz を保持しない TIMESTAMP（この 2 点が MariaDB との差ではなく MySQL 固有の制約）。
+	-->
+	<template>
+		<row name="id" type="char" size="36" null="0" default="UUID()" key="PRIMARY" />
+		<row name="created_at" type="timestamp" null="0" default="CURRENT_TIMESTAMP" />
+		<row name="updated_at" type="timestamp" null="0" default="CURRENT_TIMESTAMP" />
+	</template>
+
+	<group label="Numeric" color="rgb(238,238,170)">
+		<type id="integer" label="Integer" length="0" sql="INT" kind="int32" aka="INTEGER|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" kind="int16" aka="INT2" quote="" />
+		<type id="tinyint" label="Tiny Integer" length="0" sql="TINYINT" kind="int8" quote="" />
+		<type id="mediumint" label="Medium Integer" length="0" sql="MEDIUMINT" kind="int32" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" kind="int64" aka="INT8" quote="" />
+		<type id="bigint_identity" label="Big Integer (auto)" length="0" sql="BIGINT AUTO_INCREMENT" kind="int64" aka="SERIAL|BIGSERIAL" fk="bigint" quote="" />
+		<type id="decimal" label="Decimal" length="1" sql="DECIMAL" kind="decimal" aka="NUMERIC|DEC" quote="" />
+		<type id="float" label="Single precision" length="0" sql="FLOAT" kind="float32" aka="REAL" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE" kind="float64" aka="DOUBLE PRECISION" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="char" label="Char" length="1" sql="CHAR" kind="string" aka="CHARACTER" quote="'" />
+		<type id="varchar" label="Varchar" length="1" sql="VARCHAR" kind="string" aka="CHARACTER VARYING" quote="'" />
+		<type id="text" label="Text" length="0" sql="LONGTEXT" kind="string" aka="TEXT|MEDIUMTEXT|CLOB|CHARACTER LARGE OBJECT|XML" quote="'" />
+		<type id="bytea" label="Binary (BLOB)" length="0" sql="LONGBLOB" kind="binary" aka="BLOB|BYTEA|BINARY LARGE OBJECT" quote="'" />
+		<type id="binary" label="Binary (fixed)" length="1" sql="BINARY" kind="binary" quote="'" />
+		<type id="varbinary" label="Varbinary" length="1" sql="VARBINARY" kind="binary" quote="'" />
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" kind="boolean" aka="BOOL" quote="'" />
+	</group>
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+		<type id="date" label="Date" length="0" sql="DATE" kind="date" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" kind="time" quote="'" />
+		<type id="datetime" label="Datetime" length="1" sql="DATETIME" kind="timestamp" quote="'" />
+		<type id="timestamp" label="Timestamp (UTC)" length="1" sql="TIMESTAMP" kind="timestamp_tz" quote="'" />
+		<type id="year" label="Year" length="0" sql="YEAR" kind="other" quote="" />
+	</group>
+
+	<group label="Miscellaneous" color="rgb(200,200,255)">
+		<type id="jsonb" label="JSON" length="0" sql="JSON" kind="json" aka="JSONB" quote="'" />
+		<type id="enum" label="ENUM" length="1" sql="ENUM" kind="other" quote="" />
+		<type id="set" label="SET" length="1" sql="SET" kind="other" quote="" />
+		<type id="bit" label="Bit" length="1" sql="BIT" kind="other" quote="" />
+	</group>
+</datatypes>

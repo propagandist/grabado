@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SQL Server 2022 型パレット（HANDOVER §6 / 段階6-8b で現代化）。
+
+  6-8b まで upstream の 26 型のままで、strict を持たず re の後勝ちで解決していた
+  （known-issues #4 / #10）。**6-6b が実測した「date が無い」「tz 付きの型が無い」を
+  この段階で直している** —— どちらも house 既定に直接効く。
+
+  属性の契約は docs/FORMAT.md（db/postgresql/datatypes.xml の頭に一覧がある）。
+  strict="1" は「現代化済み」の印。
+
+  **型は SQL Server 2022 (RTM-CU26) の実物に聞いて確かめた**（採取手順は CUSTOMIZATIONS.md
+  の段階6-8b）。house 既定に効く実測:
+    uniqueidentifier   uuid をネイティブに持つ（4 本の未現代化プロファイルで唯一）
+    datetimeoffset     **timestamptz を tz ごと受けられる**（6-6b では datetime に落ちていた）
+    date               **日付だけの型がある**（6-6b では datetime に落ちていた）
+    json               **2022 には無い**（Msg 2715。2025 で追加される型）-> nvarchar で表す
+
+  **6-8b でパレットから外した型**:
+    text / ntext / image   SQL Server が**非推奨**にしている（将来削除予定）。house は
+                           非推奨型を勧めない —— 6-0 が PG から serial / char(n) を外したのと同じ判断。
+                           text 相当は nvarchar が aka で受ける
+    money / smallmoney     CLAUDE.md「numeric（not money）」。PG で外したのと同じ
+    numeric                decimal と同義なので decimal に統合（aka で受ける）
+
+  **bigint_identity を持たない**のはこのプロファイルだけ。T-SQL の IDENTITY は型の一部ではなく
+  列の属性で（PG の GENERATED ALWAYS AS IDENTITY や MySQL の AUTO_INCREMENT は型名に入る）、
+  autoincrement のチェックで表すのが自然なため。生成器が IDENTITY (1, 1) を付ける。
+
+  **text id を持たない**のもこのプロファイルだけ。SQL Server の text 相当は nvarchar(max) だが、
+  括弧を含む型名は照合（サイズを外して sql と比べる）に掛からないので型として置けない。
+  house の text 優先は nvarchar で表す。
+-->
+<datatypes db="mssql" strict="1" newrowtype="nvarchar">
+	<!--
+	  §6.2 初期テーブルテンプレート。**house 既定をほぼそのまま置ける** ——
+	  uuid は uniqueidentifier、timestamptz は datetimeoffset がある。
+	  生成関数は NEWID()（v4）で、uuidv7 の時系列の順序性だけを失う。
+	-->
+	<template>
+		<row name="id" type="uuid" null="0" default="NEWID()" key="PRIMARY" />
+		<row name="created_at" type="timestamp_with_time_zone" null="0" default="SYSDATETIMEOFFSET()" />
+		<row name="updated_at" type="timestamp_with_time_zone" null="0" default="SYSDATETIMEOFFSET()" />
+	</template>
+
+	<group label="Numeric" color="rgb(238,238,170)">
+		<type id="integer" label="Integer" length="0" sql="int" kind="int32" aka="INTEGER|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="smallint" kind="int16" aka="INT2" quote="" />
+		<type id="tinyint" label="Tiny Integer" length="0" sql="tinyint" kind="int8" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="bigint" kind="int64" aka="INT8" quote="" />
+		<type id="decimal" label="Decimal" length="1" sql="decimal" kind="decimal" aka="NUMERIC|DEC" quote="" />
+		<type id="float" label="Double precision" length="0" sql="float" kind="float64" aka="DOUBLE|DOUBLE PRECISION" quote="" />
+		<type id="real" label="Single precision" length="0" sql="real" kind="float32" aka="FLOAT4" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="char" label="Char" length="1" sql="char" kind="string" aka="CHARACTER" quote="'" />
+		<type id="varchar" label="Varchar" length="1" sql="varchar" kind="string" aka="CHARACTER VARYING" quote="'" />
+		<type id="nchar" label="nChar" length="1" sql="nchar" kind="string" quote="'" />
+		<type id="nvarchar" label="nVarchar" length="1" sql="nvarchar" kind="string" aka="TEXT|CLOB|CHARACTER LARGE OBJECT|NTEXT" quote="'" />
+		<type id="boolean" label="Boolean (bit)" length="0" sql="bit" kind="boolean" aka="BOOL|BOOLEAN" quote="" />
+	</group>
+
+	<group label="Binary" color="rgb(200,200,255)">
+		<type id="binary" label="Binary (fixed)" length="1" sql="binary" kind="binary" quote="'" />
+		<type id="varbinary" label="Varbinary" length="1" sql="varbinary" kind="binary" aka="BLOB|BYTEA|BINARY LARGE OBJECT|IMAGE" quote="'" />
+	</group>
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+		<type id="date" label="Date" length="0" sql="date" kind="date" quote="'" />
+		<type id="time" label="Time" length="1" sql="time" kind="time" quote="'" />
+		<type id="datetime" label="Datetime (legacy)" length="0" sql="datetime" kind="timestamp" quote="'" />
+		<type id="datetime2" label="Datetime2" length="1" sql="datetime2" kind="timestamp" aka="TIMESTAMP|TIMESTAMP WITHOUT TIME ZONE" quote="'" />
+		<type id="timestamp_with_time_zone" label="Datetimeoffset" length="1" sql="datetimeoffset" kind="timestamp_tz" aka="TIMESTAMPTZ|TIMESTAMP WITH TIME ZONE" quote="'" />
+		<type id="smalldatetime" label="SmallDatetime" length="0" sql="smalldatetime" kind="timestamp" quote="'" />
+	</group>
+
+	<group label="Miscellaneous" color="rgb(200,220,255)">
+		<type id="uuid" label="UUID" length="0" sql="uniqueidentifier" kind="uuid" quote="'" />
+		<type id="xml" label="XML" length="0" sql="xml" kind="xml" quote="'" />
+		<type id="sql_variant" label="SQL Variant" length="0" sql="sql_variant" kind="other" quote="'" />
+		<type id="rowversion" label="Rowversion" length="0" sql="rowversion" kind="other" quote="" />
+		<type id="hierarchyid" label="HierarchyID" length="0" sql="hierarchyid" kind="other" quote="'" />
+		<type id="geometry" label="Geometry" length="0" sql="geometry" kind="geometry" quote="'" />
+	</group>
+</datatypes>

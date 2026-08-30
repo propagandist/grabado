@@ -1,0 +1,37 @@
+{
+  "formatVersion": 2,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "counters",
+      "x": 20,
+      "y": 20,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "autoincrement": true
+        },
+        {
+          "name": "label",
+          "type": "varchar",
+          "size": "64"
+        },
+        {
+          "name": "hits",
+          "type": "integer",
+          "default": "0"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "counters_pkey",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ]
+}

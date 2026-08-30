@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PostgreSQL 18 型パレット（HANDOVER §6.1 / 段階6-3 で差し替え）。
+
+  属性の契約は docs/FORMAT.md:
+    id     設計 JSON の型キー。永続化専用。意味が同じなら変えない
+    sql    出力する型名。§6 が自由に動かしてよい
+    aka    読み込みで受ける別名（| 区切り・大小無視の完全一致）。段階6-3 で新設
+    kind   正規型。**その型が何の値か**だけを表す閉じた語彙（段階6-9c で新設）。
+           語彙は js/io/palette.ts の TYPE_KINDS で、172 型ぜんぶが 1 つ持つ。
+           ORM 出力（6-9d〜）とプロファイル変換（6-10）がこれを介して写す ——
+           (db, 型 id) で写像を持つと ORM が増えるたびに同じ表を書き直すことになる
+    fk     この型を親に持つ FK 子行の型。**id 参照**（段階6-2）
+    length 1 ならサイズ / 精度を取る型。0 なら取らない
+    re     非 strict プロファイル用の正規表現照合。本パレットは 1 つも持たない
+
+  ルート属性 newrowtype は「Add row で足す行の既定型」（id 参照。段階6-4）。
+  テンプレートとは別概念なので <template> の中に入れない。無ければ従来どおり
+  先頭の型（添字 0）になる。
+
+  **length は段階6-3 まで upstream 由来の死んだ属性だった**（js/ のどこからも読まれて
+  いなかった）。6-3 で strict プロファイルの読み込み契約にしたので、PG18 の実際に
+  合わせて 4 型を直してある: bytea / xml は精度を取らないので 1 -> 0、
+  timetz / timestamptz は秒精度を取れるので 0 -> 1。読むのは
+  js/io/xml-parser.ts で、CHAR(10) -> TEXT のように寄せ先がサイズを取らない型の
+  ときに size を捨てる（残すと TEXT(10) という壊れた DDL が出る）。
+  **UI の size 欄は 6-9a で型ごとに閉じた**（6-4 では「テンプレートとは別件」として送り、
+  6-8d が DDL 側を塞いだ）。読み込み（js/io/xml-parser.ts）・DDL 生成（js/io/ddl/shared.ts）・
+  UI（js/row.ts）の 3 経路が同じ TypePalette.hasSize を共有する。
+
+  strict="1" は「現代化済み」の印。照合は sql / aka の完全一致だけになり、
+  一致しない型は黙って先頭型に落ちず例外になる（known-issue #4 の解消）。
+  未現代化のプロファイル（mysql / mssql / oracle / sqlite）は従来どおり
+  re の後勝ち＋先頭型フォールバックで、6-8 でこちら側に移る。
+
+  aka に入れる名前の基準は 3 つ。それ以外は入れない:
+    1. 段階6-3 で撤去した型の旧 sql / re（SERIAL・CHAR・TIMESTAMP・JSON ほか）
+    2. sql を PG18 の正式名に直した 4 型の旧 sql（DECIMAL・FLOAT・DOUBLE・
+       TIMESTAMP WITH TIME ZONE）。**introspection の実出力がこちら**
+       （docs/samples/introspection-postgresql.xml）なので落とせない
+    3. PG が公式に認める短縮別名（int4 / float8 / bool ほか）
+
+  移行表（旧 id -> 新 id）は CUSTOMIZATIONS.md の段階6-3 と
+  tools/migrate-design.mjs が持つ。aka は「旧 sql 名 -> 新型」で別物。
+-->
+<datatypes db="postgresql" strict="1" newrowtype="text">
+	<!--
+	  §6.2 初期テーブルテンプレート（段階6-4）。新規テーブルはこの行で作られる。
+	  読むのは js/io/template.ts で、type は **id 参照**（sql 名ではない。fk と同じ規約）。
+	  key="PRIMARY" の行が PRIMARY キーに入る。
+
+	  §6.2 の例外 2 つ（外部露出 = gen_random_uuid() / 完全内部 = bigint identity）は
+	  **UI に出さない**。作成後に型と既定値を手で変える。テンプレートを選ばせると
+	  locale 21 言語に文言が要るわりに、変える手間は 2 クリックしか減らない。
+
+	  テンプレートを持たないプロファイル（未現代化の 4 本）は従来どおり
+	  id 1 列 ＋ autoincrement で作られる。6-8 でこちら側に移る。
+	-->
+	<template>
+		<row name="id" type="uuid" null="0" default="uuidv7()" key="PRIMARY" />
+		<row name="created_at" type="timestamp_with_time_zone" null="0" default="now()" />
+		<row name="updated_at" type="timestamp_with_time_zone" null="0" default="now()" />
+	</template>
+
+	<group label="Numeric" color="rgb(238,238,170)">
+		<type id="integer" label="Integer" length="0" sql="INTEGER" kind="int32" aka="INT|INT4" quote="" />
+		<type id="smallint" label="Small Integer" length="0" sql="SMALLINT" kind="int16" aka="INT2" quote="" />
+		<type id="bigint" label="Big Integer" length="0" sql="BIGINT" kind="int64" aka="INT8" quote="" />
+		<type id="bigint_identity" label="Big Integer (identity)" length="0" sql="BIGINT GENERATED ALWAYS AS IDENTITY" kind="int64" aka="SERIAL|SERIAL4|BIGSERIAL|SERIAL8" fk="bigint" quote="" />
+		<type id="decimal" label="Numeric" length="1" sql="NUMERIC" kind="decimal" aka="DECIMAL" quote="" />
+		<type id="float" label="Single precision" length="0" sql="REAL" kind="float32" aka="FLOAT|FLOAT4" quote="" />
+		<type id="double" label="Double precision" length="0" sql="DOUBLE PRECISION" kind="float64" aka="DOUBLE|FLOAT8" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="varchar" label="Varchar" length="1" sql="VARCHAR" kind="string" aka="CHARACTER VARYING" quote="'"/>
+		<type id="text" label="Text" length="0" sql="TEXT" kind="string" aka="CHAR|CHARACTER" quote="'"/>
+		<type id="bytea" label="Binary" length="0" sql="BYTEA" kind="binary" quote="'"/>
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" kind="boolean" aka="BOOL" quote="'"/>
+	</group>
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+		<type id="date" label="Date" length="0" sql="DATE" kind="date" quote="'" />
+		<type id="time" label="Time" length="1" sql="TIME" kind="time" quote="'" />
+		<type id="time_with_time_zone" label="Time w/ TZ" length="1" sql="TIME WITH TIME ZONE" kind="time_tz" aka="TIMETZ" quote="'" />
+		<type id="interval" label="Interval" length="1" sql="INTERVAL" kind="interval" quote="'" />
+		<type id="timestamp_with_time_zone" label="Timestamptz" length="1" sql="TIMESTAMPTZ" kind="timestamp_tz" aka="TIMESTAMP WITH TIME ZONE|TIMESTAMP|TIMESTAMP WITHOUT TIME ZONE" quote="'" />
+	</group>
+
+	<group label="Miscellaneous" color="rgb(200,200,255)">
+		<type id="uuid" label="UUID" length="0" sql="UUID" kind="uuid" quote="'" />
+		<type id="xml" label="XML" length="0" sql="XML" kind="xml" quote="'" />
+		<type id="bit" label="Bit" length="1" sql="BIT" kind="other" quote="'" />
+		<type id="varbit" label="Bit Varying" length="1" sql="VARBIT" kind="other" aka="BIT VARYING" quote="'" />
+		<type id="inet" label="Inet Host Addr" length="0" sql="INET" kind="other" quote="'" />
+		<type id="cidr" label="Inet CIDR Addr" length="0" sql="CIDR" kind="other" quote="'" />
+		<type id="geometry" label="Geometry" length="0" sql="GEOMETRY" kind="geometry" quote="'" />
+		<type id="jsonb" label="JSONB" length="0" sql="JSONB" kind="json" aka="JSON" quote="'" />
+	</group>
+</datatypes>

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  特性化テスト fixture: house 既定（HANDOVER §6）を H2 の型で表したもの。
+  postgresql 版と同じスキーマ（tests/fixtures/postgresql/house-defaults.xml）を、
+  db/h2/datatypes.xml に実在する型だけで書き直してある。
+
+  **house 既定が H2 で失うものは 1 つだけ**（記録は CUSTOMIZATIONS.md 段階6-7b）:
+    - uuidv7()  -> **RANDOM_UUID()**（H2 の生成関数は v4。時系列の順序性を失う）
+
+  それ以外は**すべてネイティブ**で置ける —— uuid / TIMESTAMP WITH TIME ZONE / JSON /
+  BOOLEAN / identity。6-6b で実測した 4 プロファイル（mysql / mssql / oracle / sqlite）が
+  uuid も tz も jsonb も失うのと対照的で、**PG で設計して H2 でテストする**という
+  対応 DB に入れた理由がこの 1 本に出ている。
+
+  **DDL が H2 2.4.240 で実際に通ることを確かめてある**（採取手順は CUSTOMIZATIONS.md 段階6-7b）。
+-->
+<sql>
+<table x="20" y="20" name="users">
+<row name="id" null="0" autoincrement="0">
+<datatype>UUID</datatype>
+<default>RANDOM_UUID()</default>
+</row>
+<row name="email" null="0" autoincrement="0">
+<datatype>CHARACTER VARYING(255)</datatype>
+<comment>ログイン用メールアドレス</comment>
+</row>
+<row name="display_name" null="0" autoincrement="0">
+<datatype>CHARACTER VARYING(255)</datatype>
+</row>
+<row name="is_active" null="0" autoincrement="0">
+<datatype>BOOLEAN</datatype>
+<default>true</default>
+</row>
+<row name="preferences" null="0" autoincrement="0">
+<datatype>JSON</datatype>
+<default>{}</default>
+<comment>UI 設定などの任意項目</comment>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<row name="updated_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="users_pkey">
+<part>id</part>
+</key>
+<key type="UNIQUE" name="users_email_key">
+<part>email</part>
+</key>
+<comment>ユーザー</comment>
+</table>
+<table x="420" y="20" name="articles">
+<row name="id" null="0" autoincrement="0">
+<datatype>UUID</datatype>
+<default>RANDOM_UUID()</default>
+</row>
+<row name="author_id" null="0" autoincrement="0">
+<datatype>UUID</datatype>
+<relation table="users" row="id" />
+<comment>執筆者 (users.id)</comment>
+</row>
+<row name="title" null="0" autoincrement="0">
+<datatype>CHARACTER VARYING(255)</datatype>
+</row>
+<row name="body" null="1" autoincrement="0">
+<datatype>CHARACTER LARGE OBJECT</datatype>
+</row>
+<row name="view_count" null="0" autoincrement="0">
+<datatype>INTEGER</datatype>
+<default>0</default>
+</row>
+<row name="price" null="1" autoincrement="0">
+<datatype>NUMERIC(12,2)</datatype>
+<comment>有料記事の価格。浮動小数ではなく numeric を使う</comment>
+</row>
+<row name="published_on" null="1" autoincrement="0">
+<datatype>DATE</datatype>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<row name="updated_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="articles_pkey">
+<part>id</part>
+</key>
+<comment>記事</comment>
+</table>
+<table x="820" y="20" name="article_tags">
+<row name="article_id" null="0" autoincrement="0">
+<datatype>UUID</datatype>
+<relation table="articles" row="id" />
+</row>
+<row name="tag" null="0" autoincrement="0">
+<datatype>CHARACTER VARYING(64)</datatype>
+</row>
+<row name="created_at" null="0" autoincrement="0">
+<datatype>TIMESTAMP WITH TIME ZONE</datatype>
+<default>CURRENT_TIMESTAMP</default>
+</row>
+<key type="PRIMARY" name="pk_article_tags">
+<part>article_id</part>
+<part>tag</part>
+</key>
+<comment>記事とタグの対応</comment>
+</table>
+</sql>

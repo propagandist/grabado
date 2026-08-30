@@ -1,0 +1,43 @@
+// grabado が生成した Prisma のスキーマ。
+//
+// **native type 属性（@db.Uuid / @db.VarChar）は出さない** —— provider ごとに別の表が
+// 要り、正規型 1 段で写すという設計（段階6-9c）と噛み合わないため。uuid は String に、
+// date / time / timestamp は DateTime に丸まる。丸めた列にはその旨のコメントが付く。
+//
+// **Prisma の識別子は ASCII だけ**なので、非 ASCII の名前は `_` に潰して通し番号で
+// 一意化してある。**元の名前は @@map / @map に必ず残る**。
+//
+// **datasource は出していない** —— oracle に対応する Prisma の provider が無い。
+// 使うときは対応する provider の datasource を自分で足すこと。
+
+model TypeSample {
+  cNumber Decimal @id @map("c_number")
+  cInteger BigInt? @map("c_integer")
+  cDecimal Decimal? @map("c_decimal")
+  cFloat Float? @map("c_float")
+  cBinaryFloat Float? @map("c_binary_float")
+  cBinaryDouble Float? @map("c_binary_double")
+  cChar String? @map("c_char")
+  cVarchar2 String? @map("c_varchar2")
+  cNchar String? @map("c_nchar")
+  cNvarchar2 String? @map("c_nvarchar2")
+  cClob String? @map("c_clob")
+  cNclob String? @map("c_nclob")
+  cBoolean Boolean? @map("c_boolean")
+  cDate DateTime? @map("c_date")
+  cTimestamp DateTime? @map("c_timestamp")
+  cTimestampTz DateTime? @map("c_timestamp_tz")
+  // interval: Prisma のスカラーに対応が無いので String で出す（INTERVAL YEAR TO MONTH）
+  cIntervalYm String? @map("c_interval_ym")
+  // interval: Prisma のスカラーに対応が無いので String で出す（INTERVAL DAY TO SECOND）
+  cIntervalDs String? @map("c_interval_ds")
+  cRaw Bytes? @map("c_raw")
+  cBlob Bytes? @map("c_blob")
+  cJson Json? @map("c_json")
+  // xml: Prisma のスカラーに対応が無いので String で出す（XMLTYPE）
+  cXml String? @map("c_xml")
+  // other: Prisma のスカラーに対応が無いので String で出す（ROWID）
+  cRowid String? @map("c_rowid")
+
+  @@map("type_samples")
+}

@@ -1,0 +1,94 @@
+[
+  {
+    "category": "naming",
+    "severity": "info",
+    "target": { "table": "employee_projects" },
+    "rationale": "多対多の中間テーブルは両側のテーブル名（複数形）をつないだ名前にすると、どの 2 つを結ぶ表なのかが名前だけで読める。",
+    "patch": { "op": "rename-table", "name": "employees_projects" }
+  },
+  {
+    "category": "naming",
+    "severity": "info",
+    "target": { "table": "employees", "column": "name" },
+    "rationale": "name だけでは何の名前か読めない。teams.name と混ざるので full_name にする。",
+    "patch": { "op": "rename-column", "name": "full_name" }
+  },
+  {
+    "category": "type_smell",
+    "severity": "warn",
+    "target": { "table": "employees", "column": "id" },
+    "rationale": "house 既定の PK は uuid（外部へ露出する id を連番にしない）。INTEGER のままだと件数と登録順が URL から読める。",
+    "patch": { "op": "change-type", "sqlType": "UUID" }
+  },
+  {
+    "category": "type_smell",
+    "severity": "warn",
+    "target": { "table": "employees", "column": "id" },
+    "rationale": "uuid の PK は DEFAULT uuidv7() を持たせる（house 既定）。時系列で単調増加するので btree が劣化しない。",
+    "patch": { "op": "set-default", "value": "uuidv7()" }
+  },
+  {
+    "category": "missing_audit",
+    "severity": "warn",
+    "target": { "table": "employees" },
+    "rationale": "監査列 created_at / updated_at が無い。house 既定は timestamptz NOT NULL DEFAULT now()。",
+    "patch": {
+      "op": "add-column",
+      "name": "created_at",
+      "sqlType": "TIMESTAMPTZ",
+      "nullable": false,
+      "default": "now()"
+    }
+  },
+  {
+    "category": "normalization",
+    "severity": "info",
+    "target": { "table": "employees" },
+    "rationale": "所属チームがどこにも記録されていない。projects.team_id はプロジェクト側の所属で、従業員の所属とは別の関心。",
+    "patch": {
+      "op": "add-column",
+      "name": "team_id",
+      "sqlType": "INTEGER",
+      "nullable": true,
+      "comment": "所属チーム（未配属は NULL）"
+    }
+  },
+  {
+    "category": "fk_gap",
+    "severity": "warn",
+    "target": { "table": "employees", "column": "team_id" },
+    "rationale": "teams.id を指す列だが外部キーの宣言が無い。宣言が無いと存在しないチーム id を書き込める。",
+    "patch": {
+      "op": "add-key",
+      "keyType": "FOREIGN",
+      "references": { "table": "teams", "column": "id" }
+    }
+  },
+  {
+    "category": "missing_index",
+    "severity": "warn",
+    "target": { "table": "projects", "column": "owner_id" },
+    "rationale": "参照列に index が無い。親（employees）の行を消すときに子の全走査になる。",
+    "patch": { "op": "add-key", "keyType": "INDEX", "columns": ["owner_id"] }
+  },
+  {
+    "category": "normalization",
+    "severity": "info",
+    "target": { "table": "projects", "column": "team_id" },
+    "rationale": "担当チームの無いプロジェクトを許すと、集計のたびに NULL の扱いを決め直すことになる。",
+    "patch": { "op": "set-nullable", "nullable": false }
+  },
+  {
+    "category": "naming",
+    "severity": "info",
+    "target": { "table": "teams" },
+    "rationale": "テーブルコメントが無い。employees との関係（1 チームに複数の従業員）が名前だけでは読めない。",
+    "patch": { "op": "add-comment", "value": "チーム。従業員とプロジェクトの所属先" }
+  },
+  {
+    "category": "missing_audit",
+    "severity": "info",
+    "target": { "table": "teams" },
+    "rationale": "teams にも監査列が無いが、参照専用のマスタとして運用しているなら不要。判断材料が設計側に無いので patch は出さない。"
+  }
+]

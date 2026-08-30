@@ -1,0 +1,71 @@
+# grabado をローカルで起こす（HANDOVER §2 / 段階2-3）。**契約は docs/ARCHITECTURE.md §9。**
+#
+#   docker compose up --build                        # 8080 で起きる
+#   GRABADO_READONLY=true docker compose up --build  # 公開デモと同じ条件（保存が 403）
+#
+# ★ `image:` ではなく `build:` —— **レジストリへは publish しない**（段階2-0 の決めたこと 5）。
+#   各自が build する。
+#
+# ★ **env は「キーだけ」のリスト形式で書く。`${VAR:-}` を使わない。**
+#   `${VAR:-}` は未設定のとき**空文字を渡し、起動を落とす**（2026-08-26 実測 ——
+#   `GRABADO_READONLY=` で `Failed to bind properties under 'grabado.readonly' to boolean`）。
+#   キーだけなら**未設定の env はコンテナに渡らず**、application.yaml の既定がそのまま効く。
+#   ついでに**既定値をここへ写さずに済む**（値の正本は application.yaml と
+#   docs/ARCHITECTURE.md §7.3 / §8.4）。
+#
+# ★ **`env_file:` を使わない。** 手元の `.env` が grabado 専用とは限らない（2026-08-26 実測 ——
+#   このリポジトリの `.env` は 3 本のうち 2 本が無関係な秘密）。`.env` は
+#   **compose の変数展開にだけ使われ、コンテナには入らない** —— 下の `environment:` が
+#   列挙したものだけが渡る。**列挙は `.env.example` と 1 本ずつ対応**していて、ずれると
+#   tests/node/env-contract.test.ts が赤くなる。
+
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+
+    # 設計 JSON の正本（CLAUDE.md 制約2）。**左がホスト側**で、ここを git で管理する。
+    # 置き場所を変えるなら**この行の左側**を書き換える。
+    #
+    # ★ ディレクトリを**リポジトリに実在させてある**（`schema/.gitkeep`）—— 無いと compose が
+    #   root 所有で作り、**非 root（uid=100）のコンテナが書けない**。
+    volumes:
+      - ./schema:/data/schema
+
+    environment:
+      # 副作用（保存・introspection・AI）を止める。**公開デモは true 一択。**
+      - GRABADO_READONLY
+      # Strict-Transport-Security を出す。**TLS の後ろに置いたデプロイだけ true。**
+      # 手元の http://localhost:8080 で立てると、ブラウザが以後 localhost を https へ倒す。
+      - GRABADO_HSTS
+      # 正本ディレクトリ。**コンテナ内のパス**なので、変えるなら上の mount 右辺も揃える
+      # （揃っていなければ起動時の検証で落ちる —— 黙って別の場所へ書くことはない）。
+      - GRABADO_SCHEMA_DIR
+      # AI（§11）。**キーとモデル名が両方そろって初めて有効**（各自のキー＝ BYOK）。
+      - ANTHROPIC_API_KEY
+      - GRABADO_AI_MODEL
+      - GRABADO_AI_EFFORT
+      # AI の上限。**既定で足りるなら触らない**（値と根拠は docs/ARCHITECTURE.md §8.4）。
+      - GRABADO_AI_MAX_TABLES
+      - GRABADO_AI_MAX_REQUEST_BYTES
+      - GRABADO_AI_RATE_PER_MINUTE
+      - GRABADO_AI_MAX_CONCURRENT
+      - GRABADO_AI_CACHE_ENTRIES
+      - GRABADO_AI_CACHE_TTL
+      - GRABADO_AI_TIMEOUT
+
+    # 起動できたかを compose が判定する。**イメージに curl は無い**ので busybox の wget を使う
+    # （2026-08-26 実測: `/usr/bin/wget` はある、`curl` は無い）。actuator は入れていないので、
+    # **判定先は capabilities** —— 副作用が無く、READONLY でも 200 が返る。
+    #
+    # ★ `start_period` が 60s なのは**起動に 18 秒かかった**から（2026-08-26 実測・
+    #   Docker Desktop for Windows）。この間の失敗は retries に数えられない。
+    # ★ Dockerfile 側の `HEALTHCHECK` は置いていない —— E2E の待ち合わせに要る 2-4 が決める。
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/backend/file/?action=capabilities"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Oracle 23ai 型パレット（HANDOVER §6 / 段階6-8c で現代化）。
+
+  6-8c まで upstream の 15 型のままで、strict を持たず re の後勝ちで解決していた
+  （known-issues #4 / #10。**このプロファイルは #10 の実害がいちばん大きく、INTEGER と
+  書いた列が NUMBER に化けて integer 型に到達できなかった**）。
+
+  属性の契約は docs/FORMAT.md（db/postgresql/datatypes.xml の頭に一覧がある）。
+  strict="1" は「現代化済み」の印 —— 照合が sql / aka の完全一致だけになるので、
+  **re を落とした瞬間に #10 が消える**。
+
+  **対象は 23ai**（Oracle AI Database 26ai Free Release 23.26.2.0.0 で実測。h2 と同じく
+  バージョンを明示する）。型は実物に聞いて確かめた。house 既定に効く実測:
+    BOOLEAN                      **23ai からネイティブ**（それ以前は NUMBER(1) 運用）
+    TIMESTAMP WITH TIME ZONE     **timestamptz を tz ごと受けられる**
+    JSON                         21c から。SYSTEM 表領域では作れないが型としては在る
+    RAW(16) + SYS_GUID()         uuid 相当（Oracle に UUID 型は無い）
+
+  **TIMESTAMP WITH TIME ZONE を length="0" にしてある。** Oracle の構文はサイズが型名の
+  途中に入る（TIMESTAMP(6) WITH TIME ZONE）ので、末尾に付ける現行の組み立てでは
+  TIMESTAMP WITH TIME ZONE(6) という無効な形になる。**精度を書けないことと引き換えに
+  tz を保つ**判断で、サイズ付きが要るときは timestamp（tz 無し）を使う。
+
+  **6-8c で足した型**: binary_float / binary_double（Oracle 固有の IEEE 浮動小数）、
+  boolean / jsonb / xml、timestamp_with_time_zone、interval 2 種、rowid。
+  **外した型**: double_precision（FLOAT の別名なので float に統合。aka で受ける）。
+-->
+<datatypes db="oracle" strict="1" newrowtype="varchar2">
+	<!--
+	  §6.2 初期テーブルテンプレート。**23ai では house 既定をほぼそのまま置ける** ——
+	  uuid だけが型として無く RAW(16) ＋ SYS_GUID()（v4 相当）になる。
+	  監査列は TIMESTAMP WITH TIME ZONE ＋ SYSTIMESTAMP で tz を保つ。
+	-->
+	<template>
+		<row name="id" type="raw" size="16" null="0" default="SYS_GUID()" key="PRIMARY" />
+		<row name="created_at" type="timestamp_with_time_zone" null="0" default="SYSTIMESTAMP" />
+		<row name="updated_at" type="timestamp_with_time_zone" null="0" default="SYSTIMESTAMP" />
+	</template>
+
+	<group label="Number" color="rgb(238,238,170)">
+		<type id="number" label="Number" length="1" sql="NUMBER" kind="decimal" quote="" />
+		<type id="integer" label="Integer" length="0" sql="INTEGER" kind="int64" aka="INT|INT4|INT8" quote="" />
+		<type id="decimal" label="Decimal" length="1" sql="DECIMAL" kind="decimal" aka="NUMERIC|DEC" quote="" />
+		<type id="float" label="Float" length="1" sql="FLOAT" kind="float64" aka="DOUBLE PRECISION|DOUBLE" quote="" />
+		<type id="binary_float" label="Binary Float" length="0" sql="BINARY_FLOAT" kind="float32" aka="REAL|FLOAT4" quote="" />
+		<type id="binary_double" label="Binary Double" length="0" sql="BINARY_DOUBLE" kind="float64" aka="FLOAT8" quote="" />
+	</group>
+
+	<group label="Character" color="rgb(255,200,200)">
+		<type id="char" label="Char" length="1" sql="CHAR" kind="string" aka="CHARACTER" quote="'" />
+		<type id="varchar2" label="Varchar2" length="1" sql="VARCHAR2" kind="string" aka="VARCHAR|CHARACTER VARYING" quote="'" />
+		<type id="nchar" label="nChar" length="1" sql="NCHAR" kind="string" quote="'" />
+		<type id="nvarchar2" label="nVarchar2" length="1" sql="NVARCHAR2" kind="string" quote="'" />
+		<type id="clob" label="CLOB" length="0" sql="CLOB" kind="string" aka="TEXT|CHARACTER LARGE OBJECT" quote="'" />
+		<type id="nclob" label="nCLOB" length="0" sql="NCLOB" kind="string" quote="'" />
+		<type id="boolean" label="Boolean" length="0" sql="BOOLEAN" kind="boolean" aka="BOOL" quote="" />
+	</group>
+
+	<group label="Date &amp; Time" color="rgb(200,255,200)">
+		<type id="date" label="Date" length="0" sql="DATE" kind="timestamp" quote="'" />
+		<type id="timestamp" label="Timestamp" length="1" sql="TIMESTAMP" kind="timestamp" aka="TIMESTAMP WITHOUT TIME ZONE" quote="'" />
+		<type id="timestamp_with_time_zone" label="Timestamp w/ TZ" length="0" sql="TIMESTAMP WITH TIME ZONE" kind="timestamp_tz" aka="TIMESTAMPTZ" quote="'" />
+		<type id="interval_year_month" label="Interval Y-M" length="0" sql="INTERVAL YEAR TO MONTH" kind="interval" quote="'" />
+		<type id="interval_day_second" label="Interval D-S" length="0" sql="INTERVAL DAY TO SECOND" kind="interval" aka="INTERVAL" quote="'" />
+	</group>
+
+	<group label="Other" color="rgb(200,200,255)">
+		<type id="raw" label="RAW" length="1" sql="RAW" kind="binary" quote="'" />
+		<type id="blob" label="BLOB" length="0" sql="BLOB" kind="binary" aka="BYTEA|BINARY LARGE OBJECT" quote="'" />
+		<type id="jsonb" label="JSON" length="0" sql="JSON" kind="json" aka="JSONB" quote="'" />
+		<type id="xml" label="XMLType" length="0" sql="XMLTYPE" kind="xml" aka="XML" quote="'" />
+		<type id="rowid" label="ROWID" length="0" sql="ROWID" kind="other" quote="'" />
+	</group>
+</datatypes>

@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<locale>
+    <!-- table management -->
+    <string name="addtable">Aldoni tabelon</string>
+    <string name="edittable">Modifi la tabelon</string>
+    <string name="removetable">Forigi la tabelon</string>
+    <string name="removetables">Forigi la tabelojn</string>
+    <string name="aligntables">Ĝisrandigi la tabelojn</string>
+    <string name="cleartables">Vakigi la tabelon</string>
+    <string name="confirmall">Ja forigi ĉiujn tabelojn</string>
+    <string name="newtable">nova tabelo</string>
+    <string name="addpending">pozicii la tabelon</string>
+    <string name="tablenamelabel">Nomo</string>
+    <string name="tablecommentlabel">Komento</string>
+
+    <!-- row management -->
+    <string name="addrow">Aldoni kampon</string>
+    <string name="editrow">Modifi la kampon</string>
+    <string name="removerow">Forigi la kampon</string>
+    <string name="uprow">Supre</string>
+    <string name="downrow">Sube</string>
+    <string name="newrow">nova kampo</string>
+    <string name="foreigncreate">Krei fremdan ŝlosilon</string>
+    <string name="foreignpending">alklaki la celan tabelon</string>
+    <string name="foreignconnect">Konekti fremdan ŝlosilon</string>
+    <string name="foreignconnectpending">alklaki la celan atributon</string>
+    <string name="foreigndisconnect">Forigi fremdan ŝlosilon</string>
+    <string name="confirmtable">Ja forigi la tabelon</string>
+    <string name="confirmrow">Ja forigi la kampon</string>
+
+    <!-- row edit -->
+    <string name="name">Nomo</string>
+    <string name="type">Tipo</string>
+    <string name="size">Grandeco</string>
+    <string name="def">Defaŭlte</string>
+    <string name="notnull">NE NUL</string>
+    <string name="null">Senvalora</string>
+    <string name="ai">Memalkremento</string>
+    <string name="comment">Modifi la komenton</string>
+    <string name="commenttext">Entajpi komenton por tiu kampo</string>
+
+    <!-- windows & options -->
+    <string name="windowok">Jes</string>
+    <string name="windowcancel">Rezigni</string>
+    <string name="throbber">Bonvolu atendi...</string>
+    <string name="options">Agordoj</string>
+    <string name="language">Lingvo</string>
+    <string name="db">Datumbazoj por novaj kreoj</string>
+    <string name="optionsnotice">Kelkaj agordoj estas aplikotaj post plena ŝarĝo de paĝo. Kuketoj devas esti ebligataj por ke la agordoj funkcias.</string>
+    <string name="snap">Kapto-distanco de tabelo</string>
+    <string name="optionsnapnotice">En rastrumeroj, 0 = malebligi kapton</string>
+    <string name="pattern">Motivo por fremdaj nomoj</string>
+    <string name="optionpatternnotice">%T = ĉefa tabelo, %R = ĉefa ŝlosilo, %t = fremda tabelo</string>
+    <string name="hide">Ĉu kaŝi konektiloj dum treno de tabelo?</string>
+    <string name="vector">Desegni glatajn konektilojn (se subtenata de retumilo)?</string>
+    <string name="showsize">Show field size in table design?</string>
+    <string name="showtype">Show field datatype in table design?</string>
+    <string name="style">Stilo</string>
+
+    <!-- keys -->
+    <string name="tablekeys">Klavoj</string>
+    <string name="keyslistlabel">Ŝlosiloj en la tabelo "%s"</string>
+    <string name="keytypelabel">Tipo:</string>
+    <string name="keynamelabel">Nomo:</string>
+    <string name="keyfieldslabel">Kampoj en klavo</string>
+    <string name="keyavaillabel">Disponeblaj kampoj</string>
+    <string name="keyedit">Modifi ŝlosilon</string>
+    <string name="keyadd">Aldoni ŝlosilon</string>
+    <string name="keyremove">Forigi ŝlosilon</string>
+
+    <!-- io -->
+    <string name="saveload">Konservi / Ŝargi</string>
+    <string name="empty">Bonvolu alglui JSON datumon en la tekst-zono sube kaj provi de nove.</string>
+    <string name="client">Kliento</string>
+    <string name="server">Servilo</string>
+    <string name="output">Enigo / Eligo</string>
+    <string name="clientsave">Konservi JSON</string>
+    <string name="clientload">Ŝargi JSON</string>
+    <string name="clientsql">Krei SQL</string>
+    <string name="serversave">Konservi</string>
+    <string name="quicksave">Quicksave</string>
+    <string name="serverload">Ŝargi</string>
+    <string name="serverlist">Listigi erojn</string>
+    <string name="serverimport">Importi el datumbazo</string>
+    <string name="serverloadprompt">Entajpi ŝlosilvorton per kiu via fasonado estis konservita:</string>
+    <string name="serversaveprompt">Entajpi ŝlosilvorton per kiu via fasonado estos konservita:</string>
+    <string name="serverimportprompt">Entajpi la nomon de datumbazo importenda:</string>
+    <string name="aireview">AI review</string>
+    <string name="aireviewconfirm">This is exactly what will be sent to the AI service. Send it?</string>
+    <string name="aireviewbroken">The AI response could not be read.</string>
+    <string name="aiapply">Apply AI suggestions</string>
+    <string name="aiapplyprompt">Numbers to apply (all / 1,3,5):</string>
+    <string name="aiapplynone">No suggestion can be applied. Run the AI review first.</string>
+    <string name="patchnopatch">this suggestion has no machine-applicable change</string>
+    <string name="patchtablemissing">that table is not in the design</string>
+    <string name="patchcolumnmissing">that column is not in the design</string>
+    <string name="patchtargetcolumn">no target column was given</string>
+    <string name="patchnametaken">that name is already taken</string>
+    <string name="patchunknowntype">that type is not in the current palette</string>
+    <string name="patchkeyexists">the same key already exists</string>
+    <string name="patchrefmissing">the referenced column is not in the design</string>
+    <string name="patchrefexists">the same reference already exists</string>
+    <string name="patchemptyvalue">an empty value is not accepted</string>
+    <string name="patchmalformed">the suggestion is malformed</string>
+    <string name="importerror">Could not read the database structure</string>
+    <string name="httpresponse">Respondo de servilo</string>
+    <string name="http201">Konservita</string>
+    <string name="http400">Bad Request</string>
+    <string name="http403">Forbidden</string>
+    <string name="http404">Netrovita</string>
+    <string name="http405">Method Not Allowed</string>
+    <string name="http429">Too Many Requests</string>
+    <string name="http500">Interna Servilo Eraro</string>
+    <string name="http501">Ne funkciigata</string>
+    <string name="http503">Servo Nedisponebla</string>
+
+    <!-- misc -->
+    <string name="xmlerror">XML-eraro</string>
+    <string name="docs">Dokumentaro</string>
+
+    <!-- identifier warnings (grabado) -->
+    <string name="identifierempty">Identifier is empty</string>
+    <string name="identifiertoolong">Identifier is too long</string>
+    <string name="identifierforbidden">Character not allowed in identifiers</string>
+    <string name="identifiertruncated">silently truncated</string>
+    <!-- profile conversion (grabado) -->
+    <string name="outputdblabel">Output for</string>
+    <string name="outputdbsame">same as design</string>
+
+    <!-- orm output (grabado) -->
+    <string name="clientorm">ORM output</string>
+
+</locale>

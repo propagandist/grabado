@@ -11860,6 +11860,121 @@ workspace 単位で見える。
 
 ---
 
+### 2026-08-30 版 v0.1.0 —— `main` を `develop` に追いつかせ、リリース運用を立ち上げる
+
+正本は [issue #145](https://github.com/propagandist/grabado/issues/145)。**段階に属さない**。
+マイルストーン **`公開デモを立てる`** の 2 本目。
+
+#### 発端
+
+**同日、#84 の着手時に「デモが配る先のブランチ」を決めた**（「公開デモの外側」の決めたこと 6）。
+`docs/ARCHITECTURE.md` §9.7 は Railway のビルド元を **`main`** と契約している。
+**その `main` が `develop` の 110 コミット前で止まっていた** —— **リリースが 1 度も無いから**で
+あって、ブランチ運用が壊れているのではない。
+
+#### 決めたこと 1: **`main` は merge commit で進める**（squash にしない）
+
+★ **実測（2026-08-30）—— リポジトリの設定は 3 方式とも有効だった**
+（`allow_squash_merge` / `allow_merge_commit` / `allow_rebase_merge` がすべて `true`）。
+**`CLAUDE.md` の「merge 方式は squash」は、設定の制約ではなく規約だった** ——
+**規約なので、理由があれば別の方式を選べる。**
+
+**`release/*` → `main` に squash を使わない。**
+
+- **111 コミット分が 1 つに潰れ、`main` に作業の履歴が 1 行も残らない**
+- **以後のリリースでも毎回潰し直す**ことになる
+- `main...develop` が**中身は同じなのに `1  111`** を返し、
+  **「`main` が遅れているか」を数で読めなくなる**
+
+採ったのは 2 段:
+
+1. `release/0.1.0` → **`develop`** を **squash**（feature と同じ既定。`(#N)` が付く）
+2. **`develop`** → **`main`** を **merge commit**
+
+**PR しか通らない**ので、`docs/BRANCHING.md` の「`release/*` ・ `hotfix/*` -> `main` は
+PR 経由で」も [`.githooks/pre-push`](.githooks/pre-push) も**そのまま守れる**。
+**`main` は merge commit のぶんだけ 1 先行し、`develop` 側は 0** になる。
+
+★ **#145 の受け入れ基準を 1 つ訂正した。**
+「`git rev-list --left-right --count origin/main...origin/develop` の**左右がどちらも 0**」は
+**fast-forward を前提にした値**で、PR 経由の merge commit では成立しない。
+**読むべきは右（`develop` 側）が 0 であること** ——「**`develop` に、`main` が持たないものが
+無い**」が split-brain を作らない条件そのもので、**左の数は merge commit の本数でしかない**。
+**元の記述は #145 に残してある**（issue は後から読まれるので、訂正はこちらに書く。
+org `security-verification.md` §5）。
+
+#### 決めたこと 2: 版番号は **0.1.0**。動かすのは **3 ファイル 4 行**
+
+`package.json` ／ `package-lock.json`（**自己記述の 2 か所だけ**）／ `server/build.gradle.kts`。
+
+★ **`npm install --package-lock-only` を使わない**（2026-08-30 に踏んだ）。
+**手元の npm が lock を作り直し、`libc` フィールドを落とした** —— 版番号と無関係な 18 行が
+差分に出る。`docs/BRANCHING.md` は release ブランチを「**版番号更新・最終微修正のみ**」と
+定めているので、**該当の 2 行だけを直した**。
+
+★ **`version` はどこからも読まれていない**（同日実測）。`server/build.gradle.kts` の
+`archiveFileName` は **`grabado.jar` で固定**（段階2-1 が「ワイルドカードにしない」と決めた）、
+フロントも `package.json` の `version` を参照していない。
+**だから版を上げても出力は 1 バイトも変わらない** —— それは「上げなくてよい」ではなく、
+**版が今は名前でしかない**ということ。**焼き込みが要るなら、それは別に決める。**
+
+**`1.0.0` にしない** —— 公開デモがまだ立っておらず、外部の利用実績が 1 件も無い。
+
+#### 決めたこと 3: **ブランチ保護に `required status checks` を置かない**
+
+`gh api .../branches/develop` は **`protected: false`**（#141 の実測。同日も変わらず）。
+`docs/BRANCHING.md` は「**public では使える**」と書き、`.githooks/pre-push` を
+「private だった間の代わり」と位置づけている —— **public にした 2026-08-26 以降、
+入れるかどうかが宙に浮いていた**。
+
+**判断: 入れるなら `force push と削除の禁止` ＋ `PR 必須` まで。`required status checks` は
+置かない。**
+
+★ **`paths` 絞りと `required status checks` は噛み合わない。** `ci-frontend` / `ci-server` /
+`ci-image` は **`pull_request` ＋ `paths`** なので、**docs だけの PR では 1 本も起動しない**
+（**#142 で実測。`check-runs` の `total_count` が 0**）。必須にすると
+**「起動しないから永久にマージできない」PR ができる** —— org `writing-baseline.md` §8 の
+「守れているのに赤が出る検査は、無視する習慣を作る」と同じ形で、**今度は無視すらできない**。
+
+**保護そのものを入れるかは、#84 が閉じてから判断する。** いま入れても止まるのは自分の手元だけで、
+**`.githooks/pre-push` が既に止めている**（`core.hooksPath` を設定していないクローンだけが穴。
+そこは人が増えた日に効く話）。**「決めていない」ではなく「順序を決めた」**として残す。
+
+#### 通った（2026-08-30 実測）
+
+| 検査 | 結果 |
+|---|---|
+| `git diff --stat`（release ブランチ） | **3 ファイル 4 行**（版番号だけ） |
+| `cd server && ./gradlew test` | **230 本** |
+| `npm test` | **624 本** |
+| `npm run typecheck` | 緑 |
+
+#### 却下した案
+
+- **`main` を `develop` へ fast-forward** —— 履歴が一直線になり `0  0` がそのまま成立するが、
+  **PR を通らない**。`.githooks/pre-push` の「**緊急の一時解除**」（`PUSH_ALLOW_PROTECTED=1`）を
+  **通常運用で使う**ことになり、`docs/BRANCHING.md` の「PR 経由で」も書き換えることになる。
+  **逃げ口を日常にすると、次に本当の緊急が来たとき何も止まらない**
+- **既定の squash のまま `release/0.1.0` → `main`** —— 決めたこと 1
+- **`git refs` API で `main` を直接進める** —— hook を通らない点は fast-forward と同じで、
+  **通る門が違うだけ**。**規約を迂回する経路を 1 本作ることになる**
+- **`1.0.0` を切る** —— 決めたこと 2
+- **GitHub Release も作る** —— **配布物を持たないリリース**になる（イメージはレジストリで
+  配らない。#83 の決めたこと 5）。**タグで足りる**
+- **`docs/BRANCHING.md` の GitFlow 図を書き換える** —— **書き換える必要が無かった。**
+  あの図の `\` `/` は**まさに merge commit**で、決めたこと 1 はそれに沿っている
+
+#### 申し送り
+
+- **ブランチ保護は未適用**（決めたこと 3。**判断は下したが、設定は触っていない**）。
+  **#84 が閉じた日に、`required status checks` を置かない形で入れるかを判断する**
+- **タグは注釈つき**（`git tag -a v0.1.0`）。**GitHub Release は作っていない**
+- **`version` が出力に出ない**のは決めたこと 2 の★。**成果物から版を読ませたくなったら、
+  そこが判断の場所**（org security-baseline §5.3.2 の「焼き込んだものの版が成果物の側から
+  読めない」は分類 P の話で、**grabado はレジストリで配らないので分類 B のまま**）
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

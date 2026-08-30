@@ -1,6 +1,6 @@
 {
   "name": "grabado",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "grabado — ER 設計ツール（wwwsqldesigner 由来）。HANDOVER §7 特性化テストと §3 フロント TS 化の基盤。",

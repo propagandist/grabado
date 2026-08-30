@@ -1207,6 +1207,10 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 **判断と実測の正は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の「2026-08-30 公開デモの外側」**
 （**理由をここへ写さない**）。ここが持つのは**構成の契約**だけ。
 
+**外側に実際に設定した状態の正本は [`propagandist/grabado-ops`](https://github.com/propagandist/grabado-ops)（private）**
+（**2026-08-30**。issue #152）—— Railway の service settings に入れた値 ／ Porkbun の DNS ／
+証明書の issuer ／ 費用。**この表はアプリが期待することで、あちらは実際に押した結果である。写し合わない。**
+
 **リポジトリの外側の状態**（Railway の設定と Porkbun の DNS）に依存する唯一の節なので、
 **確かめ方が他と違う** —— org `security-verification.md` の 3 層のうち、**手元でも既存ジョブでもない層**。
 
@@ -1225,6 +1229,12 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 **DNS を Railway へ向ける → 発行させる → issuer を実見する → CAA を置く**の順。
 
 #### 確かめ方（機械で見える 4 つ）
+
+**手順はここが持ち、実走の記録は `grabado-ops` が持つ**（#152）。**この節に「いつ通ったか」を書かない。**
+
+★ **申し送りの行き先が変わった**（**2026-08-30**。#152）—— `../CUSTOMIZATIONS.md` の同日の申し送りは
+「**やった日に、この節へ実測を追記する**（証明書の issuer ／ CAA の応答 ／ `curl -sSI` のヘッダ）」と
+書いていた。**元の記述は消さない**（判断の履歴）。
 
 ```bash
 curl -sSI https://grabado.dev/ | grep -i strict-transport-security   # preload が無いこと

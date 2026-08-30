@@ -15,7 +15,7 @@
 - 配布: マルチステージ Docker（フロント dist を Spring Boot static に同梱）。app 単一コンテナ＋mount。
 - **対応 DB は 8 本**: `postgresql`（house 標準）/ `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` は撤去（6-1）。決定は `CUSTOMIZATIONS.md` の段階6-0。
 - 公開デモ（grabado.dev）は **`READONLY=true` 一択** — AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。編集体験はブラウザ内ストアで成立する。
-- **★ 公開デモの外側は決まった**（**2026-08-30**。#84）—— 置き場所は **Railway**（PRO 契約済み。`Dockerfile` から GitHub 連携でビルドし、**ワークフローを足さない**）、配るのは **`main`**（版 v0.1.0 を切る。作業は別 issue）、**TLS は Let's Encrypt**（実測）、**CAA は置く**（ただし**証明書が出てから** —— 間違えると発行が黙って止まる）、**HSTS はアプリが `GRABADO_HSTS=true` のときだけ出す**（`preload` は付けない）。構成の契約は `docs/ARCHITECTURE.md` §9.7、判断は `CUSTOMIZATIONS.md` の同日。**`grabado.dev` は取得済み**（Porkbun）。
+- **★ 公開デモの外側は決まった**（**2026-08-30**。#84）—— 置き場所は **Railway**（PRO 契約済み。`Dockerfile` から GitHub 連携でビルドし、**ワークフローを足さない**）、配るのは **`main`**（版 v0.1.0 を切る。作業は別 issue）、**TLS は Let's Encrypt**（実測）、**CAA は置く**（ただし**証明書が出てから** —— 間違えると発行が黙って止まる）、**HSTS はアプリが `GRABADO_HSTS=true` のときだけ出す**（`preload` は付けない）。構成の契約は `docs/ARCHITECTURE.md` §9.7、判断は `CUSTOMIZATIONS.md` の同日。**`grabado.dev` は取得済み**（Porkbun）。**★ 外側に実際に設定した状態は [`grabado-ops`](https://github.com/propagandist/grabado-ops)（private）が正本**（**2026-08-30**。#152）—— Railway の service settings に入れた値 ／ Porkbun の DNS ／ 証明書の issuer ／ 費用 ／ 公開 URL の検査の実走。**ここが持つのはアプリが期待することまでで、押した結果は持たない。**
 
 ## 絶対に守る制約（Hard Constraints）
 1. **特性化テストが緑であることが移植の前提**。DDL golden ＋ serializer round-trip/決定論テストを先に用意し、挙動不変を保証してから内部を作り替える。半移行を放置しない。
@@ -197,6 +197,12 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
   - **org `work-conventions.md` §2「起票の作法」にこの規律は無い**（4 項目とも別のこと）。
     **#144 は逆向き**（申し送り→起票が起きない）なので、**これは捕まえられない**。
     **org へ上げるかは、他リポジトリでも同じ重複が出たときに判断する**
+- **★ 外側の運用は `grabado-ops` へ起票する**（**2026-08-30**。#152）—— **Railway ／ Porkbun ／
+  証明書 ／ 費用 ／ 公開 URL の検査の実走**は、**このリポジトリの issue にしない**。
+  **ここに立てるのは、アプリが期待することが変わるとき**（env の名前・既定値・`docs/ARCHITECTURE.md` §9.7 の契約）。
+  **判断の履歴は `CUSTOMIZATIONS.md` のまま** —— ops は指すだけで、書き直さない
+  - **★ マイルストーンは跨げない**（リポジトリ単位）。**`公開デモを立てる` はここにしか無い**ので、
+    **ops の issue は本文から #84 / #152 を指す**。**向こうにマイルストーンを作らない**
 - **本文の書式の見本は [#72](https://github.com/propagandist/grabado/issues/72)**
   （**2026-08-23 実測**。§11 段階11-2a の起票で、org 規約 §2 の 7 項目に沿った最初の 1 本。
   それまで issue は 1 本も無かった）

@@ -2451,7 +2451,7 @@ Cookie は現行コードが実際に使っている（db 選択・locale）。`
 1. **[`README.md`](README.md) に upstream 作者宛の PayPal 寄付ボタンが残っている**（14 行）。
    自社ブランドで公開する画面に載ると事故。2012 年のリリースノート・Google Code の話・
    CUBRID 紹介文も upstream のまま
-2. **[`license.txt`](license.txt) の権利表記**が upstream のみ（上表のとおり）
+2. **`license.txt` の権利表記**が upstream のみ（上表のとおり）
 
 ---
 
@@ -11192,6 +11192,98 @@ GitHub 側にしか残らず、**受容したのか忘れたのかが後から�
 
 ---
 
+### 2026-08-30 表側の棚卸し —— README の正本を日本語へ、ライセンスを 1 本へ
+
+org に **9 本目の正本 `docs/repo-surface-baseline.md`**（リポジトリの表側の基準）が置かれ、
+**その §5 の 1 回目の棚卸し**で public 3 本を実測したのが propagandist/.github#89。
+**grabado で §3 を満たしていなかったのは 5 つ** —— README の正本が英語 ／ ライセンスが
+`license.txt` のみ ／ description が英語 157 字 ／ topics が 12 個 ／ マージ済みブランチが 31 本。
+
+**表側だけの棚卸しで、`js/` も `server/` も `tests/` も 1 行も動いていない。**
+
+#### 決めたこと 1: ★ README の正本を日本語にする（2026-08-26 の判断を覆す）
+
+`README.md` を `README.en.md` へ、`README.ja.md` を `README.md` へ入れ替えた。
+**本文は 1 行も動かしていない** —— 変えたのはファイル名と、2 本の冒頭にある相互リンクだけ。
+
+- **2026-08-26（#95）は「公開の顔は英語」だった。** 当時 org に表側の基準が無く、
+  **リポジトリ側で決めるしかなかった**。9 本目が置かれて **値が org 側へ移った**
+- **§3.6 が「正本は日本語の `README.md`、英語版は任意で `README.en.md`」**と決めている。
+  根拠は同 §1 —— **想定読者は日本語話者の採用候補者・取引先**なので、
+  **英語を正本にすると正本が読者の側と食い違う**
+- **`CLAUDE.md` の「文章の値」は、既存の「訂正の元」と同じ形で書き換えた** ——
+  2026-08-26 の判断を消していない。**覆した理由が読めないと、次に同じ議論をやり直す**
+
+#### 決めたこと 2: ★ ライセンスは `LICENSE` 1 本。upstream 本文は 1 バイトも触らない
+
+`license.txt` を `LICENSE` へ移し、**区切り線の後ろに自社改変部分の権利表記を足した**。
+
+- **§3.5** —— fork では 1 本にまとめ、追記部分の著作権表示を入れる。
+  **2 本並ぶと、どちらが効くのかが読む側で決まらない**
+- **2026-08-09 の決定**「自社改変部分の権利表記は**今後の配布形態確定時に追記**」の実行でもある。
+  **無料公開の確定がその時だった**（2026-08-15 の記録が既にそう読んでいる）
+- **BSD-3-Clause 第 1 条が求める 3 つ**（著作権表示・条件のリスト・免責事項）は
+  **1〜25 行にそのまま残っている**。追記は 27 行目以降で、**上流本文が verbatim である旨を明記した**
+  —— 書かなければ、**追記が上流の一部だと読まれる**
+
+#### 決めたこと 3: ★ `index.html` のファイル名参照は直す —— 「1 バイトも触らない」の範囲
+
+`frontend/index.html` 冒頭の `See license.txt for licencing information.` を
+`See LICENSE for licencing information.` にした。**著作権表示の行とバージョン行は 1 文字も動かしていない。**
+
+**2026-08-28（§6.4）の「★ upstream の著作権表示は 1 バイトも触らない」と衝突して見えるが、
+触らない対象は第 1 条が名指す 3 つ**であって、**ファイル名の参照はそのどれでもない**。
+**実在しない名を指したまま残すほうが、ライセンス情報への到達性を損ない、第 1 条の趣旨に反する。**
+
+**★ 判断の分かれ目は「義務そのものか、義務への導線か」。** 導線が切れているのを放置するのは、
+**表示を保持したことにならない。**
+
+#### 決めたこと 4: 既定ブランチは `develop` のまま
+
+**§2.4 が持つのは「既定ブランチが何を映すか」だけ**で、**名前は各リポジトリの値**
+（org `work-conventions.md` §6）。`main` は upstream ＋ house docs のまま止まっており、
+**`develop` が「今」を映している**。**org 側から `main` を押し付けると、履歴と保護設定に
+既に埋まっているものを壊す。**
+
+#### 決めたこと 5: topics は 6 個。**重なるタグを両方は入れない**
+
+**§3.4 の内訳はドメイン 2 ／ スタック 3 ／ 形態 1。** 12 個から 6 個へ落とした。
+
+| 落としたもの | 理由 |
+|---|---|
+| `ddl` / `sql` | **§3.4 が名指しで挙げている重なりの例**。ドメイン枠 2 は `er-diagram` / `database-design` で埋まる |
+| `erd` | `er-diagram` と重なる（これも §3.4 の例） |
+| `schema-design` | `database-design` と重なる |
+| `postgresql` | **8 プロファイルのうちの 1 本にすぎない**。既定パレットではあるが、topics で名指すと対応 DB を誤らせる |
+| `self-hosted` | **形態は 1 つ**（`docker` を採った） |
+
+**★ 並び順で意味を作っていない** —— **GitHub は topics をアルファベット順で強制表示する**
+（**2026-08-30 実測**。`PUT .../topics` の応答が `database-design, docker, er-diagram, kotlin,
+spring-boot, typescript` の順で返った）。§3.4 の記述が実測で裏付いた。
+
+#### 検証（2026-08-30 実測。`gh api` のみで run は立てていない）
+
+| 何を | 結果 |
+|---|---|
+| description | **日本語 71 字**（§3.3 の 60〜80 字。要素 2 つ） |
+| topics | **6 個**（重なり 0） |
+| 直下の README | `README.md`（日本語・正本）／ `README.en.md`（英語） |
+| 直下のライセンス | **`LICENSE` 1 本**。`license.txt` は無い |
+| `license.txt` を指す参照 | **過去の決定ログ 5 行だけ**（当時の記録なので文面は直さない）。**リンク形式だった 1 本だけコード表記へ落とした** —— 記述は 1 文字も変えていないが、**実在しないファイルへのリンクは 404 になる** |
+| ブランチ | **36 本 → 5 本**（`develop` / `main` / dependabot の open 3 本） |
+| 削除の判定 | **PR の状態で見た** —— **merge 方式が squash なので `git branch -r --merged` は 0 件に出る**（org §2.4） |
+| upstream 本文 | `LICENSE` 1〜25 行が**変更前と同一**。`index.html` の著作権表示行も同一 |
+
+#### 申し送り
+
+- **tags は別 issue へ分けた。** grabado は Tags 0 のままで **§3.7 を満たしていない**。
+  **版に何を含めるかは表側の棚卸しとは別の判断**なので、この記録では決めていない
+- **`## 保持している upstream 資産` の表の 2 行を同時に直した** ——
+  README の行（英語が顔だと書いてあった）と `index.html` の行（参照を直した旨を追記）。
+  **表は現状を映すものなので、状態が変わったら直す。決定ログの側は消さない**
+
+---
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |
@@ -11204,8 +11296,8 @@ GitHub 側にしか残らず、**受容したのか忘れたのかが後から�
 | 描画エンジン（`js/`, `styles/`） | 保持。§3 段階1 で Vite のバンドル配下に入れ、段階2 で `SQL.Visual` 階層を ES クラス化・`OZ.Class` と ES5 polyfill を撤去、段階3-1 で `oz` / `config` / `globals` を、段階3-2 で描画中核 7 本（`visual` / `row` / `table` / `relation` / `key` / `rubberband` / `map`）を `.ts` 化、段階3-3a で残る prototype 方式 7 本を class 化、**段階3-3b で残り 8 本を `.ts` 化して `js/` から `.js` が尽きた**（いずれも挙動は不変） | 温存し TS で巻く（Tier 2）。`window` 登録と `declare global` の撤去・`strict` の最終確認は段階3-4 |
 | ~~`index.html` の Dropbox CDN 読み込み~~ | **段階4-3a で撤去**（連携ごと。`dropbox-oauth-receiver.html` / `CONFIG.DROPBOX_KEY` / ボタン 3 つ / locale 21 行を含む） | 完了。**これで外部依存は 0 本** |
 | ~~`Dockerfile`（busybox httpd 11 行）~~ | **段階2-1 で置き換え**。`COPY . .` でリポジトリをそのまま配る作りで、`index.html` が `/src/main.ts` を読むので**起動しても動かなかった**（README にも「現在このイメージは動かない」と書いてあった）。`.dockerignore` の 4 行の拒否リストも同時に**許可リスト**へ | **完了。**3 ステージ（web / api / runtime）・digest ピン・非 root。契約は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §9、実測は段階2-1 の記録 |
-| ~~`README.md`（upstream の紹介文・PayPal 寄付ボタン・**2012 年からの News 10 本**）~~ | **2026-08-26 に全面書き換え**（#95）。`/js/*.js` を指す Code Style 表も落ちた（**`js/` に `.js` は 1 本も無い**。段階3-3b で尽きた）。**「現在このイメージは動かない」の注記**も 2-1 で実体が消えていたので落ちている | **完了。**公開の顔は英語 [`README.md`](README.md)、日本語版は [`README.ja.md`](README.ja.md)。**2 本は同じ構成を保つ**（片方だけ直さない。値は [`CLAUDE.md`](CLAUDE.md) の「文章の値」） |
-| ~~`index.html` の upstream 名（`<title>WWW SQL Designer` ／ docs ボタンが `ondras/wwwsqldesigner/wiki`）~~ | **2026-08-28 に書き換え**（#118）。**public 化（#95）で README 2 本は英語にしたのに、タブに出る名前は upstream のままだった** —— `dist` にも同じ文字列が出ており、**イメージがそれを配っていた**。favicon は**宣言が 0 本**だった | **完了。**`<title>grabado`、favicon は [`frontend/images/favicon.svg`](frontend/images/favicon.svg)（色は UI のアクセントから採り、新しいブランド色を作らない）。docs ボタンは README へ。**★ 冒頭の著作権コメントは残す** —— **BSD-3-Clause 第 1 条の義務**（実測と判断は §6.4 の記録） |
+| ~~`README.md`（upstream の紹介文・PayPal 寄付ボタン・**2012 年からの News 10 本**）~~ | **2026-08-26 に全面書き換え**（#95）。`/js/*.js` を指す Code Style 表も落ちた（**`js/` に `.js` は 1 本も無い**。段階3-3b で尽きた）。**「現在このイメージは動かない」の注記**も 2-1 で実体が消えていたので落ちている | **完了。**~~公開の顔は英語 `README.md`、日本語版は `README.ja.md`~~ → **2026-08-30 に入れ替えた**（org `repo-surface-baseline.md` §3.6。正本は日本語 [`README.md`](README.md)、英語版は [`README.en.md`](README.en.md)。判断は同日の記録）。**2 本は同じ構成を保つ**（片方だけ直さない。値は [`CLAUDE.md`](CLAUDE.md) の「文章の値」） |
+| ~~`index.html` の upstream 名（`<title>WWW SQL Designer` ／ docs ボタンが `ondras/wwwsqldesigner/wiki`）~~ | **2026-08-28 に書き換え**（#118）。**public 化（#95）で README 2 本は英語にしたのに、タブに出る名前は upstream のままだった** —— `dist` にも同じ文字列が出ており、**イメージがそれを配っていた**。favicon は**宣言が 0 本**だった | **完了。**`<title>grabado`、favicon は [`frontend/images/favicon.svg`](frontend/images/favicon.svg)（色は UI のアクセントから採り、新しいブランド色を作らない）。docs ボタンは README へ。**★ 冒頭の著作権コメントは残す** —— **BSD-3-Clause 第 1 条の義務**（実測と判断は §6.4 の記録）。**★ 2026-08-30 に `See license.txt` → `See LICENSE` の 1 行だけ直した** —— ファイル名の参照であって第 1 条が名指す 3 つではない。著作権表示行とバージョン行は不変（判断は同日の記録） |
 
 > 注: 旧版の本書と ARCHITECTURE には `config.xml.sample` を upstream 資産として挙げていたが、**このリポジトリに実在しない**。アプリ設定は [`frontend/js/config.js`](frontend/js/config.js)（`CONFIG.*`）。
 

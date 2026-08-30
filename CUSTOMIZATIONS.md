@@ -11579,6 +11579,11 @@ PR そのもの ／ **過去の closed issue**。**属さないなら付けな�
 **書けるのは観測だけ** —— **空で焦って二重に付けない**。
 **`gh api 'repos/{owner}/{repo}/issues?milestone=N'` は即答した。**
 
+**★ 同じ形をこの作業でもう 1 度踏んだ。** `git push` の直後に
+`gh pr view 142 --json commits` が **1 件**（push 前の数）を返し、十数秒後に **2 件**になった。
+**`gh` の読み取り面は、書き込みの直後に古い値を返すことがある** ——
+**2 例とも、返ってきた数で判断していたら間違えた。**
+
 #### 最初の 1 本: **`公開デモを立てる`**（number=1）
 
 - **`description`**: `grabado.dev が HTTPS のみで READONLY 応答し、置き場所・費用・CAA・HSTS の判断が CUSTOMIZATIONS.md に記録されている`

@@ -130,6 +130,18 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
 - **コミットの subject は日本語で `段階N-M: 〜` 型**（`CUSTOMIZATIONS.md` の段階番号と対応させる。
   **2026-08-23 実測**）。org 由来の変更のように段階に属さないものは、その限りではない
 - **merge 方式は squash**（`(#N)` が付く。**2026-08-23 実測**）
+  - **★ 追記（2026-08-30。#145）—— `develop` → `main` だけ merge commit にする。**
+    **リポジトリの設定は 3 方式とも有効**（`allow_squash_merge` / `allow_merge_commit` /
+    `allow_rebase_merge` がすべて `true`。同日実測）——**「squash」は設定の制約ではなく規約**で、
+    **規約なので理由があれば別の方式を選べる**。`main` へ squash すると
+    **リリース 1 回ぶんのコミットが 1 つに潰れ、`main` に作業の履歴が 1 行も残らない**うえ、
+    `main...develop` が**中身は同じなのに両方とも非 0** を返し、
+    **「`main` が遅れているか」を数で読めなくなる**（v0.1.0 では 112 コミットが対象だった）。
+    **`feature/*` → `develop` は squash のまま。** 根拠は `CUSTOMIZATIONS.md` の
+    2026-08-30「版 v0.1.0」の決めたこと 1
+  - **★ `main` では CI が 1 本も走らない**（**2026-08-30 実測**。`ci-*` は `pull_request` のみ）。
+    マージ後の `main` に付く `check-runs` は **`.github/dependabot.yml` の設定検証 1 本だけ**
+    ——**緑を見る場所は PR の側**。「`main` が緑か」を確かめようとすると、**永久に見つからない**
 - **ラベルは既定の 9 種だけ。マイルストーンは運用していない**（**2026-08-23 実測**）——
   **決定の記録先は `CUSTOMIZATIONS.md`** で、issue とは別系統（上の `## 迷ったら`）。
   **★ マイルストーンは 2026-08-30 に運用へ変えた**（下の独立した行。#141）

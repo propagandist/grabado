@@ -11949,6 +11949,43 @@ org `security-verification.md` §5）。
 | `npm test` | **624 本** |
 | `npm run typecheck` | 緑 |
 
+#### 切った（2026-08-30 実測）
+
+**PR は 2 本**（#147 が `release/0.1.0` → `develop` を squash、#148 が `develop` → `main` を
+merge commit）。**書いてから確かめたのではなく、確かめてからここへ書いた。**
+
+| 見たもの | 結果 |
+|---|---|
+| `main` の先頭 | **`5a649e2 Merge pull request #148 from propagandist/develop`** |
+| その親 | **2 つ**（`a3d8563` ＝ 旧 `main` ／ `7aff058` ＝ `develop` の先端）—— **merge commit になっている** |
+| `git rev-list --left-right --count origin/main...origin/develop` | **`1  0`**（左 1 ＝ merge commit。**決めたこと 1 の予測どおり**） |
+| `git rev-list --count origin/main..origin/develop` | **`0`** —— **`develop` に、`main` が持たないものが無い** |
+| `main` の `version` 3 か所 | **すべて `0.1.0`**。**`0.0.0` は 1 つも残っていない** |
+| `refs/tags/v0.1.0` | 注釈つきタグ `a939c60` → **`5a649e2` を指す**（`^{}` で確認） |
+| `gh release list` | **0 本のまま**（決めたこと通り。**タグだけ**） |
+
+★ **`main` では CI が 1 本も走らない**（同日実測）。マージ後の `5a649e2` に付いた
+`check-runs` は **`.github/dependabot.yml` の設定検証 1 本だけ**で、
+**`ci-frontend` / `ci-server` / `ci-image` は 0 本**。3 本は **`pull_request` のみ**
+（§9.6 の「`pull_request` はマージ結果に対して走るので、push 側を足すと同じ検査を 2 度払う」）。
+
+★ **#145 の受け入れ基準を、これで 2 つ訂正したことになる。**
+
+| #145 の記述 | 実態 | なぜ外れたか |
+|---|---|---|
+| `main...develop` の**左右がどちらも 0** | **`1  0`** | **fast-forward を前提にした値**。読むべきは**右が 0**（決めたこと 1） |
+| **`main` で CI 3 本が緑** | **`main` では 1 本も走らない** | 3 本は **`pull_request` のみ**。**緑を見る場所は PR #148 の側**で、そこでは `検査` 3 本 ＋ `提出` 1 本が通っている |
+
+**どちらも「受け入れ基準を書いた時点の思い込み」で、実装が間違っていたのではない。**
+**元の記述は #145 に残してある** —— issue は後から読まれるので、
+**訂正はこちら側に書く**（org `security-verification.md` §5）。
+
+★ **`docs/BRANCHING.md` は 1 行も直していない。** リリース手順（`release/<version>` を切って
+版番号を上げ、`main` へ PR、マージ後にタグ、`develop` へ戻す）は**そのとおりに動いた** ——
+**`develop` へ戻す**ぶんは、`release/0.1.0` を先に `develop` へ入れてから `main` を追いつかせた
+ので、**別途の戻しが要らなかった**（2 段の順序が、GitFlow の「両方へマージする」を
+1 回で満たしている）。
+
 #### 却下した案
 
 - **`main` を `develop` へ fast-forward** —— 履歴が一直線になり `0  0` がそのまま成立するが、
@@ -11968,7 +12005,7 @@ org `security-verification.md` §5）。
 
 - **ブランチ保護は未適用**（決めたこと 3。**判断は下したが、設定は触っていない**）。
   **#84 が閉じた日に、`required status checks` を置かない形で入れるかを判断する**
-- **タグは注釈つき**（`git tag -a v0.1.0`）。**GitHub Release は作っていない**
+- **タグは注釈つき**（`git tag -a v0.1.0` → `5a649e2`）。**GitHub Release は作っていない**
 - **`version` が出力に出ない**のは決めたこと 2 の★。**成果物から版を読ませたくなったら、
   そこが判断の場所**（org security-baseline §5.3.2 の「焼き込んだものの版が成果物の側から
   読めない」は分類 P の話で、**grabado はレジストリで配らないので分類 B のまま**）

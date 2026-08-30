@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "io.propagandist.grabado"
-version = "0.0.0"
+version = "0.1.0"
 
 kotlin {
     // ランタイムは eclipse-temurin:25-jre-alpine（段階2-1 の Dockerfile）。開発機の JDK が

@@ -1128,6 +1128,11 @@ push 側を足すと同じ検査を 2 度払うことになる。
 待ち時間へ置き換わっただけで、結論は動かない。**`ci-image.yml` の paths の正本は
 [`.dockerignore`](../.dockerignore) の許可リスト**（＝ イメージに入るもの）＋ E2E 側の入力。
 
+**★ `ci-frontend` は `Dockerfile` / `server/build.gradle.kts` / `ci-server.yml` でも起動する**
+（2026-08-30。issue #134）—— **ツールチェーンの版の一致**を見るテストの入力なので、
+**正本と写しのどちらが動いても走らないと意味が無い**。理由と対象は
+[`TESTING.md`](TESTING.md) の「ツールチェーンの版の一致」。
+
 #### 検査の 3 層
 
 | 層 | grabado では |

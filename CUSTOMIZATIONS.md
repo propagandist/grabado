@@ -11187,6 +11187,11 @@ GitHub 側にしか残らず、**受容したのか忘れたのかが後から�
 - **更新 PR は CI で落ちる** —— `gradle.lockfile` を Dependabot が更新できないため。
   手元で `./gradlew dependencies --write-locks` を回して push する
   （`dependabot.yml` の★。**落ちること自体がロックを更新し忘れていない証拠**）
+  - **★ 訂正（2026-08-30 実測。#134）—— 落ちない。Dependabot は `gradle.lockfile` を更新する。**
+    #101（`d928a55`）も #132（`7fa30eb`）も**dependabot のコミット 1 本**で
+    `libs.versions.toml` と `gradle.lockfile` の両方が動き、`git diff --exit-code` は緑だった。
+    **手元で `--write-locks` を回す必要は無い。元の記述は消さない**（`dependabot.yml` の★を
+    そのまま引き写したもので、訂正は両方に足してある）
 - **`commons-lang3` が Kotlin 2.4.20 で直るかは未確認。** 推移的依存なので一緒に上がる見込みだが、
   **確かめるのは PR が来たとき**（`gh api .../dependabot/alerts` が 0 件になるかで見る）
 
@@ -11316,6 +11321,141 @@ spring-boot, typescript` の順で返った）。§3.4 の記述が実測で裏�
 - **`## 保持している upstream 資産` の表の 2 行を同時に直した** ——
   README の行（英語が顔だと書いてあった）と `index.html` の行（参照を直した旨を追記）。
   **表は現状を映すものなので、状態が変わったら直す。決定ログの側は消さない**
+
+### 2026-08-30 依存の更新 3 本を捌く —— 版の一致を機械に見せ、メジャーを定例から外す
+
+正本は [issue #134](https://github.com/propagandist/grabado/issues/134)。**段階に属さない**。
+#129 が Dependabot alert の待ち方を決めた翌日に、**更新 PR が 3 本溜まっていた**ので捌いた。
+**3 本を読んだら、CI が緑のまま通ってしまう問題が 2 つ出た。**
+
+| PR | 中身 | 始末 |
+|---|---|---|
+| #130 | `node:24-alpine` → `26-alpine`（Dockerfile の web ステージのみ） | **close**（→ [#133](https://github.com/propagandist/grabado/issues/133)） |
+| #131 | `typescript` 5.9.3 → **7.0.2** ／ `jsdom` 29 → 30 ／ `vite` 8.2.1 → 8.2.2 | **マージ**（`cf14e73`） |
+| #132 | `anthropic-java` 2.55.0 → 2.57.0 | **マージ**（`7fa30eb`） |
+
+#### ★ 何が起きていたか
+
+[`Dockerfile`](Dockerfile) の web ステージは前から「**版は `ci-frontend.yml` の
+`node-version: 24` に揃える。CI と違うもので配布物を作らない。**」と書いていた。
+**それを確かめる機械が 1 つも無かった** —— #130 は Dockerfile の 1 行だけを 26 にするもので、
+**ci-image しか起動せず、全ジョブ緑**だった。走った検査は「node 26 でイメージが build できる」
+であって、「**CI と同じ版か**」ではない。
+
+**Java も同型**で、`jvmToolchain(25)` ／ `ci-server.yml` の `java-version: 25` ／
+`eclipse-temurin:25-jdk-alpine`（api）／ 同 `-jre-alpine`（runtime）の **4 か所が手で揃っていた**。
+
+もう 1 つ、#131 のタイトルは「Bump the frontend group with 3 updates」で、**dev 依存の定例更新に
+見える**。中身は `typescript` の **5 → 7**（native port）で、`npm run typecheck` は主要ゲートである。
+
+#### 決めたこと 1: #130 は **安定版（LTS）を待つ**（ユーザー判断）
+
+`nodejs/Release` の `schedule.json` 実測（2026-08-30）:
+
+| 版 | start | lts | maintenance | end |
+|---|---|---|---|---|
+| v24 | 2025-05-06 | 2025-10-28 | 2026-10-20 | 2028-04-30 |
+| v26 | 2026-05-05 | **2026-10-28** | 2027-10-20 | 2029-04-30 |
+
+**v26 が LTS に入るのは約 2 か月後**で、いまは Current 系列。`HANDOVER.md` §2.2 は
+「版は着手時に**最新 LTS** 確認」。**いま入れると Current 版で配布物を作る**ことになり、
+**2 か月後に上げ直す**（配布物のビルド入力を 2 回動かす）。#105 と同じ「**待ち方を決めて
+放置と分ける**」形だが、**担保のされ方が違う** —— #105 は cooldown が自動で PR を連れてくるが、
+**close した PR が戻ってくる保証は無い**。だから **#133 を open のまま残した**。
+
+#### 決めたこと 2: 版の一致を **機械に見せる**（node ＋ java）
+
+[`tests/node/toolchain.test.ts`](tests/node/toolchain.test.ts)（新規 4 本）。イディオムは
+[`csp.test.ts`](tests/node/csp.test.ts) / [`env-contract.test.ts`](tests/node/env-contract.test.ts)
+と同じ（**正本を読んで、写しのずれを赤くする**）。
+
+| | 正本 | 写し |
+|---|---|---|
+| Node | `ci-frontend.yml` の `node-version` | Dockerfile の web ステージ |
+| Java | `build.gradle.kts` の `jvmToolchain`（**実際にコンパイルするのがそこ**） | `ci-server.yml` の `java-version` ／ Dockerfile の api（jdk）／ 同 runtime（jre） |
+
+- **版の数字はテストに書かない** —— 書けば正本が 2 つになる（`env-contract.test.ts` の
+  「値そのものは見ない」と同じ理由）。**確かめるのは一致だけ**
+- **空振りを緑にしない** —— 書式が変わって読めなくなったら「一致している」ではなく
+  「**読めなかった**」と言わせる。**正規表現は `@sha256:` を必須**にしてあるので、
+  **digest ピンを外しても赤くなる**（org security-baseline §5.1 に副次的に機械が付いた）
+- **`ci-frontend.yml` の `paths` が 3 ファイル広がった**（`Dockerfile` /
+  `server/build.gradle.kts` / `ci-server.yml`）—— **一致検査は、正本と写しのどちらが動いても
+  走らないと意味が無い**。**`server/**` とは書かない**（Kotlin を 1 行直しただけの PR で
+  フロントの検査を回す理由は無い）
+
+#### 決めたこと 3: Dependabot の group から **major を外す**
+
+4 entry すべての group に `update-types: ['minor', 'patch']`。
+**メジャーは個別 PR で来る**（グループから外れた更新は個別 PR になるので、落ちはしない）。
+**今回の #130 / #131 が両方ともメジャーだったこと**が発端。
+
+#### ★ 訂正（実測）: **Dependabot は `gradle.lockfile` を更新する**
+
+[`.github/dependabot.yml`](.github/dependabot.yml) の★は「Dependabot はロックファイルを更新
+できないので、**その PR は ci-server.yml の『追跡ファイルが動いていないこと』で落ちる**」と
+書いていたが、**#101（`d928a55`）も #132（`7fa30eb`）も、dependabot のコミット 1 本で
+`libs.versions.toml` と `gradle.lockfile` の両方が動いており**、`git diff --exit-code` は緑だった。
+**手元で `--write-locks` を回す必要は無い。**
+
+**元の記述は消していない**（判断の履歴）。**同じ誤りを #105 の申し送りにも書いていた**ので、
+そちらにも★を足した。
+
+**★ 別件と混ぜないこと** —— `security_update_dependency_not_found`（`deps-submit` が提出した
+グラフにしか無い依存は**拾えるが直せない**。`CLAUDE.md` の「セキュリティ」）は**軸が違う**。
+あちらは実測どおりで、訂正の対象ではない。
+
+#### ★ 実測: **jsdom 30 が Node の下限を上げた**（手元が割っていた）
+
+`npm ci` が `EBADENGINE` を 1 件出した:
+
+```
+package: 'jsdom@30.0.1'
+required: { node: '^22.22.2 || ^24.15.0 || >=26.0.0' }
+current:  { node: 'v24.14.0', npm: '11.9.0' }
+```
+
+**CI は `node-version: 24` が最新の 24.x を引くので緑**、**Dockerfile も `node:24-alpine` が
+同じく最新を引く**。**割っていたのは手元だけ**で、**警告のまま 624 本すべて緑**だった。
+**版を固定していないところは、下限が上がっても気付けない** —— 今回は警告が出たので分かった。
+
+#### 検証（2026-08-30 実測）
+
+| 何を | 結果 |
+|---|---|
+| `npm run typecheck` | **TypeScript 7.0.2 で緑**（native port での初回） |
+| `npm test` | **624 本**（#131 の時点で 620 本 → 新規テスト 4 本ぶんだけ増えた） |
+| `npm run test:browser` / `known-issues` / `test:dist` | 205 本 / 1 本 / 6 本が緑 |
+| `npm run test:orm-tools` | **3 道具とも OK**（39 本走って 0 FAIL、3 SKIP） |
+| `tests/golden/` の差分 | **0 バイト** |
+| **新規テストが赤くなること** | 2 通りとも確かめた —— `node-version` を 25 に変えると `expected 24 to be 25`、Dockerfile の digest を外すと `expected +0 to be 1`（**読めなかった**と言う） |
+
+#### 却下した案
+
+- **版の一致を node だけにする** —— Dockerfile が明文で「揃える」と書いているのは node だけだが、
+  **Java 26 は 2026-03 に出ている**ので temurin の同型 PR がいずれ来る。そのとき Java は 4 か所ある
+- **`ci-image.yml` の `node-version` も一致の対象に入れる** —— 段階2-5 が
+  「**揃える先を 3 か所に増やさない**」と決めている。**決定を黙って覆さない**
+- **`tests/orm-tools/cases.ts` の `node:24` も対象に入れる** —— **使い捨てコンテナで tsc を
+  回すだけ**で、配布物のビルド入力ではない
+- **検査を `ci-image.yml` のステップとして書く** —— Dockerfile では起動するが、
+  **`ci-frontend.yml` を触った PR では起動しない**。**正本の側を変えたときに赤くならない検査は、
+  一致検査として成立しない**
+- **`dependabot.yml` の★を書き換えて消す** —— 実測で外れた記述は**訂正を追記**する
+- **#131 から typescript を手で外して 2 本だけ入れる** —— group PR を手で分解する手間に対し、
+  **`update-types` を絞れば次回から構造的に起きない**
+- **`ignore` で node のメジャーを止める** —— 止めたいのは「いまの 26」だけで、
+  「node のメジャー全部」ではない。**解除を忘れると次のメジャーも黙って来なくなる**
+
+#### 申し送り
+
+- **`update-types` を絞った効きは、次の weekly（2026-09-05 前後）でしか確かめられない** ——
+  **digest だけの docker 更新が落ちずに個別 PR で来るか**を見ること。
+  **#130 が再生成されていないか**も同時に見る（close は「その版を作り直さない」だけで、
+  `node:26-alpine` の digest が動けば新しい PR が来る可能性がある）
+- **Node 26 への更新は #133 が持つ**（期限 2026-10-28）。**ここに書くと、やった日に嘘になる**
+- **手元の Node が 24.14.0 で jsdom 30 の下限（24.15.0）を割っている。** 全検査は緑だが、
+  **次に手元で踏むとしたらここ**
 
 ---
 

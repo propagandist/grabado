@@ -831,6 +831,38 @@ GRABADO_IT_AI_MODEL=claude-opus-5 server/gradlew -p server test   --tests '*Anth
 `READONLY` で 403 になることは**手で確かめた**（実測は [`ARCHITECTURE.md`](ARCHITECTURE.md) §9.5）。
 **自動化は 2-4** —— 5-9 / 11-5 と同じ形で E2E を張る。
 
+## ツールチェーンの版の一致（issue #134）
+
+**配布物と CI が同じ Node / Java で動いていること**を見る。
+[`../Dockerfile`](../Dockerfile) の web ステージは前から「版は `ci-frontend.yml` の
+`node-version` に揃える。**CI と違うもので配布物を作らない**」と書いていたが、
+**2026-08-30 まで、それを確かめる機械が 1 つも無かった** —— Dependabot の
+[#130](https://github.com/propagandist/grabado/pull/130)（node 24 → 26）は Dockerfile の 1 行だけを
+動かすもので、**全ジョブ緑のまま**食い違いを入れられる形だった。
+
+| | 正本 | 写し |
+|---|---|---|
+| Node | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) の `node-version` | Dockerfile の web ステージ |
+| Java | [`build.gradle.kts`](../server/build.gradle.kts) の `jvmToolchain`（**実際にコンパイルするのがそこ**） | [`ci-server.yml`](../.github/workflows/ci-server.yml) の `java-version` ／ Dockerfile の api（jdk）と runtime（jre） |
+
+| テスト | 何を見るか |
+|---|---|
+| [`tests/node/toolchain.test.ts`](../tests/node/toolchain.test.ts) | 上の 4 対が一致すること。**読み取りが空振りしたら赤くなる**こと（書式が変わったとき「一致している」ではなく「**読めなかった**」と言わせる）。ベースイメージの正規表現は `@sha256:` を必須にしてあるので、**digest ピンを外しても赤くなる** |
+
+**版の数字そのものはテストに書かない** —— 書けば正本が 2 つになる（`env-contract.test.ts` が
+「値そのものは見ない」と決めているのと同じ理由）。**どの版にするかは正本の側が決める**
+（判断は [`HANDOVER.md`](HANDOVER.md) §2.2 の「着手時に**最新 LTS** 確認」）。
+
+**★ 意図して対象外にしたものが 2 つある**（漏れではない）。
+[`ci-image.yml`](../.github/workflows/ci-image.yml) の `node-version` は**揃える義務が無い**
+（段階2-5 の「**揃える先を 3 か所に増やさない**」。あれは Playwright を回す Node で、
+イメージの中身とは別）。[`../tests/orm-tools/cases.ts`](../tests/orm-tools/cases.ts) の
+`node:24` は**使い捨てコンテナで tsc を回すだけ**で、配布物のビルド入力ではない。
+
+**★ この検査のために [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) の `paths` が
+3 ファイル広がっている**（`Dockerfile` / `server/build.gradle.kts` / `ci-server.yml`）——
+**一致検査は、正本と写しのどちらが動いても走らないと意味が無い**ため。
+
 ## 配布物のスモーク（`npm run test:dist`）
 
 dev server で緑でも `dist/` が壊れていては配布できないので、

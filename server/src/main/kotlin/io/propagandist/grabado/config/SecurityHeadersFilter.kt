@@ -23,11 +23,17 @@ import org.springframework.web.filter.OncePerRequestFilter
  * ★ **`Cache-Control` は段階2-4 で入れた**（issue #93）。**これだけ経路で値が変わる**ので
  *   [HEADERS] とは別に持つ —— 下の [cacheControlFor] を参照。
  *
- * ★ **HSTS はここに入れない。** ローカルは `http://localhost:8080` で動く（公開デモの
- *   置き場所と TLS は issue #84）。入れると手元が壊れる。
+ * ★ **HSTS は `grabado.hsts` が真のときだけ出す**（issue #84。値は [HSTS]）。
+ *   **[HEADERS] には入れない** —— あの 5 本は「どこで動いても同じ」もので、HSTS は
+ *   **デプロイの条件で変わる**（`Cache-Control` が経路で変わるのと同じ理由で別に持つ）。
+ *
+ *   **訂正の元**: 段階2-2 の時点では「**HSTS はここに入れない。入れると手元が壊れる**」と
+ *   書いてあった。**壊れるという観測は正しい**（既定で出すと `http://localhost:8080` を
+ *   開いたブラウザが以後 localhost を https へ強制する）。**変わったのは、置き場所が
+ *   決まって「TLS の後ろにいるデプロイ」を名指しできるようになったこと**だけである。
  */
 @Component
-class SecurityHeadersFilter : OncePerRequestFilter() {
+class SecurityHeadersFilter(private val properties: GrabadoProperties) : OncePerRequestFilter() {
 
     override fun doFilterInternal(
         request: HttpServletRequest,
@@ -35,6 +41,18 @@ class SecurityHeadersFilter : OncePerRequestFilter() {
         filterChain: FilterChain,
     ) {
         HEADERS.forEach { (name, value) -> response.setHeader(name, value) }
+        /*
+         * ★ **TLS の後ろに置いたデプロイだけが出す 1 本**（issue #84）。
+         *
+         * `request.isSecure` で判断しないのは、**前段が TLS を終端してから平文で渡してくる**
+         * から（公開デモは Railway）—— アプリから見た口はいつも http で、条件にならない。
+         * `X-Forwarded-Proto` を見る形も採らない：**クライアントが送れるヘッダ**なので、
+         * 前段を信頼する設定（`server.forward-headers-strategy`）とセットでなければ
+         * 意味を持たず、**その設定の有無が env より読みにくい**。
+         */
+        if (properties.hsts) {
+            response.setHeader(STRICT_TRANSPORT_SECURITY, HSTS)
+        }
         /*
          * ★ **経路別の 1 本を、共通の 5 本と同じ場所で付ける。**
          *
@@ -86,6 +104,26 @@ class SecurityHeadersFilter : OncePerRequestFilter() {
 
         /** ヘッダ名。**[HEADERS] の 5 本と違い、経路で値が変わる**ので別に持つ（段階2-4）。 */
         const val CACHE_CONTROL = "Cache-Control"
+
+        /** ヘッダ名。**デプロイの条件で出る／出ない**が変わるので [HEADERS] に入れない（issue #84）。 */
+        const val STRICT_TRANSPORT_SECURITY = "Strict-Transport-Security"
+
+        /**
+         * HSTS の値。**`preload` を付けない** —— org security-baseline §4.3 が
+         * 「**取り消しに数か月かかる**」と名指しで止めている。**付けなくても
+         * `grabado.dev` は常時 HTTPS になる**：`.dev` は **TLD ごと HSTS プリロード
+         * 済み**なので、ブラウザは grabado の応答を 1 度も見ずに https へ倒す。
+         *
+         * `max-age` は **1 年**（31,536,000 秒）。同 §4.3 の「崩れる変更」に
+         * **`max-age` を短くする**が挙がっている —— 短い値は「設定してある」ように
+         * 見えて実質的に効かない。
+         *
+         * `includeSubDomains` は `.dev` では**重複した保険**（TLD のプリロードが既に
+         * 全サブドメインに効く）。それでも付けるのは、**この値が `.dev` の性質に
+         * 依存しない形であるべき**だから —— 別のドメインへ載せ替えた日に、
+         * ここを直さないと守る範囲が黙って狭まる。
+         */
+        const val HSTS = "max-age=31536000; includeSubDomains"
 
         /** Vite がハッシュを名前に織り込む資産（`/assets/index-<hash>.js`）。 */
         const val ASSETS_PREFIX = "/assets/"

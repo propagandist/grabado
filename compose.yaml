@@ -36,6 +36,9 @@ services:
     environment:
       # 副作用（保存・introspection・AI）を止める。**公開デモは true 一択。**
       - GRABADO_READONLY
+      # Strict-Transport-Security を出す。**TLS の後ろに置いたデプロイだけ true。**
+      # 手元の http://localhost:8080 で立てると、ブラウザが以後 localhost を https へ倒す。
+      - GRABADO_HSTS
       # 正本ディレクトリ。**コンテナ内のパス**なので、変えるなら上の mount 右辺も揃える
       # （揃っていなければ起動時の検証で落ちる —— 黙って別の場所へ書くことはない）。
       - GRABADO_SCHEMA_DIR

@@ -11,6 +11,13 @@ grabado:
   # 落ちるのはその 3 つだけで、list / load は生きている（読み取りビューア）。
   readonly: ${GRABADO_READONLY:${READONLY:false}}
 
+  # Strict-Transport-Security を出すか（issue #84）。**既定は false。**
+  # TLS を終端するのは前段（公開デモは Railway）で、アプリが見る口はいつも平文 ——
+  # だから「このデプロイは TLS の後ろにいる」と人が宣言する env にしてある。
+  # 既定で出すと、手元の http://localhost:8080 を開いたブラウザが以後 localhost を
+  # https へ強制する。値と preload を付けない理由は SecurityHeadersFilter.HSTS。
+  hsts: ${GRABADO_HSTS:false}
+
   # introspection の接続先（段階5-7a）。**既定は空＝無効。**
   #
   # ★ ここに列挙したものしか使えない。`?action=import&database=shop` の `shop` が選ぶのは

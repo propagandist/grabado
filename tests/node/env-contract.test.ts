@@ -86,7 +86,7 @@ const documented = documentedEnvNames();
 
 describe("env の名前が 3 つのファイルで一致している", () => {
     test("application.yaml から読めている（読み取り自体が壊れていない）", () => {
-        // 増減したらここを直す。**「12 本ある」ではなく「この 12 本」**を書くのは、
+        // 増減したらここを直す。**「13 本ある」ではなく「この 13 本」**を書くのは、
         // 名前が入れ替わっても数が同じなら緑になる形を避けるため。
         expect(documented).toEqual([
             "ANTHROPIC_API_KEY",
@@ -99,6 +99,7 @@ describe("env の名前が 3 つのファイルで一致している", () => {
             "GRABADO_AI_MODEL",
             "GRABADO_AI_RATE_PER_MINUTE",
             "GRABADO_AI_TIMEOUT",
+            "GRABADO_HSTS",
             "GRABADO_READONLY",
             "GRABADO_SCHEMA_DIR",
         ]);

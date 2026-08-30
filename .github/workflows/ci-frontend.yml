@@ -58,12 +58,15 @@ on:
       - 'server/src/main/resources/application.yaml'
       - 'compose.yaml'
       - '.env.example'
+      # ★ この 2 本は toolchain.test.ts の入力でもある（issue #155 の「製品の版の一致」）。
+      #   npm のためだけだと読んで外さないこと —— 外すと、版をずらす変更で検査が走らなくなる。
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
       - '*.config.ts'
-      # toolchain.test.ts の入力（issue #134）。正本 2 本（下の ci-frontend.yml の
-      # `node-version` と build.gradle.kts の `jvmToolchain`）と写し 3 か所。
+      # toolchain.test.ts の入力（issue #134 のツールチェーンの版）。正本 2 本（下の
+      # ci-frontend.yml の `node-version` と build.gradle.kts の `jvmToolchain`）と写し 3 か所。
+      # **build.gradle.kts は #155 の「製品の版」でも入力**（2 つの軸が同じファイルを見る）。
       - 'Dockerfile'
       - 'server/build.gradle.kts'
       - '.github/workflows/ci-server.yml'

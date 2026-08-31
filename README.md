@@ -4,6 +4,10 @@
 出し、既存の DB を読み取って図に戻せる。**設計は git 管理の JSON ファイルが正本**で、
 エディタの裏に DB は無い。
 
+**触ってみる: <https://grabado.dev/>** —— **読み取り専用の公開デモ**
+（保存・introspection・AI は止めてある）。**編集はブラウザ内で完結する**ので、
+そのまま描いて **DDL とエクスポートまで出せる**。
+
 Ondrej Zara の [ondras/wwwsqldesigner](https://github.com/ondras/wwwsqldesigner)（BSD-3-Clause）
 由来。描画エンジンは温存し、その周りを TypeScript で書き直した。PHP backend は
 Kotlin/Spring Boot に置き換え、**単一の Docker イメージ**として配る。

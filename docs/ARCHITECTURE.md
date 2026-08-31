@@ -1238,13 +1238,27 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 
 ```bash
 curl -sSI https://grabado.dev/ | grep -i strict-transport-security   # preload が無いこと
-curl -s https://grabado.dev/backend/file/?action=capabilities        # 3 つとも false
+curl -s https://grabado.dev/backend/file/?action=capabilities        # readonly=true, 他 2 つが false
 curl -s -o /dev/null -w '%{http_code}\n' -X POST \
   -H 'Content-Type: application/json' -d '{}' \
   'https://grabado.dev/backend/file/?action=save&keyword=x.json'     # 403
 curl -s -H 'accept: application/dns-json' \
   'https://cloudflare-dns.com/dns-query?name=grabado.dev&type=CAA'   # Answer 節に出ること
 ```
+
+★★ **`capabilities` は「3 つとも false」ではない**（**2026-08-31 実測。訂正**）——
+返るのは **`{"readonly":true,"introspection":false,"ai":false}`** で、
+**`readonly` が `true` であることが READONLY で動いている証拠**である。
+**元は「3 つとも false」と書いていた** —— そのとおりなら**逆の意味**（READONLY で動いていない）になる。
+**#84 の受け入れ基準にも同じ誤りがあった**（あちらはコメントで訂正した）。
+
+★★ **手元の `curl` では 3 本目がそのまま走らない**（**2026-08-31 実測**）——
+**`-w '%{http_code}'` を付けると `exit 43`**（`A libcurl function was given a bad argument`）
+**になり、必ず `000` を返す**（curl 8.8.0 x86_64-w64-mingw32 Schannel）。**`-o` だけなら通る。**
+**`-D -` でヘッダを出して読む**のが代替。**★ 「`000`」を「サーバが落ちている」と読まない。**
+
+★ **`introspect` は 403 ではなく `501 Not Implemented`**（同日実測）。
+**保存（403）と番号が違う** —— どちらも副作用は起きない。
 
 ★ **`nslookup` は CAA を引けない**（Windows。`unknown query type: CAA`）。**DoH で引く。**
 **Answer 節が無いのは「引けなかった」ではなく「そのレコード型が無い」** ——

@@ -15,7 +15,7 @@
 - 配布: マルチステージ Docker（フロント dist を Spring Boot static に同梱）。app 単一コンテナ＋mount。
 - **対応 DB は 8 本**: `postgresql`（house 標準）/ `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` は撤去（6-1）。決定は `CUSTOMIZATIONS.md` の段階6-0。
 - 公開デモ（grabado.dev）は **`READONLY=true` 一択** — AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。編集体験はブラウザ内ストアで成立する。
-- **★ 公開デモの外側は決まった**（**2026-08-30**。#84）—— 置き場所は **Railway**（PRO 契約済み。`Dockerfile` から GitHub 連携でビルドし、**ワークフローを足さない**）、配るのは **`main`**（版 v0.1.0 を切る。作業は別 issue）、**TLS は Let's Encrypt**（実測）、**CAA は置く**（ただし**証明書が出てから** —— 間違えると発行が黙って止まる）、**HSTS はアプリが `GRABADO_HSTS=true` のときだけ出す**（`preload` は付けない）。構成の契約は `docs/ARCHITECTURE.md` §9.7、判断は `CUSTOMIZATIONS.md` の同日。**`grabado.dev` は取得済み**（Porkbun）。**★ 外側に実際に設定した状態は [`grabado-ops`](https://github.com/propagandist/grabado-ops)（private）が正本**（**2026-08-30**。#152）—— Railway の service settings に入れた値 ／ Porkbun の DNS ／ 証明書の issuer ／ 費用 ／ 公開 URL の検査の実走。**ここが持つのはアプリが期待することまでで、押した結果は持たない。**
+- **★ 公開デモの外側は決まった**（**2026-08-30**。#84）—— 置き場所は **Railway**（PRO 契約済み。`Dockerfile` から GitHub 連携でビルドし、**ワークフローを足さない**）、配るのは **`main`**（版 v0.1.0 を切る。作業は別 issue）、**TLS は Let's Encrypt**（実測）、**CAA は置く**（ただし**証明書が出てから** —— 間違えると発行が黙って止まる）、**HSTS はアプリが `GRABADO_HSTS=true` のときだけ出す**（`preload` は付けない）。構成の契約は `docs/ARCHITECTURE.md` §9.7、判断は `CUSTOMIZATIONS.md` の同日。**`grabado.dev` は取得済み**（Porkbun）。**★ 外側に実際に設定した状態は [`grabado-ops`](https://github.com/propagandist/grabado-ops)（private）が正本**（**2026-08-30**。#152）—— Railway の service settings に入れた値 ／ Porkbun の DNS ／ 証明書の issuer ／ 費用 ／ 公開 URL の検査の実走。**ここが持つのはアプリが期待することまでで、押した結果は持たない。****★ 2026-08-31 に立った** —— `https://grabado.dev/` が **READONLY のビューアを返している**（README 2 本に URL を載せた）。**マイルストーン `公開デモを立てる` は同日に閉じた。**
 
 ## 絶対に守る制約（Hard Constraints）
 1. **特性化テストが緑であることが移植の前提**。DDL golden ＋ serializer round-trip/決定論テストを先に用意し、挙動不変を保証してから内部を作り替える。半移行を放置しない。
@@ -176,7 +176,8 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
     **次の到達点が issue として起票されていれば、着手の日に作れる** ——
     **0 本は「次が無い」ではなく「次はあるが着手していない」**
   - **閉じるのは人**（**全 issue が closed でも GitHub は自動で閉じない**。
-    **2026-08-30 時点で未実測**——#84 が閉じた日に確かめる）。**閉じたら
+    **★ 2026-08-31 に実測した** —— #84 を閉じた直後、`open_issues` が **0**・`closed_issues` が
+    **3** になっても、**`state` は `open` のままだった**。**閉じたら
     `CUSTOMIZATIONS.md` に記録し、版を切るかを別に判断する**。**0 本のまま残ったら削除する**
   - **`due_on` は外から決まっている日付があるときだけ。作業量から逆算した締切は置かない**
     ——守られない期限は overdue を無視する習慣を作る。**同時 open の数にも閾値を置かない**

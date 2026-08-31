@@ -4,6 +4,10 @@
 eight database profiles, or point it at an existing database and get the diagram back. A design is
 a plain JSON file that lives in your git repository — there is no database behind the editor.
 
+**Try it: <https://grabado.dev/>** — a **read-only public demo** (saving, introspection
+and AI are disabled). **Editing happens entirely in the browser**, so you can draw a schema
+and export DDL right there.
+
 It is a fork of [ondras/wwwsqldesigner](https://github.com/ondras/wwwsqldesigner) by Ondrej Zara
 (BSD-3-Clause). The drawing engine is kept; everything around it was rewritten in TypeScript, the
 PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a single Docker image.

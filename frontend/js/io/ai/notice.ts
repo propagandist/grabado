@@ -37,7 +37,7 @@ export function reviewNotice(suggestions: readonly AiSuggestion[]): string {
 
     const out = [
         `grabado: AI から ${suggestions.length} 件の指摘（${summary}）。`,
-        "**まだ 1 件も適用していない** —— 承認して当てるのは段階11-4。",
+        "**まだ 1 件も適用していない** —— 番号を選んで「AI 提案を適用」を押すまで、設計は変わらない。",
         "",
     ];
 

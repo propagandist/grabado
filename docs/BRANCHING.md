@@ -56,12 +56,27 @@ git push origin v0.1.0
 # assets は付けない（イメージはレジストリで配らない）。変更を列挙しない（正本は git log）。
 gh release create v0.1.0 --draft --title "v0.1.0 — <到達点の名前>" --notes-file <file>
 gh release edit v0.1.0 --draft=false
+
+# マイルストーンを閉じる（#174）。人が閉じる —— 全 issue が closed でも自動では閉じない。
+# 閉じる前に、残っている open issue を次の版へ動かすか外すかを決める（判断はここで 1 回だけ）。
+gh api -X PATCH repos/propagandist/grabado/milestones/<N> -f state=closed
+# 次の版のマイルストーンを作り、続けて issue を付ける（0 本のまま放置しない）。
+gh api -X POST repos/propagandist/grabado/milestones \
+  -f title='v0.2.0 — <到達点の名前>' -f description='<何が成立したら閉じるかを 1 文で>'
 ```
 
 **タグを打って終わりにしない。** org `repo-surface-baseline.md` §3.7 の確かめ方は
 **リポジトリの右柱**で、**タグだけでは右柱に何も出ない**。ノートの値（日本語・assets なし・
 変更を列挙しない）は [`../CLAUDE.md`](../CLAUDE.md) の「作業の型」、判断は
 [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の 2026-08-30「版 v0.1.0」の訂正。
+
+**★ マイルストーンと 1 続きにする**（**2026-09-01**。#174）—— **単位が版なので、切る・閉じる・
+次を作るが同じ行為**になった。**順序と規律は org `work-conventions.md` の「マイルストーンと版」節**、
+**値**（単位・タイトルの形・patch 版を作らない）は [`../CLAUDE.md`](../CLAUDE.md) の「作業の型」。
+
+**★ ノートの末尾に「次は〜」を書くときが (b) の発火点。** 申し送りと `docs/` の予約の**両方**を見て、
+**結果を [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) に必ず書く —— 0 件でも書く**
+（**2026-08-31 に空振りし、回されなかったことが誰にも見えなかった**）。
 
 ## hotfix
 

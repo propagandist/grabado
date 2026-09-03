@@ -1,0 +1,356 @@
+# grabado の配布イメージを GHCR へ配る（#164 が「配る」と決め、ここがその実体）。
+# **4 本目のワークフロー。3 本の `ci-*` と違い、検査ではなく配る経路そのもの。**
+#
+# ★ なぜ契機が `push: tags` だけなのか
+#   **配る契機が 2 つになると、配布物が 2 系統になる。** `develop` の先端を `edge` で配ると
+#   **E2E を通していない状態が外へ出る窓**ができ、`workflow_dispatch` は「誰かが手で押した版」を
+#   作る。**配るのは版だけ**（#84 / #150 の判断と揃う）。
+#
+# ★ なぜ 3 ジョブなのか
+#   `ci-image.yml` の冒頭は「**分けても切り分けやすくならないなら 1 ジョブ**」と書いており、
+#   その判断はここでも効く。それでも 3 つに分かれるのは**理由が 2 つある**から ——
+#   **matrix は必然的に分かれる**こと、そして **座標の検査は push より前に落とす必要がある**こと。
+#   **一度 publish した座標は取り消せない**（org security-baseline §5.3.1 の★★ ——
+#   `spriggan-message` が `lastTag` のフォールバックで `…:96377c2` という座標で publish した）。
+#
+# ★ 座標の検査をテストに置かない理由
+#   `tests/node/toolchain.test.ts` が見ている 3 つ（`package.json` / `package-lock.json` /
+#   `server/build.gradle.kts`）は**常にファイルの中にある**が、**git タグはそこに無い**。
+#   **この軸はタグを打ったときにしか存在しない。**
+#
+# ★ なぜ QEMU を使わないのか
+#   `npm ci` と `bootJar` をエミュレーションで回すと数十分かかる。**public リポジトリは
+#   arm64 ランナー（`ubuntu-24.04-arm`）が無料**で、**枠も食わない**（org ci-strategy §1）。
+#
+# ★ org security-verification 付録 P の 4 段を、OCI の性質にそのまま写してある
+#   1. 成果物を検める … **サイズの下限**（★★ 取り込みに失敗した成果物は**ビルドが緑のまま
+#      小さくなる**。「出力がある」と「中身がある」は別）
+#   2. 起動を検める   … 各アーキの**ネイティブランナーで実際に起こす**
+#   3. チェックサム   … **OCI の digest がそれ自体チェックサム**。`SHA256SUMS.txt` を別に作らない
+#   4. ドラフト→公開 … **push-by-digest（名前が付かない）→ 検め → manifest でタグを付ける**。
+#      **OCI にドラフトは無いので、manifest を作った瞬間が「公開」になる**
+#
+# 判断規約: propagandist/.github の docs/ci-strategy.md
+# 配る側の基準: 同 docs/security-baseline.md §5.3
+name: リリース（イメージ）
+
+on:
+  push:
+    tags: ['v*']
+
+# 既定に頼らず最小を明示する。**`packages: write` はジョブ単位で与える** ——
+# ワークフロー全体に持たせると、座標の検査にまで配る権限が付く。
+permissions:
+  contents: read
+
+# ★ **`cancel-in-progress: false`。** 配る操作の途中で止めると、**digest だけ push されて
+#   manifest が無い状態**が残る。`deps-submit.yml` と同じ判断。
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+  # 実測 284MB（段階2-1）／ **287,189,003 bytes = 273 MiB**（2026-09-04。ラベル追加後に手元で再測）
+  # に対して**下限 200 MiB**。**上限ではなく下限を見る**（付録 P の★★）。
+  MIN_SIZE_BYTES: '209715200'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. 座標 —— push より前に落とす
+  # ---------------------------------------------------------------------------
+  coordinate:
+    name: 座標
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      # ★ action は SHA でピンする。**末尾コメントの版表記を消さないこと**
+      #   —— Dependabot が SHA と一緒に書き換える対象で、消すとどの版か読めなくなる。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # ★ **プレリリース接尾辞を落としたベース版**を比べる。`v0.2.0-rc.1` なら `0.2.0`。
+      #   製品の版（`package.json`）はプレリリースのたびには動かないので、
+      #   **そのまま比べると rc を打つたびに落ちる**。
+      # ★ **読めなければ落とす。** 空振りを緑にしない（`ci-image.yml` の Playwright の版と同じ判断）。
+      - name: タグと製品の版が一致すること
+        id: check
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          base="${version%%-*}"
+          case "$base" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "タグから版を読めない: '$tag'" >&2; exit 1 ;;
+          esac
+
+          pkg="$(node -p "require('./package.json').version")"
+          gradle="$(sed -n 's/^version = "\(.*\)"$/\1/p' server/build.gradle.kts)"
+          if [ -z "$gradle" ]; then
+            echo "::error::server/build.gradle.kts から version を読めない" >&2
+            exit 1
+          fi
+
+          echo "タグ=$tag / ベース版=$base / package.json=$pkg / build.gradle.kts=$gradle"
+          if [ "$base" != "$pkg" ] || [ "$base" != "$gradle" ]; then
+            echo "::error::座標がずれている —— タグ '$tag'（ベース版 $base）に対して package.json=$pkg / build.gradle.kts=$gradle" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # 2. build —— ネイティブランナー 2 本。検めてから push-by-digest
+  # ---------------------------------------------------------------------------
+  build:
+    name: build（${{ matrix.arch }}）
+    needs: coordinate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # ★ 片方が落ちても、もう片方の結果は見たい（アーキ固有の失敗か切り分けるため）。
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ★ **動的なラベルはここから渡す**（`.version` / `.revision` / `.created`）。
+      #   **静的なもの**（`.source` / `.licenses` / `.title` / `.description` / `.vendor`）は
+      #   `Dockerfile` に書いてある —— **手で build した人のイメージにも付く**ため。
+      - name: ラベルを組み立てる
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+
+      # ★ 1 回目の build。**ローカルへ load して検める**（まだ外へは出ない）。
+      #   2 回目（push）は buildx のキャッシュが効くので、同じ層を作り直さない。
+      #   **所要は実走で測る**（org ci-strategy §7「実走していないものを書かない」）。
+      - name: build（検め用にローカルへ）
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          tags: grabado:verify
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+
+      # 付録 P の 1。★★ **取り込みに失敗した成果物は、ビルドが緑のまま小さくなる。**
+      - name: 成果物を検める（サイズの下限）
+        run: |
+          size="$(docker image inspect grabado:verify --format '{{.Size}}')"
+          echo "イメージサイズ: ${size} bytes（$((size / 1048576)) MiB）"
+          if [ "$size" -lt "${MIN_SIZE_BYTES}" ]; then
+            echo "::error::サイズが下限を割っている: ${size} < ${MIN_SIZE_BYTES}" >&2
+            exit 1
+          fi
+
+      # ★ ラベルが実際に焼き込まれたかを、**成果物の側から**確かめる
+      #   （org §5.3.2 の「焼き込んだものの版が、成果物の側から読めない」）。
+      - name: ラベルが読めること
+        run: |
+          for key in source version revision licenses title; do
+            value="$(docker image inspect grabado:verify \
+              --format "{{ index .Config.Labels \"org.opencontainers.image.${key}\" }}")"
+            if [ -z "$value" ]; then
+              echo "::error::ラベルが空: org.opencontainers.image.${key}" >&2
+              exit 1
+            fi
+            echo "org.opencontainers.image.${key} = ${value}"
+          done
+
+      # 付録 P の 2。**中身が揃っていることと、立ち上がることは別。**
+      # ★ mount は必須 —— `FileDesignStore` の init が**起動時 fail-fast** で
+      #   正本ディレクトリの実在を確かめる（無ければ起動しない）。
+      - name: 起動を検める（?action=capabilities）
+        run: |
+          mkdir -p "${RUNNER_TEMP}/smoke-schema"
+          docker run -d --name smoke -p 8080:8080 \
+            -v "${RUNNER_TEMP}/smoke-schema:/data/schema" grabado:verify
+          for _ in $(seq 1 45); do
+            if curl -fsS "http://127.0.0.1:8080/backend/file/?action=capabilities" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          if ! body="$(curl -fsS "http://127.0.0.1:8080/backend/file/?action=capabilities")"; then
+            echo "::error::起動しなかった" >&2
+            docker logs smoke >&2 || true
+            exit 1
+          fi
+          echo "capabilities: ${body}"
+          case "$body" in
+            *'"readonly":false'*'"introspection":false'*'"ai":false'*) ;;
+            *) echo "::error::capabilities が既定の 3 つとも false ではない: ${body}" >&2; exit 1 ;;
+          esac
+          docker rm -f smoke
+
+      # 付録 P の 4 の前半。**push-by-digest なのでタグが付かない** ——
+      # この時点では**外から名前で引けない**。名前が付くのは publish ジョブの manifest。
+      #
+      # ★ SBOM と provenance を付ける。**org §5.3.2 の「焼き込んだものの版が、成果物の側から
+      #   読めない」を埋める最後の 1 つ。** Spring Boot の fat jar の中まで拾えるかは
+      #   **未実測** —— 実走して確かめたら、**拾えない範囲を含めて** CUSTOMIZATIONS.md に書く。
+      - name: push-by-digest（名前を付けずに置く）
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: digest を次のジョブへ渡す
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          case "${DIGEST}" in
+            sha256:*) ;;
+            *) echo "::error::digest を読めない: '${DIGEST}'" >&2; exit 1 ;;
+          esac
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # 3. 公開と検め —— ここで初めてタグが付く
+  # ---------------------------------------------------------------------------
+  publish:
+    name: 公開と検め
+    needs: [coordinate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ★ `latest=auto` —— **プレリリース（`v0.2.0-rc.1`）には `latest` を付けない**。
+      #   `docker run ghcr.io/propagandist/grabado` の 1 行で試せることが #164 の目的なので、
+      #   **`latest` 自体は付ける**。付けないのはプレリリースのときだけ。
+      - name: タグを組み立てる
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=auto
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      # 付録 P の 4 の後半。**manifest を作った瞬間が「公開」。**
+      - name: manifest へ統合する（ここでタグが付く）
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          count="$(find . -maxdepth 1 -type f | wc -l)"
+          if [ "$count" -ne 2 ]; then
+            echo "::error::digest が 2 つ揃っていない（${count} 個）" >&2
+            ls -la >&2
+            exit 1
+          fi
+
+          args=''
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            args="${args} -t ${tag}"
+          done <<< "${TAGS}"
+          if [ -z "$args" ]; then
+            echo "::error::タグが 1 つも組み立てられなかった" >&2
+            exit 1
+          fi
+
+          refs=''
+          for f in *; do
+            refs="${refs} ${IMAGE}@sha256:${f}"
+          done
+
+          echo "docker buildx imagetools create${args}${refs}"
+          # shellcheck disable=SC2086
+          docker buildx imagetools create ${args} ${refs}
+
+      # ★ **配ったものを、配った経路から取り直して起こす。** build ジョブの緑は
+      #   「手元で起きた」であって、「**レジストリから取れて起きる**」ではない。
+      - name: pull し直して起動を検める
+        env:
+          VERSION: ${{ needs.coordinate.outputs.version }}
+        run: |
+          ref="${IMAGE}:${VERSION}"
+          docker pull "$ref"
+          mkdir -p "${RUNNER_TEMP}/smoke-schema"
+          docker run -d --name smoke -p 8080:8080 \
+            -v "${RUNNER_TEMP}/smoke-schema:/data/schema" "$ref"
+          for _ in $(seq 1 45); do
+            if curl -fsS "http://127.0.0.1:8080/backend/file/?action=capabilities" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          if ! body="$(curl -fsS "http://127.0.0.1:8080/backend/file/?action=capabilities")"; then
+            echo "::error::pull したイメージが起動しなかった" >&2
+            docker logs smoke >&2 || true
+            exit 1
+          fi
+          echo "capabilities: ${body}"
+          docker rm -f smoke
+
+      # ★ **digest を job summary へ出す。** Release ノートに 1 行書くのはここから取る
+      #   （`assets` は付けない。#150 / #164 の判断 6）。
+      - name: 配った座標を書き出す
+        env:
+          VERSION: ${{ needs.coordinate.outputs.version }}
+        run: |
+          ref="${IMAGE}:${VERSION}"
+          digest="$(docker buildx imagetools inspect "$ref" --format '{{ .Manifest.Digest }}')"
+          {
+            echo '## 配ったもの'
+            echo
+            echo '| | |'
+            echo '|---|---|'
+            echo "| タグ | \`${GITHUB_REF_NAME}\` |"
+            echo "| 座標 | \`${ref}\` |"
+            echo "| digest | \`${digest}\` |"
+            echo
+            echo '```'
+            docker buildx imagetools inspect "$ref"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

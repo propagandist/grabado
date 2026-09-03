@@ -66,6 +66,18 @@ gh api -X POST repos/propagandist/grabado/milestones \
   -f title='v0.2.0 — <到達点の名前>' -f description='<何が成立したら閉じるかを 1 文で>'
 ```
 
+**★ タグを push すると `release-image.yml` が走る**（**2026-09-04**。#165）——
+**座標 → build 2 本（amd64 / arm64）→ manifest**。**配布物はここから出る**ので、
+**タグを打つ前に `package.json` / `server/build.gradle.kts` の `version` を上げておく**
+（**ずれていると座標ジョブが落ちて、GHCR には 1 バイトも出ない**）。
+**digest は run の job summary に出る** —— **リリースノートに 1 行書くのはそこから取る**。
+
+- **★ 初回の本番 publish のあと、GHCR のパッケージを public に切り替える** ——
+  **初回は private が既定**で、**API に口が無い**（`PATCH .../packages/container/grabado` は
+  **404**。2026-09-04 実測）。**Web UI の Package settings でのみ切り替えられる**
+- **プレリリース（`v0.2.0-rc.1` の形）には `latest` が付かない** —— `docker/metadata-action` の
+  `latest=auto`。**試し打ちが `latest` を奪わない**
+
 **タグを打って終わりにしない。** org `repo-surface-baseline.md` §3.7 の確かめ方は
 **リポジトリの右柱**で、**タグだけでは右柱に何も出ない**。ノートの値（日本語・assets なし・
 変更を列挙しない）は [`../CLAUDE.md`](../CLAUDE.md) の「作業の型」、判断は

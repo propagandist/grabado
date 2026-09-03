@@ -181,8 +181,6 @@ ANTHROPIC_API_KEY=sk-ant-... GRABADO_AI_MODEL=<モデル名> docker compose up
 
 ## 起動
 
-**イメージはレジストリで配らない。各自が build する。**
-
 ### compose
 
 ```bash

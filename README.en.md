@@ -195,8 +195,6 @@ wwwsqldesigner can still be read; grabado only writes JSON.
 
 ## Quick start
 
-The image is not published to any registry — **build it yourself**.
-
 ### With Docker Compose
 
 ```bash

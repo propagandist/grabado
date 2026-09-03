@@ -53,7 +53,8 @@ git push origin v0.1.0
 # release を develop にも戻す（PR or マージ）
 
 # リリースノートを出す（#150）。まず --draft で描画を見てから publish する。
-# assets は付けない（イメージはレジストリで配らない）。変更を列挙しない（正本は git log）。
+# assets は付けない（配布物はレジストリにある。Release に置くのは digest 1 行 —— 同じものを
+# 2 か所から配らない）。変更を列挙しない（正本は git log）。
 gh release create v0.1.0 --draft --title "v0.1.0 — <到達点の名前>" --notes-file <file>
 gh release edit v0.1.0 --draft=false
 
@@ -86,6 +87,23 @@ git checkout -b hotfix/0.1.1 main
 # PR: hotfix/0.1.1 -> main（マージ後 v0.1.1 タグ）
 # 同内容を develop にも反映
 ```
+
+### ★ 配ったイメージに CVE が出たら、patch 版を切って再 publish する
+
+**2026-09-04**（#164。**分類が B ＋ P になった日**）。**分類 P では、配った側が再リリースしない
+限り古いまま**で、**利用者の手元に残り続ける**（org `security-baseline.md` §5.3.2 の★★）。
+**`develop` を直しても解決しない** —— これがライブラリ（分類 L）と最も違うところ。
+
+| | |
+|---|---|
+| **契機** | Dependabot の security alert ／ ベースイメージの更新（`docker` entry）／ 同梱した依存の CVE |
+| **判断者と通知の宛先** | 作業者（1 人）。**org `security-verification.md` §0 の★★が ③ 層に求める条件 3 は、この経路があって初めて満たされる** |
+| **手順** | 上の「リリース」節と同じ。**patch 版のマイルストーンは作らない**（[`../CLAUDE.md`](../CLAUDE.md) の「作業の型」—— 緊急で切るので作る余地が無い。**切ってから記録する**） |
+
+- **★ コードが 1 行も変わらないことがある** —— `Dockerfile` のベース digest だけが動く場合。
+  **それでも版を上げる**（上げないと、配った座標と中身の対応が崩れる）
+- **★ `main` へ流す前に、その修正が `develop` にも入っていることを確かめる** ——
+  hotfix は `main` から切るので、**戻し忘れると次の版で元に戻る**
 
 ## Hard Constraints（CLAUDE.md より）
 

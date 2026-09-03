@@ -3,8 +3,11 @@
 #   docker compose up --build                        # 8080 で起きる
 #   GRABADO_READONLY=true docker compose up --build  # 公開デモと同じ条件（保存が 403）
 #
-# ★ `image:` ではなく `build:` —— **レジストリへは publish しない**（段階2-0 の決めたこと 5）。
-#   各自が build する。
+# ★ `image:` ではなく `build:` —— **手元のソースから起こす**ため。**配布イメージ
+#   （`ghcr.io/propagandist/grabado`。issue #164 / #165）に差し替えない** —— compose を使うのは
+#   リポジトリを clone した人で、**見たいのは手元の変更が入ったイメージ**である。配布物を
+#   そのまま試す経路は `docker run` の側（README の「起動」）。
+#   ★ この形は tests/node/env-contract.test.ts が縛っている。
 #
 # ★ **env は「キーだけ」のリスト形式で書く。`${VAR:-}` を使わない。**
 #   `${VAR:-}` は未設定のとき**空文字を渡し、起動を落とす**（2026-08-26 実測 ——

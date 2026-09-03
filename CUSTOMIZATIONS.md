@@ -13270,6 +13270,138 @@ Docker の起動手順 56 行、対応 DB 18 行に対して、AI は ORM 出力
 - **org へ上げた 6 つを、他リポジトリが自分の `CLAUDE.md` から消すかは各々の判断** ——
   **こちらから台帳を作らない**（org §0）
 
+### 2026-09-04 tomcat を 11.0.25 に固定し、Dependabot alert 5 件を畳んだ
+
+**段階に属さない。** issue #105（マイルストーン `v0.2.0 — イメージを配る`）。
+
+#### 発端
+
+**v0.2.0 の 5 本に着手する前に現況を引き直したところ、#105 の前提が 3 つとも崩れていた**
+（2026-09-04 実測）。
+
+| #105 が書いていること（2026-08-26） | 2026-09-04 の実態 |
+|---|---|
+| alert は **2 件**（いずれも medium） | **5 件**。**critical 3 件が 2026-09-03 に出た** |
+| **配布イメージには入らない** | **critical 3 件は `productionRuntimeClasspath` にある** ＝ **配布 jar に入る**。あの切り分けは medium 2 件にしか当たらない |
+| 案 A「安定版を待つ」 | Kotlin の安定版は **2.4.10 が最新**（2.4.20 は RC3 止まり）＝ **待ちは続いている** |
+
+**critical 3 件はいずれも `org.apache.tomcat.embed:tomcat-embed-core:11.0.24`**:
+
+| CVE | cvss | 何が起きるか |
+|---|---|---|
+| CVE-2026-68525 | 9.1 | FORM 認証で security constraint を迂回できる（POST は許すが GET は許さない制約） |
+| CVE-2026-65905 | 9.8 | DIGEST 認証の nonceCount が replay window の上端にあると、その要求を 1 回だけ再生できる |
+| CVE-2026-65182 | 9.1 | 長いパスの制約を、より短い sub-path の厳しい制約より先に書くと、後者が効かない |
+
+**v0.2.0 はイメージを配る版**なので、**critical を抱えたまま GHCR へ publish する窓を作らない**。
+だから #164 / #165 より先に閉じた。
+
+#### 決めたこと 1: **tomcat 3 本を constraints で 11.0.25 へ引き上げる**
+
+`libs.versions.toml` は冒頭で「**ライブラリの version を書かないのは意図的**。BOM が解決するので
+starter の版は Boot の版に必ず追随する。個別に書くと BOM とずれた組み合わせを作れてしまう」と
+宣言している。**その方針への唯一の例外**にした。
+
+**理由は、BOM を待つ経路が無いこと**（同日、Maven Central の `maven-metadata.xml` を実測）——
+**`spring-boot-dependencies` の安定版最新は 4.1.1**（手元と同じ）で、その先に見えているのは
+`4.2.0-M1` のみ。**Boot を上げて 11.0.25 を得ることができない。**
+
+**★ `dependencies` ではなく `constraints` にした** —— 依存を足すのではなく版だけを引き上げるので、
+**Boot の BOM が 11.0.25 以上を指した日に BOM 側が高くなり、この constraint は何もしなくなる**。
+**消し忘れても、古い版へ引き戻す側には働かない。**
+
+**★ 3 本まとめて揃えた**（core / el / websocket）—— `gradle.lockfile:44-46` が 3 本とも同じ
+11.0.24 を持っており、`starter-tomcat` がまとめて引く。**core だけ上げると版が割れる。**
+
+#### 決めたこと 2: **medium 2 件は `tolerable_risk` で dismiss する**
+
+`kotlin-gradle-plugin`（CVE-2026-53914）と `commons-lang3`（CVE-2025-48924）。**#105 の案 C。**
+切り分けは #105 が測ったとおりで、**2026-09-04 も変わっていない** —— `gradle.lockfile`（実行時）
+にも `settings-gradle.lockfile` にも 2 件とも無い。
+
+**修正版を入れない理由**: `kotlin-gradle-plugin` の修正版は **2.4.20-Beta1** で、**安定版 2.4.20 は
+まだ無い**（同日実測で **2.4.20-RC3** が最新）。**配布物を作る道具を RC にする代償のほうが大きい。**
+`commons-lang3` は推移的依存なので、あちらが上がれば一緒に直る。
+
+**★ 更新経路は消えていない** —— `.github/dependabot.yml` の gradle entry が weekly で
+`libs.versions.toml` の `kotlin` を見ており、**安定版が出れば通常の更新 PR で降りてくる**。
+**security alert を閉じることと、更新が止まることは別。**
+
+#### 決めたこと 3: **`main` へは v0.2.0 でまとめて流す。patch 版 v0.1.1 を切らない**
+
+**公開デモ（grabado.dev）は `main` から Railway がビルドしている**ので、#105 を閉じた時点でも
+**デモでは tomcat 11.0.24 が動いている**。それでも hotfix を切らないのは、**3 件とも到達経路が
+無い**から —— grabado は `spring-boot-starter-security` を**意図的に外して**おり
+（`server/build.gradle.kts:11-12`）、**security constraint も FORM / DIGEST 認証も 1 つも
+構成していない**。3 件はいずれもその機構の上でしか発火しない。
+
+**`main...develop` は diverged（ahead 13 / behind 1）**（同日実測）。
+
+#### ★ 実測: Dependabot は tomcat を直せなかった —— 「拾えるが直せない」の 2 例目
+
+**2026-09-03、alert が出た直後に security update が 2 本走り、2 本とも失敗した。**
+**`CLAUDE.md` のセキュリティ節が持つ `security_update_dependency_not_found` と同じ結末**だが、
+**原因が違う**:
+
+| 例 | 何が起きているか |
+|---|---|
+| **1 例目**（2026-08-26。#105 の元の 2 件） | **manifest に無い** —— `deps-submit` が提出したグラフにしか無い依存（ビルドスクリプトの classpath） |
+| **★ 2 例目**（2026-09-03。tomcat） | **manifest にはあるが、版が書かれていない** —— `gradle.lockfile` には居るのに、`libs.versions.toml` に版が無い（BOM が解決している）。**Dependabot は書き換える先を見つけられない** |
+
+**★ `libs.versions.toml` に版を書いた時点で、Dependabot は次から直せるようになる**
+（決めたこと 1 の副次的な効き目）。
+
+#### ★★ 実測: `dismissed_comment` は 280 文字まで
+
+**583 文字で `422 Invalid request` が返った**（`Only 280 characters are allowed`）。
+**判断の全文を GitHub 側に置けない。**
+
+**★ #105 が案 C の代償として挙げた「記録が GitHub 側にしか残らない」は、実際には逆だった** ——
+**GitHub 側には要約しか置けない**ので、**正本はここにしかならない**。
+dismiss のコメントには**切り分けと、正本の在処だけ**を書いた。
+
+#### 通った（2026-09-04 実測）
+
+| 何を | 結果 |
+|---|---|
+| `./gradlew build`（server） | **緑**（1m 7s） |
+| `gradle.lockfile` の tomcat 3 行 | **11.0.25**。`settings-gradle.lockfile` は**不変** |
+| `npm run typecheck` | **緑** |
+| `npm run test` | **26 ファイル / 627 本 緑**（42.5s） |
+| `npm run test:image` | **13 本 緑**（通常 8 ＋ READONLY 5。3.0 分）—— **Tomcat を差し替えたので、ここが本命** |
+| `gh api .../dependabot/alerts?state=open` | dismiss 直後は **3 件**（critical のみ）。**グラフの更新は `deps-submit` が `develop` への push で走ってから** |
+
+#### 却下した案
+
+- **Spring Boot 4.1.2 を待つ** —— **リリース日が分からない**。安定版は 4.1.1 が最新で、次に見えて
+  いるのは `4.2.0-M1` のみ。**待つあいだ critical が open のまま残り、v0.2.0 の publish も
+  それに引きずられる**
+- **`4.2.0-M1` へ上げる** —— **マイルストーン版を配布物のビルドに入れる**。決めたこと 2 で
+  Kotlin の RC を却下したのと同じ理由が、より強く当たる
+- **critical 3 件も dismiss する**（到達経路が無いので）—— **配る成果物に脆弱な版が入り続ける**。
+  **v0.2.0 はイメージを配る版**であり、**`docker run` した人の環境で何が動くかを、こちらの構成の
+  都合で正当化できない**（利用者が前段に何を置くかまで塞げない）
+- **patch 版 v0.1.1 を切る** —— 決めたこと 3
+- **`resolutionStrategy.force` を使う** —— **強制なので、Boot が 11.0.26 を指した日に引き戻す**。
+  constraints なら**高いほうが勝つ**ので、そちらに倒した
+- **`kotlin` を 2.4.20-RC3 へ上げて medium も消す** —— 決めたこと 2
+
+#### 申し送り
+
+- **★ critical 3 件が閉じるのは、マージ後に `deps-submit` が走ってから** —— **PR の緑では
+  確かめられない**（あれは `pull_request`、こちらは `develop` への push）。**マージ後に
+  `gh api "repos/propagandist/grabado/dependabot/alerts?state=open" --jq length` が 0 に
+  なることを見る**
+- **★ 外す条件を 2 か所に書いた**（`libs.versions.toml` の `tomcat` と `build.gradle.kts` の
+  `constraints`）—— **Boot の BOM が 11.0.25 以上を指したら両方消して BOM に戻す**。
+  **消し忘れても壊れない側に倒してある**が、**例外が 1 つあることは残る**
+- **★ #105 の本文は書き換えていない** —— **訂正はコメントで足した**（org
+  `security-verification.md` §5。元の記述を消さない）
+- **★ v0.2.0 の残りは #164 → #165 → #184 / #187** —— **#164 の本文には実態とのずれがある**
+  （直す箇所は 9 ではなく 12。`compose.yaml:6` と `tests/node/env-contract.test.ts:153` が
+  数え落とされ、`README.md:52` / `README.en.md:53` / `CLAUDE.md:195` の行番号が古い）。
+  **着手時にコメントで訂正する**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

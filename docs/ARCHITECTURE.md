@@ -894,8 +894,13 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
   「**したくなった時点で別 issue**」だった。**分類は B ＋ P** になり、org
   `security-baseline.md` §5.3.2 の責務を引き受ける（**棚卸しは `CUSTOMIZATIONS.md` の
   2026-09-04**）。**実体（OCI ラベル ／ push-by-digest → manifest ／ SBOM ＋ provenance）は
-  #165 が入れる** —— **この表にラベルの行が無いのは、その前だから**。
-  **手で build する経路は残す**（§9.5）
+  #165 が入れた**（下の★）。**手で build する経路は残す**（§9.5）
+- **★ OCI ラベルを持つ**（**2026-09-04**。#165）—— **静的な 6 つ**（`.source` / `.url` /
+  `.title` / `.description` / `.licenses` / `.vendor`）は **`Dockerfile` に書いてある**ので
+  **手で build した人のイメージにも付く**。**`.version` / `.revision` / `.created` は
+  `release-image.yml` が `docker/metadata-action` から渡す** —— **build のたびに変わる値を
+  ファイルに焼くと、手で build した人のイメージが嘘を名乗る**。
+  **`.source` があると GHCR のパッケージがリポジトリに紐づき、右柱に出る**
 
 **実測（2026-08-25、段階2-1）。** ベースは 3 本とも digest でピンしてある
 （[`../Dockerfile`](../Dockerfile)。**版のコメントは Dependabot が digest と一緒に書き換える**）。
@@ -908,6 +913,11 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 - **イメージは 284MB / 8 層。** runtime に入るのは `grabado.jar` 1 本だけで、Node も Gradle も
   JDK も残らない
+  - **★ 再測（2026-09-04。#165 で OCI ラベルを足したあと。手元の Docker Desktop）——
+    `287,189,003` bytes（**273 MiB**）。** **ラベルは層を増やさない**（メタデータなので
+    `docker history` に層として出ない）。**数字が動いたのは測った日が違うから**で、
+    中身の差はベースイメージの更新ぶん。**`release-image.yml` の下限 200 MiB は、この値に対して
+    3 割以上の余裕がある**
 - **`COPY . .` が運ぶのは 1.6MB**（`docker history`）—— `npm ci` が作る `node_modules`（175MB）
   も手元の `.env` も入らない。**`.dockerignore` の許可リストが効いている**
 - **ランタイムは Java 25 LTS**（起動ログ `using Java 25.0.4`）。`jvmToolchain` /
@@ -1111,13 +1121,17 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 （**中身をここへ写さない**。導線は [`../CLAUDE.md`](../CLAUDE.md)）。
 
 **`paths` は `on:` にしか書けず、ジョブ単位では絞れない** —— **絞りたい単位が、そのまま
-ワークフローの単位になる**。ワークフローが 3 本ある理由はそれだけで、種類が 3 つあるからではない。
+ワークフローの単位になる**。**検査が 3 本ある理由はそれだけ**で、種類が 3 つあるからではない。
+
+**★ 2026-09-04 に 4 本目が入った**（#165）。**あれだけは軸が違う** —— `paths` で絞る話ではなく、
+**契機がタグの push で、検査ではなく配る経路**である。
 
 | ワークフロー | いつ | 何を見る | 所要 |
 |---|---|---|---:|
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
 | [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
 | [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
+| [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **未実測** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
 **実測（2026-08-26、段階2-5。ubuntu-latest）**
@@ -1138,9 +1152,14 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 **遅さの原因も、ぶれの原因も、同じダウンロード**にある —— 上の「キャッシュを足すならキーの設計から」は、
 **速度だけでなく再現性の話でもある**。
 
-**★ `pull_request` のみ。** `main` / `develop` への直接 push は `.githooks/pre-push` が禁じており、
-`develop` が動くのは PR の squash merge だけ。**`pull_request` はマージ結果に対して走る**ので、
-push 側を足すと同じ検査を 2 度払うことになる。
+**★ 検査は `pull_request` のみ。** `main` / `develop` への直接 push は `.githooks/pre-push` が
+禁じており、`develop` が動くのは PR の squash merge だけ。**`pull_request` はマージ結果に対して
+走る**ので、push 側を足すと同じ検査を 2 度払うことになる。
+
+**★ 訂正の元**: **2026-09-04 まで「`pull_request` のみ」と書いていた**（#165 で `release-image.yml`
+が入るまでは、それが全 3 本に当たっていた）。**消さずに残す** —— **前提が変わったのは
+「検査ではないワークフローが増えた」ことだけ**で、**検査の側は 1 本も契機を変えていない**。
+**タグの push は hook が禁じている対象ではない**（あれが守るのはブランチへの直接 push）。
 
 **★ このリポジトリは public なので、org の枠（2,000 分/月）を消費しない**（2026-08-26 実測）。
 **それでも `paths` で絞る** —— 根拠が枠から「**入力が変わらなければ出力も変わらない**」と

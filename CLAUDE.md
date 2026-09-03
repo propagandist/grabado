@@ -63,8 +63,10 @@ GitHub Actions の無料枠 2,000 分/月は **org 全体で共有**。枯らす
 （判断の履歴であり、**org の他リポジトリには効く**）。**規約を読む義務も変わらない** ——
 **変わったのは「枠」という理由だけ**で、`paths` と `pull_request` 限定は
 「**入力が変わらなければ出力も変わらない**」と待ち時間を根拠に維持している。
-**ワークフローは 3 本 ＋ 提出 1 本**（`ci-frontend` / `ci-server` / `ci-image` ／ `deps-submit`。
-分担と所要は `docs/ARCHITECTURE.md` §9.6）。
+**★ ワークフローは 4 本 ＋ 提出 1 本**（**2026-09-04 に 3 本から**。#165）—— `ci-frontend` /
+`ci-server` / `ci-image` ／ **`release-image`** ／ `deps-submit`。**4 本目だけ契機が違う**
+（`pull_request` ではなく **タグの push**）—— **検査ではなく配る経路**だから。
+分担と所要は `docs/ARCHITECTURE.md` §9.6。
 
 **作業の型**（プランを起票で止める／起票の作法／着手前／本文／マージ／**マイルストーンと版**）は同
 `docs/work-conventions.md`（**軸が違う。CI の有無と関係なく効く**）。
@@ -106,7 +108,8 @@ org の基準を読むこと。読むのは **§2 ／ §3 の [B] ／ §4.2〜4.
 push protection** ／ **Dependabot の security updates**（`server/` には `deps-submit.yml` が
 解決済みグラフを渡して初めて効く）／ **`docker` entry**（ベースイメージ）。
 **CodeQL は「決めて外した」**（public なので技術的には入る）。根拠と確かめ方は
-`CUSTOMIZATIONS.md` の段階2-5。**ワークフローは 3 本**（`ci-frontend` / `ci-server` / `ci-image`）。
+`CUSTOMIZATIONS.md` の段階2-5。**検査のワークフローは 3 本**（`ci-frontend` / `ci-server` /
+`ci-image`。**`release-image` は検査ではない**。上の「CI / ワークフロー」）。
 
 **★ Dependency graph は 2026-08-26 に有効化した**（#98。**private のあいだ無効で、public に
 しても自動では有効にならなかった**）。**API に口が無く、Web UI でしか切り替えられない** ——

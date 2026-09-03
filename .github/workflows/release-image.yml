@@ -135,13 +135,24 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # ★ **動的なラベルはここから渡す**（`.version` / `.revision` / `.created`）。
-      #   **静的なもの**（`.source` / `.licenses` / `.title` / `.description` / `.vendor`）は
-      #   `Dockerfile` に書いてある —— **手で build した人のイメージにも付く**ため。
+      #   **静的なもの**（`.source` / `.url` / `.title` / `.description` / `.licenses` /
+      #   `.vendor`）は `Dockerfile` に書いてある —— **手で build した人のイメージにも付く**ため。
+      #
+      # ★★ **metadata-action は静的なラベルも自分で作り、`Dockerfile` の `LABEL` を上書きする**
+      #   （**2026-09-04 実測**。`v0.1.0-rc.1` で **`.url` が `https://grabado.dev/` から
+      #   リポジトリの URL に**、**`.description` がリポジトリの説明文に**化けた。
+      #   `.vendor` だけは metadata-action が出さないので `Dockerfile` の値が残った）。
+      #   **正本は `Dockerfile`** なので、**食い違う 2 つをここで戻す** ——
+      #   値が 2 か所になるが、**手で build する経路と配る経路で違う値が出るほうが悪い**。
+      #   **一致は下の「ラベルが読めること」が機械で見る。**
       - name: ラベルを組み立てる
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.url=https://grabado.dev/
+            org.opencontainers.image.description=ER 設計ツール。設計は git 管理の JSON ファイルが正本で、DB を持たずに動く。
 
       # ★ 1 回目の build。**ローカルへ load して検める**（まだ外へは出ない）。
       #   2 回目（push）は buildx のキャッシュが効くので、同じ層を作り直さない。
@@ -169,15 +180,32 @@ jobs:
       #   （org §5.3.2 の「焼き込んだものの版が、成果物の側から読めない」）。
       - name: ラベルが読めること
         run: |
-          for key in source version revision licenses title; do
-            value="$(docker image inspect grabado:verify \
-              --format "{{ index .Config.Labels \"org.opencontainers.image.${key}\" }}")"
+          label() {
+            docker image inspect grabado:verify \
+              --format "{{ index .Config.Labels \"org.opencontainers.image.$1\" }}"
+          }
+
+          for key in source url title description licenses vendor version revision created; do
+            value="$(label "$key")"
             if [ -z "$value" ]; then
               echo "::error::ラベルが空: org.opencontainers.image.${key}" >&2
               exit 1
             fi
             echo "org.opencontainers.image.${key} = ${value}"
           done
+
+          # ★★ **2 経路で同じ値になること。** 2026-09-04（`v0.1.0-rc.1`）に食い違った ——
+          #   metadata-action が `Dockerfile` の `LABEL` を上書きし、**手で build した人の
+          #   イメージと、配るイメージが違うことを名乗った**。上の meta の★★が戻しており、
+          #   ここはそれが効いているかを見る。
+          if [ "$(label url)" != "https://grabado.dev/" ]; then
+            echo "::error::.url が Dockerfile の値と違う: $(label url)" >&2
+            exit 1
+          fi
+          case "$(label description)" in
+            *"DB を持たずに動く"*) ;;
+            *) echo "::error::.description が Dockerfile の値と違う: $(label description)" >&2; exit 1 ;;
+          esac
 
       # 付録 P の 2。**中身が揃っていることと、立ち上がることは別。**
       # ★ mount は必須 —— `FileDesignStore` の init が**起動時 fail-fast** で

@@ -871,7 +871,8 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 実在は **`frontend/`** と **`server/`**。**段階2-6 で集約した** —— ただし
 **`package.json` と `tests/` は root のまま**なので、骨格の `COPY frontend/package*.json` とは
 なお違う）。**HANDOVER が触れていない論点が 1 つ** ——
-**イメージをレジストリで配るかどうか**で、これは §9.1 の最後に書いた。
+**イメージをレジストリで配るかどうか**で、これは §9.1 の最後に書いた（**2026-09-04 に
+「配る」と決めた**。#164）。
 **HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
 
 ### 9.1 イメージの構成（3 ステージ）
@@ -888,9 +889,18 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
   代償として**手元の jar には static が入らない**ので、**イメージの検証はイメージでやる**（2-4）
 - **ベースイメージは digest でピンする**（org security-baseline §5.1）。**Dependabot の `docker`
   entry とセット**。版と digest は下の実測表と [`../Dockerfile`](../Dockerfile) にある
-- **★ レジストリへは publish しない。** イメージは各自が build する。publish した日に
-  **分類 P（実行物を配る）**へ載り §5.3.2 の責務を引き受けることになるので、**したくなった
-  時点で別 issue**（段階2-0 の決めたこと 5）
+- **★ GHCR で配ると決めた**（**2026-09-04**。#164）—— `ghcr.io/propagandist/grabado`。
+  **予約どおり別 issue で決めた** —— 段階2-0 の決めたこと 5 は「配れない」ではなく
+  「**したくなった時点で別 issue**」だった。**分類は B ＋ P** になり、org
+  `security-baseline.md` §5.3.2 の責務を引き受ける（**棚卸しは `CUSTOMIZATIONS.md` の
+  2026-09-04**）。**実体（OCI ラベル ／ push-by-digest → manifest ／ SBOM ＋ provenance）は
+  #165 が入れた**（下の★）。**手で build する経路は残す**（§9.5）
+- **★ OCI ラベルを持つ**（**2026-09-04**。#165）—— **静的な 6 つ**（`.source` / `.url` /
+  `.title` / `.description` / `.licenses` / `.vendor`）は **`Dockerfile` に書いてある**ので
+  **手で build した人のイメージにも付く**。**`.version` / `.revision` / `.created` は
+  `release-image.yml` が `docker/metadata-action` から渡す** —— **build のたびに変わる値を
+  ファイルに焼くと、手で build した人のイメージが嘘を名乗る**。
+  **`.source` があると GHCR のパッケージがリポジトリに紐づき、右柱に出る**
 
 **実測（2026-08-25、段階2-1）。** ベースは 3 本とも digest でピンしてある
 （[`../Dockerfile`](../Dockerfile)。**版のコメントは Dependabot が digest と一緒に書き換える**）。
@@ -903,6 +913,11 @@ main に 1 つも無いので**実運用ではまだ常に false** —— 固定
 
 - **イメージは 284MB / 8 層。** runtime に入るのは `grabado.jar` 1 本だけで、Node も Gradle も
   JDK も残らない
+  - **★ 再測（2026-09-04。#165 で OCI ラベルを足したあと。手元の Docker Desktop）——
+    `287,189,003` bytes（**273 MiB**）。** **ラベルは層を増やさない**（メタデータなので
+    `docker history` に層として出ない）。**数字が動いたのは測った日が違うから**で、
+    中身の差はベースイメージの更新ぶん。**`release-image.yml` の下限 200 MiB は、この値に対して
+    3 割以上の余裕がある**
 - **`COPY . .` が運ぶのは 1.6MB**（`docker history`）—— `npm ci` が作る `node_modules`（175MB）
   も手元の `.env` も入らない。**`.dockerignore` の許可リストが効いている**
 - **ランタイムは Java 25 LTS**（起動ログ `using Java 25.0.4`）。`jvmToolchain` /
@@ -1056,7 +1071,8 @@ GRABADO_READONLY=true docker compose up  # 公開デモと同じ条件（save / 
 
 compose を使わないなら `docker build -t grabado .` ＋
 `docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado`。
-**レジストリからは取れない**（§9.1）。
+**★ 配布イメージ（`ghcr.io/propagandist/grabado`）を出すのは #165** —— **それまでは build が
+唯一の経路**（§9.1。**2026-09-04 に「配る」と決めた**）。
 
 **起動の判定は compose の `healthcheck`** —— `?action=capabilities` を busybox の `wget` で
 叩く。**イメージに `curl` は無く、actuator も入れていない**（ともに 2026-08-26 実測）。
@@ -1105,13 +1121,17 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 （**中身をここへ写さない**。導線は [`../CLAUDE.md`](../CLAUDE.md)）。
 
 **`paths` は `on:` にしか書けず、ジョブ単位では絞れない** —— **絞りたい単位が、そのまま
-ワークフローの単位になる**。ワークフローが 3 本ある理由はそれだけで、種類が 3 つあるからではない。
+ワークフローの単位になる**。**検査が 3 本ある理由はそれだけ**で、種類が 3 つあるからではない。
+
+**★ 2026-09-04 に 4 本目が入った**（#165）。**あれだけは軸が違う** —— `paths` で絞る話ではなく、
+**契機がタグの push で、検査ではなく配る経路**である。
 
 | ワークフロー | いつ | 何を見る | 所要 |
 |---|---|---|---:|
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
 | [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
 | [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
+| [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **未実測** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
 **実測（2026-08-26、段階2-5。ubuntu-latest）**
@@ -1132,9 +1152,14 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 **遅さの原因も、ぶれの原因も、同じダウンロード**にある —— 上の「キャッシュを足すならキーの設計から」は、
 **速度だけでなく再現性の話でもある**。
 
-**★ `pull_request` のみ。** `main` / `develop` への直接 push は `.githooks/pre-push` が禁じており、
-`develop` が動くのは PR の squash merge だけ。**`pull_request` はマージ結果に対して走る**ので、
-push 側を足すと同じ検査を 2 度払うことになる。
+**★ 検査は `pull_request` のみ。** `main` / `develop` への直接 push は `.githooks/pre-push` が
+禁じており、`develop` が動くのは PR の squash merge だけ。**`pull_request` はマージ結果に対して
+走る**ので、push 側を足すと同じ検査を 2 度払うことになる。
+
+**★ 訂正の元**: **2026-09-04 まで「`pull_request` のみ」と書いていた**（#165 で `release-image.yml`
+が入るまでは、それが全 3 本に当たっていた）。**消さずに残す** —— **前提が変わったのは
+「検査ではないワークフローが増えた」ことだけ**で、**検査の側は 1 本も契機を変えていない**。
+**タグの push は hook が禁じている対象ではない**（あれが守るのはブランチへの直接 push）。
 
 **★ このリポジトリは public なので、org の枠（2,000 分/月）を消費しない**（2026-08-26 実測）。
 **それでも `paths` で絞る** —— 根拠が枠から「**入力が変わらなければ出力も変わらない**」と
@@ -1154,8 +1179,28 @@ push 側を足すと同じ検査を 2 度払うことになる。
 | **② 自動テスト**（増分 0 分） | 上の 3 本に相乗り —— CSP とヘッダ（`csp.test.ts` ＋ イメージ E2E）・env の写し（`env-contract.test.ts`）・READONLY・契約表 |
 | **③ 週次 cron** | **置かない** |
 
-**★ ③ を置かない。** 分類 B に持ち込まないという org §0 の判断で、grabado は
-**レジストリで配らない**ので分類 B のまま（§9.1）。**public 化で「枠」の根拠は消えたが**、
+**★ ③ を置かない**（**2026-08-26 の判断を 2026-09-04 に引き直し、結論は変えなかった**。#164）。
+
+**元の根拠は分類 P では成立しない。** 2026-08-26 は「分類 B に持ち込まないという org §0 の判断」
+だったが、**同 §0 の★★が「P では上の 2 つの根拠が両方とも成立しない。同じ結論を写さないこと」と
+名指している** —— 枠の根拠（public は枠を食わない）も、「配る前に見れば足りる」（L の根拠）も
+効かない。**焼き込んだランタイムの CVE は配った後に出る。**
+
+**置いてよい条件 3 つのうち、満たせたのは 2 つ**（org `security-verification.md` §0 の★★）:
+
+| # | 条件 | grabado |
+|---|---|---|
+| 1 | public であること | **満たす**（#95） |
+| 2 | 見るのは同梱物に限る | **満たす**（JRE と `grabado.jar` の 2 つだけ。§9.1） |
+| 3 | **CVE が出たときに何をするかまで決まっていること** | **満たせなかった** —— 作業者が 1 人なので通知の宛先は自明だが、**気づいたあとの経路が無かった** |
+
+**先に経路を作った** —— [`BRANCHING.md`](BRANCHING.md) の hotfix 節に「**配ったイメージの
+ランタイム / 依存に CVE が出たら patch 版を切って再 publish する**」を足した。**それでも
+いま置かないのは、cron が足すのが「配った版と、いまビルドしたら入るものの差」だけ**だから
+（同 §3 の表）—— **差が問題になるのは版を切ってから時間が経ったとき**で、**配った版はまだ 0 本**。
+**版を 2〜3 本切ってから実測で判断する。**
+
+**★ `develop` 側については 2026-08-26 の観測が変わっていない** ——
 **cron でスキャンしても Dependabot 以上のことができない**（同 §3★★）。
 **代わりに GitHub 側の 0 分の層が 3 本**（いずれも Actions を 1 分も使わない）:
 
@@ -1207,6 +1252,10 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 **判断と実測の正は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の「2026-08-30 公開デモの外側」**
 （**理由をここへ写さない**）。ここが持つのは**構成の契約**だけ。
 
+**外側に実際に設定した状態の正本は [`propagandist/grabado-ops`](https://github.com/propagandist/grabado-ops)（private）**
+（**2026-08-30**。issue #152）—— Railway の service settings に入れた値 ／ Porkbun の DNS ／
+証明書の issuer ／ 費用。**この表はアプリが期待することで、あちらは実際に押した結果である。写し合わない。**
+
 **リポジトリの外側の状態**（Railway の設定と Porkbun の DNS）に依存する唯一の節なので、
 **確かめ方が他と違う** —— org `security-verification.md` の 3 層のうち、**手元でも既存ジョブでもない層**。
 
@@ -1226,15 +1275,35 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 
 #### 確かめ方（機械で見える 4 つ）
 
+**手順はここが持ち、実走の記録は `grabado-ops` が持つ**（#152）。**この節に「いつ通ったか」を書かない。**
+
+★ **申し送りの行き先が変わった**（**2026-08-30**。#152）—— `../CUSTOMIZATIONS.md` の同日の申し送りは
+「**やった日に、この節へ実測を追記する**（証明書の issuer ／ CAA の応答 ／ `curl -sSI` のヘッダ）」と
+書いていた。**元の記述は消さない**（判断の履歴）。
+
 ```bash
 curl -sSI https://grabado.dev/ | grep -i strict-transport-security   # preload が無いこと
-curl -s https://grabado.dev/backend/file/?action=capabilities        # 3 つとも false
+curl -s https://grabado.dev/backend/file/?action=capabilities        # readonly=true, 他 2 つが false
 curl -s -o /dev/null -w '%{http_code}\n' -X POST \
   -H 'Content-Type: application/json' -d '{}' \
   'https://grabado.dev/backend/file/?action=save&keyword=x.json'     # 403
 curl -s -H 'accept: application/dns-json' \
   'https://cloudflare-dns.com/dns-query?name=grabado.dev&type=CAA'   # Answer 節に出ること
 ```
+
+★★ **`capabilities` は「3 つとも false」ではない**（**2026-08-31 実測。訂正**）——
+返るのは **`{"readonly":true,"introspection":false,"ai":false}`** で、
+**`readonly` が `true` であることが READONLY で動いている証拠**である。
+**元は「3 つとも false」と書いていた** —— そのとおりなら**逆の意味**（READONLY で動いていない）になる。
+**#84 の受け入れ基準にも同じ誤りがあった**（あちらはコメントで訂正した）。
+
+★★ **手元の `curl` では 3 本目がそのまま走らない**（**2026-08-31 実測**）——
+**`-w '%{http_code}'` を付けると `exit 43`**（`A libcurl function was given a bad argument`）
+**になり、必ず `000` を返す**（curl 8.8.0 x86_64-w64-mingw32 Schannel）。**`-o` だけなら通る。**
+**`-D -` でヘッダを出して読む**のが代替。**★ 「`000`」を「サーバが落ちている」と読まない。**
+
+★ **`introspect` は 403 ではなく `501 Not Implemented`**（同日実測）。
+**保存（403）と番号が違う** —— どちらも副作用は起きない。
 
 ★ **`nslookup` は CAA を引けない**（Windows。`unknown query type: CAA`）。**DoH で引く。**
 **Answer 節が無いのは「引けなかった」ではなく「そのレコード型が無い」** ——

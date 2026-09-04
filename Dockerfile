@@ -14,7 +14,11 @@
 #   同じ書式）。**ピンは Dependabot とセットで初めて安全**で、凍結したまま放置すると
 #   セキュリティ修正が降りてこないぶん浮動タグより悪い（.github/dependabot.yml の docker entry）。
 #
-# ★ **レジストリへは publish しない**（段階2-0 の決めたこと 5）。イメージは各自が build する。
+# ★ **GHCR で配る**（**2026-09-04**。issue #164 / #165）—— `ghcr.io/propagandist/grabado`。
+#   段階2-0 の決めたこと 5 は「配れない」ではなく「したくなった時点で別 issue」だったので、
+#   **予約どおり別 issue で決めた**。**配る経路は .github/workflows/release-image.yml**
+#   （push-by-digest → 検め → manifest。契機はタグだけ）。**手で build する経路は残す**
+#   （README の「起動」）。
 
 
 # ---------------------------------------------------------------------------
@@ -103,6 +107,24 @@ WORKDIR /app
 COPY --from=api /src/build/libs/grabado.jar ./grabado.jar
 
 EXPOSE 8080
+
+# ★ **OCI ラベル**（issue #165）。org security-baseline §5.3.2 の「崩れる変更」の 1 つが
+#   **「焼き込んだものの版が、成果物の側から読めない」**で、**grabado で弱かったのはここだけ**
+#   だった（#164 の棚卸し）。
+#
+# ★ **ここに置くのは静的なものだけ。** `.version` / `.revision` / `.created` は
+#   **release-image.yml が docker/metadata-action から渡す** —— **build のたびに変わる値を
+#   ファイルに焼くと、手で build した人のイメージが嘘を名乗る**。逆に下の 5 つをワークフロー側へ
+#   寄せると、**手で build した人のイメージにラベルが 1 つも付かなくなる**（README は build する
+#   経路を残している）。
+#
+# ★ **`.source` があると、GHCR のパッケージがリポジトリに紐づいて右柱に出る。**
+LABEL org.opencontainers.image.source="https://github.com/propagandist/grabado" \
+      org.opencontainers.image.url="https://grabado.dev/" \
+      org.opencontainers.image.title="grabado" \
+      org.opencontainers.image.description="ER 設計ツール。設計は git 管理の JSON ファイルが正本で、DB を持たずに動く。" \
+      org.opencontainers.image.licenses="BSD-3-Clause" \
+      org.opencontainers.image.vendor="PROPAGANDIST CORPORATION"
 
 # ★ **`USER grabado` は置かない**（issue #103）。entrypoint が mount 先の所有者を読むために
 #   root で始まり、**アプリは必ず su-exec で降りた先で動く**。root のまま走ることは無い。

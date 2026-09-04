@@ -43,3 +43,9 @@ blob-report/
 
 # === ログ・一時 ===
 *.log
+
+# Claude Code の手元固有の設定（org work-conventions「commit する側と、しない側」）。
+# ★ ここに書くのは、**リポジトリの外で守られていた**から（2026-08-30 実測 —— 除外していたのは
+#   作業者のグローバル gitignore で、**作業環境が変われば commit されうる**）。
+# .claude/settings.json と .claude/hooks/ は commit する（関門は配る先でも同じであるべき）。
+.claude/settings.local.json

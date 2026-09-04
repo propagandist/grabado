@@ -22,7 +22,7 @@ plugins {
 }
 
 group = "io.propagandist.grabado"
-version = "0.1.0"
+version = "0.2.0"
 
 kotlin {
     // ランタイムは eclipse-temurin:25-jre-alpine（段階2-1 の Dockerfile）。開発機の JDK が
@@ -81,6 +81,21 @@ dependencies {
     // JUnit 5 + MockMvc + AssertJ。モックライブラリは足さない
     // （store は @TempDir で実 FS を使う。in-memory の double はテストを空虚にする）。
     testImplementation(libs.spring.boot.starter.test)
+
+    // ★ BOM が決める版への唯一の例外（2026-09-04。#105）。理由と外す条件は
+    //   libs.versions.toml の tomcat の注記。**Boot 4.1.1 の BOM が指す tomcat 11.0.24 に
+    //   critical 3 件**（CVE-2026-68525 / -65905 / -65182）があり、**安定版の Boot に
+    //   11.0.25 を指すものが無い**。
+    //
+    //   ★ **dependencies ではなく constraints にする** —— 依存を足すのではなく版だけを
+    //     引き上げるので、starter-web が引く 3 本に効き、**Boot の BOM が 11.0.25 以上を
+    //     指した日に BOM 側が高くなって、この constraint は何もしなくなる**
+    //     （消し忘れても、古い版へ引き戻す側には働かない）。
+    constraints {
+        implementation(libs.tomcat.embed.core)
+        implementation(libs.tomcat.embed.el)
+        implementation(libs.tomcat.embed.websocket)
+    }
 }
 
 tasks.withType<Test>().configureEach {

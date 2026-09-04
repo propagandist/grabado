@@ -181,6 +181,16 @@ ANTHROPIC_API_KEY=sk-ant-... GRABADO_AI_MODEL=<モデル名> docker compose up
 
 ## 起動
 
+**配布イメージがある。ビルドは要らない。**
+
+```bash
+mkdir -p schema
+docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" ghcr.io/propagandist/grabado
+```
+
+`-v` の左側は**設計 JSON を置くホスト側のディレクトリ**。**無いと起動しない**
+（正本を持たないまま動かさないため）。amd64 と arm64 の両方が入っている。
+
 ### compose
 
 ```bash
@@ -199,12 +209,12 @@ docker compose up --build
 
 ### compose を使わない
 
+**手元のソースから build する**なら:
+
 ```bash
 docker build -t grabado .
 docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado
 ```
-
-`-v` の左側は**設計 JSON を置くホスト側のディレクトリ**。
 
 ### 読み取り専用
 

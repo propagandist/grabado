@@ -195,6 +195,17 @@ wwwsqldesigner can still be read; grabado only writes JSON.
 
 ## Quick start
 
+**A published image is available — no build required.**
+
+```bash
+mkdir -p schema
+docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" ghcr.io/propagandist/grabado
+```
+
+The left side of `-v` is the host directory holding your design files. **It must exist**, or the
+container refuses to start (grabado does not run without a source of truth). Both amd64 and arm64
+are included.
+
 ### With Docker Compose
 
 ```bash
@@ -213,12 +224,12 @@ Then open <http://127.0.0.1:8080>.
 
 ### Without Compose
 
+To **build from source** on your machine:
+
 ```bash
 docker build -t grabado .
 docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado
 ```
-
-The left side of `-v` is the host directory holding your design files.
 
 ### Read-only mode
 

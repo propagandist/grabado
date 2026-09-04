@@ -129,14 +129,53 @@ git checkout -b hotfix/0.1.1 main
 - 設計正本は **トランクベース**（`main` を唯一の正、短命ブランチ→PR で直接取り込み）。`develop` に載せない（split-brain 回避）。
 - 詳細は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の決定ログを参照。
 
-## ローカルブランチ保護（pre-push hook）
+## ブランチ保護（2 層）
 
-**GitHub 側のブランチ保護は可視性で分かれる** —— Free プランの private リポでは使えず、**public では使える**。
-private だった間の代わりとして、**ローカルの pre-push hook** で `main` / `develop` への直接 push を
-禁止している（`.githooks/pre-push`）。**2026-08-26 に public 化した**（[#95](https://github.com/propagandist/grabado/issues/95)。
-`gh repo view` が `PUBLIC` を返すことを確認）ので**保護は使えるようになった**が、
-**実際に張るかは別 issue で決める** —— 可視性を変えることと、
-何を強制するかは別。**張ったあとも hook は残す**（止める層が違う。hook はローカルの push、保護はサーバ側）。
+**★ サーバ側の保護を 2026-09-05 に張った**（[#184](https://github.com/propagandist/grabado/issues/184)）。
+**`develop` と `main` の両方**に、**PR 必須 ／ force push 禁止 ／ 削除禁止**。
+**管理者にも適用する**（`enforce_admins: true`）—— **write 権限を持つのは 1 人**なので、
+**除外すると誰も止まらず、「張っているのに何も守らない」状態になる**
+（org `security-verification.md` §4「守れていないのに緑が出る」と同じ形）。
+
+**要求しないものも決めた**:
+
+| | なぜ |
+|---|---|
+| **レビュー承認**（`required_approving_review_count: 0`） | **作業者が 1 人**。必須にすると**自分の PR をマージできなくなる** |
+| **status check** | **`ci-*` は `paths` で絞っている** —— **文書だけの PR では 1 本も走らない**（**2026-09-04 実測**。#191 / #192 / #193 はいずれも checks 0 件）。必須にすると**永久に pending になる**。**`main` はさらに強く、`ci-*` が 1 本も走らない**（`pull_request` のみ） |
+| **linear history** | **`develop` → `main` は merge commit** にすると決めている（#145）。要求すると壊れる |
+
+**★ 効いていることを 1 回試した**（**2026-09-05**。org `work-conventions.md`「書いたものが
+効いているかは、書いた側からは見えない」）—— `PUSH_ALLOW_PROTECTED=1` で **hook を外して**
+`develop` へ直 push したところ、**GitHub 側が止めた**:
+
+```
+remote: error: GH006: Protected branch update failed for refs/heads/develop.
+remote: - Changes must be made through a pull request.
+```
+
+### 層が違う —— hook は残す
+
+**ローカルの pre-push hook**（`.githooks/pre-push`）は**残す**。**止める層が違う** ——
+**hook はローカルの push、保護はサーバ側**。
+
+- **hook は各自が 1 回設定して初めて効く**（下の「有効化」）。**設定していない環境では
+  何も止まらない**うえ、**`PUSH_ALLOW_PROTECTED=1` で外せる**（緊急用にそう設計されている）
+- **サーバ側の保護は、どの環境から push しても効く。管理者も外せない**（上の実測）
+- **hook が先に止めるので、手元では保護に到達しない** —— **保護が効いているかを確かめるには、
+  上のように hook を外して打つ**
+
+**訂正の元**: **2026-08-26 から 2026-09-05 まで、ここには「実際に張るかは別 issue で決める」と
+書いてあった**（下の引用）。**消さずに残す** —— **その予約は 6 日間起票されず**、
+**#174 の (b) で `git grep -n '別 issue' -- docs/ CLAUDE.md` を引いて初めて拾われた**
+（それが #184）。**予約を文書に書くだけでは、起票の契機にならない。**
+
+> **GitHub 側のブランチ保護は可視性で分かれる** —— Free プランの private リポでは使えず、**public では使える**。
+> private だった間の代わりとして、**ローカルの pre-push hook** で `main` / `develop` への直接 push を
+> 禁止している（`.githooks/pre-push`）。**2026-08-26 に public 化した**（[#95](https://github.com/propagandist/grabado/issues/95)。
+> `gh repo view` が `PUBLIC` を返すことを確認）ので**保護は使えるようになった**が、
+> **実際に張るかは別 issue で決める** —— 可視性を変えることと、
+> 何を強制するかは別。**張ったあとも hook は残す**（止める層が違う。hook はローカルの push、保護はサーバ側）。
 
 ### 有効化（clone 後に各自1回だけ）
 

@@ -50,7 +50,7 @@ git checkout -b release/0.1.0 develop
 # main マージ後にタグ
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
-# release を develop にも戻す（PR or マージ）
+# release を develop にも戻す —— ★ **release ブランチからは出せない**（下の★★）。main -> develop の PR。
 
 # リリースノートを出す（#150）。まず --draft で描画を見てから publish する。
 # assets は付けない（配布物はレジストリにある。Release に置くのは digest 1 行 —— 同じものを
@@ -66,7 +66,17 @@ gh api -X POST repos/propagandist/grabado/milestones \
   -f title='v0.2.0 — <到達点の名前>' -f description='<何が成立したら閉じるかを 1 文で>'
 ```
 
-**★ タグを push すると `release-image.yml` が走る**（**2026-09-04**。#165）——
+**★★ `release/*` はマージした瞬間に消える**（**2026-09-05 実測**）—— リポジトリの
+**`delete_branch_on_merge: true`** が head ブランチを自動削除する（**`--delete-branch` を
+付けていなくても消える**）。**`release/0.2.0` → `main` をマージした直後に、そこから
+`develop` への PR を作ろうとして `Head ref must be a branch` で落ちた**。
+**戻すのは `main` → `develop` の PR**（**merge commit**。squash すると `develop` に別 SHA の
+コミットができ、**`main` と同じ内容なのに `main...develop` が両方とも非 0 を返す**）。
+**`main` は保護されているので自動削除の対象外**（同日、マージ後に残っていることを確認した）。
+
+**★ タグを push すると `release-image.yml` が走る**（**2026-09-04**。#165。
+**所要は約 2.5 分**。2026-09-05 の v0.2.0 で実測 —— 座標 6s ／ build arm64 96s・amd64 117s（並列）／
+公開と検め 23s）——
 **座標 → build 2 本（amd64 / arm64）→ manifest**。**配布物はここから出る**ので、
 **タグを打つ前に `package.json` / `server/build.gradle.kts` の `version` を上げておく**
 （**ずれていると座標ジョブが落ちて、GHCR には 1 バイトも出ない**）。

@@ -1131,7 +1131,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
 | [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
 | [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
-| [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **未実測** |
+| [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **約 2.5 分** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
 **実測（2026-08-26、段階2-5。ubuntu-latest）**

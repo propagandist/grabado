@@ -14053,14 +14053,72 @@ HEAD~1` で消し、作業ツリーは clean に戻した**（**push が失敗�
 | 版の一致（`package.json` / `package-lock.json` ×2 / `build.gradle.kts`） | **4 か所とも `0.2.0`**（`toolchain.test.ts` が見ている） |
 | Dependabot alert | **open 0 件** |
 
+#### ★ 配った結果（2026-09-05 実測）
+
+**タグ `v0.2.0` を打って `release-image.yml` が全ジョブ緑。**
+
+| | |
+|---|---|
+| 所要 | **約 2.5 分** —— 座標 **6s** ／ build arm64 **96s**・amd64 **117s**（並列）／ 公開と検め **23s** |
+| 座標 | `ghcr.io/propagandist/grabado` |
+| **index digest** | `sha256:8b54047b9f7c0d45155df8a93fc9a0456dced3643bcada6ef491d5d3628d17c3` |
+| 付いたタグ | **`latest` / `0.2` / `0.2.0`**（**プレリリースでないので `latest` が付いた** —— rc.1 / rc.2 では付かなかった） |
+| manifest | **linux/amd64 ＋ linux/arm64**（＋ 各 attestation） |
+
+**★ 所要は rc より速かった**（rc.1 は 7.5 分、rc.2 は 4.2 分）。**buildx / gha キャッシュは
+入れていない**ので、**差はランナー側のゆれ**である（org `ci-strategy.md` §3③「高速化は最後。
+しかも実測してから」）。**§9.6 の「未実測」はこの数字で埋めた。**
+
+#### ★★ 実測: `release/*` はマージした瞬間に消える
+
+**`release/0.2.0` → `main` をマージした直後に、そこから `develop` への PR を作ろうとして落ちた**:
+
+```
+pull request create failed: GraphQL: Head sha can't be blank, Base sha can't be blank,
+No commits between develop and release/0.2.0, Head ref must be a branch
+```
+
+**原因はリポジトリの `delete_branch_on_merge: true`** —— **`--delete-branch` を付けていなくても
+head ブランチが自動削除される**。`docs/BRANCHING.md` の「release を develop にも戻す
+（PR or マージ）」は、**その release ブランチが既に無い前提で読む必要があった。**
+
+**戻し方は `main` → `develop` の PR**（**merge commit**）。**squash にすると `develop` に別 SHA の
+コミットができ、`main` と同じ内容なのに `main...develop` が両方とも非 0 を返す** ——
+**#145 が `develop` → `main` で避けた問題が、戻す向きでも起きる**。
+
+**★ `main` は保護されているので自動削除の対象外**（**マージ後に残っていることを確認した** ——
+`main` が消えると配布元とデモが同時に飛ぶので、**押す前に「保護されたブランチは対象外」を
+確かめ、押した直後にも見た**）。
+
+**結果**: `main...develop` が **`ahead=1 / behind=0`**（develop が main を完全に含み、
+develop 側のマージコミット 1 つぶん先行）。**#145 が守りたかった「数で読める」状態になっている。**
+
+#### ★ 版を切る 1 続きが、初めて全部つながった
+
+**タグ → Release → マイルストーンのクローズ**（org「マイルストーンと版」節）。
+
+| 順 | やったこと |
+|---|---|
+| 1 | 版番号を 4 か所で `0.2.0` に（**ずれているとタグを打った瞬間に座標ジョブが落ちる**） |
+| 2 | `main` へ **merge commit**（#196） |
+| 3 | **タグ `v0.2.0`** → `release-image.yml` が GHCR へ配る |
+| 4 | **Release ノートを `--draft` で作り、描画を見てから publish**（assets なし。**digest 1 行**） |
+| 5 | `main` → `develop` へ戻す（#197。**merge commit**） |
+| 6 | **マイルストーン #2 を閉じた**（人が閉じる。全 issue closed でも自動では閉じない） |
+
+**次の版のマイルストーンは作らなかった** —— **`v0.3.0 — UI をモダナイズする` が既にあり、
+issue 8 本が付いている**。**「版を切ったときに作る」は、無いときの契機である。**
+
 #### 申し送り
 
 - **★ 次の版のマイルストーンは `v0.3.0 — UI をモダナイズする`**（**既に存在し、issue 8 本が
   付いている**）—— **作る契機は「版を切ったとき」だが、今回は既にあった**
 - **★ #195 が閉じるまで、`README` の `docker run` は動かない** —— **書いてあるのに動かない
   期間ができる**。**#195 を最優先で閉じる**
-- **★ `docs/ARCHITECTURE.md` §9.6 の `release-image.yml` の所要を、この版の実走で埋める**
-  （#165 の申し送り。**rc の数字ではなく版の数字**が出る）
+- **★ `docs/ARCHITECTURE.md` §9.6 の所要は埋めた**（**約 2.5 分**。#165 の申し送りを閉じた）——
+  **rc の数字ではなく版の数字**である
+- **★ `docs/BRANCHING.md` に「release ブランチは自動削除される」を書いた** ——
+  **次に版を切る人が同じところで落ちない**ようにするため
 
 ---
 

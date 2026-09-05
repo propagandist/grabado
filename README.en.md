@@ -46,7 +46,8 @@ PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a
 PostgreSQL 18 is the default palette: designs are drawn with PostgreSQL types and converted at
 export time, so the saved file is identical whichever profile you export to.
 [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) shows what each type becomes in every profile —
-that table is generated from the implementation and verified by a test, not written by hand.
+and that table is not left to rot: a test reads it and compares every cell against what the
+implementation actually emits.
 
 ## AI review
 
@@ -202,9 +203,18 @@ mkdir -p schema
 docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" ghcr.io/propagandist/grabado
 ```
 
-The left side of `-v` is the host directory holding your design files. **It must exist**, or the
-container refuses to start (grabado does not run without a source of truth). Both amd64 and arm64
-are included.
+The left side of `-v` is the host directory holding your design files. **Create it first** — on
+Linux, if it is missing Docker creates it owned by root, and **the container, which runs as a
+non-root user, cannot write to it and exits**. **Dropping `-v` altogether does start the
+container**, but then it writes inside the container, so **the designs go away with it**.
+
+Both amd64 and arm64 are included. **You can check what is inside without waiting for us to tell
+you** — the origin, version and license are in the OCI labels, and the bundled JRE and dependency
+versions are in the SBOM:
+
+```bash
+docker buildx imagetools inspect ghcr.io/propagandist/grabado
+```
 
 ### With Docker Compose
 
@@ -256,7 +266,7 @@ npm run dev               # Vite dev server
 ```
 
 Then open <http://127.0.0.1:4173/index.html>. To check the built assets, `npm run build`
-(produces `dist/`) followed by `npm run preview` (<http://127.0.0.1:4174>).
+(produces `frontend/dist/`) followed by `npm run preview` (<http://127.0.0.1:4174>).
 
 ## Configuration
 

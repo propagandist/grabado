@@ -707,7 +707,9 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 **本章はすべて実装済み**（11-1 で適用側、11-2a で proxy の契約、**11-2b で上流を叩く実装**）。
 入口は [`../frontend/js/io/ai/`](../frontend/js/io/ai/) と
 [`../server/src/main/kotlin/io/propagandist/grabado/ai/`](../server/src/main/kotlin/io/propagandist/grabado/ai/)。
-**残るのはフロントの配線だけ**（11-3 以降。`js/` はまだ 1 行も AI を知らない）。
+**フロントの配線まで入っている**（11-3 / 11-4 / 11-5。いずれも 2026-08-24）——
+[`../frontend/js/io.ts`](../frontend/js/io.ts) が `AI_REVIEW_PATH` と
+`aireview()` / `aireviewresponse()` / `aiapply()` を持ち、`check()` は `case 429` を持つ。
 
 **HANDOVER §11 との差分は 3 つ**（URL 名・構造化出力の手段・プライバシー既定）。
 **HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
@@ -728,9 +730,10 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 **`check()` が知らない status は「成功」に倒れる**ので、status を足す段で必ず対にする
 （5-1c / 5-3 / 5-4a で 3 回効いた規律）。
 
-**11-2a はこの規律を意図的に外して 429 を先に足した** —— フロントがこの URL を 1 度も
-呼ばないので、**429 が `check()` に届く経路が存在しない**（5-1b で 400 を足したときと同じ形）。
-到達しない status は無言で成功扱いにならない。配線と同時に広げるのが 11-3。
+**11-2a はこの規律を意図的に外して 429 を先に足した** —— 当時はフロントがこの URL を 1 度も
+呼ばず、**429 が `check()` に届く経路が存在しなかった**（5-1b で 400 を足したときと同じ形）。
+到達しない status は無言で成功扱いにならない。**11-3 の配線と同時に広げた**ので、いまは
+`check()` が `case 429` を、locale が `http429` を持っている。
 
 status の写像は [`ApiExceptionHandler`](../server/src/main/kotlin/io/propagandist/grabado/api/ApiExceptionHandler.kt)
 の 1 つの表にある（例外 → status を 2 か所に書かない）。**403 は理由を区別しない** ——
@@ -833,10 +836,12 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 **費用が自社負担**なので上限はサーバが持ち、クライアントの自己申告を上限にしない。
 
 `?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」**∧ 実装がある**。
-**実装があっても使えないなら false**（5-7a と同じ）で、11-2a の時点では
+**実装があっても使えないなら false**（5-7a と同じ）。**11-2b で
+[`AnthropicSuggestionSource`](../server/src/main/kotlin/io/propagandist/grabado/ai/AnthropicSuggestionSource.kt)
+が main に入ったので、いまは env 次第で true になる** —— 11-2a の時点では
 [`SuggestionSource`](../server/src/main/kotlin/io/propagandist/grabado/ai/SuggestionSource.kt) の実装が
-main に 1 つも無いので**実運用ではまだ常に false** —— 固定応答を返すスタブを本番に置かない
-（置くと「AI が動いているように見えて実は固定」が載る）。
+main に 1 つも無く、常に false だった（**固定応答を返すスタブを本番に置かない**ため。
+置くと「AI が動いているように見えて実は固定」が載る）。
 
 ### 8.5 キャッシュ
 

@@ -25,7 +25,8 @@ import tools.jackson.databind.JsonNode
  * - **キャッシュに当たったらレート制限を消費しない** —— 費用が発生しない呼び出しを
  *   費用の上限で止める理由が無い（[RateLimiter]）
  *
- * @param source 提案を作る側。**実装が 1 つも無ければ null**（11-2a では main に実装が無い ——
+ * @param source 提案を作る側。**実装が 1 つも無ければ null**（11-2b で
+ *   [AnthropicSuggestionSource] が入るまでは main に実装が無く、常にそうだった ——
  *   [SuggestionSource] の KDoc）。null なら「使えない」に倒れて 403 になる
  */
 @Service

@@ -97,6 +97,11 @@ gh api -X POST repos/propagandist/grabado/milestones \
     **`docker run` まで通して `?action=capabilities` を見る**（`README` が案内する形そのもの）
 - **プレリリース（`v0.2.0-rc.1` の形）には `latest` が付かない** —— `docker/metadata-action` の
   `latest=auto`。**試し打ちが `latest` を奪わない**
+  - **★ 試し打ちを消すときは untagged も消す**（**2026-09-05 実測**）—— **タグ付きの版を消しても、
+    それが束ねていた untagged は自動では消えない**。**rc 1 本につき 6 つ残る**（各アーキ 2 ＋
+    attestation 2 ＋ index 2）。**世代は `Published` の時刻で切れる**ので、digest を 1 つずつ
+    突き合わせなくてよい。**消したあとは、配ったものが無傷かを `docker logout` してから
+    pull し直して確かめる**（**「消えた」と「壊れていない」は別**）
 
 **タグを打って終わりにしない。** org `repo-surface-baseline.md` §3.7 の確かめ方は
 **リポジトリの右柱**で、**タグだけでは右柱に何も出ない**。ノートの値（日本語・assets なし・

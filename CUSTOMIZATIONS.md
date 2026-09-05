@@ -14151,23 +14151,49 @@ Internal … Setting is disabled by organization administrators.
 
 **これで `README` の 1 行が実際に動くようになった** —— **#164 の到達点が成立した。**
 
-#### ★ 残っているのは rc の削除だけ
+#### ★★ rc を消した —— タグ付きを消しても untagged は残る
 
-`0.1.0-rc.1` / `0.1.0-rc.2`（版 id `1207231898` / `1207254890`）。**public にしても 403 のまま**:
+`0.1.0-rc.1` / `0.1.0-rc.2`。**public にしても API は 403 のままだった**:
 
 ```
 You need at least delete:packages and read:packages scopes to delete a package version.
 ```
 
-**可視性とスコープは別の軸。** **Web UI から消すか、`gh auth refresh -s delete:packages,read:packages`
-してから消す**（#195）。
+**可視性とスコープは別の軸。** **Web UI から消した**（#195）。
+
+**★ 消す対象は 2 つではなく 14 だった。** **タグ付きの版を消しても、それが束ねていた
+untagged は自動では消えない** —— rc 1 本につき **各アーキ 2 ＋ attestation 2 ＋ index 2 の
+6 つ**が untagged として残る。着手前は **3 tagged / 18 untagged（計 21）**で、
+**残すべきは v0.2.0 の 1 tagged ＋ 6 untagged（計 7）**だった。
+
+**★ 世代は `Published` の時刻で判別できる** —— v0.2.0 は「about 10 hours ago」、rc は
+「1 day ago」。**digest を 1 つずつ突き合わせなくても、時刻で切れる**。
+
+#### ★ 消したあとに、配ったものが無傷か確かめた（2026-09-05 実測）
+
+**untagged を 12 個消しているので、manifest が壊れていないかを実際に見る**（**「消えた」と
+「壊れていない」は別**）。
+
+| 何を | 結果 |
+|---|---|
+| 版の数 | **1 tagged / 6 untagged（計 7）**。rc は **0** |
+| **`docker logout` したまま** `docker pull ghcr.io/propagandist/grabado` | **通った**（`latest`） |
+| manifest | **linux/amd64 ＋ linux/arm64**。**index digest は `sha256:8b54047b…` で、配ったときと同一** |
+| 起動 | `?action=capabilities` が `{"readonly":false,"introspection":false,"ai":false}` |
+| ラベル | `version=v0.2.0` ／ `url=https://grabado.dev/`（**`Dockerfile` の値のまま**） |
+
+**#195 の受け入れ基準はこれで全部そろった。**
 
 #### 申し送り
 
 - **★ 次の版のマイルストーンは `v0.3.0 — UI をモダナイズする`**（**既に存在し、issue 8 本が
   付いている**）—— **作る契機は「版を切ったとき」だが、今回は既にあった**
-- **★ `README` の `docker run` は動くようになった**（2026-09-05。上の実測）——
-  **#195 に残っているのは rc の削除だけ**
+- **★ `README` の `docker run` は動く**（2026-09-05。上の実測）—— **#195 は閉じた**
+- **★ 次に版を切るときは、public 化も rc の後片付けも要らない** —— **可視性はパッケージの
+  属性で、版を足しても変わらない**。**org の設定も一度開ければ効いたまま**
+- **★ 「org で最初の public パッケージ」を org 正本へ上げるかは、2 例目が出たときに判断する**
+  —— **いまは 1 例**で、しかも**一度開ければ org 全体で解決する性質**のもの。
+  **規約に足すより、実測としてここに残すほうが腐らない**
 - **★ `docs/ARCHITECTURE.md` §9.6 の所要は埋めた**（**約 2.5 分**。#165 の申し送りを閉じた）——
   **rc の数字ではなく版の数字**である
 - **★ `docs/BRANCHING.md` に「release ブランチは自動削除される」を書いた** ——

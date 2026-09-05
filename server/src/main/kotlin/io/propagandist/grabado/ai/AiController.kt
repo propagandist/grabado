@@ -27,11 +27,12 @@ import tools.jackson.databind.JsonNode
  *   （生バイトをそのまま受ける）と実装が一致する。再発防止として、契約表に
  *   `contentType` つきのケースを足してある。
  *
- * ★ **status を増やしたが `js/io.ts` の `check()` は広げていない。** 429 は §5 の語彙に無い
- *   新しい status で、`ApiExceptionHandler` の KDoc は「status を増やす PR では `check()` と
- *   `locale` を同じ PR で広げること」と書いている。ここでそれを守らないのは、**フロントが
- *   この URL を 1 度も呼ばないので 429 が `check()` に届く経路が無い**ため（5-1b で 400 を
- *   足したときと同じ形）。配線と同時に広げるのが 11-3 で、そこが `case 429` と `http429` を持つ。
+ * ★ **429 は §5 の語彙に無い新しい status。** 11-2a では `js/io.ts` の `check()` を広げなかった
+ *   —— `ApiExceptionHandler` の KDoc は「status を増やす PR では `check()` と `locale` を同じ
+ *   PR で広げること」と書いているが、**当時はフロントがこの URL を 1 度も呼ばず、429 が
+ *   `check()` に届く経路が無かった**（5-1b で 400 を足したときと同じ形）。
+ *   **11-3 の配線と同時に広げた**ので、いまは `check()` が `case 429` を、locale が
+ *   `http429` を持っている。
  */
 @RestController
 @RequestMapping("/api/ai")

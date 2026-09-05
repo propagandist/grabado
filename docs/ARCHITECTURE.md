@@ -324,6 +324,27 @@ Rollup の依存グラフに乗る**。`images/favicon.svg`（`<link rel="icon">
 **dist に 2 つある**（`viteStaticCopy` の写しと、ハッシュ付きの本体）。**ページが読むのは
 assets 側**で、`images/` 側は CSS の `url(../images/…)` が使う。
 
+**★★ CSS の `<link>` は 5 本とも「素の資産」として配られる**（**2026-09-05 実測**。#169）——
+`frontend/index.html` の CSS `<link>` は **5 本とも `media` 属性を持つ**ので、Vite の条件
+（`!("media" in attr.attributes || "disabled" in attr.attributes)`）に外れ、**CSS として
+処理されず、そのままコピーされる**。**実証: `frontend/styles/*.css` の 5 本と
+`dist/assets/<name>-<hash>.css` の 5 本が、いずれもバイト一致する。**
+
+帰結は 2 つある。
+
+- **`url(../images/…)` が書き換わらない** —— だから `viteStaticCopy` の `images/` が要り、
+  `tests/dist/smoke.spec.ts` が `dist/images/` の実在を確かめている（すぐ上の★）
+- **★★ `@import` は dist で 404 になる** —— インライン化されないので、ブラウザが
+  `/assets/` からの相対で解決してしまう。**`npm run dev` では `/styles/` が実在するので
+  通る** ——**dev で緑、dist で無音の欠落**という壊れ方で、**既存のテストは 1 本も赤くならない**。
+  **[`../tests/node/styles.test.ts`](../tests/node/styles.test.ts) がこれを見る**（#169）
+
+**★ 設計トークンとアイコンの器も、この性質の上に載っている**（#169）——
+`styles/base.css` と `styles/icons.css` は **`title` を持たない `<link>`** なので
+`Designer.applyStyle()` の切り替え対象にならず、**テーマを切り替えても常に効く**。
+**そのぶん、テーマ側の `:root` にあるトークンを参照できない**（参照すると `original` を
+選んだときに未定義になる）。
+
 ### 5.2 DDL 生成（段階6-5a で XSLT から TS へ）
 
 SQL 出力は [`../frontend/js/io/ddl/generate.ts`](../frontend/js/io/ddl/generate.ts) が組み立てる。入口は

@@ -19,12 +19,6 @@ body {
     height: 3000px;
 }
 
-#controls {
-    position: absolute;
-    left: 0px;
-    top: 0px;
-}
-
 #bar {
     text-align: center;
     background-color: #ccc;
@@ -49,11 +43,6 @@ body {
     display: block;
     width: 90%;
     margin: auto;
-}
-
-#bar input.small {
-    width: 45%;
-    display: inline;
 }
 
 #toggle {
@@ -124,10 +113,6 @@ body {
     border-radius: 3px;
 }
 
-.table table {
-    border-collapse: collapse;
-}
-
 .table.selected {
     border: 2px solid #000;
 }
@@ -143,16 +128,6 @@ body {
 
 .table tbody td {
     padding: 3px;
-}
-
-.table tbody .selected {
-    font-weight: bold;
-    color: #f00;
-    display: inline-block;
-}
-
-.table tbody .title {
-    display: inline-block;
 }
 
 .table thead td[title]:not([title=""]):after {
@@ -183,44 +158,6 @@ body {
     border-left-color: transparent;
 }
 
-.primary {
-    font-weight: bold;
-}
-
-.key {
-    font-style: italic;
-}
-
-.primary.key {
-    font-style: normal;
-}
-
-.typehint {
-    font-size: 80%;
-    color: gray;
-}
-
-.comment {
-    font-size: 80%;
-    font-weight: normal;
-    margin-right: 0.5em;
-}
-
-.adding {
-    cursor: crosshair;
-}
-
-.relation {
-    overflow: hidden;
-}
-
-#background {
-    position: absolute;
-    background-color: #000;
-    opacity: 0.5;
-    visibility: hidden;
-}
-
 #window {
     position: absolute;
     visibility: hidden;
@@ -236,34 +173,13 @@ body {
     background-color: rgb(238, 238, 170);
 }
 
-#windowcontent {
-    padding: 1em;
-}
-
 #windowok, #windowcancel {
     margin: 0em 1em 1em;
-}
-
-.small {
-    font-size: 85%;
 }
 
 #textarea {
     width: 650px;
     height: 200px;
-}
-
-/* grabado: 段階2-2。理由と対のルールは styles/material-inspired.css の同じ 2 本 */
-#io .io-client {
-    width: 60%;
-}
-
-#io .io-server {
-    width: 40%;
-}
-
-#opts {
-    width: 700px;
 }
 
 #keys {
@@ -273,16 +189,6 @@ body {
 
 legend {
     font-weight: bold;
-}
-
-label, input, select {
-    vertical-align: middle;
-}
-
-#throbber {
-    position: absolute;
-    top: 2px;
-    right: 3px;
 }
 
 #rubberband {

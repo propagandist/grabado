@@ -13,12 +13,6 @@
     <meta charset="utf-8" />
     <link rel="stylesheet" title="material-inspired" href="styles/material-inspired.css" media="all" />
     <link rel="alternate stylesheet" title="original" href="styles/original.css" media="all" />
-    <!--[if IE 6
-      ]><link rel="stylesheet" type="text/css" href="styles/ie6.css"
-    /><![endif]-->
-    <!--[if IE 7
-      ]><link rel="stylesheet" type="text/css" href="styles/ie7.css"
-    /><![endif]-->
     <link rel="stylesheet" href="styles/print.css" type="text/css" media="print" />
 
     <!-- grabado: 段階4-3a で dropbox.js の CDN 読み込みを撤去した。外部依存はこれで 0 本 -->
@@ -163,30 +157,30 @@
                     <td class="io-client">
                         <fieldset>
                             <legend id="client"></legend>
-                            <div id="singlerow">
+                            <div class="io-row">
                                 <input type="button" id="clientsave" />
                                 <input type="button" id="clientload" />
                             </div>
-                            <div id="singlerow">
+                            <div class="io-row">
                                 <input type="button" id="clientdownload"      />
                                 <input type="button" id="clientloadfromfile"  />
                             </div>
-                            <div id="singlerow">
+                            <div class="io-row">
                                 <input type="button" id="clientlocalsave" />
                                 <input type="button" id="clientlocalload" />
                                 <input type="button" id="clientlocallist" />
                             </div>
-                            <div id="singlerow">
+                            <div class="io-row">
                               <input type="button" id="clientcopy" />
                               <input type="button" id ="clientpaste" />
                             </div>
                             <hr />
-                            <div id="singlerow">
+                            <div class="io-row">
                               <label for="outputdb" id="outputdblabel"></label>
                               <select id="outputdb"></select>
                             </div>
                             <input type="button" id="clientsql" />
-                            <div id="singlerow">
+                            <div class="io-row">
                               <select id="ormtarget"></select>
                               <input type="button" id="clientorm" />
                             </div>

@@ -4,11 +4,12 @@
 eight database profiles, or point it at an existing database and get the diagram back. A design is
 a plain JSON file that lives in your git repository — there is no database behind the editor.
 **You can have the AI review what you drew** (optional, bring your own key): it returns comments
-checked against a rubric, and **you decide one by one which ones to apply**.
+checked against **this company's own schema conventions**, and **you decide one by one which ones to
+apply**.
 
 **Try it: <https://grabado.dev/>** — a **read-only public demo** (saving, introspection
 and [AI](#ai-review) are disabled). **Editing happens entirely in the browser**, so you can draw a schema
-and export DDL right there.
+and export DDL and ORM models right there.
 
 It is a fork of [ondras/wwwsqldesigner](https://github.com/ondras/wwwsqldesigner) by Ondrej Zara
 (BSD-3-Clause). The drawing engine is kept; everything around it was rewritten in TypeScript, the
@@ -23,12 +24,39 @@ PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a
 - **Draw** — tables, columns, keys, foreign key constraints, indexes and comments, in the browser
 - **Export DDL** — eight database profiles from one design (see the table below)
 - **Export ORM models** — JPA (Kotlin), Prisma and Drizzle
-- **Import an existing database** — introspection reads `information_schema` and returns JSON
+- **Import an existing database** — introspection reads `information_schema` and `pg_catalog`, and returns JSON
 - **[Have the AI review it](#ai-review)** — optional, bring your own key. Comments come back
   checked against a rubric, and are applied through the same deterministic path as everything
   else; **nothing is applied automatically**
 - **Designs are files** — deterministic JSON (stable key and array order, one table per block),
   so a schema change is a readable diff and sharing is a pull request
+
+## Why it exists
+
+The problem was that **a schema diagram cannot be reviewed the way code is reviewed**.
+
+Most ER tools keep the design itself inside the tool — in a database, or in a SaaS. When they do,
+**the diff is unreadable, and reviewing and merging follow different rules from the code**. A schema
+change breaks things just as easily as a code change does, yet **only one of the two goes through
+review**.
+
+So **the design is a JSON file in your git repository**. It is written deterministically (stable key
+and array order, one table per block), so **adding a single column is a one-line diff**. Sharing is a
+pull request; history is `git log`. **The source of truth is never inside the tool.** The name comes
+from that — ***grabado* is "engraved"** (Spanish *grabar*): the JSON in git is the plate, and the DDL
+is printed from it.
+
+**The drawing was not rewritten.** Dragging tables and pulling relations in
+[wwwsqldesigner](https://github.com/ondras/wwwsqldesigner) dates back to 2005, and **there was no
+reason to rebuild it**. It was kept, and everything around it — the model, IO, DDL generation and
+the exporters — was rewritten in TypeScript.
+
+**The PHP backend was dropped.** Kotlin/Spring Boot is the house standard here, and **a tool we use
+ourselves should not sit outside our own conventions**. XML persistence and the global namespace went
+with it (XML designs can still be read).
+
+**Every decision is in [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md)** — not only what was decided, but
+**what was turned down and why**.
 
 ## Supported databases
 
@@ -57,14 +85,16 @@ which ones to apply** — nothing is ever applied on its own.
 
 ### What it checks
 
-For `postgresql` only, the **full house rubric** applies.
+For `postgresql` only, the **full house rubric** applies — *house* here means this company's own
+schema conventions, not an industry standard.
 
 - Primary key is `id uuid DEFAULT uuidv7()` — never a sequence for an id you expose
-  (row count and insertion order become readable from a URL)
+  (row count and insertion order become readable from a URL). **A table that stays purely internal
+  may use `bigint identity`**
 - Table names are snake_case and plural
 - `created_at` / `updated_at` exist as `timestamptz NOT NULL DEFAULT now()`
 - Prefer `text` (`char(n)` / `varchar(n)` only when there is a real length constraint)
-- `timestamptz` always, `jsonb` never `json`, `numeric` never `money`
+- `timestamptz` always; `jsonb`, never `json`; `numeric` for money **and quantities**, never `money`
 - No `serial`; enumerations are lookup tables or CHECK constraints
 
 **The other seven profiles are not held to this.** The house rubric is specific to the PostgreSQL
@@ -104,10 +134,10 @@ grabado: AI から 11 件の指摘（warn 5 / info 6）。
 and **that number is the unit of approval**.
 
 Against the real upstream, a two-table design with eight deliberate departures from the house
-defaults (singular names, `INTEGER` primary keys, no audit columns, `MONEY`, `JSON`, a table with
+rubric (singular names, `INTEGER` primary keys, no audit columns, `MONEY`, `JSON`, a table with
 no primary key, an undeclared foreign key, `VARCHAR(50)`) came back with **16 comments**
-(error 4 / warn 10 / info 2, **measured 2026-08-24**). Every departure was caught, and **every
-patch stayed inside the eight operations listed below**.
+(error 4 / warn 10 / info 2, **measured 2026-08-24**). **Every departure was caught and nothing
+spurious was raised**, and **every patch stayed inside the eight operations listed below**.
 
 Pick what to apply with `all` or `1,4,11`. Afterwards you get:
 
@@ -247,16 +277,17 @@ docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado
 GRABADO_READONLY=true docker compose up
 ```
 
-Saving, introspection and AI are disabled; listing and loading still work. This is the mode a
-public demo runs in — AI calls cost money and introspection is an SSRF pivot, so neither belongs
-on a deployment strangers can reach.
+Saving, introspection and AI are disabled; `list` and `load` still work. **This is the only mode a
+public demo can run in** — the AI calls would be billed to us and introspection is an SSRF pivot, so
+**neither belongs anywhere strangers can reach**.
 
 ### Note for Linux hosts
 
 **It just works.** The container figures out who owns the mount at startup and drops to that
 user, so files it writes are owned by you — you can `git add` your designs directly.
 
-Details are in `docker-entrypoint.sh`. Nothing to configure; `docker compose up` is enough.
+The reasoning and the branches are at the top of
+[`docker-entrypoint.sh`](docker-entrypoint.sh). Nothing to configure; `docker compose up` is enough.
 
 ### Local development
 
@@ -282,23 +313,33 @@ Two things are worth knowing before you start:
 - **Introspection targets are named in configuration, never sent in a request.** There is no way
   to hand grabado a JDBC URL from the outside
 
+## Tech stack
+
+| Layer | What it uses |
+|---|---|
+| Frontend | **TypeScript** (strict) and **Vite**. **No UI framework** — the drawing engine is upstream's DOM code, kept as it was and wrapped in types |
+| Backend | **Kotlin** and **Spring Boot**. Save and load are file I/O on the mounted directory; introspection reads `information_schema` and `pg_catalog`; and there is the AI proxy |
+| Distribution | **Multi-stage Docker** (three stages). **The runtime holds a JRE and one jar** — no Node, no Gradle, no JDK |
+| Tests | **Vitest** (jsdom), **Playwright** (real browser and the published image), **JUnit 5** (backend) |
+| Development | **[Claude Code](https://claude.com/claude-code)**. Design decisions are made by a human, and **the reasoning is written into [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md)** as the work goes |
+
 ## Documentation
 
 | Document | What it holds |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Layout, backend and AI contracts, the image |
 | [`docs/FORMAT.md`](docs/FORMAT.md) | The design JSON format |
-| [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | What each type becomes in each profile |
+| [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | What the house defaults become in each database |
 | [`docs/TESTING.md`](docs/TESTING.md) | Test layout and how to run it |
 | [`docs/BRANCHING.md`](docs/BRANCHING.md) | Branching model |
 | [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) | Every decision made since the fork, with its reasoning |
-| [`CLAUDE.md`](CLAUDE.md) | Working rules and hard constraints |
+| [`CLAUDE.md`](CLAUDE.md) | Working rules and the Hard Constraints |
 
 ## Tests
 
 ```bash
 npm ci
-npx playwright install chromium   # first time only
+npx playwright install chromium   # first time only (add --with-deps on Linux)
 
 npm test              # Node side (jsdom). Fast; this is the everyday one
 npm run test:browser  # Real browser (Chromium). The authority for the DDL golden files
@@ -310,10 +351,13 @@ npm run test:image    # Builds the image, starts the container and drives it end
 The golden files pin the bytes the tool actually emits. A change that moves them is either a bug
 or a decision that has to be recorded — see [`docs/TESTING.md`](docs/TESTING.md).
 
-## Origin and license
+## Origin and who builds it
 
 BSD-3-Clause, inherited from upstream — see [`LICENSE`](LICENSE). grabado does not follow
 upstream; every difference is recorded in [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) as it is made.
+
+**An open-source project by [PROPAGANDIST](https://github.com/propagandist).** It was built as a
+tool we use ourselves, and published as it is. **It is not monetised.**
 
 ---
 

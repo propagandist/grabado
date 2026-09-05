@@ -14109,12 +14109,65 @@ develop 側のマージコミット 1 つぶん先行）。**#145 が守りた�
 **次の版のマイルストーンは作らなかった** —— **`v0.3.0 — UI をモダナイズする` が既にあり、
 issue 8 本が付いている**。**「版を切ったときに作る」は、無いときの契機である。**
 
+#### ★★ 実測: public 化は org の設定が先に効く（2026-09-05）
+
+**#195 の受け入れ基準を実走したときに、想定していなかった層に当たった。**
+
+**パッケージ側のダイアログは開けたが、選べなかった**:
+
+```
+Public   … Setting is disabled by organization administrators.
+Private  … （選択中）
+Internal … Setting is disabled by organization administrators.
+```
+
+**#165 の実測（「Web UI の Package settings でのみ切り替えられる」）は不十分だった** ——
+**その Web UI も、org が許可していないと押せない**。
+
+**org 全体を測った**（同日）:
+
+| package_type | public なパッケージ |
+|---|---|
+| container / npm / maven / rubygems / nuget / docker | **6 タイプすべて 0 本** |
+
+**org 内のコンテナパッケージは 7 本（Kerberos 6 ／ banquete 1）で、全部 private。**
+**grabado が org で最初の public パッケージになる**ので、**前例が無いのは当然だった**。
+
+**org の Packages 設定で public を許可したあと、パッケージ側のダイアログはそのまま通った**
+（**org owner の操作**。リポジトリ側からは動かせない）。
+
+#### ★ 通った（2026-09-05 実測。#195 の受け入れ基準）
+
+| 何を | 結果 |
+|---|---|
+| `gh api orgs/propagandist/packages/container/grabado --jq .visibility` | **`public`** |
+| **`docker logout ghcr.io` してから** `docker pull ghcr.io/propagandist/grabado:0.2.0` | **通った**。digest は配ったときと一致（`sha256:8b54047b…`） |
+| `docker run … ghcr.io/propagandist/grabado`（**タグ無し＝`latest`**） | **起動し、`?action=capabilities` が `{"readonly":false,"introspection":false,"ai":false}`** |
+| 起動したコンテナの `org.opencontainers.image.version` | **`v0.2.0`** —— **`latest` が版を指している** |
+| リポジトリへの紐づき | **`repository=propagandist/grabado`**（`org.opencontainers.image.source` の効果） |
+
+**★ `docker logout` してから pull する**のが要点 —— **ログインしたままだと private でも通るので、
+確かめにならない**（org `security-verification.md` §4「守れていないのに緑が出る」と同じ形）。
+
+**これで `README` の 1 行が実際に動くようになった** —— **#164 の到達点が成立した。**
+
+#### ★ 残っているのは rc の削除だけ
+
+`0.1.0-rc.1` / `0.1.0-rc.2`（版 id `1207231898` / `1207254890`）。**public にしても 403 のまま**:
+
+```
+You need at least delete:packages and read:packages scopes to delete a package version.
+```
+
+**可視性とスコープは別の軸。** **Web UI から消すか、`gh auth refresh -s delete:packages,read:packages`
+してから消す**（#195）。
+
 #### 申し送り
 
 - **★ 次の版のマイルストーンは `v0.3.0 — UI をモダナイズする`**（**既に存在し、issue 8 本が
   付いている**）—— **作る契機は「版を切ったとき」だが、今回は既にあった**
-- **★ #195 が閉じるまで、`README` の `docker run` は動かない** —— **書いてあるのに動かない
-  期間ができる**。**#195 を最優先で閉じる**
+- **★ `README` の `docker run` は動くようになった**（2026-09-05。上の実測）——
+  **#195 に残っているのは rc の削除だけ**
 - **★ `docs/ARCHITECTURE.md` §9.6 の所要は埋めた**（**約 2.5 分**。#165 の申し送りを閉じた）——
   **rc の数字ではなく版の数字**である
 - **★ `docs/BRANCHING.md` に「release ブランチは自動削除される」を書いた** ——

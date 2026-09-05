@@ -25,7 +25,7 @@
 5. **配布は Docker・DB レス既定**。ビルドはイメージ内に隠蔽、秘密は env 注入。既定で PG コンテナを持たない。
 6. **backend は Spring Boot 一本**。PHP を残さない。save/load=ファイル I/O、introspection=information_schema→JSON。`READONLY` 時は副作用（保存・introspection）を無効化。
 7. **AI 出力は自動適用しない**。提案は review-first、適用は §4 の決定論パスに合流、LLM はテストでモック。キーは各自コンテナ env（BYOK・localStorage 不使用）。**構造化出力を強制する（自由テキストをパースしない）** —— 手段は structured outputs（段階11-0）。特定モデル名を焼き込まず env＋docs 参照。
-8. **フロント描画エンジンは今回作り直さない**（Tier 2）。UI framework 移行は将来判断・要確認。
+8. **フロント描画エンジンは今回作り直さない**（Tier 2）。**★ UI framework 移行は 2026-09-05 に検討して不採用**（#167。**全面も部分も採らない**）—— **元は「将来判断・要確認」**で、**禁止ではなかったので判断に足る材料を採った**。決定打は**壊れる本数ではなく安全網の穴の位置**。根拠・却下した案・**再考の条件 3 つ**は `CUSTOMIZATIONS.md` の同日（**規約の中身をここへ写さない**）。**時間では引き直さない。**
 9. **upstream 非追従**。自社差分は独立ファイルに分離し `CUSTOMIZATIONS.md` に必ず記録。
 
 ## 型・品質

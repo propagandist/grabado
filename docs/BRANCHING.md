@@ -85,6 +85,16 @@ gh api -X POST repos/propagandist/grabado/milestones \
 - **★ 初回の本番 publish のあと、GHCR のパッケージを public に切り替える** ——
   **初回は private が既定**で、**API に口が無い**（`PATCH .../packages/container/grabado` は
   **404**。2026-09-04 実測）。**Web UI の Package settings でのみ切り替えられる**
+  - **★★ その Web UI も、org が許可していないと押せない**（**2026-09-05 実測**）——
+    ダイアログの **Public と Internal が両方とも
+    `Setting is disabled by organization administrators.`** で選べなかった。
+    **org 全体で public なパッケージが 1 本も無かった**（container / npm / maven / rubygems /
+    nuget / docker の **6 タイプすべてで 0**）。**org の Packages 設定で public を許可するのが
+    先**で、**これは org owner の操作**である —— **リポジトリ側からは動かせない**。
+    **許可したあとは、パッケージ側のダイアログがそのまま通った**
+  - **★ public にした直後の確かめ方**（同日、実走した）—— **`docker logout ghcr.io` してから**
+    `docker pull`。**ログインしたままだと、private でも通るので確かめにならない**。
+    **`docker run` まで通して `?action=capabilities` を見る**（`README` が案内する形そのもの）
 - **プレリリース（`v0.2.0-rc.1` の形）には `latest` が付かない** —— `docker/metadata-action` の
   `latest=auto`。**試し打ちが `latest` を奪わない**
 

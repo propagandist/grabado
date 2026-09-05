@@ -188,8 +188,17 @@ mkdir -p schema
 docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" ghcr.io/propagandist/grabado
 ```
 
-`-v` の左側は**設計 JSON を置くホスト側のディレクトリ**。**無いと起動しない**
-（正本を持たないまま動かさないため）。amd64 と arm64 の両方が入っている。
+`-v` の左側は**設計 JSON を置くホスト側のディレクトリ**。**先に作っておくこと** ——
+Linux では、無いまま実行すると Docker が root 所有で作ってしまい、**非 root で走るコンテナが
+書けずに落ちる**。**`-v` ごと省くと起動はする**が、書き先がコンテナの中になるので、
+**コンテナを捨てた時点で設計も消える**。
+
+amd64 と arm64 の両方が入っている。**何が入っているかは、こちらの発表を待たずに確かめられる**
+—— 出所・版・ライセンスは OCI ラベルに、焼き込んだ JRE と依存の版は SBOM にある:
+
+```bash
+docker buildx imagetools inspect ghcr.io/propagandist/grabado
+```
 
 ### compose
 
@@ -242,7 +251,7 @@ npm run dev               # Vite dev server
 ```
 
 <http://127.0.0.1:4173/index.html> を開く。配布物を確かめるときは `npm run build`
-（`dist/` が出る）→ `npm run preview`（<http://127.0.0.1:4174>）。
+（`frontend/dist/` が出る）→ `npm run preview`（<http://127.0.0.1:4174>）。
 
 ## 設定
 

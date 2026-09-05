@@ -1,14 +1,71 @@
+/*
+ * grabado: テーマが決める値（#169）。テーマ非依存のトークンは styles/base.css の :root。
+ *
+ * ★ 値は 1 つも新しく作っていない。このファイルにあった literal を、出てくる場所から
+ *   そのまま持ち上げただけである（#169 の「見た目は 1 ピクセルも変えない」）。
+ *
+ * ★★ 色は 1 回しか出ないものもトークンにした。余白や角丸と違い、
+ *   **色はテーマが変われば全部変わる** —— #172 でダークを足すときに、
+ *   literal で残っていると探し直すことになる。
+ */
+:root {
+    /* 面 */
+    --surface: #FFF;
+    --surface-alt: #f2f2f2;
+    --surface-sunken: whitesmoke;
+    --canvas-grid: url(../images/back_dim.png);
+
+    /* 文字 */
+    --text: rgba(0, 0, 0, .87);
+    --text-muted: rgba(0, 0, 0, .54);
+    --on-accent: #FFF;
+
+    /* 線 */
+    --border: rgba(0, 0, 0, .26);
+    --divider: #ddd;
+    --port-border: rgba(0, 0, 0, .3);
+    --port-border-hover: rgba(0, 0, 0, .8);
+    --row-expanded-border: rgba(0, 0, 0, .12);
+
+    /* ブランドとアクセント。--brand は favicon と同じ色 */
+    --brand: #de2665;
+    --brand-hover: #ff5a92;
+    --brand-soft: #ff8fb5;
+    --accent: #FF4081;
+    --accent-soft: rgba(255, 64, 129, 0.5);
+
+    /* 状態 */
+    --info: #2196F3;
+    --info-hover: #39a1f4;
+    --danger: #F44336;
+    --danger-hover: #f55a4e;
+    --invalid: #d32f2f;
+    --hint: rgb(125, 178, 221);
+
+    /* 影 */
+    --shadow-button: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
+    --shadow-card: 0 2px 2px 0 rgba(0, 0, 0, .16), 0 0 2px 0 rgba(0, 0, 0, .12);
+    --shadow-bar: rgba(0, 0, 0, 0.16) 0px 3px 6px 0px, rgba(0, 0, 0, 0.23) 0px 3px 6px 0px;
+    --shadow-minimap: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .24);
+    --shadow-window: 0 10px 20px rgba(0, 0, 0, .19), 0 6px 6px rgba(0, 0, 0, .23);
+
+    /* 寸法。original は 150px なので、テーマが決める値である */
+    --bar-w: 190px;
+    --minimap-size: 100px;
+    --io-min-w: 860px;
+}
+
 /* Generic styles */
 
 body {
-    font-family: verdana, sans-serif;
-    font-size: 12px;
+    font-family: var(--font-ui);
+    font-size: var(--text-base);
     padding: 0px;
     margin: 0px;
-    background: #FFF;
+    background: var(--surface);
     font-weight: 400;
-    line-height: 1.429;
-    color: rgba(0, 0, 0, .87);
+    line-height: var(--leading-base);
+    color: var(--text);
     visibility: hidden;
     -moz-user-select: -moz-none;
     -khtml-user-select: none;
@@ -18,22 +75,22 @@ body {
 }
 
 input[type=button] {
-    font-family: verdana, sans-serif;
+    font-family: var(--font-ui);
     -webkit-appearance: button;
     cursor: pointer;
     font-weight: 500;
-    font-size: 14px;
+    font-size: var(--text-md);
     line-height: 18px;
     text-transform: uppercase;
-    color: rgba(0, 0, 0, .87);
-    background-color: #FFF;
+    color: var(--text);
+    background-color: var(--surface);
     display: inline-block;
     height: 36px;
     padding: 0 26px;
-    margin-top: 6px;
-    margin-bottom: 6px;
+    margin-top: var(--space-3);
+    margin-bottom: var(--space-3);
     border: none;
-    border-radius: 2px;
+    border-radius: var(--radius-1);
     cursor: pointer;
     -ms-touch-action: manipulation;
     touch-action: manipulation;
@@ -46,55 +103,55 @@ input[type=button] {
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
-    font-size: 14px;
+    font-size: var(--text-md);
     letter-spacing: .03em;
     position: relative;
     overflow: hidden;
 }
 
 input[type=text] {
-    font-family: verdana, sans-serif;
+    font-family: var(--font-ui);
     height: 32px;
     display: block;
     background-color: transparent;
-    color: rgba(0, 0, 0, .87);
+    color: var(--text);
     border: none;
     border-bottom-color: currentcolor;
     border-bottom-style: none;
     border-bottom-width: medium;
-    border-bottom: 1px solid rgba(0, 0, 0, .26);
+    border-bottom: 1px solid var(--border);
     outline: 0;
     width: 100%;
-    font-size: 16px;
+    font-size: var(--text-lg);
     padding: 0;
     box-shadow: none;
-    border-radius: 0;
+    border-radius: var(--radius-0);
     background-image: none;
 }
 
 textarea {
     min-width: 500px;
-    font-family: verdana, sans-serif;
+    font-family: var(--font-ui);
     min-height: 64px;
     display: block;
     background-color: transparent;
-    color: rgba(0, 0, 0, .87);
+    color: var(--text);
     border: none;
     border-bottom-color: currentcolor;
     border-bottom-style: none;
     border-bottom-width: medium;
-    border-bottom: 1px solid rgba(0, 0, 0, .26);
+    border-bottom: 1px solid var(--border);
     outline: 0;
     width: 100%;
-    font-size: 16px;
+    font-size: var(--text-lg);
     padding: 0;
     box-shadow: none;
-    border-radius: 0;
+    border-radius: var(--radius-0);
     background-image: none;
 }
 
 select {
-    font-family: verdana, sans-serif;
+    font-family: var(--font-ui);
     display: block;
     height: 32px;
     width: 100%;
@@ -106,26 +163,26 @@ select {
     border-bottom-color: currentcolor;
     border-bottom-style: none;
     border-bottom-width: medium;
-    border-bottom: 1px solid rgba(0, 0, 0, .26);
-    border-radius: 0;
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-0);
     box-shadow: none;
     background-color: transparent;
     background-image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNiIgd2lkdGg9IjEwIj48cG9seWdvbiBwb2ludHM9IjAsMCAxMCwwIDUsNiIgc3R5bGU9ImZpbGw6cmdiYSgwLDAsMCwuMjQpOyIvPjwvc3ZnPg==);
     background-repeat: no-repeat;
     background-position: right center;
     cursor: pointer;
-    color: rgba(0, 0, 0, .87);
-    font-size: 16px;
+    color: var(--text);
+    font-size: var(--text-lg);
     padding: 0 25px 0 0;
 }
 
 textarea:focus, select:focus, input[type=text]:focus {
-    border-color: #2196F3;
+    border-color: var(--info);
     border-width: 2px;
 }
 
 select optgroup {
-    color: rgba(0, 0, 0, .54);
+    color: var(--text-muted);
     font-size: .9em;
     background: white !important;
     font-style: normal;
@@ -136,9 +193,9 @@ legend {
     display: block;
     width: 100%;
     padding: 0;
-    margin-bottom: 10px;
-    font-size: 21px;
-    color: rgba(0, 0, 0, .87);
+    margin-bottom: var(--space-4);
+    font-size: var(--text-xl);
+    color: var(--text);
     line-height: inherit;
 }
 
@@ -152,74 +209,57 @@ label {
     opacity: 0.7;
 }
 
-label, input, select {
-    vertical-align: middle;
-}
-
 /* Area */
 
 #area {
     position: relative;
-    background: transparent url(../images/back_dim.png);
-    width: 3000px;
-    height: 3000px;
+    background: transparent var(--canvas-grid);
+    width: var(--area-size);
+    height: var(--area-size);
     opacity: 0.7;
 }
 
 #rubberband {
     position: absolute;
-    border: .2px solid #FF4081;
-    background: rgba(255, 64, 129, 0.5);
-    opacity: 0.5;
-    visibility: hidden;
-}
-
-#background {
-    position: absolute;
-    background-color: #000;
+    border: .2px solid var(--accent);
+    background: var(--accent-soft);
     opacity: 0.5;
     visibility: hidden;
 }
 
 /* Main menu */
 
-#controls {
-    position: absolute;
-    left: 0px;
-    top: 0px;
-}
-
 #bar {
     position: fixed;
-    transition: all .2s ease-in-out;
+    transition: all var(--duration) var(--ease);
     right: 4px;
     top: 0px;
-    width: 190px;
+    width: var(--bar-w);
     margin: 0px 0px 20px 0px;
     padding: 0px;
-    background-color: rgb(255, 255, 255);
+    background-color: var(--surface);
     text-align: center;
-    border-radius: 0px;
-    box-shadow: rgba(0, 0, 0, 0.16) 0px 3px 6px 0px, rgba(0, 0, 0, 0.23) 0px 3px 6px 0px;
+    border-radius: var(--radius-0);
+    box-shadow: var(--shadow-bar);
     box-sizing: border-box;
     max-height: 600px;
 }
 
 #bar input {
-    transition: all .2s ease-in-out;
-    border-radius: 2px;
+    transition: all var(--duration) var(--ease);
+    border-radius: var(--radius-1);
     width: 100%;
     height: auto;
     margin: auto auto 3px auto;
-    padding: 2px;
+    padding: var(--space-1);
     line-height: 1.3;
     opacity: .7;
     text-transform: none;
 }
 
 #bar input:hover {
-    background-color: #de2665;
-    color: #fff;
+    background-color: var(--brand);
+    color: var(--on-accent);
 }
 
 #bar input:disabled {
@@ -229,14 +269,9 @@ label, input, select {
     box-shadow: none;
 }
 
-#bar input.small {
-    width: 45%;
-    display: inline;
-}
-
 #bar hr {
     margin: 8px;
-    background-color: #ddd;
+    background-color: var(--divider);
     height: 1px;
     border: none;
 }
@@ -244,8 +279,8 @@ label, input, select {
 #toggle {
     margin-bottom: 5px;
     cursor: pointer;
-    transition: all .2s ease-in-out;
-    border-radius: 2px;
+    transition: all var(--duration) var(--ease);
+    border-radius: var(--radius-1);
     background-position: center;
     background-repeat: no-repeat;
     height: 22px;
@@ -253,7 +288,7 @@ label, input, select {
 }
 
 #toggle:hover {
-    background-color: #de2665;
+    background-color: var(--brand);
 }
 
 #toggle.on {
@@ -276,35 +311,35 @@ label, input, select {
 
 #minimap {
     position: fixed;
-    width: 100px;
-    height: 100px;
+    width: var(--minimap-size);
+    height: var(--minimap-size);
     right: 5px;
     bottom: 5px;
-    background-color: #fff;
+    background-color: var(--surface);
     opacity: 0.9;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .24);
+    box-shadow: var(--shadow-minimap);
 }
 
 .mini {
     position: absolute;
-    background-color: #ff8fb5;
+    background-color: var(--brand-soft);
     font-size: 1px;
     line-height: 1px;
 }
 
 .mini_selected {
-    background-color: #de2665;
+    background-color: var(--brand);
 }
 
 .port {
     position: absolute;
     transition: border 0.2s ease-in-out;
-    border: 2px solid rgba(0, 0, 0, .3);
+    border: 2px solid var(--port-border);
 }
 
 #minimap:hover .port {
-    border: 2px solid rgba(0, 0, 0, .8);
+    border: 2px solid var(--port-border-hover);
 }
 
 /* Tables */
@@ -313,18 +348,14 @@ label, input, select {
     position: absolute;
     padding: 0 6px 6px 6px;
     cursor: pointer;
-    margin-bottom: 20px;
-    border-radius: 0;
-    background-color: #FFF;
-    box-shadow: 0 2px 2px 0 rgba(0, 0, 0, .16), 0 0 2px 0 rgba(0, 0, 0, .12);
-}
-
-.table table {
-    border-collapse: collapse;
+    margin-bottom: var(--space-6);
+    border-radius: var(--radius-0);
+    background-color: var(--surface);
+    box-shadow: var(--shadow-card);
 }
 
 .table.selected {
-    border: 1px solid #FF4081;
+    border: 1px solid var(--accent);
 }
 
 .table thead .title {
@@ -338,23 +369,13 @@ label, input, select {
 }
 
 .table tbody td {
-    padding: 3px;
+    padding: var(--space-2);
     position: relative;
 }
 
 .table tbody.expanded {
-    border-right: 6px solid rgba(0, 0, 0, .12);
-    background-color: whitesmoke !important;
-}
-
-.table tbody .selected {
-    font-weight: bold;
-    color: #f00;
-    display: inline-block;
-}
-
-.table tbody .title {
-    display: inline-block;
+    border-right: 6px solid var(--row-expanded-border);
+    background-color: var(--surface-sunken) !important;
 }
 
 .table thead td[title]:not([title=""]):after {
@@ -362,7 +383,7 @@ label, input, select {
     position: absolute;
     top: 0;
     right: 0;
-    border-color: rgb(125, 178, 221);
+    border-color: var(--hint);
     border-style: solid;
     border-width: 5px;
     border-bottom-color: transparent;
@@ -372,7 +393,7 @@ label, input, select {
 .table tbody[title]:not(.expanded):not([title=""]) td:last-child:after {
     content: '';
     position: relative;
-    border-color: rgb(125, 178, 221);
+    border-color: var(--hint);
     border-style: solid;
     border-width: 6px;
     border-bottom-color: transparent;
@@ -381,43 +402,12 @@ label, input, select {
     float: right;
 }
 
-.primary {
-    font-weight: bold;
-}
-
-.key {
-    font-style: italic;
-}
-
-.primary.key {
-    font-style: normal;
-}
-
-.typehint {
-    font-size: 80%;
-    color: gray;
-}
-
-.comment {
-    font-size: 80%;
-    font-weight: normal;
-    margin-right: 0.5em;
-}
-
 #commentbtn {
-    box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
-}
-
-.adding {
-    cursor: crosshair;
-}
-
-.relation {
-    overflow: hidden;
+    box-shadow: var(--shadow-button);
 }
 
 #tablename, #tablecomment {
-    margin-bottom: 10px;
+    margin-bottom: var(--space-4);
 }
 
 /* Window */
@@ -425,9 +415,9 @@ label, input, select {
 #window {
     position: absolute;
     visibility: hidden;
-    background-color: #fff;
-    box-shadow: 0 10px 20px rgba(0, 0, 0, .19), 0 6px 6px rgba(0, 0, 0, .23);
-    padding: 15px;
+    background-color: var(--surface);
+    box-shadow: var(--shadow-window);
+    padding: var(--space-5);
 }
 
 #windowtitle {
@@ -437,12 +427,8 @@ label, input, select {
     padding-right: 15px;
 }
 
-#windowcontent {
-    padding: 1em;
-}
-
 #windowok {
-    color: #FF4081;
+    color: var(--accent);
 }
 
 #windowok, #windowcancel {
@@ -450,19 +436,13 @@ label, input, select {
 }
 
 #windowok:hover, #windowcancel:hover {
-    background-color: #f2f2f2;
-}
-
-#throbber {
-    position: absolute;
-    top: 2px;
-    right: 3px;
+    background-color: var(--surface-alt);
 }
 
 /* Save / Load */
 
 #io {
-    min-width: 860px;
+    min-width: var(--io-min-w);
 }
 
 #io hr {
@@ -473,57 +453,38 @@ label, input, select {
     width: 100%;
 }
 
-/*
- * grabado: 段階2-2 で index.html の style 属性 2 か所をここへ移した
- * （CSP の style-src に 'unsafe-inline' を要らなくするため。issue #89）。
- *
- * ★ **両テーマに書く。** テーマは alternate stylesheet の title 切り替えなので、
- *   片方にしか無いと、そのテーマで列幅が変わる（styles/original.css にも同じ 2 本がある）。
- */
-#io .io-client {
-    width: 60%;
-}
-
-#io .io-server {
-    width: 40%;
-}
-
 #io input[type=button] {
-    box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
+    box-shadow: var(--shadow-button);
 }
 
 #io input[type=button]:active {
-    background-color: #f2f2f2;
+    background-color: var(--surface-alt);
     transition: all .2s ease-out;
 }
 
 #io #clientsql {
-    color: #FFF;
-    background-color: #FF4081;
+    color: var(--on-accent);
+    background-color: var(--accent);
 }
 
 #io #clientsql:hover {
-    transition: all .2s ease-in-out;
-    box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
-    background-color: #ff5a92;
+    transition: all var(--duration) var(--ease);
+    box-shadow: var(--shadow-button);
+    background-color: var(--brand-hover);
 }
 
 #textarea {
     width: 100%;
     height: 200px;
     font-size: small;
-    font-family: "Lucida Console", Monaco, monospace;
+    font-family: var(--font-mono);
 }
 
 /* Options */
 
-#opts {
-    width: 700px;
-}
-
 #opts td {
     padding-top: 15px;
-    margin-bottom: 20px;
+    margin-bottom: var(--space-6);
 }
 
 #opts #optionsnotice {
@@ -531,14 +492,10 @@ label, input, select {
 }
 
 #opts hr {
-    background-color: #ddd;
+    background-color: var(--divider);
     height: 1px;
     border: none;
-    margin: 25px 0px 25px 0px;
-}
-
-.small {
-    font-size: 85%;
+    margin: var(--space-7) 0px var(--space-7) 0px;
 }
 
 /* Keys */
@@ -571,45 +528,45 @@ label, input, select {
 
 #keyadd {
     margin: 15px;
-    color: #FFF;
-    background-color: #2196F3;
+    color: var(--on-accent);
+    background-color: var(--info);
 }
 
 #keyadd:hover {
-    transition: all .2s ease-in-out;
-    background-color: #39a1f4;
-    box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
+    transition: all var(--duration) var(--ease);
+    background-color: var(--info-hover);
+    box-shadow: var(--shadow-button);
 }
 
 #keyremove {
     margin: 15px;
-    color: #FFF;
-    background-color: #F44336;
+    color: var(--on-accent);
+    background-color: var(--danger);
 }
 
 #keyremove:hover {
-    transition: all .2s ease-in-out;
-    background-color: #f55a4e;
-    box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
+    transition: all var(--duration) var(--ease);
+    background-color: var(--danger-hover);
+    box-shadow: var(--shadow-button);
 }
 
 #keyleft, #keyright {
     height: auto;
     line-height: normal;
     box-shadow: none;
-    padding: 3px;
-    box-shadow: 0 0 2px rgba(0, 0, 0, .12), 0 2px 2px rgba(0, 0, 0, .2);
+    padding: var(--space-2);
+    box-shadow: var(--shadow-button);
 }
 
 #keyfields, #keyavail {
     height: auto;
     background-image: none;
     font-size: small;
-    border: 1px solid rgba(0, 0, 0, .26);
+    border: 1px solid var(--border);
     padding: 0px;
 }
 /* grabado: 識別子の警告（段階6-9b）。理由は tooltip。styles/original.css と同じ理由で波線だけ */
 .invalid {
-    text-decoration: underline wavy #d32f2f;
+    text-decoration: underline wavy var(--invalid);
     text-underline-offset: 2px;
 }

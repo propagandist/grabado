@@ -1,0 +1,47 @@
+/*
+ * grabado: アイコンの器（#169）。42 ボタンへの展開は #170。
+ *
+ * ★ このファイルは title を持たない <link> で読む = テーマを切り替えても効く。
+ *   だから **テーマのトークン（--brand など）を参照しない** ——
+ *   original を選ぶと material-inspired.css ごと disabled になって未定義になる。
+ *   参照してよいのは styles/base.css の :root にあるものだけ。
+ *
+ * ★★ なぜラッパー（span）が要るか: <input type="button"> は置換要素なので
+ *   疑似要素を持てない。mask を input 自身に当てるとラベル文字ごと切り抜かれる。
+ *   <button> へは変えられない —— elm.value = _(id) にラベルが入り、
+ *   tests/browser/io-ui.spec.ts が value の実文字列を読む。
+ *
+ * ★★ なぜ background-image ではなく mask か: SVG を background-image で読むと
+ *   画像文書として扱われ、SVG 内の currentColor がホスト要素の色を見ない。
+ *   黒・白の 2 諧調を用意してテーマとホバーごとに切り替える羽目になる。
+ *   mask なら 1 諧調で、色の正本が currentColor 1 つに閉じる。
+ *
+ * ★ data: URI をここに置く理由: 個別ファイルにすると SecurityHeadersFilter が
+ *   /images/ に no-cache を返すので、ページを開くたび 45 本の条件付き GET が走る
+ *   （/assets/ は immutable）。base64 ではなく URL エンコードにしてあるのは、
+ *   base64 が生の 4/3 に膨らんで diff が読めなくなるため。
+ */
+
+.tb {
+    position: relative;
+    display: block;
+}
+
+.tb::before {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    left: var(--space-3);
+    top: 50%;
+    translate: 0 -50%;
+    width: var(--icon-size);
+    height: var(--icon-size);
+    background-color: currentColor;
+    -webkit-mask: var(--icon) center / contain no-repeat;
+    mask: var(--icon) center / contain no-repeat;
+}
+
+/* #169 では CSP の実測のために 1 個だけ入れる。残り 41 個は #170 */
+.i-addtable {
+    --icon: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%20-960%20960%20960%22%3E%3Cpath%20d=%22M440-440H200v-80h240v-240h80v240h240v80H520v240h-80v-240Z%22/%3E%3C/svg%3E");
+}

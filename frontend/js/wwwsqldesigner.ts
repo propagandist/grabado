@@ -322,6 +322,10 @@ export class Designer extends Visual<DesignerDom> {
     applyStyle(): void {
         /* apply style */
         var style = this.getOption("style");
+        /* grabado: #169。構造の重複をテーマ側へ書き足さずに済ませるための取り付け口
+           （styles/base.css から [data-theme^="material-"] で引ける）。
+           init2() が visibility を visible にするより前に呼ばれるので、切り替えは見えない */
+        document.documentElement.dataset["theme"] = style;
         var i,
             link_elms = document.querySelectorAll("link");
         for (i = 0; i < link_elms.length; i++) {

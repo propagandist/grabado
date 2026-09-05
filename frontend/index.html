@@ -11,6 +11,10 @@
     <link rel="icon" href="images/favicon.svg" type="image/svg+xml" />
     <meta name="viewport" content="initial-scale=1,maximum-scale=1" />
     <meta charset="utf-8" />
+    <!-- grabado: #169。title を持たない = applyStyle() が切り替えないので常に効く。
+         media="all" は必須（無いと Vite が CSS モジュールとして JS グラフへ取り込む） -->
+    <link rel="stylesheet" href="styles/base.css" media="all" />
+    <link rel="stylesheet" href="styles/icons.css" media="all" />
     <link rel="stylesheet" title="material-inspired" href="styles/material-inspired.css" media="all" />
     <link rel="alternate stylesheet" title="original" href="styles/original.css" media="all" />
     <link rel="stylesheet" href="styles/print.css" type="text/css" media="print" />
@@ -30,7 +34,7 @@
 
             <hr />
 
-            <input type="button" id="addtable" />
+            <span class="tb i-addtable"><input type="button" id="addtable" /></span>
             <input type="button" id="edittable" />
             <input type="button" id="tablekeys" />
             <input type="button" id="removetable" />

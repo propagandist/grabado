@@ -1,0 +1,152 @@
+/*
+ * grabado: 設計トークンと、2 テーマで完全に同じだった規則（#169）。
+ *
+ * ★ 1 本にまとめてある理由は「どちらもテーマの切り替えで変わらない」こと。
+ *   テーマ CSS は title 付きの <link> なので applyStyle() が disabled で
+ *   切り替えるが、このファイルは title を持たないので常に効く
+ *   （print.css と同じ扱い。frontend/index.html を見ること）。
+ *
+ * ★★ ここに色を書くときは literal で書く。var() を使わない ——
+ *   色のトークンは各テーマファイルの :root にあり、original を選ぶと
+ *   material-inspired.css が丸ごと disabled になって未定義になるため。
+ *   下の「2 テーマで完全に同じだった規則」が literal のままなのはそのため。
+ */
+
+:root {
+    /*
+     * 余白。値は material-inspired.css にあった literal をそのまま採った
+     * （#169 で出現回数を実測し、2 回以上出るものだけ階梯にした）。
+     * 1 回しか出ない値（5px / 8px / 26px / 30px など）は literal のまま残す ——
+     * 名前を付けても呼ぶ場所が 1 つしかない。
+     */
+    --space-1: 2px;
+    --space-2: 3px;
+    --space-3: 6px;
+    --space-4: 10px;
+    --space-5: 15px;
+    --space-6: 20px;
+    --space-7: 25px;
+
+    --radius-0: 0;
+    --radius-1: 2px;
+
+    --font-ui: verdana, sans-serif;
+    --font-mono: "Lucida Console", Monaco, monospace;
+    --text-xs: 80%;
+    --text-sm: 85%;
+    --text-base: 12px;
+    --text-md: 14px;
+    --text-lg: 16px;
+    --text-xl: 21px;
+    --leading-base: 1.429;
+
+    --duration: .2s;
+    --ease: ease-in-out;
+
+    /* #170 で 42 ボタンへ展開する。いまは試験用の 1 個だけが使う */
+    --icon-size: 18px;
+
+    /* 両テーマとも同じ値なのでここに置く（テーマが変えたければ :root で上書きできる） */
+    --area-size: 3000px;
+}
+
+/*
+ * 2 テーマで完全に同じだった規則（#169 実測で 20 本）。
+ * material-inspired.css と original.css の両方から、ここへ 1 本ずつ移した。
+ * ★ 値は 1 バイトも変えていない。トークンにも置き換えていない（上の★★）。
+ */
+
+#controls {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+}
+
+#background {
+    position: absolute;
+    background-color: #000;
+    opacity: 0.5;
+    visibility: hidden;
+}
+
+#bar input.small {
+    width: 45%;
+    display: inline;
+}
+
+#throbber {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+}
+
+#windowcontent {
+    padding: 1em;
+}
+
+/* grabado: 段階2-2 で index.html の style 属性 2 か所を CSS へ移した（issue #89）。
+   段階2-2 は「両テーマに書く」と注記していたが、#169 で 1 本に寄せた */
+#io .io-client {
+    width: 60%;
+}
+
+#io .io-server {
+    width: 40%;
+}
+
+#opts {
+    width: 700px;
+}
+
+.table table {
+    border-collapse: collapse;
+}
+
+.table tbody .selected {
+    font-weight: bold;
+    color: #f00;
+    display: inline-block;
+}
+
+.table tbody .title {
+    display: inline-block;
+}
+
+.primary {
+    font-weight: bold;
+}
+
+.key {
+    font-style: italic;
+}
+
+.primary.key {
+    font-style: normal;
+}
+
+.typehint {
+    font-size: var(--text-xs);
+    color: gray;
+}
+
+.comment {
+    font-size: var(--text-xs);
+    font-weight: normal;
+    margin-right: 0.5em;
+}
+
+.small {
+    font-size: var(--text-sm);
+}
+
+.adding {
+    cursor: crosshair;
+}
+
+.relation {
+    overflow: hidden;
+}
+
+label, input, select {
+    vertical-align: middle;
+}

@@ -25,7 +25,12 @@ body {
     position: fixed;
     top: 0px;
     right: 0px;
-    width: 150px;
+    /*
+     * grabado: #170 で 150px から広げた。アイコン溝 30px を引くとラベル領域が
+     * 131px になり、"Remove foreign key"（149px）が無言で切れたため
+     * （#bar input は white-space: nowrap ／ overflow: hidden）。
+     */
+    width: 190px;
     padding: 0px 5px 5px;
     -moz-box-shadow: -4px 4px 8px #888;
     /* FF 3.5+ */

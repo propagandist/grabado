@@ -43,8 +43,9 @@
     --duration: .2s;
     --ease: ease-in-out;
 
-    /* #170 で 42 ボタンへ展開する。いまは試験用の 1 個だけが使う */
+    /* アイコン（#170）。--icon-gutter はラベルの左に空ける溝 */
     --icon-size: 18px;
+    --icon-gutter: 30px;
 
     /* 両テーマとも同じ値なのでここに置く（テーマが変えたければ :root で上書きできる） */
     --area-size: 3000px;

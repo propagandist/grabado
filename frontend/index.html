@@ -30,32 +30,32 @@
     <div id="controls">
         <div id="bar">
             <div id="toggle"></div>
-            <input type="button" id="saveload" />
+            <span class="tb i-saveload"><input type="button" id="saveload" /></span>
 
             <hr />
 
             <span class="tb i-addtable"><input type="button" id="addtable" /></span>
-            <input type="button" id="edittable" />
-            <input type="button" id="tablekeys" />
-            <input type="button" id="removetable" />
-            <input type="button" id="aligntables" />
-            <input type="button" id="cleartables" />
+            <span class="tb i-edittable"><input type="button" id="edittable" /></span>
+            <span class="tb i-tablekeys"><input type="button" id="tablekeys" /></span>
+            <span class="tb i-removetable"><input type="button" id="removetable" /></span>
+            <span class="tb i-aligntables"><input type="button" id="aligntables" /></span>
+            <span class="tb i-cleartables"><input type="button" id="cleartables" /></span>
 
             <hr />
 
-            <input type="button" id="addrow" />
-            <input type="button" id="editrow" />
-            <input type="button" id="uprow" class="small" /><input type="button" id="downrow" class="small" />
-            <input type="button" id="foreigncreate" />
-            <input type="button" id="foreignconnect" />
-            <input type="button" id="foreigndisconnect" />
-            <input type="button" id="removerow" />
+            <span class="tb i-addrow"><input type="button" id="addrow" /></span>
+            <span class="tb i-editrow"><input type="button" id="editrow" /></span>
+            <span class="tb i-uprow"><input type="button" id="uprow" class="small" /></span><span class="tb i-downrow"><input type="button" id="downrow" class="small" /></span>
+            <span class="tb i-foreigncreate"><input type="button" id="foreigncreate" /></span>
+            <span class="tb i-foreignconnect"><input type="button" id="foreignconnect" /></span>
+            <span class="tb i-foreigndisconnect"><input type="button" id="foreigndisconnect" /></span>
+            <span class="tb i-removerow"><input type="button" id="removerow" /></span>
 
             <hr />
 
-            <input type="button" id="options" />
-            <a href="https://github.com/propagandist/grabado#readme" target="_blank" rel="noopener noreferrer"><input type="button" id="docs"
-                    value="" /></a>
+            <span class="tb i-options"><input type="button" id="options" /></span>
+            <a href="https://github.com/propagandist/grabado#readme" target="_blank" rel="noopener noreferrer"><span class="tb i-docs"><input type="button" id="docs"
+                    value="" /></span></a>
         </div>
 
         <div id="rubberband"></div>
@@ -69,8 +69,8 @@
                 <img id="throbber" src="images/throbber.gif" alt="" title="" />
             </div>
             <div id="windowcontent"></div>
-            <input type="button" id="windowok" />
-            <input type="button" id="windowcancel" />
+            <span class="tb i-windowok"><input type="button" id="windowok" /></span>
+            <span class="tb i-windowcancel"><input type="button" id="windowcancel" /></span>
         </div>
     </div>
     <!-- #controls -->
@@ -162,31 +162,31 @@
                         <fieldset>
                             <legend id="client"></legend>
                             <div class="io-row">
-                                <input type="button" id="clientsave" />
-                                <input type="button" id="clientload" />
+                                <span class="tb i-clientsave"><input type="button" id="clientsave" /></span>
+                                <span class="tb i-clientload"><input type="button" id="clientload" /></span>
                             </div>
                             <div class="io-row">
-                                <input type="button" id="clientdownload"      />
-                                <input type="button" id="clientloadfromfile"  />
+                                <span class="tb i-clientdownload"><input type="button" id="clientdownload"      /></span>
+                                <span class="tb i-clientloadfromfile"><input type="button" id="clientloadfromfile"  /></span>
                             </div>
                             <div class="io-row">
-                                <input type="button" id="clientlocalsave" />
-                                <input type="button" id="clientlocalload" />
-                                <input type="button" id="clientlocallist" />
+                                <span class="tb i-clientlocalsave"><input type="button" id="clientlocalsave" /></span>
+                                <span class="tb i-clientlocalload"><input type="button" id="clientlocalload" /></span>
+                                <span class="tb i-clientlocallist"><input type="button" id="clientlocallist" /></span>
                             </div>
                             <div class="io-row">
-                              <input type="button" id="clientcopy" />
-                              <input type="button" id ="clientpaste" />
+                              <span class="tb i-clientcopy"><input type="button" id="clientcopy" /></span>
+                              <span class="tb i-clientpaste"><input type="button" id ="clientpaste" /></span>
                             </div>
                             <hr />
                             <div class="io-row">
                               <label for="outputdb" id="outputdblabel"></label>
                               <select id="outputdb"></select>
                             </div>
-                            <input type="button" id="clientsql" />
+                            <span class="tb i-clientsql"><input type="button" id="clientsql" /></span>
                             <div class="io-row">
                               <select id="ormtarget"></select>
-                              <input type="button" id="clientorm" />
+                              <span class="tb i-clientorm"><input type="button" id="clientorm" /></span>
                             </div>
                         </fieldset>
                     </td>
@@ -194,13 +194,13 @@
                         <fieldset>
                             <legend id="server"></legend>
                             <hr />
-                            <input type="button" id="serversave" />
-                            <input type="button" id="quicksave" />
-                            <input type="button" id="serverload" />
-                            <input type="button" id="serverlist" />
-                            <input type="button" id="serverimport" />
-                            <input type="button" id="aireview" />
-                            <input type="button" id="aiapply" />
+                            <span class="tb i-serversave"><input type="button" id="serversave" /></span>
+                            <span class="tb i-quicksave"><input type="button" id="quicksave" /></span>
+                            <span class="tb i-serverload"><input type="button" id="serverload" /></span>
+                            <span class="tb i-serverlist"><input type="button" id="serverlist" /></span>
+                            <span class="tb i-serverimport"><input type="button" id="serverimport" /></span>
+                            <span class="tb i-aireview"><input type="button" id="aireview" /></span>
+                            <span class="tb i-aiapply"><input type="button" id="aiapply" /></span>
                         </fieldset>
                     </td>
                 </tr>
@@ -223,8 +223,8 @@
             <select id="keyslist">
                 <option></option>
             </select>
-            <input type="button" id="keyadd" />
-            <input type="button" id="keyremove" />
+            <span class="tb i-keyadd"><input type="button" id="keyadd" /></span>
+            <span class="tb i-keyremove"><input type="button" id="keyremove" /></span>
         </fieldset>
         <fieldset>
             <legend id="keyedit"></legend>
@@ -256,8 +256,8 @@
                             </select>
                         </td>
                         <td>
-                            <input type="button" id="keyleft" value="&lt;&lt;" /><br />
-                            <input type="button" id="keyright" value="&gt;&gt;" /><br />
+                            <span class="tb i-keyleft"><input type="button" id="keyleft" value="&lt;&lt;" /></span><br />
+                            <span class="tb i-keyright"><input type="button" id="keyright" value="&gt;&gt;" /></span><br />
                         </td>
                         <td>
                             <label for="keyavail" id="keyavaillabel"></label><br />

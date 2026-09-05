@@ -15081,6 +15081,191 @@ DIST_ICON={"mask":"url(\"data:image/svg+xml,%3Csvg%20xmlns=%22http", "size":"18p
   **「常に効く CSS」と「全 CSS」で分けた**ので 1 本増えた。
   **残り（トークンの命名・未使用トークン・コントラスト）は #175**
 
+### 2026-09-05 アイコンを入れた —— 42 字形。「保存 4 種」を行き先で描き分ける
+
+**段階に属さない。** issue #170（マイルストーン `v0.3.0 — UI をモダナイズする`）。
+**見た目が変わる最初の PR**（#167 → #168 → #169 はどれも「見た目不変」が完了判定だった）。
+
+#### 発端
+
+**ツールバーが 17 行のテキストの壁になっていた。** 「保存／読み込み」「テーブルを追加」
+「列を追加」が同じ見た目で縦に並び、**形で区別できない**。Save/Load ダイアログはさらに厳しく、
+**「保存」が 4 種類ある**（`clientsave` / `clientdownload` / `clientlocalsave` / `serversave`
+＋ `quicksave`）のに、**違いがラベルの文字列にしか出ていない**。
+
+**器は #169 で通っている**ので、この issue は**字形を入れるだけ**になる —— はずだった
+（下の★★が 3 つ出た）。
+
+#### 決めたこと 1: **入れた字形は 42。#170 が数えた 45 ではない**
+
+| | 数 | |
+|---|---|---|
+| GitHub API で取得した | **45** | `symbols/web/<name>/materialsymbolsoutlined/<name>_20px.svg`。**全部実在した**（合計 16,979 バイト。135〜928 バイト） |
+| **CSS に入れた** | **42** | ボタン 41 ＋ `#toggle` |
+| 入れなかった | **3** | `keyboard_arrow_down`（**rotate 180deg で畳んだ**）／ `arrow_drop_down` ／ `key_fill1`（下の決めたこと 4） |
+
+**`fill` 属性を持つ字形は 0 件**（mask にそのまま使える）。**`viewBox` は 43 個が
+`0 -960 960 960`、`auto_awesome` と `auto_fix_high` の 2 個だけが旧形式**（viewBox 無しの
+20×20 座標系）。**`width`/`height` が 20 なので `contain` で同じ枠に収まる。**
+
+#### ★★ 決めたこと 2: **`#toggle` は id で当てる —— クラスは JS が消す**
+
+**`.i-toggle` クラスを付けたら、開閉のたびに消えた。**
+`frontend/js/toggle.ts:38` が **`this._elm.className = this._state ? "on" : "off"`** と
+**`className` ごと上書きする**ため。
+
+**実測でこう出た**（一時 spec）:
+
+```
+dbg: {"cls":"on", "icon":"", "iconOnBefore":"", "mask":"none"}
+```
+
+**`cls` が `on` だけになっている** —— `i-toggle` が消えている。**`#toggle { --icon: … }` に変えた。**
+
+#### ★★ 決めたこと 3: **`.tb::before` に `z-index: 1` が要る**
+
+**ツールバーでは見えたが、ダイアログでは見えなかった。**
+`material-inspired.css` の `input[type=button]` が **`position: relative`** を持つので、
+**同じ stacking context で DOM 順が後ろの input が上に来る**。
+**疑似要素は最初の子として扱われる**ので、**input の背景（白）に隠れる**。
+
+**`z-index: 1` を足した。`pointer-events: none` があるのでクリックは素通りする。**
+
+#### ★★ 決めたこと 4: **状態表示は `#toggle` だけ。残り 3 つは #171 へ**
+
+**#170 のタイトルは「42 ボタンと状態表示」だが、状態表示のうち 3 つを外した。**
+
+| 対象 | なぜ外したか |
+|---|---|
+| `<select>` の三角 | **`<select>` は置換要素で疑似要素を持てない**。`background-image` で入れると **SVG 内の色が `currentColor` に追従しない**ので、**#172 のダークで破れる**。現行の base64 SVG のままにした |
+| `.primary` / `.key`（`key_fill1` の塗り違い） | **行の中に字形を足すと列幅が動き、`#area` のレイアウトが変わる**。#170 自身が「NOT NULL 印は入れない（別 issue）」を**同じ理由**で分けている |
+| コメント有無マーク | 同上（CSS の border 三角の置換） |
+| `#commentbtn` | **`frontend/js/row.ts:321` が `OZ.DOM.elm("input")` で作る**ので、**HTML にラッパーが無い**。包むには `row.ts` の DOM 構造を変えることになり、**golden 128 本が 1 バイトも動かない**という受け入れ基準と衝突しうる |
+
+**外した 2 字形（`arrow_drop_down` / `key_fill1`）は定義ごと落とした** ——
+**当て先の無い `--icon` を残すと、#168 で消したのと同じ死骸になる。**
+
+#### ★★ 決めたこと 5: **`original` の `#bar` を 150px → 190px に広げた**
+
+**アイコン溝 30px を空けると、`original` でラベルが 3 個切れた**（`foreigncreate` /
+`foreignconnect` / `foreigndisconnect`）。**material は 190px、original は 150px** だったため。
+
+**#170 は「ツールバーの幅 190px は据え置き」と書いていたが、それは material の話**で、
+**original の 150px には触れていなかった。**
+
+**★ 溝はトークンにした** —— `base.css` の `:root` に **`--icon-gutter: 30px`**。
+**テーマ非依存**（アイコンの器と同じ軸）なので `base.css` 側で、
+**`--icon-size` の隣**に置いた（#169 の決めたこと 3 の線引きに従う）。
+
+#### ★★ de / ru のラベルは、アイコンを入れる前から切れていた（実測）
+
+**4 言語で測った**（cookie に `locale` を入れ、言語ごとに context を分けて起動）:
+
+| locale | アイコン前 | アイコン後 |
+|---|---|---|
+| en | **0 個** | **0 個** |
+| ja | **0 個** | **0 個** |
+| **de** | **1 個**（`foreignconnect` 215 > 190） | **3 個** |
+| **ru** | **1 個**（`foreignconnect` 227 > 190） | **5 個** |
+
+**元からの問題で、溝が悪化させた。** **幅の見直しは #171** に送り、この PR では
+**`text-overflow: ellipsis` を足して「無言で切れる」のをやめた** ——
+`#bar input` は `white-space: nowrap` ／ `overflow: hidden` なので、
+**溢れても何も出ずに消えていた**（#170 の受け入れ基準が目視を求めていた点）。
+
+#### ★ `[data-theme^="material-"]` の初回利用
+
+**#169 は属性を書くだけで、読み手が 0 本だった**（同日の申し送り）。**ここで初めて使った** ——
+`#toggle` の mask を **material 系だけに当てる**。**`original` は `up.gif` / `down.gif` のまま**で、
+理由は **`#toggle` の高さが 5px（material は 22px）なので 18px の字形が収まらない**こと。
+
+**PNG 4 枚（`up_2_black` / `up_2_white` / `down_2_black` / `down_2_white`）が消えた** ——
+**色は `currentColor` が持つので、黒白 2 枚を持つ理由が無くなった**（`#toggle:hover` に
+`color: var(--on-accent)` を 1 行足しただけで反転する）。`frontend/images/` は
+**6 本 4,449 バイト**になった。
+
+#### ライセンス（Apache-2.0）
+
+**`google/material-design-icons` のルートに NOTICE ファイルが無い**ので **§4(d) は発生しない**
+（2026-09-05 実測。API が 404）。置いた場所は 3 つ:
+
+| 場所 | 何を |
+|---|---|
+| `frontend/styles/icons.css` の先頭コメント | 出典 URL・Apache-2.0 である旨・**加えた変更**（path を CSS の data: URI へ写した）・全文への相対パス |
+| `third-party/material-symbols/LICENSE` | 全文 201 行（§4(a)）。**リポジトリ直下に置かない** |
+| `README.md` ＋ `README.en.md` | 「由来と位置づけ」に 2 行（**2 本は同じ構成を保つ**） |
+
+**★ CSS のコメントが要の 1 つ** —— **CSS は dist にバイト単位でそのまま出る**
+（`docs/ARCHITECTURE.md` §5.1.1）。**`Dockerfile` は `frontend/dist` だけを入れる**ので、
+**配布物が帰属を持ち歩く手段はこのコメントしか無い。**
+
+**★ `LICENSE` には絶対に書かない** —— org `repo-surface-baseline.md` §3.5 の実測で、
+**上流 25 行の末尾に散文 13 行を足したら検出が `BSD-3-Clause` から `NOASSERTION` に落ち、
+About 欄と org 一覧からライセンス表示が消えた**。
+
+#### 通った（2026-09-05 実測）
+
+| 何を | 結果 |
+|---|---|
+| `npm run typecheck` | **緑** |
+| `npm run test`（vitest） | **27 ファイル 631 本 緑** |
+| `npm run test:browser` | **205 本 緑** |
+| `npm run known-issues` | **1 本 緑** |
+| `npm run test:dist` | **7 本 緑**（**1 本足した**。下） |
+| `npm run test:image`（Docker。8.7 分） | **13 本 緑** |
+| `git diff --stat -- tests/golden` | **0 行**（128 本が 1 バイトも動いていない） |
+| アイコンの当たり（両テーマ） | **`.tb` 19 個 ＋ `#toggle` すべて `maskImage` が `none` でない** |
+| ラベル切れ（en / ja） | **0 個**（de / ru は上の表） |
+| `#bar` の高さ | **material 481px ／ original 403px**（**`max-height: 600px` の内側**） |
+| `pageerror` | **0 件** |
+
+**★ `tests/dist/smoke.spec.ts` に 1 本足した** —— **3 つを 1 本で固定する**:
+**`icons.css` が dist に入っている** ／ **その `<link>` が有効** ／ **`--icon` が解決している**。
+**どれが欠けても症状は「アイコンが出ない」だけ**で、**dev では起きない**。
+
+**★ Save / Load の 18 個は dist の検査から見えない** —— **io の container は
+コンストラクタで DOM から外れている**ので、**ダイアログを開くまで `document` に無い**。
+**同じ器なので、ツールバーと `#window` から 1 個ずつ採れば経路は押さえられる。**
+
+#### 却下した案
+
+- **`background-image` ＋ 黒白 2 諧調** —— **定義が 84 本になり、テーマとホバーごとに
+  切り替え規則を書くことになる**。**`mask` なら 42 本 1 諧調で、色の正本が `currentColor`
+  1 つに閉じる**（#169 で CSP を実測済み）
+- **`frontend/images/icons/*.svg` を 45 本置く** —— **`SecurityHeadersFilter` が `/images/` に
+  `no-cache` を返す**ので、**ページを開くたび 42 本の条件付き GET** が走る（`/assets/` は
+  `immutable`）
+- **アイコンのみにしてラベルを消す** —— **21 言語の訳が画面から消える**。
+  ツールバーの幅は据え置きで、**アイコン＋ラベル**にした
+- **`<input type="button">` を `<button>` に変えてインライン `<svg>` を入れる** ——
+  **`elm.value = _(id)` が全マネージャの ids ループで回っており**、
+  `tests/browser/io-ui.spec.ts` が **`value` の実文字列を読む**。**`<button>` の `value` は
+  表示されない**ので、**i18n の流し込みが丸ごと壊れる**
+- **`original` にはアイコンを入れない** —— **入れた**。テーマは色と形の違いであって
+  機能の違いではなく、入れないと「**テーマを変えるとアイコンが消える**」という
+  説明しづらい状態になる
+- **`#bar` の幅を広げて de / ru の切れも直す** —— **元からの問題**なので、
+  **アイコンの PR で幅の設計を変えない**。**#171 で扱う**
+- **`row.ts` を変えて `#commentbtn` を包む** —— 決めたこと 4。
+  **golden が動かないという受け入れ基準と衝突しうる**
+
+#### 申し送り
+
+- **★ 次は #171（見た目を刷新する）** —— **そこで幅の設計を見る**。
+  **de / ru のラベル切れ（3 個 / 5 個）と、`<select>` の三角・`.primary` / `.key`・
+  コメント有無マークの 3 つが待っている**
+- **★ `#commentbtn` だけアイコンが無い** —— **JS が作るのでラッパーが無い**。
+  **`row.ts` を触る回に、`buildEdit()` の中で包む**
+- **★ ライセンス検出が `BSD-3-Clause` のままかを、マージ後に確かめる** ——
+  `gh api repos/propagandist/grabado/license --jq .license.spdx_id`。
+  **`third-party/` が licensee の検出を壊さないことは未検証**（#170 が挙げていた項目）
+- **★ 未使用の SVG が 3 本ある**（`keyboard_arrow_down` / `arrow_drop_down` / `key_fill1`）——
+  **リポジトリには入れていない**（scratchpad で取得しただけ）。**#171 で要るときに取り直す**
+- **★ アイコンのホバー追従は material だけ** —— `#toggle:hover { color: var(--on-accent) }` を
+  足したが、**`#bar input:hover` は `color: var(--on-accent)` を既に持っていた**ので
+  ボタン側は元から追従する。**`original` は `#bar input:hover` に色指定が無い**ので、
+  **ホバーしてもアイコンの色が変わらない**（元の見た目に合わせた結果）
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

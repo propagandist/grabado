@@ -332,6 +332,9 @@ golden はツールが**実際に吐いているバイト列**を固定してい
 **BSD-3-Clause**（upstream から継承。[`LICENSE`](LICENSE)）。grabado は
 **upstream に追従しない**。差分は生じたその都度 [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) に記録する。
 
+アイコンは [Material Symbols](https://github.com/google/material-design-icons)（**Apache-2.0**）。
+全文は [`third-party/material-symbols/LICENSE`](third-party/material-symbols/LICENSE)。
+
 **[PROPAGANDIST](https://github.com/propagandist) が公開している OSS。** 自社で使う道具として
 作り、そのまま公開している。**収益化はしない。**
 

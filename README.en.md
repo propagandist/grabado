@@ -356,6 +356,9 @@ or a decision that has to be recorded — see [`docs/TESTING.md`](docs/TESTING.m
 BSD-3-Clause, inherited from upstream — see [`LICENSE`](LICENSE). grabado does not follow
 upstream; every difference is recorded in [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) as it is made.
 
+Icons are [Material Symbols](https://github.com/google/material-design-icons) (**Apache-2.0**);
+the full text is in [`third-party/material-symbols/LICENSE`](third-party/material-symbols/LICENSE).
+
 **An open-source project by [PROPAGANDIST](https://github.com/propagandist).** It was built as a
 tool we use ourselves, and published as it is. **It is not monetised.**
 

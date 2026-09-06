@@ -242,6 +242,14 @@ export class Designer extends Visual<DesignerDom> {
     }
 
     languageResponse(xmlDoc: unknown): void {
+        /*
+         * grabado: #175。**<html lang> は静的属性では書けない** —— locale は cookie で
+         * 決まるので、辞書が届いた時点で入れる。**読み上げ言語と :lang() のフォント調整**が
+         * ここで初めて効く（着手前は lang 属性そのものが無かった）。
+         * ロケール名の区切りは XML のファイル名（pt_BR）と BCP 47（pt-BR）で違う。
+         */
+        document.documentElement.lang = String(this.getOption("locale")).replace("_", "-");
+
         if (xmlDoc) {
             var strings = (xmlDoc as Document).getElementsByTagName("string");
             for (var i = 0; i < strings.length; i++) {

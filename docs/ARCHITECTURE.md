@@ -345,6 +345,32 @@ assets 側**で、`images/` 側は CSS の `url(../images/…)` が使う。
 **そのぶん、テーマ側の `:root` にあるトークンを参照できない**（参照すると `original` を
 選んだときに未定義になる）。
 
+### 5.1.2 テーマとトークン（v0.3.0）
+
+**CSS は 5 本。役割で 3 層に分かれている**（#169〜#172）。
+
+| 層 | ファイル | 何を持つ | いつ効くか |
+|---|---|---|---|
+| **常に効く** | `base.css`（トークン ＋ 共通規則 ＋ **material 系の構造**）／ `icons.css`（アイコン 44 字形） | テーマ非依存トークン ／ **2 テーマで完全に同じだった 20 規則** ／ `[data-theme^="material-"]` の構造規則 72 本 ／ `:focus-visible` ／ `prefers-reduced-motion` | **`<link>` に `title` が無い**ので `applyStyle()` が切らない |
+| **テーマ** | `material-inspired.css` ／ `material-dark.css` ／ `original.css` | **`:root` のトークンだけ**（material 系は同じキー 32 個）。`original` は upstream の見た目そのままで、**トークンを消費しない** | `applyStyle()` が `disabled` を切り替える |
+| **印刷** | `print.css` | `:root` を**ライトで上書き**（ダークのまま印刷すると黒塗りになる） | `media="print"` |
+
+**★ 切り替えは 2 系統ある。** `applyStyle()` が **`<link>` の `disabled`** と
+**`<html data-theme>`** の両方を動かす —— **前者がテーマの `:root` を選び、後者が
+`base.css` の構造規則を選ぶ**。**material 系の構造は 1 本しか無い**ので、
+**ダークは色を並べるだけで済む**（移す前は 595 行を丸ごと写すことになった）。
+
+**★ 常に効く側からテーマのトークンを参照してはいけない** ——
+`original` を選ぶと `material-inspired.css` が丸ごと `disabled` になり、**未定義の `var()` は
+その 1 宣言だけが静かに落ちる**。**例外は `[data-theme^="material-"]` で括った規則**で、
+**material 系を選んだときしかマッチしない**ので参照してよい。
+**この線引きは [`../tests/node/styles.test.ts`](../tests/node/styles.test.ts) が縛る。**
+
+**★ `applyStyle()` の結果が computed style に出るのは非同期**（#172 実測）——
+**全 titled sheet を一度 `disabled` にしてから 1 本を戻す**ので、Chromium はその sheet を
+捨てて**再パースする**。**起動時の 1 回は `body` の `visibility: hidden` のあいだに済む**が、
+**テストから読むときは `styleSheets` に戻るまで待つ**。
+
 ### 5.2 DDL 生成（段階6-5a で XSLT から TS へ）
 
 SQL 出力は [`../frontend/js/io/ddl/generate.ts`](../frontend/js/io/ddl/generate.ts) が組み立てる。入口は

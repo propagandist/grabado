@@ -108,6 +108,28 @@ describe("styles の器（#169）", () => {
         }
     });
 
+    test("url() の参照先は ../images/ か data: だけ —— 外部を CSS からも縛る", () => {
+        /*
+         * ★ 「外部リクエスト 0 本」は tests/browser/harness.ts が**実行時に**見ているが、
+         *   **その経路を通らない CSS**（印刷・ホバー・別テーマ）は通り抜ける。
+         *   ここはソースを読むので、**踏まれない規則でも捕まえられる**。
+         *
+         * ★ 許すのは 2 つだけ。**data: は #170 のアイコン**（44 字形）と
+         *   material-inspired.css の <select> の三角、**../images/ は back.png ほか 6 本**。
+         */
+        for (const file of cssFiles) {
+            /* コメントを落としてから読む —— 説明の中に url() の例が出る（#173 と同じ轍） */
+            const css = read(file).replace(/\/\*[\s\S]*?\*\//g, "");
+            for (const m of css.matchAll(/url\(\s*["']?([^"')]+)/g)) {
+                const target = m[1]!.trim();
+                expect(
+                    target.startsWith("../images/") || target.startsWith("data:"),
+                    `${file} の url(${target.slice(0, 40)}…) が外を指している`,
+                ).toBe(true);
+            }
+        }
+    });
+
     test("styles/*.css が全部 index.html の <link> から参照されている", () => {
         for (const file of cssFiles) {
             expect(html, `styles/${file} を読む <link> が無い`).toContain(`styles/${file}`);

@@ -5,13 +5,13 @@ import tools.jackson.databind.JsonNode
 /**
  * 提案を作る側の境界（段階11-2a）。
  *
- * ## main にはインタフェースしか置かない
+ * ## スタブを main に置かない
  *
- * 実装（Anthropic API を実際に叩くもの）は **11-2b で入る**。固定応答を返すスタブを main に
- * 置かないのは、消し忘れると「**AI が動いているように見えて実は固定**」が本番に載るため ——
- * スタブはテスト側にだけ置く。実装 Bean が 1 つも無ければ [AiReviewService] は「使えない」に
- * 倒れ、`capabilities.ai` も false のままになる。**実装があっても使えないなら false**（5-7a）の
- * 裏返しで、実装が無いならなおさら false。
+ * 実装（Anthropic API を実際に叩くもの）は [AnthropicSuggestionSource]（**11-2b で入った**）。
+ * **固定応答を返すスタブは main に置かない** —— 消し忘れると「**AI が動いているように見えて
+ * 実は固定**」が本番に載るため、スタブはテスト側にだけ置く。実装 Bean が 1 つも無ければ
+ * [AiReviewService] は「使えない」に倒れ、`capabilities.ai` も false になる。
+ * **実装があっても使えないなら false**（5-7a）の裏返しで、実装が無いならなおさら false。
  *
  * ## 提案の中身を型に写さない
  *

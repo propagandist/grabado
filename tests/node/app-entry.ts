@@ -16,6 +16,7 @@
 import "../../frontend/src/app.ts";
 import { OZ } from "../../frontend/js/oz.ts";
 import { Designer } from "../../frontend/js/wwwsqldesigner.ts";
+import { dialogs, resetDialogs } from "../../frontend/js/dialog.ts";
 
 /** window.eval したバンドルが載せる、ハーネス専用の面 */
 export interface GrabadoTestApi {
@@ -23,6 +24,18 @@ export interface GrabadoTestApi {
     OZ: typeof OZ;
     /** 生成はハーネスが順序を握り、戻り値をそのまま使う（旧 SQL.designer は段階4-0a で消えた） */
     Designer: typeof Designer;
+    /*
+     * grabado: #173。alert / confirm / prompt の差し替え口。
+     * **Designer を作る前に覆う**必要がある（初期化中に出る alert を拾うため）ので、
+     * ハーネスが自分で dialogs() を呼べるように出す。
+     */
+    dialogs: typeof dialogs;
+    resetDialogs: typeof resetDialogs;
 }
 
-(window as unknown as { __grabado: GrabadoTestApi }).__grabado = { OZ, Designer };
+(window as unknown as { __grabado: GrabadoTestApi }).__grabado = {
+    OZ,
+    Designer,
+    dialogs,
+    resetDialogs,
+};

@@ -134,6 +134,10 @@ test("CSP 下で主要操作が一巡する", async () => {
         d.setOption("style", "original");
         d.applyStyle();
         const pattern = d.getOption("pattern");
+        /* grabado: #172。ダークも配布物で 1 度は通す —— material-dark.css は
+           alternate stylesheet なので、**dist に入っていなくても静かに何も起きない** */
+        d.setOption("style", "material-dark");
+        d.applyStyle();
         d.setOption("style", "material-inspired");
         d.applyStyle();
 
@@ -149,4 +153,40 @@ test("CSP 下で主要操作が一巡する", async () => {
     expect(await clickIo(page, "clientsql")).toEqual([]);
     expect(await clickIo(page, "clientlocalsave", "csp-smoke")).toEqual([]);
     expect(await clickIo(page, "clientlocalload", "csp-smoke")).toEqual([]);
+});
+
+test("配布物でもアイコンの mask が解決する（#170）", async () => {
+    /*
+     * 3 つを 1 本で固定する —— **どれが欠けても症状は「アイコンが出ない」だけ**で、
+     * dev では起きない:
+     *   1. icons.css が dist に入っている（media 付き <link> は素の資産としてコピーされる。
+     *      docs/ARCHITECTURE.md §5.1.1）
+     *   2. その <link> が有効（title を持たないので applyStyle() が切らない）
+     *   3. --icon が解決している（base.css の :root にある --icon-size ともども）
+     *
+     * ★ CSP 違反が出れば afterEach が拾う —— mask の data: URI は img-src で評価される
+     *   （#169 で配布物を使って実測した）。
+     *
+     * ★ Save / Load の 18 個はここから見えない —— io の container は**コンストラクタで
+     *   DOM から外れている**ので、ダイアログを開くまで document に無い（#167 の調査どおり）。
+     *   同じ icons.css の同じ器なので、ツールバー（#area 直下）とダイアログ（#window）から
+     *   1 個ずつ採れば経路は押さえられる。
+     */
+    const icons = await page.evaluate(() => {
+        const out: Record<string, string> = {};
+        for (const id of ["addtable", "windowok"]) {
+            const el = document.querySelector(`.tb.i-${id}`);
+            const cs = el ? getComputedStyle(el, "::before") : null;
+            out[id] = !el ? "ラッパーが無い" : cs!.maskImage === "none" ? "mask が none" : "あり";
+        }
+        const tg = getComputedStyle(document.getElementById("toggle")!, "::before");
+        out["toggle"] = tg.maskImage === "none" ? "mask が none" : "あり";
+        return out;
+    });
+
+    expect(icons).toEqual({
+        addtable: "あり",
+        windowok: "あり",
+        toggle: "あり",
+    });
 });

@@ -1,0 +1,837 @@
+/*
+ * grabado: 設計トークンと、2 テーマで完全に同じだった規則（#169）。
+ *
+ * ★ 1 本にまとめてある理由は「どちらもテーマの切り替えで変わらない」こと。
+ *   テーマ CSS は title 付きの <link> なので applyStyle() が disabled で
+ *   切り替えるが、このファイルは title を持たないので常に効く
+ *   （print.css と同じ扱い。frontend/index.html を見ること）。
+ *
+ * ★★ ここに色を書くときは literal で書く。var() を使わない ——
+ *   色のトークンは各テーマファイルの :root にあり、original を選ぶと
+ *   material-inspired.css が丸ごと disabled になって未定義になるため。
+ *   下の「2 テーマで完全に同じだった規則」が literal のままなのはそのため。
+ */
+
+:root {
+    /*
+     * 余白。値は material-inspired.css にあった literal をそのまま採った
+     * （#169 で出現回数を実測し、2 回以上出るものだけ階梯にした）。
+     * 1 回しか出ない値（5px / 8px / 26px / 30px など）は literal のまま残す ——
+     * 名前を付けても呼ぶ場所が 1 つしかない。
+     */
+    --space-1: 2px;
+    --space-2: 3px;
+    --space-3: 6px;
+    --space-4: 10px;
+    --space-5: 15px;
+    --space-6: 20px;
+    --space-7: 25px;
+
+    --radius-0: 0;
+    --radius-1: 2px;
+
+    /*
+     * タイポ（#171）。**Web フォントは構造的に使えない** —— CSP は default-src 'none'
+     * で始まり font-src を持たないので、font-src は default-src に落ちる。
+     * **自己ホストの @font-face すら拒否される**（外部 CDN 以前の問題）。
+     *
+     * ★★ 和文フォントを sans-serif より前に必ず置く —— system-ui（Windows では
+     *   Segoe UI）は仮名・漢字を持たず、**グリフ単位で次の候補に落ちる**。
+     *   ここを空けると OS 既定の明朝や MS Pゴシックに落ちる環境が出る。
+     * ★ --font-mono は #textarea が使う（DDL / JSON が出る唯一の等幅面）ので、
+     *   和文コメントが混ざっても崩れない BIZ UDGothic を後ろに置く。
+     */
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+        "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo,
+        "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+        "Cascadia Mono", "Liberation Mono", "BIZ UDGothic", monospace;
+    --text-xs: 80%;
+    --text-sm: 85%;
+    /* #171 で 12px から上げた。和文の本文としては 12px が下限を割っている。
+       入力欄の 16px（--text-lg）は据え置き —— iOS の自動ズームを避けるため */
+    --text-base: 14px;
+    --text-md: 14px;
+    --text-lg: 16px;
+    --text-xl: 21px;
+    --leading-base: 1.429;
+
+    --duration: .2s;
+    --ease: ease-in-out;
+
+    /*
+     * フォーカスの色（#171）。**ここだけは base に色トークンを置く** ——
+     * :focus-visible は両テーマに掛かる必要があり、テーマ側の :root に置くと
+     * original で未定義になる。**テーマが上書きしてよい**（material がしている）。
+     */
+    --focus: #1565c0;
+
+    /* アイコン（#170）。--icon-gutter はラベルの左に空ける溝 */
+    --icon-size: 18px;
+    --icon-gutter: 30px;
+
+    /* 両テーマとも同じ値なのでここに置く（テーマが変えたければ :root で上書きできる） */
+    --area-size: 3000px;
+}
+
+/*
+ * ★★ キーボードのフォーカス（#171）。**この UI で最も効く a11y 修正**。
+ *
+ * 着手前は material-inspired.css が input[type=text] / textarea / select の 3 か所で
+ * `outline: 0` を書いており、**キーボードだけで操作すると、いまどこにいるかが
+ * 1 ピクセルも見えなかった**。role や aria を足すより先にこれ。
+ *
+ * :focus-visible なので、**マウスで押しただけでは出ない**（:focus だとボタンを
+ * クリックするたびに枠が残り、それを嫌って outline: 0 が書かれる元の動機に戻る）。
+ */
+:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+/*
+ * ★ 動きを減らす設定を尊重する（#171）。
+ *
+ * ★★ `*` に transition-duration: 0 を !important で叩き込む慣用句は使わない ——
+ *   このリポジトリの transition は **8 か所すべてが var(--duration) を通っている**
+ *   （#171 で literal だった 2 か所もトークンへ寄せた）ので、**トークンを 0 にすれば足りる**。
+ *   慣用句を持ち込むと author の !important が 3 → 7 に増え、
+ *   tests/node/styles.test.ts が縛っている数の意味が薄れる。
+ */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --duration: 0s;
+    }
+}
+
+/*
+ * 2 テーマで完全に同じだった規則（#169 実測で 20 本）。
+ * material-inspired.css と original.css の両方から、ここへ 1 本ずつ移した。
+ * ★ 値は #171 で 1 つだけ変えた（.typehint の色。WCAG 4.5:1 未達だった）。
+ */
+
+#controls {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+}
+
+/*
+ * ★ モーダル（#173）。#window は <dialog> になった —— **position / visibility /
+ *   JS の px 中央寄せ / #background の黒幕は、まとめて showModal() と ::backdrop に
+ *   置き換わった**。ここが持つのは、どのテーマでも要る箱の性質だけ。
+ */
+#window,
+#prompt {
+    border: none;
+    padding: 0;
+    max-width: min(92vw, 1000px);
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+}
+
+#window::backdrop,
+#prompt::backdrop {
+    background-color: rgba(0, 0, 0, .5);
+}
+
+/*
+ * ★ 1 問だけを訊くダイアログ（#173 の js/dialog.ts）。
+ *   alert / confirm / prompt の置き換え先で、**#window とは別の要素**
+ *   —— パネルを開いたまま alert を出す経路があるため。
+ */
+#prompt {
+    min-width: min(92vw, 24rem);
+}
+
+.dialog-message {
+    margin: 0 0 1rem;
+    /* 長いエラー文（HTTP の本文・AI の応答）が来るので、折り返しと改行を保つ */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.dialog-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/*
+ * ★★ hidden 属性だけでは消えない（#173 で踏んだ）—— material の
+ *   input[type=text] / input[type=button] が display を明示しており、
+ *   **要素の既定（none）より詳細度で勝つ**。
+ *   ★ 属性セレクタを足すだけでは足りない —— [data-theme^="material-"] input[type=text]
+ *   は (0,2,1) で、.dialog-input[hidden] の (0,2,0) に勝つ。id で取り返す。
+ */
+#prompt .dialog-input[hidden],
+#prompt .dialog-cancel[hidden] {
+    display: none;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    margin-top: 1rem;
+}
+
+/* 開いているあいだ、背後のスクロールを止める（黒幕の下で盤面が動かないように） */
+body:has(#window[open]) {
+    overflow: hidden;
+}
+
+#bar input.small {
+    width: 45%;
+    display: inline;
+}
+
+#throbber {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+}
+
+#windowcontent {
+    padding: 1em;
+}
+
+/* grabado: 段階2-2 で index.html の style 属性 2 か所を CSS へ移した（issue #89）。
+   段階2-2 は「両テーマに書く」と注記していたが、#169 で 1 本に寄せた */
+#io .io-client {
+    width: 60%;
+}
+
+#io .io-server {
+    width: 40%;
+}
+
+#opts {
+    width: 700px;
+}
+
+.table table {
+    border-collapse: collapse;
+}
+
+.table tbody .selected {
+    font-weight: bold;
+    color: #f00;
+    display: inline-block;
+}
+
+.table tbody .title {
+    display: inline-block;
+}
+
+.primary {
+    font-weight: bold;
+}
+
+.key {
+    font-style: italic;
+}
+
+.primary.key {
+    font-style: normal;
+}
+
+/*
+ * ★ #171 で gray（#808080）から下げた。白地で 3.95:1 しかなく **WCAG AA（4.5:1）未達**
+ *   だったため。#767676 で 4.54:1 —— 4.5 を満たす最も薄い灰色に寄せてある
+ *   （ヒントとして薄く見えることと、読めることの両方が要る）。
+ *   値の検査は tests/node/styles.test.ts。
+ */
+.typehint {
+    font-size: var(--text-xs);
+    color: #767676;
+}
+
+.comment {
+    font-size: var(--text-xs);
+    font-weight: normal;
+    margin-right: 0.5em;
+}
+
+.small {
+    font-size: var(--text-sm);
+}
+
+.adding {
+    cursor: crosshair;
+}
+
+.relation {
+    overflow: hidden;
+}
+
+label, input, select {
+    vertical-align: middle;
+}
+
+
+/*
+ * ★ .typehint はダークで読めなくなる（#767676 は #1e1e1e の上で 2.9:1）。
+ *   共通側の literal は original 用に残し、material 系だけトークンへ寄せる。
+ */
+[data-theme^="material-"] .typehint {
+    color: var(--text-muted);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * material 系テーマの構造規則（#172 で material-inspired.css から移した）。
+ *
+ * ★★ **#169 が用意した [data-theme^="material-"] の当て先がここ。**
+ *   移した理由は「ダークを足すと 557 行を丸ごと写すことになる」ため —— テーマ CSS を
+ *   :root のトークン宣言だけにすれば、**ダークは色を並べるだけで済む**。
+ *
+ * ★ 属性は Designer.applyStyle() が <html> に書く（wwwsqldesigner.ts）。
+ *   **material-inspired と material-dark の両方に当たる**のは接頭辞一致だから。
+ *   original は [data-theme="original"] なのでマッチせず、original.css だけが効く。
+ *
+ * ★ 値は 1 バイトも変えていない。セレクタに接頭辞を足しただけである。
+ * ---------------------------------------------------------------------------
+ */
+
+/* Generic styles */
+
+[data-theme^="material-"] body {
+    font-family: var(--font-ui);
+    font-size: var(--text-base);
+    padding: 0px;
+    margin: 0px;
+    background: var(--surface);
+    font-weight: 400;
+    line-height: var(--leading-base);
+    color: var(--text);
+    visibility: hidden;
+    -moz-user-select: -moz-none;
+    -khtml-user-select: none;
+    -webkit-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+/* ★ #173: 1 問ダイアログの OK は type=submit（form method="dialog" の Enter を活かす）
+   なので、ボタンの様式を submit にも当てる */
+[data-theme^="material-"] input[type=button],
+[data-theme^="material-"] input[type=submit] {
+    font-family: var(--font-ui);
+    -webkit-appearance: button;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: var(--text-md);
+    line-height: 18px;
+    color: var(--text);
+    background-color: var(--surface);
+    display: inline-block;
+    height: 36px;
+    padding: 0 26px;
+    margin-top: var(--space-3);
+    margin-bottom: var(--space-3);
+    border: none;
+    border-radius: var(--radius-1);
+    cursor: pointer;
+    -ms-touch-action: manipulation;
+    touch-action: manipulation;
+    background-image: none;
+    text-align: center;
+    line-height: 36px;
+    vertical-align: middle;
+    white-space: nowrap;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    font-size: var(--text-md);
+    position: relative;
+    overflow: hidden;
+}
+
+[data-theme^="material-"] input[type=text] {
+    font-family: var(--font-ui);
+    height: 32px;
+    display: block;
+    background-color: transparent;
+    color: var(--text);
+    border: none;
+    border-bottom-color: currentcolor;
+    border-bottom-style: none;
+    border-bottom-width: medium;
+    border-bottom: 1px solid var(--border);
+    width: 100%;
+    font-size: var(--text-lg);
+    padding: 0;
+    box-shadow: none;
+    border-radius: var(--radius-0);
+    background-image: none;
+}
+
+[data-theme^="material-"] textarea {
+    min-width: 500px;
+    font-family: var(--font-ui);
+    min-height: 64px;
+    display: block;
+    background-color: transparent;
+    color: var(--text);
+    border: none;
+    border-bottom-color: currentcolor;
+    border-bottom-style: none;
+    border-bottom-width: medium;
+    border-bottom: 1px solid var(--border);
+    width: 100%;
+    font-size: var(--text-lg);
+    padding: 0;
+    box-shadow: none;
+    border-radius: var(--radius-0);
+    background-image: none;
+}
+
+[data-theme^="material-"] select {
+    font-family: var(--font-ui);
+    display: block;
+    height: 32px;
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    border: none;
+    border-bottom-color: currentcolor;
+    border-bottom-style: none;
+    border-bottom-width: medium;
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-0);
+    box-shadow: none;
+    background-color: transparent;
+    background-image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGhlaWdodD0iNiIgd2lkdGg9IjEwIj48cG9seWdvbiBwb2ludHM9IjAsMCAxMCwwIDUsNiIgc3R5bGU9ImZpbGw6cmdiYSgwLDAsMCwuMjQpOyIvPjwvc3ZnPg==);
+    background-repeat: no-repeat;
+    background-position: right center;
+    cursor: pointer;
+    color: var(--text);
+    font-size: var(--text-lg);
+    padding: 0 25px 0 0;
+}
+
+[data-theme^="material-"] textarea:focus,
+[data-theme^="material-"] select:focus,
+[data-theme^="material-"] input[type=text]:focus {
+    border-color: var(--info);
+    border-width: 2px;
+}
+
+[data-theme^="material-"] select optgroup {
+    color: var(--text-muted);
+    font-size: .9em;
+    background: white !important;
+    font-style: normal;
+}
+
+[data-theme^="material-"] legend {
+    text-align: left;
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin-bottom: var(--space-4);
+    font-size: var(--text-xl);
+    color: var(--text);
+    line-height: inherit;
+}
+
+[data-theme^="material-"] fieldset {
+    border: none;
+    padding: 0px;
+    margin: 0px 0px 10px 0px;
+}
+
+/* ★ #171 で opacity: 0.7 から変えた。**不透明度はコントラスト計算から逃げる書き方**で、
+   色にすれば tests/node/styles.test.ts が値を見られる */
+[data-theme^="material-"] label {
+    color: var(--text-muted);
+}
+
+/* Area */
+
+/*
+ * ★★ #171 で opacity: 0.7 を外した。**#area はテーブル div も relation の <svg> も
+ *   子に持つ**（wwwsqldesigner.ts:168, 382）ので、**設計そのものが 70% 不透明で
+ *   描かれていた**。背景タイルを淡くする意図が要素全体に漏れた形で、
+ *   back_dim.png は名前どおり既に淡い。original.css には opacity が無い。
+ */
+[data-theme^="material-"] #area {
+    position: relative;
+    /*
+     * ★ background の shorthand に分けずに書くと、--canvas-grid が**複数レイヤーの
+     *   グラデーション**（ダーク）になった瞬間に壊れる —— shorthand では
+     *   background-color を最後のレイヤーにしか書けないため。
+     *   ライトは url() の 1 レイヤーなので、どちらの書き方でも動いてしまう（2026-09-06 に踏んだ）。
+     */
+    background-color: transparent;
+    background-image: var(--canvas-grid);
+    width: var(--area-size);
+    height: var(--area-size);
+}
+
+/*
+ * ★ #171 で 2 つ直した。**border の .2px は実質無効値**（1 デバイスピクセル未満）で、
+ *   **opacity が二重に掛かっていた**（要素の opacity: .5 ＋ 背景の rgba(...,0.5)）。
+ *   border を 1px にし、要素の opacity を落として背景の alpha 側に一本化した。
+ */
+[data-theme^="material-"] #rubberband {
+    position: absolute;
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    visibility: hidden;
+}
+
+/* Main menu */
+
+[data-theme^="material-"] #bar {
+    position: fixed;
+    transition: all var(--duration) var(--ease);
+    right: 4px;
+    top: 0px;
+    width: var(--bar-w);
+    margin: 0px 0px 20px 0px;
+    padding: 0px;
+    background-color: var(--surface);
+    text-align: center;
+    border-radius: var(--radius-0);
+    box-shadow: var(--shadow-bar);
+    box-sizing: border-box;
+    max-height: 600px;
+}
+
+[data-theme^="material-"] #bar input {
+    transition: all var(--duration) var(--ease);
+    border-radius: var(--radius-1);
+    width: 100%;
+    height: auto;
+    margin: auto auto 3px auto;
+    padding: var(--space-1);
+    line-height: 1.3;
+    opacity: .7;
+}
+
+[data-theme^="material-"] #bar input:hover {
+    background-color: var(--brand);
+    color: var(--on-accent);
+}
+
+/*
+ * ★ #171 で pointer-events: none を外した。**それが効くと cursor: not-allowed は
+ *   表示されない**（要素がヒットテストの対象外になる）ので、書いてある意図が
+ *   実装で打ち消されていた。disabled な input はどのみち押せない。
+ */
+[data-theme^="material-"] #bar input:disabled {
+    cursor: not-allowed;
+    opacity: .4;
+    box-shadow: none;
+}
+
+[data-theme^="material-"] #bar hr {
+    margin: 8px;
+    background-color: var(--divider);
+    height: 1px;
+    border: none;
+}
+
+[data-theme^="material-"] #toggle {
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: all var(--duration) var(--ease);
+    border-radius: var(--radius-1);
+    height: 22px;
+    opacity: .7;
+}
+
+[data-theme^="material-"] #toggle:hover {
+    background-color: var(--brand);
+    /* アイコンは currentColor なので、色を変えればラベルと一緒に反転する
+       （黒白 2 枚の PNG を持っていた理由がこれで消えた。#170） */
+    color: var(--on-accent);
+}
+
+/* Minimap */
+
+/*
+ * ★ box-sizing を明示する（#171）。**frontend/js/map.ts:49-50 が offsetWidth - 2 を
+ *   前提にしている**ので、border を足したり box-sizing が変わると port の寸法が動く。
+ *   100px を保つことを CSS 側で固定しておく。
+ */
+[data-theme^="material-"] #minimap {
+    position: fixed;
+    box-sizing: border-box;
+    width: var(--minimap-size);
+    height: var(--minimap-size);
+    right: 5px;
+    bottom: 5px;
+    background-color: var(--surface);
+    opacity: 0.9;
+    overflow: hidden;
+    box-shadow: var(--shadow-minimap);
+}
+
+[data-theme^="material-"] .mini {
+    position: absolute;
+    background-color: var(--brand-soft);
+    font-size: 1px;
+    line-height: 1px;
+}
+
+[data-theme^="material-"] .mini_selected {
+    background-color: var(--brand);
+}
+
+[data-theme^="material-"] .port {
+    position: absolute;
+    transition: border var(--duration) var(--ease);
+    border: 2px solid var(--port-border);
+}
+
+[data-theme^="material-"] #minimap:hover .port {
+    border: 2px solid var(--port-border-hover);
+}
+
+/* Tables */
+
+[data-theme^="material-"] .table {
+    position: absolute;
+    padding: 0 6px 6px 6px;
+    cursor: pointer;
+    margin-bottom: var(--space-6);
+    border-radius: var(--radius-0);
+    background-color: var(--surface);
+    box-shadow: var(--shadow-card);
+}
+
+/*
+ * ★★ #171 で border から outline に変えた。**border はカードの外形を 2px 動かす**ので、
+ *   **Relation.redraw() が実測している offsetWidth が選択のたびに変わっていた**。
+ *   outline はレイアウトを動かさない。
+ */
+[data-theme^="material-"] .table.selected {
+    outline: 2px solid var(--accent);
+}
+
+[data-theme^="material-"] .table thead .title {
+    text-align: center;
+    padding: 6px 30px;
+}
+
+[data-theme^="material-"] .table tbody {
+    border-right: 4px solid transparent;
+    background: none !important;
+}
+
+[data-theme^="material-"] .table tbody td {
+    padding: var(--space-2);
+    position: relative;
+}
+
+[data-theme^="material-"] .table tbody.expanded {
+    border-right: 6px solid var(--row-expanded-border);
+    background-color: var(--surface-sunken) !important;
+}
+
+[data-theme^="material-"] .table thead td[title]:not([title=""]):after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    border-color: var(--hint);
+    border-style: solid;
+    border-width: 5px;
+    border-bottom-color: transparent;
+    border-left-color: transparent;
+}
+
+[data-theme^="material-"] .table tbody[title]:not(.expanded):not([title=""]) td:last-child:after {
+    content: '';
+    position: relative;
+    border-color: var(--hint);
+    border-style: solid;
+    border-width: 6px;
+    border-bottom-color: transparent;
+    border-left-color: transparent;
+    border-top-color: transparent;
+    float: right;
+}
+
+[data-theme^="material-"] #commentbtn {
+    box-shadow: var(--shadow-button);
+}
+
+[data-theme^="material-"] #tablename,
+[data-theme^="material-"] #tablecomment {
+    margin-bottom: var(--space-4);
+}
+
+/* Window */
+
+/*
+ * ★ #171 で縦の溢れを止めた。**#io は 3 段組で、狭い画面では画面外に出ていた**
+ *   （#window は JS が px で中央寄せする）。
+ */
+[data-theme^="material-"] #window,
+[data-theme^="material-"] #prompt {
+    background-color: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-window);
+    padding: var(--space-5);
+}
+
+[data-theme^="material-"] #windowtitle {
+    font-size: x-large;
+    margin: 15px 15px 24px 15px;
+    padding-left: 15px;
+    padding-right: 15px;
+}
+
+[data-theme^="material-"] #windowok {
+    color: var(--accent);
+}
+
+[data-theme^="material-"] #windowok,
+[data-theme^="material-"] #windowcancel {
+    float: right;
+}
+
+[data-theme^="material-"] #windowok:hover,
+[data-theme^="material-"] #windowcancel:hover {
+    background-color: var(--surface-alt);
+}
+
+/* Save / Load */
+
+/* ★ #171: 狭い画面では画面幅に従う（min-width をそのまま守ると画面外に出る） */
+[data-theme^="material-"] #io {
+    min-width: min(var(--io-min-w), 92vw);
+}
+
+[data-theme^="material-"] #io hr {
+    visibility: hidden;
+}
+
+[data-theme^="material-"] #io table {
+    width: 100%;
+}
+
+[data-theme^="material-"] #io input[type=button] {
+    box-shadow: var(--shadow-button);
+}
+
+[data-theme^="material-"] #io input[type=button]:active {
+    background-color: var(--surface-alt);
+    transition: all var(--duration) ease-out;
+}
+
+[data-theme^="material-"] #io #clientsql {
+    color: var(--on-accent);
+    background-color: var(--accent);
+}
+
+[data-theme^="material-"] #io #clientsql:hover {
+    transition: all var(--duration) var(--ease);
+    box-shadow: var(--shadow-button);
+    background-color: var(--brand-hover);
+}
+
+[data-theme^="material-"] #textarea {
+    width: 100%;
+    height: 200px;
+    font-size: small;
+    font-family: var(--font-mono);
+}
+
+/* Options */
+
+[data-theme^="material-"] #opts td {
+    padding-top: 15px;
+    margin-bottom: var(--space-6);
+}
+
+[data-theme^="material-"] #opts #optionsnotice {
+    opacity: 0.7;
+}
+
+[data-theme^="material-"] #opts hr {
+    background-color: var(--divider);
+    height: 1px;
+    border: none;
+    margin: var(--space-7) 0px var(--space-7) 0px;
+}
+
+/* Keys */
+
+[data-theme^="material-"] #keys {
+    white-space: nowrap;
+    padding: 0px 10px;
+    text-align: center;
+}
+
+[data-theme^="material-"] #keys hr {
+    visibility: hidden;
+}
+
+[data-theme^="material-"] #keys table {
+    width: 100%;
+}
+
+[data-theme^="material-"] #keys table td {
+    width: 42%;
+}
+
+[data-theme^="material-"] #keys table td+td {
+    width: 16%;
+}
+
+[data-theme^="material-"] #keys table td+td+td {
+    width: 42%;
+}
+
+[data-theme^="material-"] #keyadd {
+    margin: 15px;
+    color: var(--on-accent);
+    background-color: var(--info);
+}
+
+[data-theme^="material-"] #keyadd:hover {
+    transition: all var(--duration) var(--ease);
+    background-color: var(--info-hover);
+    box-shadow: var(--shadow-button);
+}
+
+[data-theme^="material-"] #keyremove {
+    margin: 15px;
+    color: var(--on-accent);
+    background-color: var(--danger);
+}
+
+[data-theme^="material-"] #keyremove:hover {
+    transition: all var(--duration) var(--ease);
+    background-color: var(--danger-hover);
+    box-shadow: var(--shadow-button);
+}
+
+[data-theme^="material-"] #keyleft,
+[data-theme^="material-"] #keyright {
+    height: auto;
+    line-height: normal;
+    box-shadow: none;
+    padding: var(--space-2);
+    box-shadow: var(--shadow-button);
+}
+
+[data-theme^="material-"] #keyfields,
+[data-theme^="material-"] #keyavail {
+    height: auto;
+    background-image: none;
+    font-size: small;
+    border: 1px solid var(--border);
+    padding: 0px;
+}
+/* grabado: 識別子の警告（段階6-9b）。理由は tooltip。styles/original.css と同じ理由で波線だけ */
+[data-theme^="material-"] .invalid {
+    text-decoration: underline wavy var(--invalid);
+    text-underline-offset: 2px;
+}

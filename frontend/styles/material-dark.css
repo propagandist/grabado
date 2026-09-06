@@ -1,0 +1,74 @@
+/*
+ * grabado: ダークテーマ（#172）。**:root のトークン宣言だけ**で、構造規則は 1 本も無い ——
+ * material 系の構造は styles/base.css の [data-theme^="material-"] が持つ。
+ *
+ * ★ キー集合は material-inspired.css と完全に一致していること。
+ *   **片方にだけ足すと、そのテーマでその宣言だけが静かに落ちる**
+ *   （tests/node/styles.test.ts が縛っている）。
+ *
+ * ★★ ライトとの一番大きな違いは --on-accent —— **暗い盤面では、色面に載せる文字は
+ *   白ではなく暗い色にする**。#ff6090 の上に白文字は 2.87:1 しか出ないが、
+ *   #1e1e1e の文字なら 5.82:1 になる（2026-09-06 実測）。
+ */
+:root {
+    color-scheme: dark;
+
+    /* 面 */
+    --surface: #1e1e1e;
+    --surface-alt: #2a2a2a;
+    --surface-sunken: #262626;
+    /*
+     * ★ 背景タイルはライト専用（back_dim.png は白地に灰の格子）。ダークでは
+     *   同じ 20px 間隔の格子を CSS で描く。**画像は消さない** —— ライトが使っており、
+     *   tests/dist ／ tests/image ／ CacheControlTest.kt の 3 本が back.png の 200 を
+     *   要求している（#171 の却下した案）。
+     */
+    --canvas-grid: repeating-linear-gradient(0deg, transparent 0 19px, rgba(255, 255, 255, .08) 19px 20px),
+        repeating-linear-gradient(90deg, transparent 0 19px, rgba(255, 255, 255, .08) 19px 20px);
+
+    /* 文字 */
+    --text: rgba(255, 255, 255, .87);
+    --text-muted: rgba(255, 255, 255, .6);
+    --on-accent: #1e1e1e;
+
+    /* 線 */
+    --border: rgba(255, 255, 255, .3);
+    --divider: #3a3a3a;
+    --port-border: rgba(255, 255, 255, .4);
+    --port-border-hover: rgba(255, 255, 255, .85);
+    --row-expanded-border: rgba(255, 255, 255, .2);
+
+    /*
+     * ブランドとアクセント。**ライトとは向きが逆で、hover で明るくなる** ——
+     * 暗い面の上では明るいほうが前に出る（ライトでは #171 で暗くする側へ倒した）。
+     */
+    --brand: #ff6090;
+    --brand-hover: #ff80ab;
+    --brand-soft: #ad1457;
+    --accent: #f06292;
+    --accent-soft: rgba(240, 98, 146, 0.4);
+
+    /* 状態 */
+    --focus: #64b5f6;
+    --info: #64b5f6;
+    --info-hover: #90caf9;
+    --danger: #ef5350;
+    --danger-hover: #e57373;
+    --invalid: #ef5350;
+    --hint: rgb(125, 178, 221);
+
+    /*
+     * 影。**暗い面では影が見えない**ので、ライトより濃くして輪郭を出す
+     * （Material の慣習では面を明るくして高さを出すが、ここは面を 3 段しか持たない）。
+     */
+    --shadow-button: 0 0 2px rgba(0, 0, 0, .5), 0 2px 2px rgba(0, 0, 0, .6);
+    --shadow-card: 0 2px 2px 0 rgba(0, 0, 0, .5), 0 0 2px 0 rgba(0, 0, 0, .4);
+    --shadow-bar: rgba(0, 0, 0, 0.5) 0px 3px 6px 0px, rgba(0, 0, 0, 0.6) 0px 3px 6px 0px;
+    --shadow-minimap: 0 1px 3px rgba(0, 0, 0, .5), 0 1px 2px rgba(0, 0, 0, .6);
+    --shadow-window: 0 10px 20px rgba(0, 0, 0, .6), 0 6px 6px rgba(0, 0, 0, .5);
+
+    /* 寸法。ライトと同じ */
+    --bar-w: 190px;
+    --minimap-size: 100px;
+    --io-min-w: 860px;
+}

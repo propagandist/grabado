@@ -1,22 +1,32 @@
-#bar, #background, #minimap {
+/*
+ * grabado: 印刷（#172 でライト強制を足した）。
+ *
+ * ★★ **ダークのまま印刷すると黒塗りになる。** この <link> は media="print" なので
+ *   常に効き、テーマの :root より後に読まれる —— :root へ書けばトークンごと上書きできる。
+ */
+:root {
+    color-scheme: light;
+    --surface: #FFF;
+    --surface-alt: #FFF;
+    --surface-sunken: #FFF;
+    --canvas-grid: none;
+    --text: #000;
+    --text-muted: #444;
+    --on-accent: #FFF;
+    --border: #000;
+    --divider: #999;
+    --shadow-button: none;
+    --shadow-card: none;
+    --shadow-bar: none;
+    --shadow-minimap: none;
+    --shadow-window: none;
+}
+
+/* grabado: #background は #173 で消えた（<dialog> の ::backdrop が担う） */
+#bar, #minimap {
     display: none;
 }
 
 .table {
     border: 1px solid #000000;
-    background-color: none;
-}
-
-.row {
-    background-color: none;
-}
-
-.table .shadow-corner, .shadow-right, .shadow-bottom {
-    display: none;
-}
-
-.table_title {
-    font-weight: bold;
-    font-size: 115%;
-    background-color: none;
 }

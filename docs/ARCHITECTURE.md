@@ -324,6 +324,53 @@ Rollup の依存グラフに乗る**。`images/favicon.svg`（`<link rel="icon">
 **dist に 2 つある**（`viteStaticCopy` の写しと、ハッシュ付きの本体）。**ページが読むのは
 assets 側**で、`images/` 側は CSS の `url(../images/…)` が使う。
 
+**★★ CSS の `<link>` は 5 本とも「素の資産」として配られる**（**2026-09-05 実測**。#169）——
+`frontend/index.html` の CSS `<link>` は **5 本とも `media` 属性を持つ**ので、Vite の条件
+（`!("media" in attr.attributes || "disabled" in attr.attributes)`）に外れ、**CSS として
+処理されず、そのままコピーされる**。**実証: `frontend/styles/*.css` の 5 本と
+`dist/assets/<name>-<hash>.css` の 5 本が、いずれもバイト一致する。**
+
+帰結は 2 つある。
+
+- **`url(../images/…)` が書き換わらない** —— だから `viteStaticCopy` の `images/` が要り、
+  `tests/dist/smoke.spec.ts` が `dist/images/` の実在を確かめている（すぐ上の★）
+- **★★ `@import` は dist で 404 になる** —— インライン化されないので、ブラウザが
+  `/assets/` からの相対で解決してしまう。**`npm run dev` では `/styles/` が実在するので
+  通る** ——**dev で緑、dist で無音の欠落**という壊れ方で、**既存のテストは 1 本も赤くならない**。
+  **[`../tests/node/styles.test.ts`](../tests/node/styles.test.ts) がこれを見る**（#169）
+
+**★ 設計トークンとアイコンの器も、この性質の上に載っている**（#169）——
+`styles/base.css` と `styles/icons.css` は **`title` を持たない `<link>`** なので
+`Designer.applyStyle()` の切り替え対象にならず、**テーマを切り替えても常に効く**。
+**そのぶん、テーマ側の `:root` にあるトークンを参照できない**（参照すると `original` を
+選んだときに未定義になる）。
+
+### 5.1.2 テーマとトークン（v0.3.0）
+
+**CSS は 5 本。役割で 3 層に分かれている**（#169〜#172）。
+
+| 層 | ファイル | 何を持つ | いつ効くか |
+|---|---|---|---|
+| **常に効く** | `base.css`（トークン ＋ 共通規則 ＋ **material 系の構造**）／ `icons.css`（アイコン 44 字形） | テーマ非依存トークン ／ **2 テーマで完全に同じだった 20 規則** ／ `[data-theme^="material-"]` の構造規則 72 本 ／ `:focus-visible` ／ `prefers-reduced-motion` | **`<link>` に `title` が無い**ので `applyStyle()` が切らない |
+| **テーマ** | `material-inspired.css` ／ `material-dark.css` ／ `original.css` | **`:root` のトークンだけ**（material 系は同じキー 32 個）。`original` は upstream の見た目そのままで、**トークンを消費しない** | `applyStyle()` が `disabled` を切り替える |
+| **印刷** | `print.css` | `:root` を**ライトで上書き**（ダークのまま印刷すると黒塗りになる） | `media="print"` |
+
+**★ 切り替えは 2 系統ある。** `applyStyle()` が **`<link>` の `disabled`** と
+**`<html data-theme>`** の両方を動かす —— **前者がテーマの `:root` を選び、後者が
+`base.css` の構造規則を選ぶ**。**material 系の構造は 1 本しか無い**ので、
+**ダークは色を並べるだけで済む**（移す前は 595 行を丸ごと写すことになった）。
+
+**★ 常に効く側からテーマのトークンを参照してはいけない** ——
+`original` を選ぶと `material-inspired.css` が丸ごと `disabled` になり、**未定義の `var()` は
+その 1 宣言だけが静かに落ちる**。**例外は `[data-theme^="material-"]` で括った規則**で、
+**material 系を選んだときしかマッチしない**ので参照してよい。
+**この線引きは [`../tests/node/styles.test.ts`](../tests/node/styles.test.ts) が縛る。**
+
+**★ `applyStyle()` の結果が computed style に出るのは非同期**（#172 実測）——
+**全 titled sheet を一度 `disabled` にしてから 1 本を戻す**ので、Chromium はその sheet を
+捨てて**再パースする**。**起動時の 1 回は `body` の `visibility: hidden` のあいだに済む**が、
+**テストから読むときは `styleSheets` に戻るまで待つ**。
+
 ### 5.2 DDL 生成（段階6-5a で XSLT から TS へ）
 
 SQL 出力は [`../frontend/js/io/ddl/generate.ts`](../frontend/js/io/ddl/generate.ts) が組み立てる。入口は
@@ -559,8 +606,15 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
    sql 名にも id にも解決しない。解決するのは形式側 2 本が受け取る `palette` 引数（4-1a）。
 3. **`js/io/` は locale を通さない。** 例外 message は開発者向けで、価値の本体が位置情報。
    ユーザーへの見せ方（見出しだけ locale・詳細は素通し）は呼び手の [`../frontend/js/io.ts`](../frontend/js/io.ts) が決める（4-3b）。
-4. **UI と通信は `js/io.ts` に残す。** ダイアログの組み立て・`alert` / `confirm` / `prompt`・
+4. **UI と通信は `js/io.ts` に残す。** ダイアログの組み立て・**1 問ダイアログの呼び出し**・
    `OZ.Request`・localStorage・ダウンロードはすべてこちら側で、`js/io/` は形式とモデルしか知らない。
+
+   **★ `alert` / `confirm` / `prompt` は #173 で [`../frontend/js/dialog.ts`](../frontend/js/dialog.ts) へ移った**
+   （ネイティブの 3 つは 0 件。`js/io.ts` からは `dialogs().alert(...)` の形で呼ぶ）。
+   **`dialog.ts` は「答えを待つ 1 問」だけを持ち、モデルも形式も通信も知らない** ——
+   [`../frontend/js/window.ts`](../frontend/js/window.ts)（4 枚のパネルを付け替えるモーダル）
+   とは**別の `<dialog>` 要素**で、**パネルを開いたまま alert を出す経路があるため**
+   使い回していない。**戻り値が Promise になったので、`io.ts` の 9 メソッドが `async` になった。**
 
 **段階6-5a で `ddl-xml.ts`（`DesignModel` → DDL 入力 XML）が消え、`ddl/` が入った。**
 XSLT が TS になって中間 XML が要らなくなったので、書き出し側は「モデル → バイト列」の
@@ -707,7 +761,9 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 **本章はすべて実装済み**（11-1 で適用側、11-2a で proxy の契約、**11-2b で上流を叩く実装**）。
 入口は [`../frontend/js/io/ai/`](../frontend/js/io/ai/) と
 [`../server/src/main/kotlin/io/propagandist/grabado/ai/`](../server/src/main/kotlin/io/propagandist/grabado/ai/)。
-**残るのはフロントの配線だけ**（11-3 以降。`js/` はまだ 1 行も AI を知らない）。
+**フロントの配線まで入っている**（11-3 / 11-4 / 11-5。いずれも 2026-08-24）——
+[`../frontend/js/io.ts`](../frontend/js/io.ts) が `AI_REVIEW_PATH` と
+`aireview()` / `aireviewresponse()` / `aiapply()` を持ち、`check()` は `case 429` を持つ。
 
 **HANDOVER §11 との差分は 3 つ**（URL 名・構造化出力の手段・プライバシー既定）。
 **HANDOVER = 入口 / CUSTOMIZATIONS = 正**という役割分担は 5-0 の決定どおり。
@@ -728,9 +784,10 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 **`check()` が知らない status は「成功」に倒れる**ので、status を足す段で必ず対にする
 （5-1c / 5-3 / 5-4a で 3 回効いた規律）。
 
-**11-2a はこの規律を意図的に外して 429 を先に足した** —— フロントがこの URL を 1 度も
-呼ばないので、**429 が `check()` に届く経路が存在しない**（5-1b で 400 を足したときと同じ形）。
-到達しない status は無言で成功扱いにならない。配線と同時に広げるのが 11-3。
+**11-2a はこの規律を意図的に外して 429 を先に足した** —— 当時はフロントがこの URL を 1 度も
+呼ばず、**429 が `check()` に届く経路が存在しなかった**（5-1b で 400 を足したときと同じ形）。
+到達しない status は無言で成功扱いにならない。**11-3 の配線と同時に広げた**ので、いまは
+`check()` が `case 429` を、locale が `http429` を持っている。
 
 status の写像は [`ApiExceptionHandler`](../server/src/main/kotlin/io/propagandist/grabado/api/ApiExceptionHandler.kt)
 の 1 つの表にある（例外 → status を 2 か所に書かない）。**403 は理由を区別しない** ——
@@ -833,10 +890,12 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 **費用が自社負担**なので上限はサーバが持ち、クライアントの自己申告を上限にしない。
 
 `?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」**∧ 実装がある**。
-**実装があっても使えないなら false**（5-7a と同じ）で、11-2a の時点では
+**実装があっても使えないなら false**（5-7a と同じ）。**11-2b で
+[`AnthropicSuggestionSource`](../server/src/main/kotlin/io/propagandist/grabado/ai/AnthropicSuggestionSource.kt)
+が main に入ったので、いまは env 次第で true になる** —— 11-2a の時点では
 [`SuggestionSource`](../server/src/main/kotlin/io/propagandist/grabado/ai/SuggestionSource.kt) の実装が
-main に 1 つも無いので**実運用ではまだ常に false** —— 固定応答を返すスタブを本番に置かない
-（置くと「AI が動いているように見えて実は固定」が載る）。
+main に 1 つも無く、常に false だった（**固定応答を返すスタブを本番に置かない**ため。
+置くと「AI が動いているように見えて実は固定」が載る）。
 
 ### 8.5 キャッシュ
 
@@ -1131,7 +1190,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
 | [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
 | [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
-| [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **未実測** |
+| [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **約 2.5 分** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
 **実測（2026-08-26、段階2-5。ubuntu-latest）**

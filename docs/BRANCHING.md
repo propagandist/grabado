@@ -50,7 +50,7 @@ git checkout -b release/0.1.0 develop
 # main マージ後にタグ
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
-# release を develop にも戻す（PR or マージ）
+# release を develop にも戻す —— ★ **release ブランチからは出せない**（下の★★）。main -> develop の PR。
 
 # リリースノートを出す（#150）。まず --draft で描画を見てから publish する。
 # assets は付けない（配布物はレジストリにある。Release に置くのは digest 1 行 —— 同じものを
@@ -66,7 +66,17 @@ gh api -X POST repos/propagandist/grabado/milestones \
   -f title='v0.2.0 — <到達点の名前>' -f description='<何が成立したら閉じるかを 1 文で>'
 ```
 
-**★ タグを push すると `release-image.yml` が走る**（**2026-09-04**。#165）——
+**★★ `release/*` はマージした瞬間に消える**（**2026-09-05 実測**）—— リポジトリの
+**`delete_branch_on_merge: true`** が head ブランチを自動削除する（**`--delete-branch` を
+付けていなくても消える**）。**`release/0.2.0` → `main` をマージした直後に、そこから
+`develop` への PR を作ろうとして `Head ref must be a branch` で落ちた**。
+**戻すのは `main` → `develop` の PR**（**merge commit**。squash すると `develop` に別 SHA の
+コミットができ、**`main` と同じ内容なのに `main...develop` が両方とも非 0 を返す**）。
+**`main` は保護されているので自動削除の対象外**（同日、マージ後に残っていることを確認した）。
+
+**★ タグを push すると `release-image.yml` が走る**（**2026-09-04**。#165。
+**所要は約 2.5 分**。2026-09-05 の v0.2.0 で実測 —— 座標 6s ／ build arm64 96s・amd64 117s（並列）／
+公開と検め 23s）——
 **座標 → build 2 本（amd64 / arm64）→ manifest**。**配布物はここから出る**ので、
 **タグを打つ前に `package.json` / `server/build.gradle.kts` の `version` を上げておく**
 （**ずれていると座標ジョブが落ちて、GHCR には 1 バイトも出ない**）。
@@ -75,8 +85,23 @@ gh api -X POST repos/propagandist/grabado/milestones \
 - **★ 初回の本番 publish のあと、GHCR のパッケージを public に切り替える** ——
   **初回は private が既定**で、**API に口が無い**（`PATCH .../packages/container/grabado` は
   **404**。2026-09-04 実測）。**Web UI の Package settings でのみ切り替えられる**
+  - **★★ その Web UI も、org が許可していないと押せない**（**2026-09-05 実測**）——
+    ダイアログの **Public と Internal が両方とも
+    `Setting is disabled by organization administrators.`** で選べなかった。
+    **org 全体で public なパッケージが 1 本も無かった**（container / npm / maven / rubygems /
+    nuget / docker の **6 タイプすべてで 0**）。**org の Packages 設定で public を許可するのが
+    先**で、**これは org owner の操作**である —— **リポジトリ側からは動かせない**。
+    **許可したあとは、パッケージ側のダイアログがそのまま通った**
+  - **★ public にした直後の確かめ方**（同日、実走した）—— **`docker logout ghcr.io` してから**
+    `docker pull`。**ログインしたままだと、private でも通るので確かめにならない**。
+    **`docker run` まで通して `?action=capabilities` を見る**（`README` が案内する形そのもの）
 - **プレリリース（`v0.2.0-rc.1` の形）には `latest` が付かない** —— `docker/metadata-action` の
   `latest=auto`。**試し打ちが `latest` を奪わない**
+  - **★ 試し打ちを消すときは untagged も消す**（**2026-09-05 実測**）—— **タグ付きの版を消しても、
+    それが束ねていた untagged は自動では消えない**。**rc 1 本につき 6 つ残る**（各アーキ 2 ＋
+    attestation 2 ＋ index 2）。**世代は `Published` の時刻で切れる**ので、digest を 1 つずつ
+    突き合わせなくてよい。**消したあとは、配ったものが無傷かを `docker logout` してから
+    pull し直して確かめる**（**「消えた」と「壊れていない」は別**）
 
 **タグを打って終わりにしない。** org `repo-surface-baseline.md` §3.7 の確かめ方は
 **リポジトリの右柱**で、**タグだけでは右柱に何も出ない**。ノートの値（日本語・assets なし・

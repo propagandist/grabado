@@ -111,6 +111,13 @@ export interface NodeHarness {
     setConfirm(answer: boolean): void;
     /** confirm に渡された文言を取り出して空にする */
     takeConfirms(): string[];
+    /**
+     * prompt が返す文字列を固定する（#173）。**既定は null＝キャンセル**。
+     * 空文字を渡すと「既定値のまま OK」になる（ネイティブの prompt と同じ振る舞い）。
+     */
+    setPrompt(answer: string | null): void;
+    /** prompt に渡された文言を取り出して空にする */
+    takePrompts(): string[];
     close(): void;
 }
 
@@ -446,18 +453,40 @@ export async function createHarness(): Promise<NodeHarness> {
         return false;
     };
 
-    const alerts: string[] = [];
-    window.alert = (msg?: unknown) => void alerts.push(String(msg));
-
     /*
-     * confirm（段階4-6）。jsdom は "not implemented" を出して常に false を返すので、
-     * 「上書きする」側の経路が試せない。alert と同じ形で記録し、答えは固定する。
+     * grabado: #173 で差し替え先が window から Dialogs へ移った。
+     *
+     * ★ **Designer を作る前に覆う** —— 初期化中に出る alert を拾うため（下の
+     *   「Designer の初期化に失敗」がそれを読む）。dialogs() は遅延生成なので、
+     *   ここで先に呼んでインスタンスを確定させてから覆う。
+     * ★ **resetDialogs() を先に呼ぶ** —— jsdom を組み直しても、前の document に
+     *   append した <dialog> を掴んだままになる。
+     *
+     * confirm（段階4-6）: jsdom の confirm は常に false を返すので「上書きする」側の
+     * 経路が試せなかった。**その事情は <dialog> でも同じ**（答えを人が押す）ので、
+     * alert と同じ形で記録し、答えは固定する。
      */
+    api.resetDialogs();
+    const dialogs = api.dialogs();
+    const alerts: string[] = [];
+    dialogs.alert = (msg: string): Promise<void> => {
+        alerts.push(String(msg));
+        return Promise.resolve();
+    };
+
     const confirms: string[] = [];
     let confirmAnswer = false;
-    window.confirm = (msg?: string): boolean => {
+    dialogs.confirm = (msg: string): Promise<boolean> => {
         confirms.push(String(msg));
-        return confirmAnswer;
+        return Promise.resolve(confirmAnswer);
+    };
+
+    /* prompt は答えをテストが決める（既定は「キャンセル」＝ null） */
+    const prompts: string[] = [];
+    let promptAnswer: string | null = null;
+    dialogs.prompt = (msg: string, def?: string): Promise<string | null> => {
+        prompts.push(String(msg));
+        return Promise.resolve(promptAnswer === null ? null : promptAnswer || def || "");
     };
 
     // 段階3-4b まで window.eval("new SQL.Designer();") と書いて結果を window.SQL.designer から
@@ -563,6 +592,10 @@ export async function createHarness(): Promise<NodeHarness> {
             confirmAnswer = answer;
         },
         takeConfirms: (): string[] => confirms.splice(0, confirms.length),
+        setPrompt: (answer: string | null): void => {
+            promptAnswer = answer;
+        },
+        takePrompts: (): string[] => prompts.splice(0, prompts.length),
         close(): void {
             window.close();
         },

@@ -59,6 +59,9 @@ export class Relation extends Visual<RelationDom> {
             case "material-inspired":
                 this.relationColors = CONFIG.MATERIAL_RELATION_COLORS;
                 break;
+            case "material-dark":
+                this.relationColors = CONFIG.DARK_RELATION_COLORS;
+                break;
             case "original":
             default:
                 this.relationColors = CONFIG.RELATION_COLORS;

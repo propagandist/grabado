@@ -49,3 +49,6 @@ blob-report/
 #   作業者のグローバル gitignore で、**作業環境が変われば commit されうる**）。
 # .claude/settings.json と .claude/hooks/ は commit する（関門は配る先でも同じであるべき）。
 .claude/settings.local.json
+
+# grabado: #175。PR に貼るためのスクリーンショット（baseline ではないので追跡しない）
+/shots/

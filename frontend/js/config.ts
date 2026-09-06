@@ -77,7 +77,7 @@ export const CONFIG = {
     RELATION_HIGHLIGHTED_COLOR: "#FF0000",
     RELATION_HIGHLIGHTED_THICKNESS: 5,
 
-    STYLES: ["material-inspired", "original"],
+    STYLES: ["material-inspired", "material-dark", "original"],
     MATERIAL_RELATION_COLORS: [
         "#323232",
         "#F44336",
@@ -96,6 +96,35 @@ export const CONFIG = {
         "#FF5722",
         "#795548",
         "#607D8B",
+    ],
+
+    /*
+     * grabado: ダーク用のリレーション色（#172）。**足さないと relation.ts の switch が
+     * default に落ちて RELATION_COLORS（#000 / #800 / #080 …）になり、暗い盤面に
+     * 暗い線で見えなくなる。** tests/support/state.ts は relation の色を意図的に
+     * 採っていないので、テストは止めてくれない。
+     *
+     * 並びは MATERIAL_RELATION_COLORS と 1 対 1（同じ位置に同じ系統の色）。
+     * 値は Material の 200〜300 番台 —— 暗い面の上で見えるだけの明度を持たせてある。
+     */
+    DARK_RELATION_COLORS: [
+        "#e0e0e0",
+        "#ef9a9a",
+        "#f48fb1",
+        "#ce93d8",
+        "#9fa8da",
+        "#b39ddb",
+        "#90caf9",
+        "#81d4fa",
+        "#80deea",
+        "#80cbc4",
+        "#a5d6a7",
+        "#c5e1a5",
+        "#e6ee9c",
+        "#ffe082",
+        "#ffab91",
+        "#bcaaa4",
+        "#b0bec5",
     ],
 
     STATIC_PATH: "",

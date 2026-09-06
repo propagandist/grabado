@@ -18,6 +18,7 @@ import { applyTemplate, newRowType } from "./io/template.ts";
 import type { Table } from "./table.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
+import { dialogs } from "./dialog.ts";
 
 /** 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」（ボタン 7 個はループが埋める） */
 export interface TableManagerDom {
@@ -234,19 +235,19 @@ export class TableManager {
         }
     }
 
-    clear(e?: Event): void {
+    async clear(e?: Event): Promise<void> {
         /* remove all tables */
         if (!this.owner.tables.length) {
             return;
         }
-        var result = confirm(_("confirmall") + " ?");
+        var result = await dialogs().confirm(_("confirmall") + " ?");
         if (!result) {
             return;
         }
         this.owner.clearTables();
     }
 
-    remove(e?: Event): void {
+    async remove(e?: Event): Promise<void> {
         /*
          * grabado: 現行は Table[] のコピーを文字列で上書きしていく。型では両方を持たせ、
          * 読み出し側に as Table を 1 個置くだけにした（実行コードは無変更・段階3-3b）。
@@ -255,7 +256,7 @@ export class TableManager {
         for (var i = 0; i < titles.length; i++) {
             titles[i] = "'" + (titles[i] as Table).getTitle() + "'";
         }
-        var result = confirm(_("confirmtable") + " " + titles.join(", ") + "?");
+        var result = await dialogs().confirm(_("confirmtable") + " " + titles.join(", ") + "?");
         if (!result) {
             return;
         }
@@ -310,9 +311,11 @@ export class TableManager {
             return;
         } /* nothing if selection is active */
 
-        switch (e.keyCode) {
-            case 46:
-                this.remove();
+        /* grabado: #173 で keyCode（46 = Delete）から key へ */
+        switch (e.key) {
+            case "Delete":
+                /* remove() は confirm を待つので Promise を返す（#173） */
+                void this.remove();
                 OZ.Event.prevent(e);
                 break;
         }

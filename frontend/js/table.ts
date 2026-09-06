@@ -104,6 +104,12 @@ export class Table extends Visual<TableDom> {
     _build(): void {
         this.dom.container = OZ.DOM.elm("div", { className: "table" });
         this.dom.content = OZ.DOM.elm("table");
+        /*
+         * grabado: #175。**ER 図のカードは視覚的な箱**で、行列として読み上げる意味が無い
+         * （列は縦に並ぶが、横方向に意味のある見出しが無い）。
+         * ★ golden は tag.class しか採らないので、この属性では 1 バイトも動かない。
+         */
+        this.dom.content.setAttribute("role", "presentation");
         var thead = OZ.DOM.elm("thead");
         var tr = OZ.DOM.elm("tr");
         this.dom.title = OZ.DOM.elm("td", { className: "title", colSpan: 2 });

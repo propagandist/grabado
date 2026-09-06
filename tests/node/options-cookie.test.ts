@@ -59,7 +59,26 @@ describe("オプションの cookie（Node / jsdom）", () => {
         expect(h.io.owner.getOption("pattern")).toBe(pattern);
     });
 
-    test("cookie が空でも既定値に落ちる", () => {
+    /*
+     * ★★ 元は 1 本で「cookie が空でも既定値に落ちる」だった（#172 で 2 本に割った）。
+     *   あれは **jsdom に window.matchMedia が無いおかげで偶然緑だった** ——
+     *   既定は #172 から「保存された値が無ければ OS に従う」になっている。
+     *   **偶然を契約に変える**: 不在なら material-inspired、ダークを望むなら material-dark。
+     */
+    test("cookie が空で matchMedia も無いなら material-inspired（jsdom の既定）", () => {
+        expect(typeof h.window.matchMedia).not.toBe("function");
         expect(h.io.owner.getOption("style")).toBe("material-inspired");
+    });
+
+    test("cookie が空で OS がダークを望むなら material-dark", () => {
+        const win = h.window as unknown as { matchMedia?: unknown };
+        const saved = win.matchMedia;
+        win.matchMedia = (q: string) => ({ matches: q.includes("dark"), media: q });
+        try {
+            expect(h.io.owner.getOption("style")).toBe("material-dark");
+        } finally {
+            if (saved === undefined) delete win.matchMedia;
+            else win.matchMedia = saved;
+        }
     });
 });

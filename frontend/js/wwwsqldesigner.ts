@@ -468,7 +468,16 @@ export class Designer extends Visual<DesignerDom> {
             case "vector":
                 return true;
             case "style":
-                return "material-inspired";
+                /*
+                 * grabado: #172。**保存された値があればそれ、無ければ OS に従う。**
+                 * 副作用を 2 つ承知で採っている:
+                 *   1. Options を開いて OK を押すと、その時点の実効テーマが cookie に
+                 *      焼かれ、**以後 OS に追従しなくなる**
+                 *   2. **OS の切り替えに実行中は追従しない** —— matchMedia の change を
+                 *      張れば追従できるが、Relation の色は生成時に決まるので
+                 *      **線だけ前のテーマの色で残る**（却下した案）
+                 */
+                return this.prefersDark() ? "material-dark" : "material-inspired";
             default:
                 /*
                  * grabado: 戻り型に null を出していない（段階3-2 の判断）。呼び出しの
@@ -477,6 +486,20 @@ export class Designer extends Visual<DesignerDom> {
                  */
                 return null as unknown as string;
         }
+    }
+
+    /**
+     * OS がダークを望んでいるか。
+     *
+     * ★★ **jsdom 30.0.1 に window.matchMedia が無い**（2026-08-31 実測）ので typeof で守る。
+     *   素直に書くと tests/node/harness.ts が new Designer() した瞬間に TypeError で
+     *   **Node 側の全数が落ちる**。
+     */
+    prefersDark(): boolean {
+        return (
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches
+        );
     }
 
     setOption(name: string, value: string): void {

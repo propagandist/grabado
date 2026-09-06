@@ -15266,6 +15266,182 @@ About 欄と org 一覧からライセンス表示が消えた**。
   ボタン側は元から追従する。**`original` は `#bar input:hover` に色指定が無い**ので、
   **ホバーしてもアイコンの色が変わらない**（元の見た目に合わせた結果）
 
+### 2026-09-06 見た目を刷新した —— 手計算が違っていて、直す色が 1 つから 6 つに増えた
+
+**段階に属さない。** issue #171（マイルストーン `v0.3.0 — UI をモダナイズする`）。
+
+#### 発端
+
+**古さの実体は、色や角丸ではなく「意図と実装のずれ」だった。** #169 のトークン化は
+**値を移すだけ**なので、これらは 1 つも直らない。
+
+| 場所 | 着手前 | 何が起きていたか |
+|---|---|---|
+| `#area` | `opacity: 0.7` | **`#area` はテーブル div も relation の `<svg>` も子に持つ**ので、**設計そのものが 70% 不透明で描かれていた** |
+| `input[type=text]` / `textarea` / `select` | `outline: 0` × 3 | **キーボードのフォーカスが 1 ピクセルも見えない** |
+| `input[type=button]` | `uppercase` ＋ `letter-spacing: .03em` | **`#bar input` が `text-transform: none` で打ち消しており二度手間**。和文では字間が間延びする |
+| `body` | `font-size: 12px` | 和文の本文としては下限を割っている |
+| `.typehint` | `color: gray` | **3.95:1**（WCAG AA 未達） |
+| `label` | `opacity: 0.7` | **不透明度はコントラスト計算から逃げる書き方** |
+| `#rubberband` | `.2px` ＋ opacity 二重 | `.2px` は実質無効値 |
+| `#bar input:disabled` | `cursor: not-allowed` ＋ `pointer-events: none` | **`pointer-events: none` が効くと `cursor` は表示されない** |
+| `.table.selected` | `border: 1px` | **カードの外形を 2px 動かす**（`Relation.redraw()` が `offsetWidth` を実測している） |
+| `#io` / `#window` | `min-width: 860px` ／ `max-height` なし | 狭い画面で画面外に出る ／ 縦に溢れる |
+
+#### ★★ 手計算が違っていて、直す色が 1 つから 6 つに増えた
+
+**着手時、`--text-muted`（`rgba(0,0,0,.54)`）を「白地で 4.48:1 だから未達」と手で計算し、
+`.6` に上げた。検査を書いて走らせたら、`.54` のままでも緑だった。**
+
+**実測すると 4.61:1 で、元から足りていた**（合成 `#757575` の相対輝度を取り違えていた）。
+**手計算を根拠に値を動かしていた。**
+
+**代わりに、検査が別のものを見つけた** —— **白い文字を載せる面 6 つのうち 5 つが未達だった**
+（**2026-09-06 実測**）:
+
+| トークン | 着手前 | 比 | 変更後 | 比 |
+|---|---|---|---|---|
+| `--accent`（`#clientsql` の面） | `#FF4081` | **3.33** | `#d81b60` | **4.95** |
+| `--brand-hover`（同 hover） | `#ff5a92` | **2.95** | `#ad1457` | **6.97** |
+| `--info`（`#keyadd`） | `#2196F3` | **3.12** | `#1565c0` | **5.75** |
+| `--info-hover` | `#39a1f4` | **2.77** | `#0d47a1` | **8.63** |
+| `--danger`（`#keyremove`） | `#F44336` | **3.68** | `#d32f2f` | **4.98** |
+| `--brand`（`#bar` の hover） | `#de2665` | **4.59** | **据え置き** | —— |
+| `--danger-hover` | `#f55a4e` | **3.25** | `#b71c1c` | **6.57** |
+
+**#171 が挙げていたのは `.typehint` の `gray`（3.95）だけ**で、**この 5 つは挙がっていなかった。**
+**目で見て「薄い」と思ったところしか疑っていなかった** —— **色面の上の白文字は、
+濃く見えるので疑われない。**
+
+**★ 副作用: hover が「明るくなる」から「暗くなる」に変わった** ——
+**明るい側で 4.5:1 を保てる色が、元の色調から離れすぎるため**。
+
+**★ `--text-muted` は `.6` のまま残した** —— **コントラストが理由ではなく**、
+**`label { opacity: .7 }` の実効 alpha（0.87 × 0.7 = 0.609）に近いのが `.6` だから**。
+**`.54` に戻すと、元より薄くなる。**
+
+#### ★★ 決めたこと 1: `:focus-visible` —— **入力欄では本当に見えていなかった**
+
+**ボタンでは着手前から枠が出ていた**（`outline: 0` は入力欄の 3 か所だけだった）。
+**Tab を 6 回押す実測では前後で差が出ず**、**ダイアログを開いて入力欄に当てて初めて差が出た**:
+
+| | `#textarea` | `#outputdb` | `#ormtarget` |
+|---|---|---|---|
+| **着手前** | **`0px none`** | **`0px none`** | **`0px none`** |
+| 変更後 | `2px solid` | `2px solid` | `2px solid` |
+
+**`:focus-visible` にした**（`:focus` ではない）—— **`:focus` だとボタンをクリックするたびに
+枠が残り、それを嫌って `outline: 0` が書かれた元の動機に戻る。**
+
+**`--focus` は `base.css` の `:root` に置いた** —— **`:focus-visible` は両テーマに掛かる**ので、
+テーマ側に置くと `original` で未定義になる。**material が上書きしている**（同じ値だが、
+#172 のダークで変わる）。
+
+#### 決めたこと 2: `prefers-reduced-motion` に `!important` の慣用句を持ち込まない
+
+**`*` に `transition-duration: 0 !important` を叩き込む書き方はしない。**
+このリポジトリの transition は **8 か所すべてが `var(--duration)` を通っている**
+（**literal だった 2 か所も #171 でトークンへ寄せた**）ので、**トークンを 0 にすれば足りる**。
+
+**慣用句を持ち込むと author の `!important` が 3 → 7 に増え、`styles.test.ts` が縛っている
+数の意味が薄れる。**
+
+#### 決めたこと 3: 検査は 3 対ではなく 11 対にした
+
+**#171 は「`--fg`/`--bg`、`--fg-muted`/`--surface`、`--brand-fg`/`--brand` の 3 対」と
+書いていた**（トークン名は #169 で `--text` / `--surface` / `--text-muted` / `--on-accent` に
+なっている）。**11 対にした** —— **上の 5 つは、3 対だけ見ていたら見つからなかった。**
+
+**★ 見るのは背景が確定している組み合わせだけ**。**任意の重なりを総当たりすると、
+実際には起きない組み合わせで赤くなる。**
+
+#### 決めたこと 4: **Web フォントは構造的に使えない。system font stack 一択**
+
+**CSP は `default-src 'none'` で始まり `font-src` を持たない**（正本は
+`SecurityHeadersFilter.kt`）。**`font-src` は `default-src` に落ちるので、自己ホストの
+`@font-face` すら拒否される** —— **外部 CDN 以前の問題**。
+
+**★ 和文フォントを `sans-serif` より前に必ず置く** —— **`system-ui`（Windows では Segoe UI）は
+仮名・漢字を持たず、グリフ単位で次の候補に落ちる**。ここを空けると **OS 既定の明朝や
+MS Pゴシックに落ちる環境が出る**。
+
+**`body` を 12px → 14px に上げた**（`--text-base`）。**入力欄の 16px は据え置き**
+（iOS の自動ズーム回避）。**テーブルカードの幅が広がるが、レイアウト由来の値は
+golden の採取対象外**なので影響 0（実測で 128 本とも動いていない）。
+
+#### 決めたこと 5: **`#area` の `opacity` を外す。背景タイルは触らない**
+
+**`back_dim.png`（353 バイト）は名前どおり既に淡い**ので、**opacity を外しても背景が
+濃くなりすぎない**（撮り比べて確認）。**`original.css` には元から opacity が無い。**
+
+**★ 背景を `repeating-linear-gradient` に置き換える案は採らない** ——
+**`frontend/images/back.png` を消せなくなる**（`tests/dist` ／ `tests/image` ／
+`CacheControlTest.kt` の **3 本が 200 を要求しており、静的コピーが生きていることの
+カナリアになっている**）。**グラデーションにしても画像は残るので、資産が減らない。**
+
+#### 決めたこと 6: **`.table.selected` は `border` ではなく `outline`**
+
+**`border` はカードの外形を 2px 動かす**ので、**`Relation.redraw()` が実測している
+`offsetWidth` が選択のたびに変わっていた**。**`outline` はレイアウトを動かさない。**
+
+**同じ軸で `#minimap` に `box-sizing: border-box` を明示した** ——
+**`frontend/js/map.ts:49-50` が `offsetWidth - 2` を前提にしている**ので、
+**border を足したり box-sizing が変わると port の寸法が動く**。
+
+#### 通った（2026-09-06 実測）
+
+| 何を | 結果 |
+|---|---|
+| `npm run typecheck` | **緑** |
+| `npm run test`（vitest） | **643 本 緑**（`styles.test.ts` が 4 → 16 本） |
+| `npm run test:browser` | **205 本 緑** |
+| `npm run known-issues` | **1 本 緑** |
+| `npm run test:dist` | **7 本 緑** |
+| `npm run test:image` | **13 本 緑** |
+| **`git diff --stat -- tests/golden`** | **0 行**（**128 本が 1 バイトも動いていない**。これが完了判定） |
+| `#area` の opacity | **0.7 → 1** |
+| `body` の font | **12px verdana → 14px system-ui** |
+| ボタンの `text-transform` / `letter-spacing` | **none / normal**（打ち消しごと消えた） |
+| 入力欄のフォーカスリング | **`0px none` → `2px solid`** |
+| author の `!important` | **3 のまま** |
+| `pageerror` | **0 件** |
+
+**★ 検査が本物であることを 2 回確かめた** —— `--accent` を `#FF4081` に戻すと
+**「アクセント面（#clientsql）」が赤**になり、`--text-muted` を `.54` に戻しても**緑のまま**
+だった（**それが手計算の誤りに気づいた経路**）。
+
+#### 却下した案
+
+- **行の背景色を CSS で塗り直す** —— **型の区別が消える**。`original.css` のコメントが
+  「行の背景色は型パレット由来（`Row.getColor`）で意味を持っており、そこを奪うと
+  『型が変わった』ように見える」と書いている。**既定テーマは既に色帯に移してある**
+- **`.table tbody { background: none !important }` を消す** —— **消すと背景が戻る**。
+  author の `!important` は inline 宣言に勝つので、**これが `row.ts:428` の
+  `style.backgroundColor` を殺しており、型の色は `border-right: 4px` の帯として出ている**
+- **`aria-disabled` を出す** —— **ネイティブの `disabled` は既にアクセシビリティツリーに
+  現れる**ので二重管理になり、**代入箇所 44 か所を 88 か所にする対価に見合わない**
+- **`--text-muted` を `.54` に戻す** —— **コントラストは足りている**が、
+  **`label { opacity: .7 }` の実効 alpha（0.609）より薄くなる**
+- **hover を明るいまま 4.5:1 に載せる** —— **元の色調から離れすぎる**
+- **`prefers-reduced-motion` に `*` の慣用句を入れる** —— 決めたこと 2
+
+#### 申し送り
+
+- **★ #170 の申し送りを回収した** —— **マージ後に
+  `gh api repos/propagandist/grabado/license --jq .license.spdx_id` が
+  `BSD-3-Clause` を返した**。**`third-party/` は licensee の検出を壊さない**
+- **★ 次は #172（ダークテーマ）** —— **`--focus` を material が上書きしている理由が
+  そこで効く**。**`[data-theme^="material-"]` に material 固有の構造規則を移すのも #172**
+  （#169 で器だけ入れ、#170 で `#toggle` が初めて使った）
+- **★ `--text-base` と `--text-md` が同値（14px）になった** —— 役割は違う（本文とボタン）が、
+  **値が同じトークンが 2 つある**。**#175 の「未使用トークン」検査を書くときに、
+  同値トークンをどう扱うか決める**
+- **★ `original.css` の IE フィルタ 4 か所は、まだ残っている**（#170 の申し送りから継続）——
+  **`filter: progid:DXImageTransform`**。**モダンブラウザは無視するので無害**
+- **★ 狭い画面の確認は機械化していない** —— `#io` の `min-width: min(860px, 92vw)` と
+  `#window` の `max-height` は入れたが、**1024px で実際に収まるかは目で見ていない**。
+  **#175 で viewport を変えた検査を入れるときに拾う**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

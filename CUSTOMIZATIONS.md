@@ -15612,6 +15612,145 @@ golden の採取対象外**なので影響 0（実測で 128 本とも動いて�
 - **★ 3 本目のテーマを足すときは、`styles.test.ts` の `describe.each` に 1 行足すだけでよい**
   —— コントラスト検査は**両テーマを同じ式で回している**（下の決めたこと 8）
 
+### 2026-09-06 対話を `<dialog>` に載せ替えた —— ネイティブの 3 つが 0 件になった
+
+**段階に属さない。** issue #173（マイルストーン `v0.3.0 — UI をモダナイズする`）。
+
+#### 発端
+
+**対話がすべてブラウザのネイティブダイアログか、自前の `visibility` 切り替えでできていた。**
+
+| 対象 | 着手前 | 変更後 |
+|---|---|---|
+| `alert` | **28 か所**（全部 `io.ts`） | **0**（`dialogs().alert()`） |
+| `confirm` | **5 か所** | **0** |
+| `prompt` | **6 か所** | **0** |
+| モーダル | `window.ts` **148 行**。`style.visibility` を切り、`#background` を実測サイズに合わせて敷き、**JS が px で中央寄せ** | **130 行**。`showModal()` |
+| フォーカストラップ | **無い**（Tab は背後のツールバーへ抜ける） | `<dialog>` が標準で持つ |
+| `role` / `aria-modal` | **0 件** | `showModal()` が付ける |
+| Esc / Enter | `keydown` を握って `keyCode == 13` / `27` | **Esc は `<dialog>`**。Enter = OK だけ残る |
+
+**ネイティブの `alert` はページの見た目から完全に浮く**うえ、**28 か所が HTTP エラー・
+JSON パース失敗・クリップボード拒否・AI 応答の不整合を伝えており、アプリが失敗を伝える
+主要な手段になっていた**。
+
+#### ★★ 踏んだこと 1: `alert` を非同期にすると、モーダルが重なる
+
+**`alert` は戻り値を持たないので呼び手が `await` しない。** そのままだと
+**「警告を出してから保存し、失敗したらもう 1 本 alert」の経路で、開いている `<dialog>` に
+`showModal()` を呼んで InvalidStateError になる**。
+
+**ネイティブの `alert` は同期でブロックしていたので、この形は起きなかった。**
+**`dialog.ts` に 1 問ずつ出す待ち行列を置いた**（`tests/browser/dialog.spec.ts` の 3 本目が
+「続けて出しても重ならない」を張っている）。
+
+#### ★★ 踏んだこと 2: `hidden` 属性だけでは消えない
+
+`alert` では入力欄とキャンセルを `hidden` にするが、**入力欄の下線が残った**。
+**material の `input[type=text]` が `display: block` を明示しており、要素の既定（`none`）より
+詳細度で勝つ**ため。
+
+**`.dialog-input[hidden]`（0,2,0）でも足りない** ——
+`[data-theme^="material-"] input[type=text]` は **(0,2,1)**。
+**`#prompt .dialog-input[hidden]`（1,2,0）で取り返した。**
+
+#### ★★ 踏んだこと 3: テストが「押した直後」を見られなくなった
+
+`tests/browser/harness.ts` の `clickIo` は **`button.click()` の直後に同期で alert を集めていた**。
+**`prompt` / `confirm` を通る経路は `await` で 1 度中断する**ので、
+**click から戻った時点ではまだ alert が出ていない**。
+
+**`page.evaluate` を `async` にして 1 マクロタスク譲るようにした。**
+**ネイティブの `prompt` は同期でブロックしていたので、この待ちは要らなかった。**
+
+#### 決めたこと 1: `dialog.ts` は `window.ts` と**別の `<dialog>`** を持つ
+
+**同じ要素を使い回すと、パネルを開いたまま alert を出す経路で壊れる。**
+`window.ts` は**開いているあいだ他の操作を受ける画面**（4 枚のパネルを付け替える）で、
+`dialog.ts` は**答えを待つ 1 問**。
+
+#### 決めたこと 2: `dialogs()` はモジュール関数。`this` に依存しない
+
+**置き換える 39 か所のうちいくつかは `function` コールバックの中にいる**
+（clipboard の `then` / `catch`、`FileReader` の `onerror`）。**そこから `this.owner` は届かない**
+ので、`var self = this` を足して回るか全部アロー関数にするかになる ——
+**どちらも `io.ts` の書き方を alert の都合で変えることになる**。
+
+**生成は遅延させる** —— モジュールの読み込み時に `document.body` へ append すると、
+**Node 側のハーネスが jsdom を組む前に走る**。
+
+#### 決めたこと 3: テストの差し替え口は `d.dialogs`（同じインスタンス）
+
+`Designer.dialogs` は `dialogs()` が返す**同じインスタンス**を指す。
+**テストが `d.dialogs.alert` を覆えば、`io.ts` が `dialogs().alert` で呼んでも覆ったほうが効く。**
+
+**Node 側は `Designer` を作る前に覆う** —— 初期化中に出る alert を拾うため。
+`app-entry.ts` から `dialogs` と `resetDialogs` を出した（**jsdom を組み直しても、
+前の document に append した `<dialog>` を掴んだままにしない**）。
+
+**`clickIo` の設計（押した結果 alert が出たかを配列で返す）はそのまま維持できた** ——
+差し替える先が `window` から `d.dialogs` に変わっただけ。
+
+#### 決めたこと 4: `keyCode` を `key` へ（5 ファイル）
+
+`window.ts` の分岐が減ったので、**ついでに残りも移した** ——
+`io.ts`（F2）／ `row.ts`（Enter）／ `rowmanager.ts`（ArrowUp / ArrowDown / Delete / Enter / Escape）／
+`tablemanager.ts`（Delete）。**`Delete` の呼び先が `async` になったので `void` を付けた。**
+
+#### 決めたこと 5: `#background` は要素ごと消す
+
+**`::backdrop` と二重の黒幕になる。** **`window.ts` から参照を消してから HTML を消した**
+（順序を守れば `OZ.$` の TypeError は起きない）。
+**`sync()`（scroll / resize で黒幕サイズを追う 9 行）と、その `OZ.Event.add` 2 本も消えた。**
+
+#### 通った（2026-09-06 実測）
+
+| 何を | 結果 |
+|---|---|
+| `npm run typecheck` | **緑** |
+| `npm run test`（vitest） | **658 本 緑** |
+| `npm run test:browser` | **210 本 緑**（`dialog.spec.ts` の 3 本ぶん増えた） |
+| `npm run known-issues` ／ `npm run test:dist` | **1 本** ／ **7 本 緑** |
+| `npm run test:image`（7.1 分） | **13 本 緑**（READONLY 系 5 本を含む） |
+| `git diff --stat -- tests/golden` | **0 行**（128 本が 1 バイトも動いていない） |
+| **ネイティブの `alert` / `confirm` / `prompt`** | **0 件**（`dialog.ts` の実装を除く） |
+| `dialogs().` の呼び出し | **39 件**（28 ＋ 5 ＋ 6 と一致） |
+| `async` になったメソッド | **13 本**（`io.ts` 9 ／ `row.ts` 1 ／ `rowmanager.ts` 1 ／ `tablemanager.ts` 2） |
+| `keyCode` | **0 件**（コメントを除く） |
+| Esc → 閉じる → フォーカスが戻る | **開く前の要素（`#saveload`）に戻った** |
+| Tab を 40 回 | **ダイアログの外の操作可能要素へ抜けない** |
+
+#### 却下した案
+
+- **`alert` の 28 か所だけ先に片づける** —— **`window.ts` を `<dialog>` にする前にトーストを
+  作ると、置き場所（z-index・スクロール追従・`#background` との重なり）を 2 回決めることになる**
+- **`#background` を残したまま `<dialog>` にする** —— **`::backdrop` と二重の黒幕になる**
+- **独自のフォーカストラップを書く** —— **`showModal()` が標準で持っているものを再実装する**
+  ことになる。`inert` の伝播・Shift+Tab の折り返しを自前で正しく書くのは難しく、
+  **間違えても自動テストが 1 本も無い**
+- **`confirm` を残して `alert` と `prompt` だけ置き換える** —— **見た目が混ざる**。
+  「確認だけネイティブ」は置き換えの途中で止まったようにしか見えない（Hard Constraint 1）
+- **`alert` を全部 `await` にする** —— **戻り値を持たないので待つ理由が無い**。
+  **待ち行列があれば重ならない**（踏んだこと 1）
+- **`d.dialogs` ではなくモジュールの export を直接覆う** —— **テストから import できない**
+  （バンドルの内側）。`app-entry.ts` に口を出す形にした
+
+#### 申し送り
+
+- **★ 次は #175（a11y と検証を作り込む）** —— v0.3.0 の最後の 1 本。
+  **`#docs` の対話要素の入れ子**（#170 から）／ **`<select>` の三角・`.primary` / `.key`・
+  コメント有無マーク**（#171 から送られた 3 つ）／ **スクリーンショット比較の恒久化**（#168 から）／
+  **狭い画面の確認**（#171 から）が待っている
+- **★ `dialog.ts` に入力の検証はまだ無い** —— #173 は「prompt の 6 か所で入力の検証も
+  プレースホルダも出せない」を問題に挙げていたが、**入れたのは既定値だけ**。
+  **保存名の妥当性（`serversave` / `serverimport`）を見るなら #175**
+- **★ `throbber` は `#windowtitle` の中に残っている** —— `<dialog>` の中なので、
+  **モーダルを開いていないあいだは見えない**。**通信中の表示としてはこれでよい**
+  （開いていないときに通信するのは quicksave くらい）
+- **★ `window.ts` の `state` は残した** —— `<dialog>.open` で代替できるが、
+  **`key()` が「開いているか」を見るのに使っており、`close` イベントで 0 に戻している**。
+  **1 つの真実にするなら `open` を見るべき**だが、**この PR の範囲を広げない**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

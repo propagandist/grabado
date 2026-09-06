@@ -64,16 +64,18 @@
 
         <div id="minimap"></div>
 
-        <div id="background"></div>
-
-        <div id="window">
+        <!--
+            grabado: #173。#background は消えた —— <dialog> の ::backdrop が担う。
+            aria-modal / フォーカストラップ / Esc も showModal() が標準で持つ。
+        -->
+        <dialog id="window" aria-labelledby="windowtitle">
             <div id="windowtitle">
                 <img id="throbber" src="images/throbber.gif" alt="" title="" />
             </div>
             <div id="windowcontent"></div>
             <span class="tb i-windowok"><input type="button" id="windowok" /></span>
             <span class="tb i-windowcancel"><input type="button" id="windowcancel" /></span>
-        </div>
+        </dialog>
     </div>
     <!-- #controls -->
 

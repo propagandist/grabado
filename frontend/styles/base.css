@@ -116,11 +116,68 @@
     top: 0px;
 }
 
-#background {
-    position: absolute;
-    background-color: #000;
-    opacity: 0.5;
-    visibility: hidden;
+/*
+ * ★ モーダル（#173）。#window は <dialog> になった —— **position / visibility /
+ *   JS の px 中央寄せ / #background の黒幕は、まとめて showModal() と ::backdrop に
+ *   置き換わった**。ここが持つのは、どのテーマでも要る箱の性質だけ。
+ */
+#window,
+#prompt {
+    border: none;
+    padding: 0;
+    max-width: min(92vw, 1000px);
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+}
+
+#window::backdrop,
+#prompt::backdrop {
+    background-color: rgba(0, 0, 0, .5);
+}
+
+/*
+ * ★ 1 問だけを訊くダイアログ（#173 の js/dialog.ts）。
+ *   alert / confirm / prompt の置き換え先で、**#window とは別の要素**
+ *   —— パネルを開いたまま alert を出す経路があるため。
+ */
+#prompt {
+    min-width: min(92vw, 24rem);
+}
+
+.dialog-message {
+    margin: 0 0 1rem;
+    /* 長いエラー文（HTTP の本文・AI の応答）が来るので、折り返しと改行を保つ */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.dialog-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/*
+ * ★★ hidden 属性だけでは消えない（#173 で踏んだ）—— material の
+ *   input[type=text] / input[type=button] が display を明示しており、
+ *   **要素の既定（none）より詳細度で勝つ**。
+ *   ★ 属性セレクタを足すだけでは足りない —— [data-theme^="material-"] input[type=text]
+ *   は (0,2,1) で、.dialog-input[hidden] の (0,2,0) に勝つ。id で取り返す。
+ */
+#prompt .dialog-input[hidden],
+#prompt .dialog-cancel[hidden] {
+    display: none;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    margin-top: 1rem;
+}
+
+/* 開いているあいだ、背後のスクロールを止める（黒幕の下で盤面が動かないように） */
+body:has(#window[open]) {
+    overflow: hidden;
 }
 
 #bar input.small {
@@ -255,7 +312,10 @@ label, input, select {
     user-select: none;
 }
 
-[data-theme^="material-"] input[type=button] {
+/* ★ #173: 1 問ダイアログの OK は type=submit（form method="dialog" の Enter を活かす）
+   なので、ボタンの様式を submit にも当てる */
+[data-theme^="material-"] input[type=button],
+[data-theme^="material-"] input[type=submit] {
     font-family: var(--font-ui);
     -webkit-appearance: button;
     cursor: pointer;
@@ -612,14 +672,12 @@ label, input, select {
  * ★ #171 で縦の溢れを止めた。**#io は 3 段組で、狭い画面では画面外に出ていた**
  *   （#window は JS が px で中央寄せする）。
  */
-[data-theme^="material-"] #window {
-    position: absolute;
-    visibility: hidden;
+[data-theme^="material-"] #window,
+[data-theme^="material-"] #prompt {
     background-color: var(--surface);
+    color: var(--text);
     box-shadow: var(--shadow-window);
     padding: var(--space-5);
-    max-height: calc(100vh - 2 * var(--space-6));
-    overflow-y: auto;
 }
 
 [data-theme^="material-"] #windowtitle {

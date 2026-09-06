@@ -174,6 +174,28 @@ function tokenValue(css: string, name: string): string {
     return m[1]!.trim();
 }
 
+/**
+ * 規則 1 本の中から 1 宣言を読む。
+ *
+ * ★★ **セレクタ名で indexOf して以降を舐める書き方は使わない**（#173 で踏んだ）——
+ *   コメントに書いたセレクタ名を先に拾い、そこから最初に現れた別規則の color を
+ *   返してしまう。しかも `background-color:` も `color\s*:` に一致するので、
+ *   **赤くなった値がどこの色なのか分からない**。行頭のセレクタから閉じ括弧までに閉じる。
+ */
+function ruleValue(css: string, selector: string, prop: string): string {
+    /* 正規表現に埋めない —— セレクタもプロパティ名も呼び手が固定文字列で渡す */
+    const start = css.indexOf(`
+${selector} {`);
+    if (start === -1) throw new Error(`規則 ${selector} が見つからない`);
+    const body = css.slice(css.indexOf("{", start) + 1, css.indexOf("}", start));
+    for (const decl of body.split(";")) {
+        const [key, ...rest] = decl.split(":");
+        /* background-color を color と取り違えないよう、キーは完全一致で見る */
+        if (key?.trim() === prop) return rest.join(":").trim();
+    }
+    throw new Error(`${selector} に ${prop} が無い`);
+}
+
 /*
  * ★ #172 で両テーマを回すようにした。ダークは --on-accent が暗い色（#1e1e1e）になるので、
  *   **同じ対を同じ式で見ていれば、ライトの直感が通じない側も機械が拾う**。
@@ -192,7 +214,7 @@ describe.each(["material-inspired.css", "material-dark.css"])(
         /* material 系の .typehint は base.css で var(--text-muted) に寄せてある（#172） */
         ["型ヒント", tokenValue(theme, "--text-muted"), surface],
         /* original が使う共通側の literal は、白い面で見る */
-        ["型ヒント（original 用の literal）", tokenValue(base.slice(base.indexOf(".typehint")), "color"), "#FFF"],
+        ["型ヒント（original 用の literal）", ruleValue(base, ".typehint", "color"), "#FFF"],
         /* 白い文字を載せる面。#171 でこの 6 つのうち 5 つが 4.5:1 に届いていなかった */
         ["ブランド面の上の文字（#bar のホバー）", onAccent, tokenValue(theme, "--brand")],
         ["ブランド面（ホバー）", onAccent, tokenValue(theme, "--brand-hover")],

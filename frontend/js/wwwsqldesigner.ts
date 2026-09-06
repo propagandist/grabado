@@ -38,6 +38,7 @@ import { KeyManager } from "./keymanager.ts";
 import { IO } from "./io.ts";
 import { Options } from "./options.ts";
 import { Window as SqlWindow } from "./window.ts";
+import { dialogs, type Dialogs } from "./dialog.ts";
 import { TypePalette } from "./io/palette.ts";
 import { extractModel } from "./io/extract.ts";
 import { generateDdl } from "./io/ddl/generate.ts";
@@ -144,6 +145,12 @@ export class Designer extends Visual<DesignerDom> {
     declare io: IO;
     declare options: Options;
     declare window: SqlWindow;
+    /*
+     * grabado: #173。alert / confirm / prompt の置き換え先。
+     * **テストはここのメソッドを覆って「何が出たか」を集める**ので、
+     * プロトタイプではなくインスタンスの面として持つ。
+     */
+    declare dialogs: Dialogs;
 
     constructor() {
         super();
@@ -350,6 +357,7 @@ export class Designer extends Visual<DesignerDom> {
         this.io = new IO(this);
         this.options = new Options(this);
         this.window = new SqlWindow(this);
+        this.dialogs = dialogs();
 
         this.sync();
 

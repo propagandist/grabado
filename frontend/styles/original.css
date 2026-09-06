@@ -163,11 +163,12 @@ body {
     border-left-color: transparent;
 }
 
-#window {
-    position: absolute;
-    visibility: hidden;
+/* grabado: #173 で <dialog> になった。position / visibility は showModal() が持つ */
+#window,
+#prompt {
     background-color: #fff;
     border: 6px double #333;
+    padding: 10px;
 }
 
 #windowtitle {

@@ -18,8 +18,7 @@ import type { Designer } from "./wwwsqldesigner.ts";
 
 /** ダイアログの DOM。すべてコンストラクタで埋まる（後付けキーは無い） */
 export interface WindowDom {
-    container: HTMLElement;
-    background: HTMLElement;
+    container: HTMLDialogElement;
     ok: HTMLInputElement;
     cancel: HTMLInputElement;
     title: HTMLElement;
@@ -38,8 +37,7 @@ export class Window {
     constructor(owner: Designer) {
         this.owner = owner;
         this.dom = {
-            container: OZ.$("window"),
-            background: OZ.$("background"),
+            container: OZ.$<HTMLDialogElement>("window"),
             ok: OZ.$<HTMLInputElement>("windowok"),
             cancel: OZ.$<HTMLInputElement>("windowcancel"),
             title: OZ.$("windowtitle"),
@@ -52,15 +50,16 @@ export class Window {
         OZ.Event.add(this.dom.ok, "click", this.ok.bind(this));
         OZ.Event.add(this.dom.cancel, "click", this.close.bind(this));
         OZ.Event.add(document, "keydown", this.key.bind(this));
+        /*
+         * grabado: #173。Esc は <dialog> が自分で拾って cancel → close を出す。
+         * **close() を経由しないので、状態の後始末はここで受ける。**
+         */
+        OZ.Event.add(this.dom.container, "close", () => {
+            this.state = 0;
+        });
 
-        this.sync = this.sync.bind(this);
-
-        OZ.Event.add(window, "scroll", this.sync);
-        OZ.Event.add(window, "resize", this.sync);
         this.state = 0;
         this.hideThrobber();
-
-        this.sync();
     }
 
     showThrobber(): void {
@@ -80,23 +79,16 @@ export class Window {
 
         var txt = OZ.DOM.text(title);
         this.dom.title.appendChild(txt);
-        this.dom.background.style.visibility = "visible";
         OZ.DOM.clear(this.dom.content);
         this.dom.content.appendChild(content);
 
-        var win = OZ.DOM.win();
-        var scroll = OZ.DOM.scroll();
-        this.dom.container.style.left =
-            Math.round(
-                scroll[0] + (win[0] - this.dom.container.offsetWidth) / 2
-            ) + "px";
-        this.dom.container.style.top =
-            Math.round(
-                scroll[1] + (win[1] - this.dom.container.offsetHeight) / 2
-            ) + "px";
-
         this.dom.cancel.style.visibility = this.callback ? "" : "hidden";
-        this.dom.container.style.visibility = "visible";
+        /*
+         * grabado: #173。showModal() が中央寄せ・::backdrop・フォーカストラップ・
+         * 背後の inert 化・Esc を持つ。**JS の px 計算（scroll + (win - offsetWidth) / 2）と
+         * #background のサイズ追従（sync）は、まるごと要らなくなった。**
+         */
+        this.dom.container.showModal();
 
         var formElements = ["input", "select", "textarea"];
         var all = this.dom.container.getElementsByTagName("*");
@@ -112,11 +104,12 @@ export class Window {
         if (!this.state) {
             return;
         }
-        if (e.keyCode == 13) {
+        /*
+         * grabado: #173。**Esc の分岐は消えた** —— <dialog> が標準で拾う。
+         * keyCode（非推奨）も key に移した。Enter = OK だけがここに残る。
+         */
+        if (e.key === "Enter") {
             this.ok(e);
-        }
-        if (e.keyCode == 27) {
-            this.close();
         }
     }
 
@@ -132,17 +125,6 @@ export class Window {
             return;
         }
         this.state = 0;
-        this.dom.background.style.visibility = "hidden";
-        this.dom.container.style.visibility = "hidden";
-    }
-
-    sync(): void {
-        /* adjust background position */
-        var dims = OZ.DOM.win();
-        var scroll = OZ.DOM.scroll();
-        this.dom.background.style.width = dims[0] + "px";
-        this.dom.background.style.height = dims[1] + "px";
-        this.dom.background.style.left = scroll[0] + "px";
-        this.dom.background.style.top = scroll[1] + "px";
+        this.dom.container.close();
     }
 }

@@ -31,6 +31,21 @@ const html = readFileSync(INDEX, "utf8");
 /** テーマ切り替えの対象にならない = 常に効く CSS。テーマのトークンを参照できない側 */
 const ALWAYS_ON = ["base.css", "icons.css"];
 
+/**
+ * 常に効く CSS のうち、**テーマのトークンを参照してよい部分**を切り出す。
+ *
+ * ★ [data-theme^="material-"] で括られた規則は **material 系を選んだときしかマッチしない**
+ *   ので、そのとき material-inspired.css / material-dark.css の :root が生きている。
+ *   #172 で material の構造規則を base.css へ移したときに、この例外が要った。
+ */
+const THEME_SCOPED = '[data-theme^="material-"]';
+
+function unscoped(css: string): string {
+    /* 属性セレクタが出る前＝どのテーマでも効く部分。以降は material 系限定 */
+    const i = css.indexOf(THEME_SCOPED);
+    return i === -1 ? css : css.slice(0, i);
+}
+
 function read(file: string): string {
     return readFileSync(join(STYLES, file), "utf8");
 }
@@ -54,8 +69,8 @@ describe("styles の器（#169）", () => {
     test("常に効く CSS は、自前と base.css のトークンだけを参照する", () => {
         const base = declaredTokens(read("base.css"));
         for (const file of ALWAYS_ON) {
-            const css = read(file);
-            const own = declaredTokens(css);
+            const css = unscoped(read(file));
+            const own = declaredTokens(read(file));
             for (const ref of referencedTokens(css)) {
                 expect(
                     own.has(ref) || base.has(ref),
@@ -66,14 +81,30 @@ describe("styles の器（#169）", () => {
         }
     });
 
-    test("テーマ CSS の var() は、自前か base.css で定義されている", () => {
-        const base = declaredTokens(read("base.css"));
+    test("var() は、どこかのテーマか base.css で定義されている", () => {
+        /*
+         * ★ material 系限定の規則（base.css の後半）は material-inspired.css の :root を
+         *   参照する。**ファイルをまたぐので、定義側は全 CSS の和集合で見る** ——
+         *   「original で未定義になる」形は上のテストが押さえている。
+         */
+        const declared = new Set(cssFiles.flatMap((f) => [...declaredTokens(read(f))]));
         for (const file of cssFiles) {
-            const css = read(file);
-            const own = declaredTokens(css);
-            for (const ref of referencedTokens(css)) {
-                expect(own.has(ref) || base.has(ref), `${file} の ${ref} が未定義`).toBe(true);
+            for (const ref of referencedTokens(read(file))) {
+                expect(declared.has(ref), `${file} の ${ref} がどこにも無い`).toBe(true);
             }
+        }
+    });
+
+    test("material 系テーマの :root は、キー集合が完全に一致する", () => {
+        /*
+         * ★ **片方にだけトークンを足す事故を潰す**（#172）。構造規則は base.css に
+         *   1 本しか無いので、**キーが欠けたテーマでは、その宣言だけが静かに落ちる**。
+         */
+        const themes = cssFiles.filter((f) => f.startsWith("material-"));
+        expect(themes.length, "material 系テーマが 2 本ない").toBeGreaterThanOrEqual(2);
+        const keys = themes.map((f) => [...declaredTokens(read(f))].sort());
+        for (let i = 1; i < keys.length; i++) {
+            expect(keys[i], `${themes[i]} のキー集合が ${themes[0]} と違う`).toEqual(keys[0]);
         }
     });
 
@@ -143,8 +174,14 @@ function tokenValue(css: string, name: string): string {
     return m[1]!.trim();
 }
 
-describe("色のコントラスト（#171）", () => {
-    const theme = read("material-inspired.css");
+/*
+ * ★ #172 で両テーマを回すようにした。ダークは --on-accent が暗い色（#1e1e1e）になるので、
+ *   **同じ対を同じ式で見ていれば、ライトの直感が通じない側も機械が拾う**。
+ */
+describe.each(["material-inspired.css", "material-dark.css"])(
+    "色のコントラスト（#171 / #172）—— %s",
+    (themeFile) => {
+    const theme = read(themeFile);
     const base = read("base.css");
     const surface = tokenValue(theme, "--surface");
 
@@ -152,7 +189,10 @@ describe("色のコントラスト（#171）", () => {
     const PAIRS: [string, string, string][] = [
         ["本文", tokenValue(theme, "--text"), surface],
         ["薄い文字（label / optgroup）", tokenValue(theme, "--text-muted"), surface],
-        ["型ヒント", tokenValue(base.slice(base.indexOf(".typehint")), "color"), surface],
+        /* material 系の .typehint は base.css で var(--text-muted) に寄せてある（#172） */
+        ["型ヒント", tokenValue(theme, "--text-muted"), surface],
+        /* original が使う共通側の literal は、白い面で見る */
+        ["型ヒント（original 用の literal）", tokenValue(base.slice(base.indexOf(".typehint")), "color"), "#FFF"],
         /* 白い文字を載せる面。#171 でこの 6 つのうち 5 つが 4.5:1 に届いていなかった */
         ["ブランド面の上の文字（#bar のホバー）", onAccent, tokenValue(theme, "--brand")],
         ["ブランド面（ホバー）", onAccent, tokenValue(theme, "--brand-hover")],
@@ -162,13 +202,14 @@ describe("色のコントラスト（#171）", () => {
         ["危険面（#keyremove）", onAccent, tokenValue(theme, "--danger")],
         ["危険面（ホバー）", onAccent, tokenValue(theme, "--danger-hover")],
         /* フォーカスリングは非テキストなので 3:1 でよいが、値が既に 4.5 を超えている */
-        ["フォーカスリング", tokenValue(base, "--focus"), surface],
+        ["フォーカスリング", tokenValue(theme, "--focus"), surface],
     ];
 
     test.each(PAIRS)("%s が WCAG AA（4.5:1）を満たす", (_label, fg, bg) => {
         expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
     });
-});
+    },
+);
 
 describe("!important（#171）", () => {
     test("author の !important は 3 つのまま —— 増やすなら理由を書いてから", () => {

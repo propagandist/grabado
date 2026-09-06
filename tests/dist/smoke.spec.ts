@@ -134,6 +134,10 @@ test("CSP 下で主要操作が一巡する", async () => {
         d.setOption("style", "original");
         d.applyStyle();
         const pattern = d.getOption("pattern");
+        /* grabado: #172。ダークも配布物で 1 度は通す —— material-dark.css は
+           alternate stylesheet なので、**dist に入っていなくても静かに何も起きない** */
+        d.setOption("style", "material-dark");
+        d.applyStyle();
         d.setOption("style", "material-inspired");
         d.applyStyle();
 

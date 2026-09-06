@@ -139,6 +139,14 @@ export class Options {
             "showtype",
             this.dom.optionshowtype.checked ? "1" : ""
         );
+
+        /*
+         * grabado: #172 で足した 1 行。**ここが無いと、テーマを変えてもリロードするまで
+         * 見た目が変わらない** —— applyStyle() の呼び出しはコンストラクタの 1 か所しか
+         * なかった。テーマが 2 本のあいだは気づきにくく、
+         * tests/dist ／ tests/image は手で d.applyStyle() を呼んでいたので見えていなかった。
+         */
+        this.owner.applyStyle();
     }
 
     click(): void {

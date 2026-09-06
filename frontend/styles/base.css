@@ -30,11 +30,27 @@
     --radius-0: 0;
     --radius-1: 2px;
 
-    --font-ui: verdana, sans-serif;
-    --font-mono: "Lucida Console", Monaco, monospace;
+    /*
+     * タイポ（#171）。**Web フォントは構造的に使えない** —— CSP は default-src 'none'
+     * で始まり font-src を持たないので、font-src は default-src に落ちる。
+     * **自己ホストの @font-face すら拒否される**（外部 CDN 以前の問題）。
+     *
+     * ★★ 和文フォントを sans-serif より前に必ず置く —— system-ui（Windows では
+     *   Segoe UI）は仮名・漢字を持たず、**グリフ単位で次の候補に落ちる**。
+     *   ここを空けると OS 既定の明朝や MS Pゴシックに落ちる環境が出る。
+     * ★ --font-mono は #textarea が使う（DDL / JSON が出る唯一の等幅面）ので、
+     *   和文コメントが混ざっても崩れない BIZ UDGothic を後ろに置く。
+     */
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+        "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo,
+        "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+        "Cascadia Mono", "Liberation Mono", "BIZ UDGothic", monospace;
     --text-xs: 80%;
     --text-sm: 85%;
-    --text-base: 12px;
+    /* #171 で 12px から上げた。和文の本文としては 12px が下限を割っている。
+       入力欄の 16px（--text-lg）は据え置き —— iOS の自動ズームを避けるため */
+    --text-base: 14px;
     --text-md: 14px;
     --text-lg: 16px;
     --text-xl: 21px;
@@ -42,6 +58,13 @@
 
     --duration: .2s;
     --ease: ease-in-out;
+
+    /*
+     * フォーカスの色（#171）。**ここだけは base に色トークンを置く** ——
+     * :focus-visible は両テーマに掛かる必要があり、テーマ側の :root に置くと
+     * original で未定義になる。**テーマが上書きしてよい**（material がしている）。
+     */
+    --focus: #1565c0;
 
     /* アイコン（#170）。--icon-gutter はラベルの左に空ける溝 */
     --icon-size: 18px;
@@ -52,9 +75,39 @@
 }
 
 /*
+ * ★★ キーボードのフォーカス（#171）。**この UI で最も効く a11y 修正**。
+ *
+ * 着手前は material-inspired.css が input[type=text] / textarea / select の 3 か所で
+ * `outline: 0` を書いており、**キーボードだけで操作すると、いまどこにいるかが
+ * 1 ピクセルも見えなかった**。role や aria を足すより先にこれ。
+ *
+ * :focus-visible なので、**マウスで押しただけでは出ない**（:focus だとボタンを
+ * クリックするたびに枠が残り、それを嫌って outline: 0 が書かれる元の動機に戻る）。
+ */
+:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+/*
+ * ★ 動きを減らす設定を尊重する（#171）。
+ *
+ * ★★ `*` に transition-duration: 0 を !important で叩き込む慣用句は使わない ——
+ *   このリポジトリの transition は **8 か所すべてが var(--duration) を通っている**
+ *   （#171 で literal だった 2 か所もトークンへ寄せた）ので、**トークンを 0 にすれば足りる**。
+ *   慣用句を持ち込むと author の !important が 3 → 7 に増え、
+ *   tests/node/styles.test.ts が縛っている数の意味が薄れる。
+ */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --duration: 0s;
+    }
+}
+
+/*
  * 2 テーマで完全に同じだった規則（#169 実測で 20 本）。
  * material-inspired.css と original.css の両方から、ここへ 1 本ずつ移した。
- * ★ 値は 1 バイトも変えていない。トークンにも置き換えていない（上の★★）。
+ * ★ 値は #171 で 1 つだけ変えた（.typehint の色。WCAG 4.5:1 未達だった）。
  */
 
 #controls {
@@ -125,9 +178,15 @@
     font-style: normal;
 }
 
+/*
+ * ★ #171 で gray（#808080）から下げた。白地で 3.95:1 しかなく **WCAG AA（4.5:1）未達**
+ *   だったため。#767676 で 4.54:1 —— 4.5 を満たす最も薄い灰色に寄せてある
+ *   （ヒントとして薄く見えることと、読めることの両方が要る）。
+ *   値の検査は tests/node/styles.test.ts。
+ */
 .typehint {
     font-size: var(--text-xs);
-    color: gray;
+    color: #767676;
 }
 
 .comment {

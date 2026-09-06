@@ -83,3 +83,109 @@ describe("styles の器（#169）", () => {
         }
     });
 });
+
+/*
+ * 色のコントラスト（#171）。
+ *
+ * ★ **不透明度ではなく色で薄くする**と、値をここで見られる —— 着手前は
+ *   `label { opacity: .7 }` や `.typehint { color: gray }` が**コントラスト計算から
+ *   逃げていた**。gray（#808080）は白地で 3.95:1 しかなく WCAG AA（4.5:1）に届かない。
+ *
+ * ★ 見るのは 4 対だけ。**背景が確定している組み合わせ**に限る ——
+ *   任意の重なりを総当たりすると、実際には起きない組み合わせで赤くなる。
+ */
+
+/** #rrggbb / rgba(r, g, b, a) を、白い面の上に合成した [r, g, b] にする */
+function toRgb(css: string, bg: [number, number, number]): [number, number, number] {
+    const hex = css.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (hex) {
+        /* #FFF のような 3 桁も来る（material-inspired.css の --surface がこれ） */
+        const six =
+            hex[1]!.length === 3
+                ? hex[1]!
+                      .split("")
+                      .map((c) => c + c)
+                      .join("")
+                : hex[1]!;
+        const n = parseInt(six, 16);
+        return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    const m = css.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/);
+    if (!m) throw new Error(`色として読めない: ${css}`);
+    const a = m[4] === undefined ? 1 : Number(m[4]);
+    return [1, 2, 3].map((i) => Math.round(Number(m[i]!) * a + bg[i - 1]! * (1 - a))) as [
+        number,
+        number,
+        number,
+    ];
+}
+
+/** WCAG 2.x の相対輝度 */
+function luminance([r, g, b]: [number, number, number]): number {
+    const f = (v: number) => {
+        const c = v / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+function contrast(fg: string, bg: string): number {
+    const bgRgb = toRgb(bg, [255, 255, 255]);
+    const fgRgb = toRgb(fg, bgRgb);
+    const [a, b] = [luminance(fgRgb), luminance(bgRgb)].sort((x, y) => y - x) as [number, number];
+    return (a + 0.05) / (b + 0.05);
+}
+
+/** `--name: 値;` を 1 つ読む */
+function tokenValue(css: string, name: string): string {
+    const m = css.match(new RegExp(`${name}\s*:\s*([^;]+);`));
+    if (!m) throw new Error(`${name} が見つからない`);
+    return m[1]!.trim();
+}
+
+describe("色のコントラスト（#171）", () => {
+    const theme = read("material-inspired.css");
+    const base = read("base.css");
+    const surface = tokenValue(theme, "--surface");
+
+    const onAccent = tokenValue(theme, "--on-accent");
+    const PAIRS: [string, string, string][] = [
+        ["本文", tokenValue(theme, "--text"), surface],
+        ["薄い文字（label / optgroup）", tokenValue(theme, "--text-muted"), surface],
+        ["型ヒント", tokenValue(base.slice(base.indexOf(".typehint")), "color"), surface],
+        /* 白い文字を載せる面。#171 でこの 6 つのうち 5 つが 4.5:1 に届いていなかった */
+        ["ブランド面の上の文字（#bar のホバー）", onAccent, tokenValue(theme, "--brand")],
+        ["ブランド面（ホバー）", onAccent, tokenValue(theme, "--brand-hover")],
+        ["アクセント面（#clientsql）", onAccent, tokenValue(theme, "--accent")],
+        ["情報面（#keyadd）", onAccent, tokenValue(theme, "--info")],
+        ["情報面（ホバー）", onAccent, tokenValue(theme, "--info-hover")],
+        ["危険面（#keyremove）", onAccent, tokenValue(theme, "--danger")],
+        ["危険面（ホバー）", onAccent, tokenValue(theme, "--danger-hover")],
+        /* フォーカスリングは非テキストなので 3:1 でよいが、値が既に 4.5 を超えている */
+        ["フォーカスリング", tokenValue(base, "--focus"), surface],
+    ];
+
+    test.each(PAIRS)("%s が WCAG AA（4.5:1）を満たす", (_label, fg, bg) => {
+        expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
+    });
+});
+
+describe("!important（#171）", () => {
+    test("author の !important は 3 つのまま —— 増やすなら理由を書いてから", () => {
+        /*
+         * 3 つとも **inline 宣言を殺すため**に要る（消すと挙動が変わる）:
+         *   .table tbody { background: none !important }  —— row.ts:428 の型パレット由来の
+         *       背景色を殺し、型の色を border-right の帯として出している
+         *   .table tbody.expanded { background-color: … !important }  —— 同上
+         *   select optgroup { background: white !important }  —— row.ts:512 の inline 背景色
+         *
+         * ★ 数える前にコメントを落とす —— **規約や理由を書いた文の中の "!important" を
+         *   拾うと、説明を書くほど数が増える**（org writing-baseline §8 と同じ形）。
+         */
+        const total = cssFiles
+            .map((f) => read(f).replace(/\/\*[\s\S]*?\*\//g, ""))
+            .join("\n")
+            .match(/!important/g);
+        expect(total?.length ?? 0).toBe(3);
+    });
+});

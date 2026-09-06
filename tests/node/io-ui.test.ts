@@ -47,9 +47,9 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
     }
 
     describe("serversave", () => {
-        test("keyword に .json が付き、Content-type と body が JSON になる", () => {
+        test("keyword に .json が付き、Content-type と body が JSON になる", async () => {
             const expected = h.toJson();
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             /* 段階5-4b: プリフライトが消えて 1 往復になった */
             const reqs = h.takeRequests();
@@ -72,10 +72,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(req.xml).toBeUndefined();
         });
 
-        test(".json 付きの名前を渡しても二重にならない", () => {
+        test(".json 付きの名前を渡しても二重にならない", async () => {
             /* serverlist が返すのは backend 上のファイル名なので .json 付き。
                それをそのまま prompt に貼っても壊れないことが jsonKeyword() の要件 */
-            h.io.serversave(undefined, "orders.json");
+            await h.io.serversave(undefined, "orders.json");
 
             for (const req of h.takeRequests()) {
                 expect(req.url).toContain("keyword=orders.json");
@@ -83,16 +83,16 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             }
         });
 
-        test("大文字の拡張子も二重付与しない", () => {
-            h.io.serversave(undefined, "Orders.JSON");
+        test("大文字の拡張子も二重付与しない", async () => {
+            await h.io.serversave(undefined, "Orders.JSON");
 
             for (const req of h.takeRequests()) {
                 expect(req.url).toContain("keyword=Orders.JSON");
             }
         });
 
-        test("設計の名前（タイトル）には .json を付けない", () => {
-            h.io.serversave(undefined, "orders");
+        test("設計の名前（タイトル）には .json を付けない", async () => {
+            await h.io.serversave(undefined, "orders");
 
             /* .json はファイル名の都合で、設計の名前ではない */
             expect(h.window.document.title).toContain("orders");
@@ -113,8 +113,8 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
      * **通信が何本起きたか／confirm が出たか／サーバ上のファイルが変わったか**。
      */
     describe("条件付き更新（段階5-4b）", () => {
-        test("保存は 1 往復で、プリフライトの load を投げない", () => {
-            h.io.serversave(undefined, "orders");
+        test("保存は 1 往復で、プリフライトの load を投げない", async () => {
+            await h.io.serversave(undefined, "orders");
 
             const reqs = h.takeRequests();
             expect(reqs).toHaveLength(1);
@@ -123,52 +123,52 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             );
         });
 
-        test("派生元が無ければ「新規のつもり」で送る（If-None-Match: *）", () => {
-            h.io.serversave(undefined, "orders");
+        test("派生元が無ければ「新規のつもり」で送る（If-None-Match: *）", async () => {
+            await h.io.serversave(undefined, "orders");
 
             const req = h.takeRequests()[0]!;
             expect(req.headers?.["If-None-Match"]).toBe("*");
             expect(req.headers?.["If-Match"]).toBeUndefined();
         });
 
-        test("読み込んだ後は観測した ETag を If-Match に載せる", () => {
+        test("読み込んだ後は観測した ETag を If-Match に載せる", async () => {
             h.setServerFile("orders.json", h.toJson());
-            h.io.serverload(false, "orders");
+            await h.io.serverload(false, "orders");
             h.takeRequests();
 
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             const req = h.takeRequests()[0]!;
             expect(req.headers?.["If-Match"]).toMatch(/^"[0-9a-f]{32}"$/);
             expect(req.headers?.["If-None-Match"]).toBeUndefined();
         });
 
-        test("サーバに無ければ確認を出さずに保存する", () => {
+        test("サーバに無ければ確認を出さずに保存する", async () => {
             const expected = h.toJson();
 
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toEqual([]);
             expect(h.getServerFile("orders.json")).toBe(expected);
         });
 
-        test("読み込んだ後の保存は確認を出さずに通る", () => {
+        test("読み込んだ後の保存は確認を出さずに通る", async () => {
             /* サーバ上の版を読む -> 派生元が載る -> 同じ名前へ保存 */
             h.setServerFile("orders.json", h.toJson());
-            h.io.serverload(false, "orders");
+            await h.io.serverload(false, "orders");
             h.takeRequests();
 
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.takeAlerts()).toEqual([]);
             expect(h.takeConfirms()).toEqual([]);
             expect(saveRequests(h.takeRequests())).toHaveLength(1);
         });
 
-        test("外部で変わっていたら確認を出し、断れば save をもう一度投げない", () => {
+        test("外部で変わっていたら確認を出し、断れば save をもう一度投げない", async () => {
             const mine = h.toJson();
             h.setServerFile("orders.json", mine);
-            h.io.serverload(false, "orders");
+            await h.io.serverload(false, "orders");
             h.takeRequests();
 
             /* app の外でファイルが変わった（= git pull） */
@@ -176,7 +176,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.setServerFile("orders.json", theirs);
 
             h.setConfirm(false);
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             const confirms = h.takeConfirms();
             expect(confirms).toHaveLength(1);
@@ -187,15 +187,15 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.getServerFile("orders.json")).toBe(theirs);
         });
 
-        test("外部で変わっていても、承諾すれば上書きする（衝突時だけ 2 往復）", () => {
+        test("外部で変わっていても、承諾すれば上書きする（衝突時だけ 2 往復）", async () => {
             const mine = h.toJson();
             h.setServerFile("orders.json", mine);
-            h.io.serverload(false, "orders");
+            await h.io.serverload(false, "orders");
             h.takeRequests();
             h.setServerFile("orders.json", mine + "\n");
 
             h.setConfirm(true);
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toHaveLength(1);
             const saves = saveRequests(h.takeRequests());
@@ -205,35 +205,35 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.getServerFile("orders.json")).toBe(mine);
         });
 
-        test("一度も読んでいない名前に実体があれば確認を出す", () => {
+        test("一度も読んでいない名前に実体があれば確認を出す", async () => {
             h.setServerFile("orders.json", '{"formatVersion": 2}\n');
 
             h.setConfirm(false);
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toHaveLength(1);
             /* 他人のファイルは無傷のまま */
             expect(h.getServerFile("orders.json")).toBe('{"formatVersion": 2}\n');
         });
 
-        test("412 は textarea に文言を出さない（confirm と二重にしない）", () => {
+        test("412 は textarea に文言を出さない（confirm と二重にしない）", async () => {
             h.setServerFile("orders.json", '{"formatVersion": 2}\n');
             h.io.dom.ta.value = "";
 
             h.setConfirm(false);
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             /* check() に通していたら httpresponse の文言が出る */
             expect(h.io.dom.ta.value).toBe("");
         });
 
-        test("保存に成功した内容が次の派生元になる（save の ETag をそのまま使う）", () => {
-            h.io.serversave(undefined, "orders");
+        test("保存に成功した内容が次の派生元になる（save の ETag をそのまま使う）", async () => {
+            await h.io.serversave(undefined, "orders");
             h.takeRequests();
 
             /* 2 回目は「自分が書いた版」と一致するので確認が出ない。
                load し直していないのに If-Match が載るのは、save の応答に ETag が来るから */
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toEqual([]);
             const reqs = saveRequests(h.takeRequests());
@@ -243,22 +243,22 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             );
         });
 
-        test("別名へ保存すると派生元が移る", () => {
-            h.io.serversave(undefined, "orders");
-            h.io.serversave(undefined, "invoices");
+        test("別名へ保存すると派生元が移る", async () => {
+            await h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "invoices");
             h.takeRequests();
             h.takeConfirms();
 
             /* invoices が派生元になったので、orders へ戻ると「新規のつもり」で送って 412 */
             h.setConfirm(false);
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.takeConfirms()).toHaveLength(1);
         });
 
-        test("save が 500 なら派生元を更新しない", () => {
+        test("save が 500 なら派生元を更新しない", async () => {
             /* 書けていないのに「書けた版」として記録すると、次の保存で他人の版を黙って踏む */
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
             h.takeRequests();
             const before = h.io.baseline;
 
@@ -266,17 +266,17 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(before!.name).toBe("orders.json");
         });
 
-        test("新規保存で 404 の文言が出ない（プリフライトが無いので原理的に起きない）", () => {
+        test("新規保存で 404 の文言が出ない（プリフライトが無いので原理的に起きない）", async () => {
             h.io.dom.ta.value = "";
 
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.io.dom.ta.value).not.toContain("Not Found");
             /* save 成功（201）の文言は現行どおり出る */
             expect(h.io.dom.ta.value).toContain("Saved");
         });
 
-        test("quicksave（F2）も同じ経路を通る", () => {
+        test("quicksave（F2）も同じ経路を通る", async () => {
             /* 無言で上書きしていた経路を塞ぐのが 4-6 からの主眼の 1 つ */
             h.setServerFile("orders.json", '{"formatVersion": 2}\n');
             h.io._name = "orders";
@@ -288,7 +288,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.getServerFile("orders.json")).toBe('{"formatVersion": 2}\n');
         });
 
-        test("書き出せない設計では save すら投げない", () => {
+        test("書き出せない設計では save すら投げない", async () => {
             /* serializer が落ちる状態（型パレット未取得）。通信の前に止まる */
             const palette = (h.io as unknown as {
                 owner: { palette: { setRoot(e: unknown): void; element(): unknown } };
@@ -296,7 +296,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             const loaded = palette.element();
             palette.setRoot(h.window.document.createElement("nothing"));
 
-            h.io.serversave(undefined, "orders");
+            await h.io.serversave(undefined, "orders");
 
             expect(h.takeAlerts()).toHaveLength(1);
             expect(h.takeRequests()).toEqual([]);
@@ -312,7 +312,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
      *   ボタンが消えると、5-5 以前より不便になるだけ。
      */
     describe("capabilities（段階5-5）", () => {
-        test("READONLY なら保存ボタンを押せなくする", () => {
+        test("READONLY なら保存ボタンを押せなくする", async () => {
             h.io.applyCapabilities({ readonly: true });
 
             expect(h.io.dom.serversave.disabled).toBe(true);
@@ -322,33 +322,33 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.io.dom.serverlist.disabled).toBe(false);
         });
 
-        test("READONLY でなければ何も隠さない", () => {
+        test("READONLY でなければ何も隠さない", async () => {
             h.io.applyCapabilities({ readonly: false });
 
             expect(h.io.dom.serversave.disabled).toBe(false);
             expect(h.io.dom.quicksave.disabled).toBe(false);
         });
 
-        test("readonly が無い応答は「できる」に倒す", () => {
+        test("readonly が無い応答は「できる」に倒す", async () => {
             h.io.applyCapabilities({});
 
             expect(h.io.dom.serversave.disabled).toBe(false);
         });
 
-        test("introspection が false なら import ボタンを押せなくする", () => {
+        test("introspection が false なら import ボタンを押せなくする", async () => {
             /* 接続先が env に列挙されていなければ押しても 404（段階5-7a） */
             h.io.applyCapabilities({ readonly: false, introspection: false });
 
             expect(h.io.dom.serverimport.disabled).toBe(true);
         });
 
-        test("introspection が true なら押せる", () => {
+        test("introspection が true なら押せる", async () => {
             h.io.applyCapabilities({ readonly: false, introspection: true });
 
             expect(h.io.dom.serverimport.disabled).toBe(false);
         });
 
-        test("introspection のキーが無ければ隠さない（分からないものを勝手に閉じない）", () => {
+        test("introspection のキーが無ければ隠さない（分からないものを勝手に閉じない）", async () => {
             /*
              * 古いサーバや壊れた JSON は「分からなかった」であって「できない」ではない ——
              * 引けなかったときに何も隠さないのと同じ理屈。
@@ -358,7 +358,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.io.dom.serverimport.disabled).toBe(false);
         });
 
-        test("反映は冪等（同じ入力なら何度呼んでも同じ状態）", () => {
+        test("反映は冪等（同じ入力なら何度呼んでも同じ状態）", async () => {
             h.io.applyCapabilities({ readonly: true });
             h.io.applyCapabilities({ readonly: true });
             expect(h.io.dom.serversave.disabled).toBe(true);
@@ -370,8 +370,8 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
     });
 
     describe("serverload", () => {
-        test("keyword に .json が付き、応答をテキストで受ける", () => {
-            h.io.serverload(false, "orders");
+        test("keyword に .json が付き、応答をテキストで受ける", async () => {
+            await h.io.serverload(false, "orders");
 
             const reqs = h.takeRequests();
             expect(reqs).toHaveLength(1);
@@ -395,9 +395,9 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
      * `introspectionToModel()` が引き受ける —— backend はパレットを知らない。
      */
     describe("serverimport（段階5-7b）", () => {
-        test("応答をテキストで受ける（xml: true を外した）", () => {
-            h.window.prompt = () => "shop";
-            h.io.serverimport();
+        test("応答をテキストで受ける（xml: true を外した）", async () => {
+            h.setPrompt("shop");
+            await h.io.serverimport();
 
             const reqs = h.takeRequests();
             expect(reqs).toHaveLength(1);
@@ -407,34 +407,34 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(req.xml).toBeFalsy();
         });
 
-        test("keyword の .json は付かない（設計ファイルの名前ではない）", () => {
-            h.window.prompt = () => "shop";
-            h.io.serverimport();
+        test("keyword の .json は付かない（設計ファイルの名前ではない）", async () => {
+            h.setPrompt("shop");
+            await h.io.serverimport();
 
             expect(h.takeRequests()[0]!.url).not.toContain(".json");
         });
 
-        test("接続名は URL エンコードされる", () => {
+        test("接続名は URL エンコードされる", async () => {
             /* env に列挙された接続の名前。段階5-7a までエンコードしていなかった */
-            h.window.prompt = () => "受注 db";
-            h.io.serverimport();
+            h.setPrompt("受注 db");
+            await h.io.serverimport();
 
             expect(h.takeRequests()[0]!.url).toContain("database=%E5%8F%97%E6%B3%A8%20db");
         });
 
-        test("壊れた応答は alert で伝え、開いている設計を壊さない", () => {
+        test("壊れた応答は alert で伝え、開いている設計を壊さない", async () => {
             const before = h.captureState();
-            h.window.prompt = () => "shop";
+            h.setPrompt("shop");
             h.setIntrospection("{ これは JSON ではない");
-            h.io.serverimport();
+            await h.io.serverimport();
 
             expect(h.takeAlerts()).toHaveLength(1);
             expect(h.captureState()).toBe(before);
             h.setIntrospection(null);
         });
 
-        test("読み込んだ結果が設計に入る（parse -> 型解決 -> 適用）", () => {
-            h.window.prompt = () => "shop";
+        test("読み込んだ結果が設計に入る（parse -> 型解決 -> 適用）", async () => {
+            h.setPrompt("shop");
             h.setIntrospection(
                 JSON.stringify({
                     introspectionVersion: 1,
@@ -453,7 +453,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
                 }),
             );
 
-            h.io.serverimport();
+            await h.io.serverimport();
 
             expect(h.takeAlerts()).toEqual([]);
             const state = h.captureState();
@@ -462,8 +462,8 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.setIntrospection(null);
         });
 
-        test("落ちた型を textarea で伝える（黙って捨てない）", () => {
-            h.window.prompt = () => "shop";
+        test("落ちた型を textarea で伝える（黙って捨てない）", async () => {
+            h.setPrompt("shop");
             h.setIntrospection(
                 JSON.stringify({
                     introspectionVersion: 1,
@@ -480,15 +480,15 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
                 }),
             );
 
-            h.io.serverimport();
+            await h.io.serverimport();
 
             expect(h.io.dom.ta.value).toContain("t.status");
             expect(h.io.dom.ta.value).toContain("USER-DEFINED");
             h.setIntrospection(null);
         });
 
-        test("落ちた列が無ければその旨を出す", () => {
-            h.window.prompt = () => "shop";
+        test("落ちた列が無ければその旨を出す", async () => {
+            h.setPrompt("shop");
             h.setIntrospection(
                 JSON.stringify({
                     introspectionVersion: 1,
@@ -499,7 +499,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
                 }),
             );
 
-            h.io.serverimport();
+            await h.io.serverimport();
 
             expect(h.io.dom.ta.value).toContain("落ちた列は無い");
             h.setIntrospection(null);
@@ -507,7 +507,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
     });
 
     describe("loadDesignText", () => {
-        test("設計 JSON を読む", () => {
+        test("設計 JSON を読む", async () => {
             const source = h.toJson();
             h.loadFixture(readFixture(SERIALIZER_DB, "minimal"));
 
@@ -517,7 +517,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.toJson()).toBe(source);
         });
 
-        test("設計 XML も読む（読込互換）", () => {
+        test("設計 XML も読む（読込互換）", async () => {
             /*
              * 段階6-5a まで入力の XML を h.toXML()（＝ grabado 自身の書き出し）から
              * 作っていた。XML の書き出しが消えたので fixture をそのまま食わせる
@@ -534,7 +534,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.toJson()).toBe(source);
         });
 
-        test("空なら empty を出して何もしない", () => {
+        test("空なら empty を出して何もしない", async () => {
             const before = h.toJson();
 
             h.io.loadDesignText("   \n  ");
@@ -543,7 +543,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.toJson()).toBe(before);
         });
 
-        test("どちらの形式でもない入力は parser に渡さない", () => {
+        test("どちらの形式でもない入力は parser に渡さない", async () => {
             const before = h.toJson();
 
             h.io.loadDesignText("CREATE TABLE foo ();");
@@ -553,7 +553,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.toJson()).toBe(before);
         });
 
-        test("壊れた JSON は alert で伝え、開いている設計を壊さない", () => {
+        test("壊れた JSON は alert で伝え、開いている設計を壊さない", async () => {
             const before = h.toJson();
 
             h.io.loadDesignText('{"formatVersion": 2, "db": ');
@@ -562,7 +562,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.toJson()).toBe(before);
         });
 
-        test("db 不一致の alert にファイル側と実行中の db 名と導線が入る", () => {
+        test("db 不一致の alert にファイル側と実行中の db 名と導線が入る", async () => {
             const design = JSON.parse(h.toJson());
             design.db = "mysql";
 
@@ -576,7 +576,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(alerts[0]).toContain("Options");
         });
 
-        test("壊れた JSON を XML として読み直さない（フォールバックが無いこと）", () => {
+        test("壊れた JSON を XML として読み直さない（フォールバックが無いこと）", async () => {
             /*
              * ここが detect.ts の存在理由。フォールバックがあると、この入力は
              * 「JSON として壊れている」→「XML としても壊れている」とたどって
@@ -591,7 +591,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
     });
 
     describe("書き出し", () => {
-        test("clientsave は textarea に JSON を入れる", () => {
+        test("clientsave は textarea に JSON を入れる", async () => {
             h.io.clientsave();
 
             const text = h.io.dom.ta.value;
@@ -599,7 +599,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(text).toBe(h.toJson());
         });
 
-        test("型パレットが読めていなければ書かずに alert する", () => {
+        test("型パレットが読めていなければ書かずに alert する", async () => {
             /*
              * serializer は「1 バイトも書かずに落ちる」契約（js/io/json-serializer.ts）。
              * UI 側もそれに合わせて textarea を空で上書きしない。
@@ -640,10 +640,10 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.io.applyCapabilities({ ai: true });
         });
 
-        test("押すと、送る JSON がそのまま textarea に出る", () => {
+        test("押すと、送る JSON がそのまま textarea に出る", async () => {
             h.setConfirm(false);
 
-            h.io.aireview();
+            await h.io.aireview();
 
             const shown = h.io.dom.ta.value;
             expect(shown).toContain('"aiRequestVersion": 1');
@@ -652,23 +652,23 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(shown).not.toContain('"x"');
         });
 
-        test("**断ったら 1 バイトも送らない**", () => {
+        test("**断ったら 1 バイトも送らない**", async () => {
             h.setConfirm(false);
 
-            h.io.aireview();
+            await h.io.aireview();
 
             expect(h.takeRequests().filter((r) => r.url.indexOf("api/ai/review") !== -1)).toHaveLength(0);
         });
 
-        test("承諾すると POST が飛び、body は見せたものと 1 バイトも違わない", () => {
+        test("承諾すると POST が飛び、body は見せたものと 1 バイトも違わない", async () => {
             /* まず断って、送る前に見せたものを取る（承諾すると応答の文言で上書きされる） */
             h.setConfirm(false);
-            h.io.aireview();
+            await h.io.aireview();
             const shown = h.io.dom.ta.value;
             h.takeRequests();
 
             h.setConfirm(true);
-            h.io.aireview();
+            await h.io.aireview();
             const req = h.takeRequests().find((r) => r.url.indexOf("api/ai/review") !== -1)!;
 
             expect(req.method).toBe("post");
@@ -677,7 +677,7 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(req.data).toBe(shown);
         });
 
-        test("提案が返ると一覧になる（**まだ適用しない**）", () => {
+        test("提案が返ると一覧になる（**まだ適用しない**）", async () => {
             h.setConfirm(true);
             h.setAiReview(
                 JSON.stringify([
@@ -691,31 +691,31 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
                 ]),
             );
 
-            h.io.aireview();
+            await h.io.aireview();
 
             expect(h.io.dom.ta.value).toContain("1 件");
             expect(h.io.dom.ta.value).toContain("missing_pk");
             expect(h.io.dom.ta.value).toContain("まだ 1 件も適用していない");
         });
 
-        test("429 に文言が出る（段階11-2a が先送りした分の受け皿）", () => {
+        test("429 に文言が出る（段階11-2a が先送りした分の受け皿）", async () => {
             h.setConfirm(true);
             h.setAiReview("", 429);
 
-            h.io.aireview();
+            await h.io.aireview();
 
             expect(h.io.dom.ta.value).toContain("Too Many Requests");
         });
 
-        test("403 は「このデプロイでは禁止」の文言（AI が無効なデプロイ）", () => {
+        test("403 は「このデプロイでは禁止」の文言（AI が無効なデプロイ）", async () => {
             h.setConfirm(true);
 
-            h.io.aireview();
+            await h.io.aireview();
 
             expect(h.io.dom.ta.value).toContain("Forbidden");
         });
 
-        test("capabilities の ai が false ならボタンが押せない（冪等）", () => {
+        test("capabilities の ai が false ならボタンが押せない（冪等）", async () => {
             h.io.applyCapabilities({ ai: false });
             expect(h.io.dom.aireview.disabled).toBe(true);
 
@@ -749,48 +749,48 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             patch: { op: "rename-table", name: "gone2" },
         };
 
-        function review(suggestions: unknown[]): void {
+        async function review(suggestions: unknown[]): Promise<void> {
             h.setConfirm(true);
             h.setAiReview(JSON.stringify(suggestions));
             h.io.applyCapabilities({ ai: true });
-            h.io.aireview();
+            await h.io.aireview();
             h.takeRequests();
         }
 
-        test("提案が無ければ当てない（alert で言う）", () => {
+        test("提案が無ければ当てない（alert で言う）", async () => {
             h.io.aiSuggestions = null;
 
-            h.io.aiapply();
+            await h.io.aiapply();
 
             expect(h.takeAlerts()).toHaveLength(1);
         });
 
-        test("all で当てると**設計が実際に変わる**", () => {
-            review([rename]);
-            h.window.prompt = () => "all";
+        test("all で当てると**設計が実際に変わる**", async () => {
+            await review([rename]);
+            h.setPrompt("all");
 
-            h.io.aiapply();
+            await h.io.aiapply();
 
             const json = h.toJson();
             expect(json).toContain('"name": "user_accounts"');
             expect(json).not.toContain('"name": "users"');
         });
 
-        test("**適用は保存ではない**（1 度も save が飛ばない）", () => {
-            review([rename]);
-            h.window.prompt = () => "all";
+        test("**適用は保存ではない**（1 度も save が飛ばない）", async () => {
+            await review([rename]);
+            h.setPrompt("all");
 
-            h.io.aiapply();
+            await h.io.aiapply();
 
             expect(saveRequests(h.takeRequests())).toHaveLength(0);
             expect(h.io.dom.ta.value).toContain("まだ保存していない");
         });
 
-        test("落ちた提案は理由が locale の語で出る（他の適用は止めない）", () => {
-            review([missing, rename]);
-            h.window.prompt = () => "all";
+        test("落ちた提案は理由が locale の語で出る（他の適用は止めない）", async () => {
+            await review([missing, rename]);
+            h.setPrompt("all");
 
-            h.io.aiapply();
+            await h.io.aiapply();
 
             const shown = h.io.dom.ta.value;
             expect(shown).toContain("2 件のうち 1 件を適用した");
@@ -799,22 +799,22 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.toJson()).toContain('"name": "user_accounts"');
         });
 
-        test("番号で選ぶと、選んだものだけ当たる", () => {
-            review([missing, rename]);
+        test("番号で選ぶと、選んだものだけ当たる", async () => {
+            await review([missing, rename]);
             /* 一覧は重い順（error が 1 番）。2 番だけ選ぶ */
-            h.window.prompt = () => "2";
+            h.setPrompt("2");
 
-            h.io.aiapply();
+            await h.io.aiapply();
 
             expect(h.io.dom.ta.value).toContain("1 件のうち 1 件を適用した");
             expect(h.toJson()).toContain('"name": "user_accounts"');
         });
 
-        test("prompt を断ったら設計に触らない", () => {
-            review([rename]);
-            h.window.prompt = () => null;
+        test("prompt を断ったら設計に触らない", async () => {
+            await review([rename]);
+            h.setPrompt(null);
 
-            h.io.aiapply();
+            await h.io.aiapply();
 
             expect(h.toJson()).toContain('"name": "users"');
         });

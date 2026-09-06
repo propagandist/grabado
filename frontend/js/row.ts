@@ -14,6 +14,7 @@ import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";
 import type { Relation } from "./relation.ts";
+import { dialogs } from "./dialog.ts";
 
 /**
  * buildEdit() が作る編集フォームの 8 要素。
@@ -346,8 +347,8 @@ export class Row extends Visual<RowDom> {
         this.dom.container.appendChild(tr);
     }
 
-    changeComment(e: MouseEvent): void {
-        var c = prompt(_("commenttext"), this.data.comment);
+    async changeComment(e: MouseEvent): Promise<void> {
+        var c = await dialogs().prompt(_("commenttext"), this.data.comment);
         if (c === null) {
             return;
         }
@@ -572,7 +573,8 @@ export class Row extends Visual<RowDom> {
     }
 
     enter(e: KeyboardEvent): void {
-        if (e.keyCode == 13) {
+        /* grabado: #173 で keyCode から key へ */
+        if (e.key === "Enter") {
             this.collapse();
         }
     }

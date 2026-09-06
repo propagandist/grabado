@@ -22,7 +22,8 @@
     --shadow-window: none;
 }
 
-#bar, #background, #minimap {
+/* grabado: #background は #173 で消えた（<dialog> の ::backdrop が担う） */
+#bar, #minimap {
     display: none;
 }
 

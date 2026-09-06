@@ -20,6 +20,7 @@ import type { Row } from "./row.ts";
 import type { Table } from "./table.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
+import { dialogs } from "./dialog.ts";
 
 /** 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」（7 個ともループが埋める） */
 export interface RowManagerDom {
@@ -201,8 +202,8 @@ export class RowManager {
         this.redraw();
     }
 
-    remove(e?: Event): void {
-        var result = confirm(
+    async remove(e?: Event): Promise<void> {
+        var result = await dialogs().confirm(
             _("confirmrow") + " '" + (this.selected as Row).getTitle() + "' ?"
         );
         if (!result) {
@@ -260,21 +261,23 @@ export class RowManager {
             return;
         } /* not when in form field */
 
-        switch (e.keyCode) {
-            case 38:
+        /* grabado: #173 で keyCode（38/40/46/13/27）から key へ移した */
+        switch (e.key) {
+            case "ArrowUp":
                 this.up();
                 OZ.Event.prevent(e);
                 break;
-            case 40:
+            case "ArrowDown":
                 this.down();
                 OZ.Event.prevent(e);
                 break;
-            case 46:
-                this.remove();
+            case "Delete":
+                /* remove() は confirm を待つので Promise を返す（#173） */
+                void this.remove();
                 OZ.Event.prevent(e);
                 break;
-            case 13:
-            case 27:
+            case "Enter":
+            case "Escape":
                 this.selected.collapse();
                 break;
         }

@@ -93,12 +93,17 @@ export async function useDatatypes(page: Page, db: string): Promise<void> {
 export async function loadFixture(page: Page, xml: string): Promise<void> {
     const failures = await page.evaluate((fixtureXml) => {
         const seen: string[] = [];
-        const originalAlert = window.alert;
-        window.alert = (msg?: unknown) => void seen.push(String(msg));
+        /* grabado: #173 で差し替え先が window.alert から d.dialogs へ移った */
+        const dialogs = window.d!.dialogs;
+        const original = dialogs.alert;
+        dialogs.alert = (msg: string) => {
+            seen.push(String(msg));
+            return Promise.resolve();
+        };
         try {
             window.d!.io.fromXMLText(fixtureXml);
         } finally {
-            window.alert = originalAlert;
+            dialogs.alert = original;
         }
         return seen;
     }, xml);
@@ -125,12 +130,24 @@ export function clickIo(
     promptAnswer: string | null = null,
 ): Promise<string[]> {
     return page.evaluate(
-        ([buttonId, answer]) => {
+        async ([buttonId, answer]) => {
             const seen: string[] = [];
-            const originalAlert = window.alert;
-            const originalPrompt = window.prompt;
-            window.alert = (msg?: unknown) => void seen.push(String(msg));
-            window.prompt = () => answer;
+            /*
+             * grabado: #173。差し替え先が window から d.dialogs へ移った。
+             *
+             * ★★ **押した後にマイクロタスクを消化する** —— prompt / confirm を通る経路は
+             *   `await` で 1 度中断するので、**click() から戻った時点ではまだ alert が
+             *   出ていない**。ネイティブの prompt は同期でブロックしていたので、
+             *   この待ちは要らなかった。
+             */
+            const dialogs = window.d!.dialogs;
+            const originalAlert = dialogs.alert;
+            const originalPrompt = dialogs.prompt;
+            dialogs.alert = (msg: string) => {
+                seen.push(String(msg));
+                return Promise.resolve();
+            };
+            dialogs.prompt = () => Promise.resolve(answer);
             try {
                 const buttons = window.d!.io.dom as unknown as Record<
                     string,
@@ -141,9 +158,11 @@ export function clickIo(
                     throw new Error(`io にボタンが無い: ${buttonId}`);
                 }
                 button.click();
+                /* await を数段またぐ経路があるので、1 マクロタスク分だけ譲る */
+                await new Promise((r) => setTimeout(r, 0));
             } finally {
-                window.alert = originalAlert;
-                window.prompt = originalPrompt;
+                dialogs.alert = originalAlert;
+                dialogs.prompt = originalPrompt;
             }
             return seen;
         },

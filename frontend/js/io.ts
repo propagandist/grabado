@@ -71,6 +71,7 @@ import {
 } from "./io/conflict.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
+import { dialogs } from "./dialog.ts";
 
 /**
  * server 経路の keyword に `.json` をちょうど 1 つ付ける（段階4-3b）。
@@ -435,7 +436,7 @@ export class IO {
             var parser = new DOMParser();
             var xmlDoc = parser.parseFromString(xml, "text/xml");
         } catch (e) {
-            alert(_("xmlerror") + ": " + (e as Error).message);
+            void dialogs().alert(_("xmlerror") + ": " + (e as Error).message);
             return;
         }
         this.fromXML(xmlDoc);
@@ -448,7 +449,7 @@ export class IO {
      */
     fromXML(xmlDoc: Document | null): boolean {
         if (!xmlDoc || !xmlDoc.documentElement) {
-            alert(_("xmlerror") + ": Null document");
+            void dialogs().alert(_("xmlerror") + ": Null document");
             return false;
         }
         this.owner.fromXML(xmlDoc.documentElement);
@@ -474,7 +475,7 @@ export class IO {
     loadDesignText(text: string): void {
         switch (detectDesignFormat(text)) {
             case "empty":
-                alert(_("empty"));
+                void dialogs().alert(_("empty"));
                 return;
 
             case "xml":
@@ -485,14 +486,14 @@ export class IO {
                 try {
                     this.owner.fromJson(text);
                 } catch (e) {
-                    alert(_("jsonerror") + ": " + (e as Error).message);
+                    void dialogs().alert(_("jsonerror") + ": " + (e as Error).message);
                     return;
                 }
                 this.owner.window.close();
                 return;
 
             case "unknown":
-                alert(_("unknownformat"));
+                void dialogs().alert(_("unknownformat"));
                 return;
         }
     }
@@ -509,7 +510,7 @@ export class IO {
         try {
             return this.owner.toJson();
         } catch (e) {
-            alert(_("jsonerror") + ": " + (e as Error).message);
+            void dialogs().alert(_("jsonerror") + ": " + (e as Error).message);
             return null;
         }
     }
@@ -533,9 +534,9 @@ export class IO {
             return;
         }
         navigator.clipboard.writeText(json).then(function() {
-            alert(_("clientsave") + " - Copied to clipboard!");
+            void dialogs().alert(_("clientsave") + " - Copied to clipboard!");
         }).catch(function(err) {
-            alert("Failed to copy: " + err);
+            void dialogs().alert("Failed to copy: " + err);
         });
     }
 
@@ -544,7 +545,7 @@ export class IO {
         navigator.clipboard.readText().then(function(text) {
             self.loadDesignText(text);
         }).catch(function(err) {
-            alert("Failed to paste: " + err);
+            void dialogs().alert("Failed to paste: " + err);
         });
     }
 
@@ -576,10 +577,10 @@ export class IO {
      * 剥がしてから付け直す経路）で、しかも実装が name.length - 4 の決め打ちだったので
      * suffix の長さが 4 でなければ壊れる。撤去する側に呼び手ごとあるので直さず消した。
      */
-    promptName(title: string): string | null {
+    async promptName(title: string): Promise<string | null> {
         var lastUsedName = (this.owner.getOption("lastUsedName") ||
             this.lastUsedName) as string;
-        var name = prompt(_(title), lastUsedName);
+        var name = await dialogs().prompt(_(title), lastUsedName);
         if (!name) {
             return null;
         }
@@ -604,7 +605,7 @@ export class IO {
             // Check file extension
             var fileName = file.name.toLowerCase();
             if (!fileName.endsWith(".json") && !fileName.endsWith(".xml") && !fileName.endsWith(".txt")) {
-                alert(_("clientloadfromfile") + ": Please select a JSON, XML or TXT file.");
+                void dialogs().alert(_("clientloadfromfile") + ": Please select a JSON, XML or TXT file.");
                 return;
             }
 
@@ -613,16 +614,16 @@ export class IO {
                 self.loadDesignText((e.target as FileReader).result as string);
             };
             reader.onerror = function(e) {
-                alert(_("xmlerror") + ": Failed to read file.");
+                void dialogs().alert(_("xmlerror") + ": Failed to read file.");
             };
             reader.readAsText(file);
         };
         input.click();
     }
 
-    clientlocalsave(): void {
+    async clientlocalsave(): Promise<void> {
         if (!window.localStorage) {
-            alert("Sorry, your browser does not seem to support localStorage.");
+            void dialogs().alert("Sorry, your browser does not seem to support localStorage.");
             return;
         }
 
@@ -632,13 +633,13 @@ export class IO {
         }
         if (json.length >= (5 * 1024 * 1024) / 2) {
             /* this is a very big db structure... */
-            alert(
+            void dialogs().alert(
                 "Warning: your database structure is above 5 megabytes in size, this is above the localStorage single key limit allowed by some browsers, example Mozilla Firefox 10"
             );
             return;
         }
 
-        var key = this.promptName("serversaveprompt");
+        var key = await this.promptName("serversaveprompt");
         if (!key) {
             return;
         }
@@ -653,7 +654,7 @@ export class IO {
                 throw new Error("Content verification failed");
             }
         } catch (e) {
-            alert(
+            void dialogs().alert(
                 "Error saving database structure to localStorage! (" +
                     (e as Error).message +
                     ")"
@@ -661,13 +662,13 @@ export class IO {
         }
     }
 
-    clientlocalload(): void {
+    async clientlocalload(): Promise<void> {
         if (!window.localStorage) {
-            alert("Sorry, your browser does not seem to support localStorage.");
+            void dialogs().alert("Sorry, your browser does not seem to support localStorage.");
             return;
         }
 
-        var key = this.promptName("serverloadprompt");
+        var key = await this.promptName("serverloadprompt");
         if (!key) {
             return;
         }
@@ -680,7 +681,7 @@ export class IO {
                 throw new Error("No data available");
             }
         } catch (e) {
-            alert(
+            void dialogs().alert(
                 "Error loading database structure from localStorage! (" +
                     (e as Error).message +
                     ")"
@@ -694,7 +695,7 @@ export class IO {
 
     clientlocallist(): void {
         if (!window.localStorage) {
-            alert("Sorry, your browser does not seem to support localStorage.");
+            void dialogs().alert("Sorry, your browser does not seem to support localStorage.");
             return;
         }
 
@@ -719,7 +720,7 @@ export class IO {
                 throw new Error("No data available");
             }
         } catch (e) {
-            alert(
+            void dialogs().alert(
                 "Error loading database names from localStorage! (" +
                     (e as Error).message +
                     ")"
@@ -747,7 +748,7 @@ export class IO {
             try {
                 sql = this.owner.toDdl(target);
             } catch (e) {
-                alert(_("xmlerror") + ": " + (e as Error).message);
+                void dialogs().alert(_("xmlerror") + ": " + (e as Error).message);
                 return;
             }
             this.dom.ta.value = sql;
@@ -769,7 +770,7 @@ export class IO {
         }
         this.owner.loadPalette(target, (ok) => {
             if (!ok) {
-                alert(_("xmlerror") + ": " + target);
+                void dialogs().alert(_("xmlerror") + ": " + target);
                 return;
             }
             body(target);
@@ -789,7 +790,7 @@ export class IO {
             try {
                 out = this.owner.toOrm(this.dom.ormtarget.value, target);
             } catch (e) {
-                alert(_("xmlerror") + ": " + (e as Error).message);
+                void dialogs().alert(_("xmlerror") + ": " + (e as Error).message);
                 return;
             }
             this.dom.ta.value = out;
@@ -804,8 +805,8 @@ export class IO {
      * setTitle() も保存が確定してから呼ぶ —— 中止したのにタイトルだけ変わると、
      * 保存できたように見える。
      */
-    serversave(e?: Event, keyword?: string): void {
-        var name = keyword || prompt(_("serversaveprompt"), this._name);
+    async serversave(e?: Event, keyword?: string): Promise<void> {
+        var name = keyword || (await dialogs().prompt(_("serversaveprompt"), this._name));
         if (!name) {
             return;
         }
@@ -879,8 +880,8 @@ export class IO {
         this.serversave(e, this._name);
     }
 
-    serverload(e?: Event | false, keyword?: string): void {
-        var name = keyword || prompt(_("serverloadprompt"), this._name);
+    async serverload(e?: Event | false, keyword?: string): Promise<void> {
+        var name = keyword || (await dialogs().prompt(_("serverloadprompt"), this._name));
         if (!name) {
             return;
         }
@@ -919,8 +920,8 @@ export class IO {
      *
      * `database` は **env に列挙された接続の名前**（段階5-7a）。ホスト名はここから渡らない。
      */
-    serverimport(e?: Event): void {
-        var name = prompt(_("serverimportprompt"), "");
+    async serverimport(e?: Event): Promise<void> {
+        var name = await dialogs().prompt(_("serverimportprompt"), "");
         if (!name) {
             return;
         }
@@ -967,11 +968,11 @@ export class IO {
      * 見せ方は textarea 経路で、6-10b（変換注記）/ 5-7b（import 注記）と同じ ——
      * **新しい UI 語彙を増やさない**。
      */
-    aireview(e?: Event): void {
+    async aireview(e?: Event): Promise<void> {
         var json = serializeAiRequest(buildAiRequest(extractModel(this.owner), this.owner.palette));
         /* 見せてから訊く。断られたら 1 バイトも送らない */
         this.dom.ta.value = json;
-        if (!confirm(_("aireviewconfirm"))) {
+        if (!(await dialogs().confirm(_("aireviewconfirm")))) {
             return;
         }
 
@@ -1010,11 +1011,11 @@ export class IO {
         try {
             suggestions = JSON.parse(data);
         } catch {
-            alert(_("aireviewbroken"));
+            void dialogs().alert(_("aireviewbroken"));
             return;
         }
         if (!Array.isArray(suggestions)) {
-            alert(_("aireviewbroken"));
+            void dialogs().alert(_("aireviewbroken"));
             return;
         }
         /* ★ 控えるのは 11-4 が当てるため。**表示のたびに上書きする**（古い提案を当てない） */
@@ -1036,21 +1037,21 @@ export class IO {
      * ★ **`alignTables()` を呼ばない。** 既存の設計を書き換えるだけなので座標は保つ
      *   （introspection の適用とはそこが違う）。
      */
-    aiapply(e?: Event): void {
+    async aiapply(e?: Event): Promise<void> {
         var suggestions = this.aiSuggestions;
         if (suggestions === null || suggestions.length === 0) {
-            alert(_("aiapplynone"));
+            void dialogs().alert(_("aiapplynone"));
             return;
         }
 
         var ordered = orderedSuggestions(suggestions);
-        var answer = prompt(_("aiapplyprompt"), "all");
+        var answer = await dialogs().prompt(_("aiapplyprompt"), "all");
         if (answer === null) {
             return;
         }
         var chosen = parseSelection(answer, ordered.length).map((index) => ordered[index]!);
         if (chosen.length === 0) {
-            alert(_("aiapplynone"));
+            void dialogs().alert(_("aiapplynone"));
             return;
         }
 
@@ -1081,7 +1082,7 @@ export class IO {
         }
     }
 
-    saveresponse(data: unknown, code: number, headers?: Record<string, string>): void {
+    async saveresponse(data: unknown, code: number, headers?: Record<string, string>): Promise<void> {
         this.owner.window.hideThrobber();
         var pending = this.pendingSave;
         this.pendingSave = null;
@@ -1097,7 +1098,7 @@ export class IO {
             }
             var verdict = verdictAfterConflict(this.baseline, pending.file);
             var message = verdict === "conflict" ? "saveconflict" : "saveexists";
-            if (!confirm(pending.file + "\n\n" + _(message))) {
+            if (!(await dialogs().confirm(pending.file + "\n\n" + _(message)))) {
                 return;
             }
             /* 上書きすると答えた。存在すれば無条件で置き換える */
@@ -1161,7 +1162,7 @@ export class IO {
             return;
         }
         if (typeof data !== "string" || !data) {
-            alert(_("empty"));
+            void dialogs().alert(_("empty"));
             return;
         }
 
@@ -1169,7 +1170,7 @@ export class IO {
         try {
             result = JSON.parse(data) as IntrospectionResult;
         } catch (e) {
-            alert(_("importerror") + "\n\n" + String(e));
+            void dialogs().alert(_("importerror") + "\n\n" + String(e));
             return;
         }
 
@@ -1178,7 +1179,7 @@ export class IO {
             converted = introspectionToModel(result, this.owner.palette);
         } catch (e) {
             /* パレットが読めていない等。開いている設計は壊さない（XML 経路と同じ流儀） */
-            alert(_("importerror") + "\n\n" + String(e));
+            void dialogs().alert(_("importerror") + "\n\n" + String(e));
             return;
         }
 
@@ -1194,14 +1195,15 @@ export class IO {
     }
 
     press(e: KeyboardEvent): void {
-        switch (e.keyCode) {
-            case 113:
+        /* grabado: #173 で keyCode（非推奨）から key へ移した。113 は F2 */
+        switch (e.key) {
+            case "F2":
                 /*
                  * grabado: OZ.opera の分岐を撤去した（HANDOVER §3 段階3-3b）。
                  * 元式 !!window.opera は Chromium / jsdom のどちらでも false（段階3-1 の
                  * 実測）なので、この preventDefault には到達しない。
                  */
-                this.quicksave(e);
+                void this.quicksave(e);
                 break;
         }
     }

@@ -580,8 +580,15 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
    sql 名にも id にも解決しない。解決するのは形式側 2 本が受け取る `palette` 引数（4-1a）。
 3. **`js/io/` は locale を通さない。** 例外 message は開発者向けで、価値の本体が位置情報。
    ユーザーへの見せ方（見出しだけ locale・詳細は素通し）は呼び手の [`../frontend/js/io.ts`](../frontend/js/io.ts) が決める（4-3b）。
-4. **UI と通信は `js/io.ts` に残す。** ダイアログの組み立て・`alert` / `confirm` / `prompt`・
+4. **UI と通信は `js/io.ts` に残す。** ダイアログの組み立て・**1 問ダイアログの呼び出し**・
    `OZ.Request`・localStorage・ダウンロードはすべてこちら側で、`js/io/` は形式とモデルしか知らない。
+
+   **★ `alert` / `confirm` / `prompt` は #173 で [`../frontend/js/dialog.ts`](../frontend/js/dialog.ts) へ移った**
+   （ネイティブの 3 つは 0 件。`js/io.ts` からは `dialogs().alert(...)` の形で呼ぶ）。
+   **`dialog.ts` は「答えを待つ 1 問」だけを持ち、モデルも形式も通信も知らない** ——
+   [`../frontend/js/window.ts`](../frontend/js/window.ts)（4 枚のパネルを付け替えるモーダル）
+   とは**別の `<dialog>` 要素**で、**パネルを開いたまま alert を出す経路があるため**
+   使い回していない。**戻り値が Promise になったので、`io.ts` の 9 メソッドが `async` になった。**
 
 **段階6-5a で `ddl-xml.ts`（`DesignModel` → DDL 入力 XML）が消え、`ddl/` が入った。**
 XSLT が TS になって中間 XML が要らなくなったので、書き出し側は「モデル → バイト列」の

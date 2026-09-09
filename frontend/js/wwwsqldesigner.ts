@@ -206,7 +206,7 @@ export class Designer extends Visual<DesignerDom> {
     /* update area size */
     sync(): void {
         var w = this.minSize[0];
-        var h = this.minSize[0];
+        var h = this.minSize[1];
         for (var i = 0; i < this.tables.length; i++) {
             var t = this.tables[i]!;
             w = Math.max(w, t.x + t.width);
@@ -366,6 +366,20 @@ export class Designer extends Visual<DesignerDom> {
         this.options = new Options(this);
         this.window = new SqlWindow(this);
         this.dialogs = dialogs();
+
+        /*
+         * grabado: #214。**キャンバスの下限をここで測り直す。**
+         *
+         * コンストラクタ（上の _init 直後）で測った値は使えない —— #area の 3000x3000 は
+         * styles/base.css の `[data-theme^="material-"] #area` が持っており、その data-theme を
+         * 付けるのは applyStyle()（同ファイル）で、**minSize を読む行より後**にある。
+         * 結果、コンストラクタ側では **テーマ CSS が当たる前の #area**（幅はビューポート、
+         * 高さは 0）を測っていた。init2() は applyStyle() の後に走るので、ここなら実寸が採れる。
+         */
+        this.minSize = [
+            this.dom.container.offsetWidth,
+            this.dom.container.offsetHeight,
+        ];
 
         this.sync();
 

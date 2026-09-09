@@ -516,6 +516,32 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 かつ `alert` / `prompt` を**その呼び出しの間だけ**差し替えられる（`openDesigner` が張る
 dialog ハンドラと衝突しない）。
 
+### 座標系 — jsdom が 0 しか返さない層（#214）
+
+**ここは jsdom では成立しない。** `Designer.minSize` は `#area` の `offsetWidth` /
+`offsetHeight` から採られる（[`../frontend/js/wwwsqldesigner.ts`](../frontend/js/wwwsqldesigner.ts)）が、
+jsdom はレイアウトしないので両方 0 になる。[`../tests/support/state.ts`](../tests/support/state.ts) も
+同じ理由で**レイアウト由来の値を golden から全部除外している**（`table.width/height`、
+`dom.mini` の位置と大きさ、**relation path の `d` 属性**、`designer.width/height`）。
+
+結果、**この層を見ているテストは #214 まで 1 本も無かった。**
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/browser/canvas.spec.ts`](../tests/browser/canvas.spec.ts) | `minSize` が `#area` の実寸と一致すること・**幅と高さの下限が独立していること**（#214 の再現）・テーブルがあれば下限を超えること・**ミニマップの port が縦横で別々に追随すること**・`<svg>` の寸法属性が `designer` と一致すること |
+
+**★ CSS の値を焼かない。** `#area` は現在 3000x3000 の正方形（`styles/base.css` の
+`--area-size`）で、**正方形であるあいだ `minSize[0]` と `minSize[1]` は区別できない**。
+3000 をハードコードすると、縦横比を変えた日に**通ったまま意味を失う**。
+
+**★ #214 で 2 つ目が出た**（2026-09-09 実測）。`minSize` を読む行は `applyStyle()` より前に
+あり、**テーマ CSS（`[data-theme^="material-"] #area`）が当たる前の `#area`** を測っていた
+—— 実測 `[1264, 0]`。高さに `minSize[0]` を読んでいたバグが、**`minSize[1]` が 0 であることを
+隠していた**。測り直しは `init2()`（`applyStyle()` の後）に置いてある。
+
+**ここは今後も積む棚**。`relation.ts` / `map.ts` / `rubberband.ts` / `keymanager.ts` は
+まだテストからの参照が 0 で、ドラッグとラバーバンドは下の「見た目とキーボードの手動確認」に残る（#236）。
+
 ### 仮想 backend（§4 段階4-6）
 
 4-6 で保存が read-before-write（save の前に load を 1 回投げる）になり、**「サーバ上に何が
@@ -909,7 +935,7 @@ dev server で緑でも `dist/` が壊れていては配布できないので、
 | 4 | Keys | `<<` / `>>` が押せる |
 | 5 | Options | **テーマを変えて OK を押した瞬間に切り替わる**（#172 で `applyStyle()` の欠落を塞いだ）。リロードは要らない |
 | 6 | Save / Load | 「保存」4 種が**行き先の絵で読み分けられる**（#170） |
-| 7 | ミニマップのドラッグ | port が動く（`map.ts` が `offsetWidth - 2` を前提にしている。#171 で `box-sizing` を固定した） |
+| 7 | ミニマップのドラッグ | port が動く（`map.ts` が `offsetWidth - 2` を前提にしている。#171 で `box-sizing` を固定した）。**port の大きさの計算は `canvas.spec.ts` が張る**が、**ドラッグ操作そのものは目視のまま**（#236） |
 | 8 | ラバーバンド | 枠が 1px で見える（#171 で `.2px` から直した） |
 
 ### キーボードだけで一巡する

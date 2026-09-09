@@ -45,6 +45,7 @@ services:
       # 正本ディレクトリ。**コンテナ内のパス**なので、変えるなら上の mount 右辺も揃える
       # （揃っていなければ起動時の検証で落ちる —— 黙って別の場所へ書くことはない）。
       - GRABADO_SCHEMA_DIR
+      - GRABADO_MAX_DESIGN_BYTES
       # AI（§11）。**キーとモデル名が両方そろって初めて有効**（各自のキー＝ BYOK）。
       - ANTHROPIC_API_KEY
       - GRABADO_AI_MODEL

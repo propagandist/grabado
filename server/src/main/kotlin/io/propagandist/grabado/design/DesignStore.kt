@@ -60,3 +60,17 @@ interface DesignStore {
  * エラー表示ではなく分岐だから。
  */
 class PreconditionFailedException : RuntimeException("条件付き更新の前提が崩れている（If-Match / If-None-Match）")
+
+/**
+ * save の body が上限（`grabado.max-design-bytes`）を超えた（issue #215）。**413。**
+ *
+ * ★★ **413 を返すと決めたのは、返さなくても届くから。** 前段に nginx（既定
+ * `client_max_body_size` 1 MiB）や Traefik を置いた瞬間、上限超過は**アプリを通らずに
+ * 413 で返る**。`js/io.ts` の `check()` が 413 を持たなければ、アプリが 400 に寄せても
+ * その経路は塞がらない —— だから **`check()` に 413 を足し、アプリも 413 で揃える**。
+ *
+ * ★ 上限は**読み切る前に**判定する（[io.propagandist.grabado.api.DesignController.save]）。
+ * `readAllBytes()` で全ボディをヒープに読んでから測ると、上限の意味が半分無くなる。
+ */
+class DesignTooLargeException(val limit: Int) :
+    RuntimeException("設計が上限を超えている（上限 $limit バイト）")

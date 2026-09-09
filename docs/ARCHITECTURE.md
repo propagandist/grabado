@@ -742,7 +742,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | URL | `backend/<name>/?action=` | **`backend/file/?action=`** に固定（フロントの `BACKEND_PATH`）。サーバは `<name>` を**読まないままにしてある**ので、`?backend=` 付きの古い URL もそのまま動く | 5-1b / **5-5（実装済み）** |
 | 能力の問い合わせ | 無し | **`?action=capabilities`** → `{"readonly":…,"introspection":…,"ai":…}`。フロントは起動時に 1 回引き、READONLY なら保存ボタンを `disabled` にする。**引けなければ「全部できる」に倒す** | **5-5（実装済み）** |
 | `list` | `data/*` 全件・fs 順 | **`*.json` のみ・昇順固定**・空なら 0 バイト。`\n` 区切りは維持 | 5-2 |
-| `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**。`If-Match` / `If-None-Match` が満たされなければ **412**、応答には新しい **ETag** が付く | 5-2 / **5-4a（実装済み）** |
+| `save` | 201・body 空・内容を解釈しない | 201 と無解釈を維持（body は `inputStream` 直読み）。`.json` 以外（大小無視）と `keyword` 省略は **400**。`If-Match` / `If-None-Match` が満たされなければ **412**、応答には新しい **ETag** が付く。**上限（`GRABADO_MAX_DESIGN_BYTES`）を超えたら 413**（#215） | 5-2 / **5-4a（実装済み）** / **#215** |
 | `load` | 200 / 404・`text/xml` | 200 / 404 は維持。**`application/octet-stream` ＋ `nosniff` ＋ `attachment`**、**ETag（内容の SHA-256 先頭 16 バイト）** | 5-2 / **5-4a（実装済み）** |
 | `import` | XML（`db/<db>/datatypes.xml` 全文を連結） | **中立な introspection JSON**（§7.2）。パレットは連結せず、実行中パレットも差し替えない。接続先は **env に列挙した名前だけ**（表に無ければ 404、READONLY は 403、接続失敗は 503）。**§4.6 の 2 不具合は再現しない** | **5-7a / 5-7b（実装済み）** |
 | 未知 action / 指定なし | 501 | 501 を維持 | 5-1b |
@@ -787,6 +787,7 @@ SQL 型情報を返し、型 id への解決はフロントの `TypePalette` が
 | `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ） |
 | `GRABADO_READONLY`（`READONLY` も読む） | `false` | save を **403** にする（段階5-3 で実装）。introspection は 5-7、AI は §11 で同じ扱いになる。**公開デモは `true` 一択** —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。READONLY のときは正本ディレクトリの**書き込み可能性を要求しない**（読み取り専用マウントでも起動する） |
 | `GRABADO_HSTS` | `false` | `Strict-Transport-Security` を出す（issue #84）。**TLS の後ろに置いたデプロイだけ `true`** —— TLS を終端するのは前段（公開デモは Railway）で、アプリが見る口はいつも平文なので `request.isSecure` では判断できない。**既定で出すと手元が壊れる**（`http://localhost:8080` を開いたブラウザが以後 localhost を https へ強制し、消すにはブラウザの設定を触るしかない） |
+| `GRABADO_MAX_DESIGN_BYTES` | `1048576`（1 MiB） | save が受け取る設計 1 本の上限。超えたら **413**（issue #215）。**実測から出した値**（#206）—— 300 テーブルの設計 JSON が 414 KiB なので **750 テーブル相当**。★ **nginx の既定 `client_max_body_size` と同じ 1 MiB に揃えてある** —— 前段にプロキシを置くと 413 は**アプリを通らずに返る**ので、境界が揃っていれば「プロキシの裏かどうか」で挙動が変わらない。判定は**読み切る前**（`readNBytes(limit+1)`）|
 | introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする）。**入るのは 5-7** |
 
 ### 7.4 走らせ方

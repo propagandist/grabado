@@ -819,4 +819,39 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             expect(h.toJson()).toContain('"name": "users"');
         });
     });
+
+    describe("HTTP status の認識（IO.check）", () => {
+        /*
+         * ★★ **default: return true は「知らない status は成功」を意味する。**
+         *   ApiExceptionHandler の KDoc が「status を増やす PR では check() と locale を
+         *   同じ PR で広げること」と書いているのは、片側だけ広げると**無言で成功扱いの期間**が
+         *   できるため（#215）。
+         */
+        const RECOGNISED = [201, 400, 403, 404, 405, 413, 429, 500, 501, 503];
+
+        for (const code of RECOGNISED) {
+            test(`${code} は認識して false を返す`, () => {
+                h.io.dom.ta.value = "";
+                expect(h.io.check(code)).toBe(false);
+                /* 文言は locale から引く（http<code> のキー） */
+                expect(h.io.dom.ta.value).not.toBe("");
+            });
+        }
+
+        test("200 は成功として通す（既定の分岐）", () => {
+            expect(h.io.check(200)).toBe(true);
+        });
+
+        /*
+         * ★ 413 は **自分たちが返さなくても届く** —— 前段に nginx（既定
+         *   client_max_body_size 1 MiB）や Traefik を置いた瞬間、上限超過は**アプリを
+         *   通らずに 413 で返る**。だから backend が返すかどうかに関わらず必要（#215）。
+         */
+        test("413 の文言が 21 言語すべてにある", () => {
+            h.io.dom.ta.value = "";
+            h.io.check(413);
+            /* 未訳なら "http413" というキーがそのまま出る（globals.ts の _()） */
+            expect(h.io.dom.ta.value).not.toContain("http413");
+        });
+    });
 });

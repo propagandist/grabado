@@ -27,12 +27,26 @@ import java.time.Duration
  *   1 度開いたブラウザが**以後 localhost を https へ強制する**（HSTS はホスト名に効く。
  *   IP には効かない）—— 消すには利用者が自分でブラウザの設定を触るしかない。
  *   値と `preload` を付けない理由は [SecurityHeadersFilter.HSTS] にある。
+ * @property maxDesignBytes save が受け取る設計 1 本の上限（issue #215）。**既定 1 MiB。**
+ *
+ *   **実測から出した値**（#206、2026-09-09）—— 300 テーブルの設計 JSON が **414 KiB**
+ *   （1 テーブルおよそ 1.4 KiB）なので、1 MiB は **750 テーブル相当 ＝ 実測した上限の 2.5 倍**、
+ *   AI レビューの宣言上限（[AiProperties.maxTables] = 100）の 7.5 倍にあたる。
+ *
+ *   ★★ **nginx の既定 `client_max_body_size` と同じ 1 MiB に揃えてある。** アプリが上限を
+ *   持たなくても、前段にプロキシを置いた瞬間に **413 はアプリを通らずに返る** ——
+ *   境界を揃えておけば、「プロキシの裏かどうか」で挙動が変わらない。
+ *
+ *   ★ 超過は **413**。AI 側が 400 に寄せていた（[AiRequestCheck]）のは
+ *   「`js/io.ts` の `check()` が 413 を持たないから」で、**この issue でそれを塞いだ**ので
+ *   寄せる理由が消えた。
  */
 @ConfigurationProperties("grabado")
 data class GrabadoProperties(
     val schemaDir: Path,
     val readonly: Boolean = false,
     val hsts: Boolean = false,
+    val maxDesignBytes: Int = 1024 * 1024,
     val introspect: IntrospectProperties = IntrospectProperties(),
     val ai: AiProperties = AiProperties(),
 )

@@ -1069,6 +1069,13 @@ export class IO {
             case 403:
             case 404:
             case 405:
+            /*
+             * grabado: #215。**413 は自分たちが返さなくても届く** —— 前段に nginx
+             * （既定 client_max_body_size 1 MiB）や Traefik を置いた瞬間、上限超過は
+             * アプリを通らずに 413 で返る。ここが持たないと default: return true で
+             * **保存の失敗が黙って成功に見える**。
+             */
+            case 413:
             case 429:
             case 500:
             case 501:

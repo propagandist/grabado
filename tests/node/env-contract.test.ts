@@ -100,6 +100,7 @@ describe("env の名前が 3 つのファイルで一致している", () => {
             "GRABADO_AI_RATE_PER_MINUTE",
             "GRABADO_AI_TIMEOUT",
             "GRABADO_HSTS",
+            "GRABADO_MAX_DESIGN_BYTES",
             "GRABADO_READONLY",
             "GRABADO_SCHEMA_DIR",
         ]);

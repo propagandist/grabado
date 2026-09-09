@@ -144,18 +144,30 @@ export class Row extends Visual<RowDom> {
         this.collapse();
     }
 
-    setTitle(t: string): void {
+    setTitle(t: string, path?: Set<Row>): void {
         var old = this.getTitle();
+        /*
+         * grabado: #231。**サイクルで止める。** 相互 FK（A -> B かつ B -> A）で
+         * 無限再帰していた —— foreignconnect は isUnique() の行しか繋げないので
+         * 両端は PK 列で、house 既定ならどちらも `id`。**最も普通の形で踏む**。
+         *
+         * super.setTitle() がこのループの**後**にあるのが効いていた: 再帰の途中では
+         * 自分の title が古いまま残るので、戻ってきた辺で「まだ変わる」と判定される。
+         * 経路の意味は update() と同じ（下の KDoc）。
+         */
+        var seen = path ?? new Set<Row>();
+        seen.add(this);
         for (var i = 0; i < this.relations.length; i++) {
             var r = this.relations[i]!;
-            if (r.row1 != this) {
+            if (r.row1 != this || seen.has(r.row2)) {
                 continue;
             }
             var tt = renameOccurrences(r.row2.getTitle(), old, t);
             if (tt != r.row2.getTitle()) {
-                r.row2.setTitle(tt);
+                r.row2.setTitle(tt, seen);
             }
         }
+        seen.delete(this);
 
         super.setTitle(t);
         this.syncIdentifierWarning();
@@ -195,7 +207,20 @@ export class Row extends Visual<RowDom> {
         this.expand();
     }
 
-    update(data: Partial<RowData>): void {
+    /**
+     * 行のデータを更新し、FK の子行へ型と size を伝播する。
+     *
+     * ★★ `path` は **「今たどっている経路の上にある行」**であって、訪問済み集合ではない。
+     *   再帰の前に足し、**後で外す**。大域の visited にすると**非循環でも訪問回数が減る** ——
+     *   ダイヤモンド（A -> B、A -> C、B -> C）で C は 2 回更新されるのが現行の挙動で、
+     *   visited だと 1 回になる。経路上の集合なら DAG で枝刈りが 1 つも起きないので、
+     *   **値だけでなく redraw() の回数まで不変**（#207 / #210 が数えているのがそれ）。
+     *
+     *   引数で回すのは Designer 側に可変状態を置かないため —— 段階4-0a が撤去した
+     *   「可変シングルトンへの依存」を戻すことになるうえ、例外が抜けたときの後始末が要る。
+     *   引数ならトップレベル呼び出し 1 回の寿命で、残骸が出ない。
+     */
+    update(data: Partial<RowData>, path?: Set<Row>): void {
         /* update subset of row data */
         /* grabado: 旧 SQL.designer（段階4-0a）。コンストラクタは this.owner の代入後に
            update() を呼ぶので、ここで owner 鎖は必ず張れている */
@@ -232,16 +257,27 @@ export class Row extends Visual<RowDom> {
         }
 
         var elm = this.getDataType();
+        /*
+         * grabado: #212。**サイクルで止める。** 相互 FK で無限再帰していた
+         * （UI から到達でき、undo が無いので保存していない編集が失われる）。
+         * 止まったときは**編集した行の型が残る** —— 伝播で選んだ値を上書きし返さない。
+         */
+        var seen = path ?? new Set<Row>();
+        seen.add(this);
         for (var i = 0; i < this.relations.length; i++) {
             var r = this.relations[i]!;
-            if (r.row1 == this) {
-                r.row2.update({
-                    /* grabado: 段階6-2 で des.getFKTypeFor() から移した（id 照合・キャッシュ無し） */
-                    type: des.palette.fkIndexFor(this.data.type),
-                    size: this.data.size,
-                });
+            if (r.row1 == this && !seen.has(r.row2)) {
+                r.row2.update(
+                    {
+                        /* grabado: 段階6-2 で des.getFKTypeFor() から移した（id 照合・キャッシュ無し） */
+                        type: des.palette.fkIndexFor(this.data.type),
+                        size: this.data.size,
+                    },
+                    seen
+                );
             }
         }
+        seen.delete(this);
         this.redraw();
     }
 

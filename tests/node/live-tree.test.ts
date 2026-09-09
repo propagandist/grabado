@@ -273,4 +273,284 @@ describe("ライブツリー", () => {
             expect(b.keys).toEqual([]);
         });
     });
+
+    /*
+     * FK の型伝播とリネームの伝播（#212 / #231）。
+     *
+     * ★★ どちらも **相互 FK でサイクルになる**。foreignconnect は isUnique() の行しか
+     *   繋げないので**両端は PK 列**で、house 既定なら**どちらも `id`** ―― 相互 FK は
+     *   SQL として正当な設計で、UI からも作れる（rowClick が弾くのは r1 == r2 だけ）。
+     */
+    describe("FK の伝播がサイクルで止まる（#212 / #231）", () => {
+        /** 相互 FK。a.id -> b.id かつ b.id -> a.id */
+        const MUTUAL = J([
+            {
+                name: "a",
+                x: 20,
+                y: 20,
+                columns: [
+                    {
+                        name: "id",
+                        type: "integer",
+                        references: [{ table: "b", column: "id" }],
+                    },
+                ],
+            },
+            {
+                name: "b",
+                x: 400,
+                y: 20,
+                columns: [
+                    {
+                        name: "id",
+                        type: "integer",
+                        references: [{ table: "a", column: "id" }],
+                    },
+                ],
+            },
+        ]);
+
+        it("相互 FK は読み込める（relation は 2 本）", () => {
+            h.loadJson(MUTUAL);
+            expect(h.designer.relations.length).toBe(2);
+        });
+
+        it("相互 FK で型を変えても返る（#212）", () => {
+            h.loadJson(MUTUAL);
+            const a = h.designer.tables[0]!.rows[0]!;
+            const bigint = h.designer.palette.indexOfId("bigint");
+            expect(bigint).toBeGreaterThanOrEqual(0);
+            /* 修正前は RangeError: Maximum call stack size exceeded */
+            expect(() => a.update({ type: bigint })).not.toThrow();
+        });
+
+        it("止まったとき、編集した行の型が残る（#212）", () => {
+            h.loadJson(MUTUAL);
+            const a = h.designer.tables[0]!.rows[0]!;
+            const b = h.designer.tables[1]!.rows[0]!;
+            const bigint = h.designer.palette.indexOfId("bigint");
+            a.update({ type: bigint });
+            /* 伝播は 1 段で止まり、選んだ値が編集した行に残る */
+            expect(a.data.type).toBe(bigint);
+            expect(b.data.type).toBe(h.designer.palette.fkIndexFor(bigint));
+        });
+
+        it("相互 FK で行をリネームしても返る（#231）", () => {
+            h.loadJson(MUTUAL);
+            const a = h.designer.tables[0]!.rows[0]!;
+            const b = h.designer.tables[1]!.rows[0]!;
+            expect([a.getTitle(), b.getTitle()]).toEqual(["id", "id"]);
+            /* 修正前は RangeError */
+            expect(() => a.setTitle("id2")).not.toThrow();
+            expect(a.getTitle()).toBe("id2");
+        });
+
+        it("自己ループでも止まる", () => {
+            h.loadJson(
+                J([
+                    {
+                        name: "t",
+                        x: 20,
+                        y: 20,
+                        columns: [
+                            {
+                                name: "id",
+                                type: "integer",
+                                references: [{ table: "t", column: "id" }],
+                            },
+                        ],
+                    },
+                ])
+            );
+            const id = h.designer.tables[0]!.rows[0]!;
+            const bigint = h.designer.palette.indexOfId("bigint");
+            expect(() => id.update({ type: bigint })).not.toThrow();
+            expect(() => id.setTitle("id2")).not.toThrow();
+        });
+    });
+
+    /*
+     * ★★ **サイクル検出は「訪問済み集合」ではなく「経路上の集合」でなければならない。**
+     *
+     *   大域の visited にすると、**非循環でも訪問回数が減る** —— ダイヤモンド
+     *   （A->B, A->C, B->C）では C が 2 回更新されるのが現行の挙動で、visited だと 1 回になる。
+     *   経路上の集合（再帰前に add / 再帰後に delete）なら DAG で枝刈りが 1 つも起きず、
+     *   **値だけでなく redraw() の回数まで不変**になる（#207 / #210 が数えているのがそれ）。
+     *
+     *   ここの 2 本は**修正前から緑**である必要がある —— それが「挙動を変えていない」の実体。
+     */
+    describe("非循環では伝播の回数が変わらない", () => {
+        /** ダイヤモンド: a.id -> b.y、a.id -> c.x、b.y -> c.x */
+        const DIAMOND = J([
+            { name: "a", x: 20, y: 20, columns: [{ name: "id", type: "integer" }] },
+            {
+                name: "b",
+                x: 400,
+                y: 20,
+                columns: [
+                    {
+                        name: "y",
+                        type: "integer",
+                        references: [{ table: "a", column: "id" }],
+                    },
+                ],
+            },
+            {
+                name: "c",
+                x: 700,
+                y: 20,
+                columns: [
+                    {
+                        name: "x",
+                        type: "integer",
+                        references: [
+                            { table: "a", column: "id" },
+                            { table: "b", column: "y" },
+                        ],
+                    },
+                ],
+            },
+        ]);
+
+        it("ダイヤモンドの合流点は 2 回更新される", () => {
+            h.loadJson(DIAMOND);
+            const a = h.designer.tables[0]!.rows[0]!;
+            const c = h.designer.tables[2]!.rows[0]!;
+
+            let calls = 0;
+            const original = c.update.bind(c);
+            (c as unknown as { update: typeof c.update }).update = ((
+                ...args: Parameters<typeof original>
+            ) => {
+                calls++;
+                return original(...args);
+            }) as typeof c.update;
+
+            a.update({ type: h.designer.palette.indexOfId("bigint") });
+
+            expect(calls).toBe(2);
+        });
+
+        it("3 段のチェーンで型と size が末端まで届く", () => {
+            h.loadJson(
+                J([
+                    {
+                        name: "a",
+                        x: 20,
+                        y: 20,
+                        columns: [{ name: "id", type: "varchar", size: "10" }],
+                    },
+                    {
+                        name: "b",
+                        x: 400,
+                        y: 20,
+                        columns: [
+                            {
+                                name: "a_id",
+                                type: "varchar",
+                                size: "10",
+                                references: [{ table: "a", column: "id" }],
+                            },
+                        ],
+                    },
+                    {
+                        name: "c",
+                        x: 700,
+                        y: 20,
+                        columns: [
+                            {
+                                name: "b_id",
+                                type: "varchar",
+                                size: "10",
+                                references: [{ table: "b", column: "a_id" }],
+                            },
+                        ],
+                    },
+                ])
+            );
+            const a = h.designer.tables[0]!.rows[0]!;
+            const b = h.designer.tables[1]!.rows[0]!;
+            const c = h.designer.tables[2]!.rows[0]!;
+
+            a.update({ type: h.designer.palette.indexOfId("varchar"), size: "42" });
+
+            expect(b.data.size).toBe("42");
+            expect(c.data.size).toBe("42");
+        });
+
+        it("非循環のリネームは末端まで届く", () => {
+            h.loadJson(
+                J([
+                    { name: "a", x: 20, y: 20, columns: [{ name: "id", type: "integer" }] },
+                    {
+                        name: "b",
+                        x: 400,
+                        y: 20,
+                        columns: [
+                            {
+                                name: "id_ref",
+                                type: "integer",
+                                references: [{ table: "a", column: "id" }],
+                            },
+                        ],
+                    },
+                ])
+            );
+            const a = h.designer.tables[0]!.rows[0]!;
+            const b = h.designer.tables[1]!.rows[0]!;
+
+            a.setTitle("key");
+
+            expect(b.getTitle()).toBe("key_ref");
+        });
+    });
+
+    /*
+     * ★ **相互 FK は正当な設計なので、作成の側は塞がない**（#212 の判断）。
+     *   rowClick が弾くのは r1 == r2 だけ ―― この issue の前は目視でしか確かめられなかった。
+     */
+    describe("相互 FK は引き続き作れる", () => {
+        it("UI の経路（rowClick）で 2 方向とも繋がる", () => {
+            h.loadJson(
+                J([
+                    { name: "a", x: 20, y: 20, columns: [{ name: "id", type: "integer" }] },
+                    { name: "b", x: 400, y: 20, columns: [{ name: "id", type: "integer" }] },
+                ])
+            );
+            const d = h.designer;
+            const a = d.tables[0]!.rows[0]!;
+            const b = d.tables[1]!.rows[0]!;
+            expect(d.relations.length).toBe(0);
+
+            const connect = (from: Row, to: Row): void => {
+                d.rowManager.select(from);
+                d.rowManager.connecting = true;
+                d.rowManager.rowClick({ target: to, data: null });
+                d.rowManager.connecting = false;
+            };
+
+            connect(a, b);
+            connect(b, a);
+
+            expect(d.relations.length).toBe(2);
+            /* できた相互 FK を操作しても固まらない */
+            expect(() => a.update({ type: d.palette.indexOfId("bigint") })).not.toThrow();
+            expect(() => a.setTitle("id2")).not.toThrow();
+        });
+
+        it("同じ行どうしは繋がらない（現行のまま）", () => {
+            h.loadJson(
+                J([{ name: "a", x: 20, y: 20, columns: [{ name: "id", type: "integer" }] }])
+            );
+            const d = h.designer;
+            const a = d.tables[0]!.rows[0]!;
+
+            d.rowManager.select(a);
+            d.rowManager.connecting = true;
+            d.rowManager.rowClick({ target: a, data: null });
+            d.rowManager.connecting = false;
+
+            expect(d.relations.length).toBe(0);
+        });
+    });
 });

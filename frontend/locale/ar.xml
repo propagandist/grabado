@@ -106,6 +106,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">لم يتم العثور عليه</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http413">Content Too Large</string>
     <string name="http429">Too Many Requests</string>
     <string name="http500">خطأ داخلي في الخادم</string>
     <string name="http501">الخاصية غير موجودة</string>

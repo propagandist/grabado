@@ -109,6 +109,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">Non trovato</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http413">Content Too Large</string>
     <string name="http429">Too Many Requests</string>
     <string name="http500">Errore interno del server</string>
     <string name="http501">Non implementato</string>

@@ -16825,6 +16825,97 @@ eval するので、投げられる Error は **jsdom realm の Error**。`messa
 - **★ UI から同名テーブルは今も作れる**（`setTitle` で同じ名前を付けられる）。保存で止まる
   ——**入力を止めるかは別の判断**（#183 と同じく、どこまで強制するかの軸）
 
+### 2026-09-09 save に上限を置いた —— 413 は、自分たちが返さなくても届く
+
+**#215**（413 が返ると保存が成功に倒れる）。この issue は「**予約**」で、本文が
+「**save にサイズ上限を置くかどうかを決めるのが先**」と書いていた。
+
+#### ★★ 決めたこと: 上限を置いて 413 を返す
+
+**決定打は「413 は自分たちが返さなくても届く」。**
+
+配布物を受け取った人が nginx（既定 `client_max_body_size` **1 MiB**）／ Traefik ／ Railway の
+edge の裏に置いた瞬間、上限超過は**アプリを通らずに 413 で返る**。`frontend/js/io.ts` の
+`check()` の `default: return true` は、**アプリが 400 に寄せても塞がらない**。
+
+issue の却下欄にあった「返さない status を扱うコードが増える」は、この事実で無効になる。
+
+**AI 側が 400 に寄せていた理由も消えた** —— `AiReviewService.kt` / `AiRequestCheck.kt` /
+`tests/contract/backend-cases.json` はいずれも「**`check()` が 413 を持たないから**」と
+書いていた。`check()` が持てば、寄せる理由が無い。**ただし AI 側を寄せ直すかは別の判断**
+（あちらは「テーブル数」と「バイト数」を 1 つの status で返しており、分けると文言も分かれる）。
+
+#### ★★ 上限値 1 MiB の導出
+
+| 根拠 | |
+|---|---|
+| **実測**（#206、同日） | 300 テーブルの設計 JSON が **423,836 バイト（414 KiB）**。1 テーブルおよそ 1.4 KiB |
+| 1 MiB が表すもの | **750 テーブル相当 ＝ 実測した上限の 2.5 倍**、AI レビューの宣言上限（100）の 7.5 倍 |
+| **★ nginx の既定と同じ** | `client_max_body_size` の既定が 1 MiB。**境界を揃えておけば、「プロキシの裏かどうか」で挙動が変わらない** |
+
+`AiProperties.maxRequestBytes`（256 KiB）は KDoc が「**下の既定値は実測ではなく判断**」と
+認めている。**こちらは実測から出した** —— 同じ状況を繰り返さない。
+
+#### 決めたこと: 判定は読み切る前
+
+`DesignController.save` は `readAllBytes()` で**全ボディをヒープに読んで**いた。
+`readNBytes(limit + 1)` に変え、**上限 + 1 バイトだけ読んで**判定する ——
+全部読んでから測ると、上限の意味が半分無くなる（大きな body は既に載っている）。
+
+**`Content-Length` は見ない** —— chunked 転送では付かないので、**付いていないときに抜ける**
+判定になる。実際に読んだ量で決めれば経路によらない。
+
+#### ★ 同じ PR で広げた 4 つ
+
+`ApiExceptionHandler.kt` の KDoc が「**status を増やす PR では `check()` と locale を
+同じ PR で広げること**」と書いている、その**最初の実行例**:
+
+| | |
+|---|---|
+| backend | `GrabadoProperties.maxDesignBytes` ／ `DesignTooLargeException` ／ 413 のマッピング |
+| 契約表 | `save-too-large`（**51 件目**） |
+| フロント | `check()` に `case 413` |
+| locale | **21 本すべて**に `http413`（`http429` が全 21 本で英語のまま入っている先例に合わせ、英語） |
+
+#### ★ 踏んだこと 3 つ
+
+- **`HttpStatus.PAYLOAD_TOO_LARGE` は deprecated**（RFC 9110 で `CONTENT_TOO_LARGE` に改名）。
+  `allWarningsAsErrors = true` なのでビルドが落ちる
+- **契約表に 1 MiB のリテラルは置けない。** `bodyBytes` を足し、**Kotlin 側だけが解釈する**
+  （TS 側は `virtual: true` のケースしか流さないので、解釈は 1 か所で済む）。
+  **表が持つのは「上限を 1 バイト超える」という契約そのもの**で、そのバイト列の中身は契約ではない
+- **`tests/node/env-contract.test.ts` が正しく赤くなった** —— env を足すと
+  `application.yaml` / `.env.example` / `compose.yaml` の 3 つが揃っていないと落ちる。
+  **3 ファイル ＋ テストの期待リストで 4 か所**。よくできた安全網
+
+#### 実測
+
+| | 結果 |
+|---|---|
+| `./gradlew -p server test` | **231 tests / failures 0 / skipped 24**（opt-in の Testcontainers 系） |
+| 契約表の `save-too-large` | 実行され、失敗なし |
+| `npm test` | **755 passed**（743 → 755） |
+| `npm run typecheck` | 緑 |
+
+#### 却下した案
+
+| 案 | 却下の理由 |
+|---|---|
+| **上限を置かない** | `readAllBytes()` の丸読みが残り、`ApiExceptionHandler` の譲歩の記録を「413 を将来も返さない」と書き換えることになる |
+| **上限は置くが 400 に寄せる**（AI と同じ） | **前段のプロキシが返す 413 が塞がらず、`check()` の穴だけが残る** |
+| `check()` に 413 だけ足す | 返さない status を扱うコードが増える（issue の却下どおり） |
+| `default` を `return false` にする | 未知の status が全部失敗になる。`io.ts` が現行の倒し方を意図として書いている |
+| 上限を 2 MiB 以上にする | **nginx の既定を超える** —— プロキシを置いた人が `client_max_body_size` を上げないと、アプリの上限に届く前に 413 が返る |
+| 契約表のテストだけ上限を小さくする | **境界そのものを検証しなくなる**（契約表は本番と同じ設定で回るのが前提） |
+
+#### 申し送り
+
+- **★ AI 側の 400 を 413 に寄せ直すかは未決** —— 寄せる理由（`check()` が 413 を持たない）は
+  消えたが、あちらは 2 つの上限を 1 つの status で返している。**別 issue**
+- **★ README に上限の記述が無い** —— `docs/ARCHITECTURE.md` §7.3 には入れた。
+  README に env の一覧が無いので、そもそも置き場が無い。**規模の記述（#206 の申し送り）と
+  同じ軸で、まとめて判断する**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

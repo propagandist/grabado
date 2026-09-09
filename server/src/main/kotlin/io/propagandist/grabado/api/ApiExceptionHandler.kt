@@ -4,6 +4,7 @@ import io.propagandist.grabado.ai.AiBadRequestException
 import io.propagandist.grabado.ai.AiRateLimitedException
 import io.propagandist.grabado.ai.AiUnavailableException
 import io.propagandist.grabado.ai.AiUpstreamException
+import io.propagandist.grabado.design.DesignTooLargeException
 import io.propagandist.grabado.design.InvalidDesignNameException
 import io.propagandist.grabado.design.PreconditionFailedException
 import io.propagandist.grabado.design.ReadOnlyException
@@ -54,6 +55,23 @@ class ApiExceptionHandler {
     @ExceptionHandler(PreconditionFailedException::class)
     fun preconditionFailed(): ResponseEntity<Void> =
         ResponseEntity.status(HttpStatus.PRECONDITION_FAILED).build()
+
+    /**
+     * save の body が上限を超えた（issue #215）。
+     *
+     * ★★ **413 は `check()` に足した**（`js/io.ts`）。上の★が「status を増やす PR では
+     * `check()` と `locale` を同じ PR で広げること」と書いている、その最初の実行例。
+     *
+     * ★ **AI 側が 400 に寄せていた理由は、これで消えた** ——
+     * [io.propagandist.grabado.ai.AiRequestCheck] と
+     * [io.propagandist.grabado.ai.AiReviewService] のコメントが「`check()` が 413 を
+     * 持たないから 400 に寄せる」と書いている。**寄せ直すかは別の判断**（あちらは
+     * 「テーブル数」と「バイト数」の 2 つを 1 つの status で返しており、分けると
+     * フロントの文言も分かれる）。
+     */
+    @ExceptionHandler(DesignTooLargeException::class)
+    fun designTooLarge(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).build()
 
     /**
      * `?action=import&database=<name>` の名前が env の表に無い（段階5-7a）。

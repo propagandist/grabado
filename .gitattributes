@@ -34,6 +34,11 @@ server/**/*.kts                      text eol=lf
 server/**/*.yaml                     text eol=lf
 server/gradle/wrapper/*.properties   text eol=lf
 
+# 開いて使う設計サンプル（#237）。tests/node/samples.test.ts が往復でバイト一致を見るので、
+# チェックアウト時に CRLF になると末尾 LF の比較が落ちる。**ここが無いと、作業者の
+# .gitconfig の core.autocrlf に依存する**（tests/fixtures/** を LF 固定しているのと同じ理由）。
+docs/samples/*.json text eol=lf
+
 # 契約表（段階5-1b）。Kotlin と TS の両方が同じバイト列を読む。
 tests/contract/** text eol=lf
 

@@ -331,6 +331,7 @@ Two things are worth knowing before you start:
 | [`docs/FORMAT.md`](docs/FORMAT.md) | The design JSON format |
 | [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | What the house defaults become in each database |
 | [`docs/TESTING.md`](docs/TESTING.md) | Test layout and how to run it |
+| [`docs/samples/`](docs/samples/) | Sample ER designs you can open, plus introspection measurements |
 | [`docs/BRANCHING.md`](docs/BRANCHING.md) | Branching model |
 | [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) | Every decision made since the fork, with its reasoning |
 | [`CLAUDE.md`](CLAUDE.md) | Working rules and the Hard Constraints |

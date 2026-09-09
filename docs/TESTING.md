@@ -559,6 +559,42 @@ golden は fixture を**読んで書き出す**だけなので、**行やキー�
 `git diff --stat tests/golden/` が **0 files changed**（2026-09-09）。この変更だけは
 `clearTables()` 経由で **golden の全読み込みを通る**ので、比較テストの緑だけで済ませない。
 
+### 開いて使うサンプル — 母集団が表ではなくディレクトリ（#237）
+
+[`../docs/samples/`](../docs/samples/) に置いた**人が開く設計**が、現行のパーサで読めて
+**正準形である**ことを見る。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/samples.test.ts`](../tests/node/samples.test.ts) | `docs/samples/*.json` を `readdirSync` で全部拾い、`db` が実在プロファイルであること・CRLF が混ざっていないこと・**読み込んで書き戻すと 1 バイトも変わらないこと** |
+
+**★ assert は実質 1 つ（往復でバイト一致）で、それが 4 つを同時に押さえる:**
+
+| 押さえること | 落ちる契機 |
+|---|---|
+| 現行のパーサで読める | `formatVersion` ／ `db` 照合 ／ 未知の型 id |
+| **正準形である** | キー順 ／ 既定値と同じキーが出ている ／ 2 スペース ／ 末尾 LF ／ 展開形 |
+| 同名テーブルが無い | `json-serializer.ts` の `assertUniqueTableNames` が throw |
+| size の正規化に乗る | `length="0"` の型に `size` を書いている |
+
+**★★ 母集団は表ではなくディレクトリの実体。** [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts)
+が表を持つのは **8 × 7 の格子が固定**だからで、`docs/samples/` は**可変長のリスト** ——
+表を持たせると保守だけが乗って利得が無い。**サンプルを足しても、テストに書き足すことは何も無い。**
+
+**★ 赤くなる契機はパレットから型を撤去したとき。** 対処は
+`npm run migrate:design -- docs/samples/*.json` で、これは**既にリポジトリ内の設計ファイルに
+要る作業**（[`../frontend/js/io/json-parser.ts`](../frontend/js/io/json-parser.ts) の KDoc）。
+**コストではなく、移行漏れを見る場所が 1 つ増える利得。**
+
+**★ 再現用サンプル（`repro-*.json`）が今も再現するかは追わない。** それは
+[`../tests/known-issues/`](../tests/known-issues/) の軸で、ここから追うと**不具合を直した日に
+docs のテストが赤くなる**。`repro-*` が持つのは**人が実ブラウザで確かめる手順**で、
+機械側は `tests/node/live-tree.test.ts` と `tests/node/rename.test.ts` が持っている。
+
+**★ `.gitattributes` に `docs/samples/*.json text eol=lf` が要る。** 無いと
+`core.autocrlf=true` の環境で CRLF になり、末尾 LF の比較が落ちる ——
+`tests/fixtures/**` を LF 固定しているのと同じ理由。
+
 ### リネームの伝播 — 置換の両側がユーザー入力だった（#213）
 
 `Row.setTitle` / `Table.setTitle` は、名前を変えたときに**追随する側の名前**を書き換える。

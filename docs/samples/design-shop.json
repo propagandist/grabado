@@ -1,0 +1,337 @@
+{
+  "formatVersion": 2,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "customers",
+      "x": 20,
+      "y": 20,
+      "comment": "顧客",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()",
+          "comment": "外部に出る識別子なので uuidv7()。内部だけなら bigint identity"
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "comment": "ログイン用。UNIQUE で一意にする"
+        },
+        {
+          "name": "display_name",
+          "type": "text"
+        },
+        {
+          "name": "preferences",
+          "type": "jsonb",
+          "default": "'{}'::jsonb",
+          "comment": "通知設定などの任意項目。json ではなく jsonb"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "type": "UNIQUE",
+          "columns": [
+            "email"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "categories",
+      "x": 420,
+      "y": 20,
+      "comment": "商品カテゴリ。自己参照で階層を持つ",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "parent_id",
+          "type": "uuid",
+          "nullable": true,
+          "comment": "親カテゴリ。最上位は NULL",
+          "references": [
+            {
+              "table": "categories",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "type": "INDEX",
+          "columns": [
+            "parent_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "x": 820,
+      "y": 20,
+      "comment": "商品",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": true
+        },
+        {
+          "name": "price",
+          "type": "decimal",
+          "size": "12,2",
+          "comment": "税抜。money ではなく numeric（金額を浮動小数で持たない）"
+        },
+        {
+          "name": "is_active",
+          "type": "boolean",
+          "default": "true"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "x": 20,
+      "y": 380,
+      "comment": "受注",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "customer_id",
+          "type": "uuid",
+          "references": [
+            {
+              "table": "customers",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": "'pending'",
+          "comment": "値の集合は native enum ではなく参照テーブルか CHECK で表す"
+        },
+        {
+          "name": "ordered_on",
+          "type": "date"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "type": "INDEX",
+          "columns": [
+            "customer_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "product_categories",
+      "x": 420,
+      "y": 380,
+      "comment": "商品とカテゴリの多対多",
+      "columns": [
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "references": [
+            {
+              "table": "products",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "references": [
+            {
+              "table": "categories",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "product_id",
+            "category_id"
+          ]
+        },
+        {
+          "type": "INDEX",
+          "columns": [
+            "category_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "order_items",
+      "x": 820,
+      "y": 380,
+      "comment": "受注明細。受注と商品の多対多",
+      "columns": [
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "references": [
+            {
+              "table": "orders",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "references": [
+            {
+              "table": "products",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "default": "1"
+        },
+        {
+          "name": "unit_price",
+          "type": "decimal",
+          "size": "12,2",
+          "comment": "受注時点の価格を写す。商品側の変更に追随させない"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "order_id",
+            "product_id"
+          ]
+        },
+        {
+          "type": "INDEX",
+          "columns": [
+            "product_id"
+          ]
+        }
+      ]
+    }
+  ]
+}

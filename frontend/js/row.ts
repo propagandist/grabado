@@ -10,6 +10,7 @@
 import { OZ } from "./oz.ts";
 import { _, publish } from "./globals.ts";
 import { identifierHint } from "./identifier-hint.ts";
+import { renameOccurrences } from "./rename.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import type { Table } from "./table.ts";
 import type { Key } from "./key.ts";
@@ -150,7 +151,7 @@ export class Row extends Visual<RowDom> {
             if (r.row1 != this) {
                 continue;
             }
-            var tt = r.row2.getTitle().replace(new RegExp(old, "g"), t);
+            var tt = renameOccurrences(r.row2.getTitle(), old, t);
             if (tt != r.row2.getTitle()) {
                 r.row2.setTitle(tt);
             }

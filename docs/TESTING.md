@@ -559,6 +559,41 @@ golden は fixture を**読んで書き出す**だけなので、**行やキー�
 `git diff --stat tests/golden/` が **0 files changed**（2026-09-09）。この変更だけは
 `clearTables()` 経由で **golden の全読み込みを通る**ので、比較テストの緑だけで済ませない。
 
+### 規模の費用 — 2 系統に分かれる 4 本目の層（#206）
+
+**10 / 50 / 100 / 300 テーブルの合成設計を通し、費用を数で記録する。**
+実時間ではなく**回数**で判定するのは、共有ランナーが不安定で計装自体が実時間を歪めるから。
+
+| ファイル | 実行系 | 担当 |
+|---|---|---|
+| [`../tests/node/scale.test.ts`](../tests/node/scale.test.ts) | jsdom（**CI に乗る**） | 10 / 50 / 100 の 3 点で**カウンタが 1 次式に乗ること**。合成設計が決定論で正準形であること。`clearTables()` で DOM が戻ること |
+| [`../tests/scale/load.spec.ts`](../tests/scale/load.spec.ts) | 実ブラウザ | 4 段の読み込み ＋ **`LayoutCount` と読み出し回数の比** |
+| [`../tests/scale/export.spec.ts`](../tests/scale/export.spec.ts) | 実ブラウザ | `toJson()` / `toDdl()` の費用とバイト数 |
+| [`../tests/scale/interaction.spec.ts`](../tests/scale/interaction.spec.ts) | 実ブラウザ | 読み込んだ後の**1 操作**あたりの費用 |
+
+**★★ 3 点で見る。2 点は必ず直線に乗る**ので、線形性の証明にならない。加えて
+**式とは独立に次数を見る 1 本**を置いてある（N が 10 倍で費用がおよそ 10 倍。二次なら 100 倍）
+—— 式が全部合っていても「式を実測に合わせて書き換えただけ」かもしれないため。
+
+**★★ 実ブラウザ側は `npm run test:browser` に入れない。** `ci-frontend.yml` がそれを回すので、
+**300 テーブルの実測が全 PR に載る**（`golden:update` も同じ project 指定なので、golden の
+再生成にも巻き込まれる）。`npm run test:scale` で別に回す。
+
+**★ 計装の正本は 1 本。** [`../tests/support/probe.ts`](../tests/support/probe.ts) を、
+Node は直接呼び、page 側は**ソース文字列として注入**する（`state.ts` と同じ形）。
+**アプリのコードは 1 行も触らない** —— 出荷コードが変わらず、バンドルの diff にも出ない。
+
+**★ jsdom で数えられないもの**: `LayoutCount`（jsdom はレイアウトしない）／ `alignTables()`
+（折り返しが `offsetWidth` に依存する）／ 実時間。**この分担は上の「なぜ 2 系統あるのか」と
+同じ形**で、新しい規律を作っていない。
+
+**★ 生成物はコミットしない。** `SCALE_DUMP=1` のときだけ `test-results/`（gitignore 済み）へ
+落ちる。既定で 1 バイトも書かない —— CI の最終ステップが `git diff --exit-code` を回す。
+
+**数の正本は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)**（測った日と機械つき）、
+費用モデルは [`ARCHITECTURE.md`](ARCHITECTURE.md) §5.7、運用は
+[`../tests/scale/README.md`](../tests/scale/README.md)。
+
 ### 開いて使うサンプル — 母集団が表ではなくディレクトリ（#237）
 
 [`../docs/samples/`](../docs/samples/) に置いた**人が開く設計**が、現行のパーサで読めて

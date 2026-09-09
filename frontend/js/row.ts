@@ -537,8 +537,18 @@ export class Row extends Visual<RowDom> {
         while (this.relations.length) {
             this.owner.owner.removeRelation(this.relations[0]!);
         }
-        for (var i = 0; i < this.keys.length; i++) {
-            this.keys[i]!.removeRow(this);
+        /*
+         * grabado: #216。**前進走査にしない。** Key.removeRow は Row.removeKey を呼んで
+         * this.keys を縮めるので、添字を進めると 1 つおきに飛ばす（複合キー / 複数キーの
+         * 行で、破棄したはずの行がキーに残っていた）。先頭を取り続ける形は
+         * Table.destroy / Designer.clearTables と同じイディオム。
+         *
+         * 止まる根拠は **k in row.keys <=> row in k.rows** の不変条件（Key.addRow /
+         * Key.removeRow が対称に動かし、Row.addKey の呼び手は Key.addRow ただ 1 つ）。
+         * 実行時ガードは足さず、tests/node/live-tree.test.ts がこの不変条件を見張る。
+         */
+        while (this.keys.length) {
+            this.keys[0]!.removeRow(this);
         }
     }
 

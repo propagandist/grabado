@@ -42,6 +42,14 @@ class FileDesignStore(properties: GrabadoProperties) : DesignStore {
          * mount を忘れたままコンテナを起動すると、書き込み先がコンテナ内 fs になり、
          * コンテナを捨てた瞬間に設計が消える。「起動はするが save のたびに 500」も
          * 同じくらい悪い。**駄目なら起動させない。**
+         *
+         * ★★ **この宣言は 2026-09-09（issue #202）まで効いていなかった。** `Dockerfile` が
+         * `mkdir -p /data/schema` で正本ディレクトリを**イメージに焼いていた**ので、
+         * mount を省いても下の 4 つの check が全部通っていた —— **防ぐと書いてある事故が
+         * そのまま起きていた**。Dockerfile 側から `mkdir` と `chown` を外して一致させた。
+         *
+         * ★ **ここは 1 行も変えていない。** 動かしたのは Dockerfile だけで、意図の側は
+         * 最初から正しかった。実測は `CUSTOMIZATIONS.md` の 2026-09-09。
          */
         check(Files.exists(root)) { "正本ディレクトリが無い: $root（grabado.schema-dir / GRABADO_SCHEMA_DIR）" }
         check(Files.isDirectory(root)) { "正本ディレクトリがディレクトリでない: $root" }

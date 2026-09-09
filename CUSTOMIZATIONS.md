@@ -16284,6 +16284,87 @@ FK の既定命名パターンが `%R_%T` で親テーブル名を含むので�
 - **★ `frontend/js/io/xml-parser.ts` に同型の `new RegExp` が 1 か所ある** —— パレットの
   `quote` 属性に `.` や `(` を書いた瞬間に壊れる。出荷物なので現状は無害
 
+### 2026-09-09 破棄した行がキーに残る不具合を直した —— 不変条件はコードではなくテストで担保する
+
+**#216**（`Row.destroy()` が複合キーを 1 つおきに飛ばす）。`this.keys` を前進走査する一方で、
+`Key.removeRow` → `Row.removeKey` が**同じ配列を splice する**ので添字がずれていた。
+
+#### 決めたこと: `while (this.keys.length)` へ。**実行時ガードは足さない**
+
+`Table.destroy` と `Designer.clearTables` が既に同じイディオムを使っている。
+
+**★ 止まる根拠が自明ではない。** `Key.removeRow` は `this.rows.indexOf(r) === -1` で
+早期 return するので、**無条件には縮まない**。縮むのは
+
+> `k ∈ row.keys` ⟺ `row ∈ k.rows`
+
+が保たれているときだけ。これは呼び出し点を数えれば証明できる:
+
+| 呼ばれるもの | 呼び手 | 対称性 |
+|---|---|---|
+| `Row.addKey` | **`Key.addRow` ただ 1 つ**。直前が `this.rows.push(r)` | 対称に増える |
+| `Row.removeKey` | `Key.removeRow`（直後が `this.rows.splice`）／ `Key.destroy` | 前者は対称。**後者は逆向きの非対称を作る** |
+| `Key.addRow` | `r.owner != this.owner` で他テーブルの行を弾く | 片側だけ入ることが無い |
+
+**`Key.destroy` が作る非対称は無限ループの原因にならない** —— `key.rows` に残るが
+`row.keys` からは消えるので、`Row.destroy` が回す `this.keys` には現れない。
+
+**担保の形は「防御的ガードを足す」ではなく「不変条件をテストで見張る」**にした。
+このリポジトリは実行時ガードを足さないイディオム C を明文で採っている
+（[`frontend/js/row.ts`](frontend/js/row.ts) の KDoc）。
+
+#### ★ 棚を新設した —— `tests/node/live-tree.test.ts`
+
+**golden は fixture を読んで書き出すだけ**なので、**行やキーを壊す操作は 1 ビットも通らない**。
+この棚を作った時点で、`frontend/js/` 直下の `relation.ts` / `key.ts` / `map.ts` /
+`rubberband.ts` / `keymanager.ts` / `window.ts` / `toggle.ts` は**テストからの参照が 0 本**だった。
+
+**fixture を足さない** —— `tests/fixtures/` に置くと 8 プロファイル分が必要になり
+（`tests/node/fixture-set.test.ts` が格子を機械的に見る）DDL golden が 8 本連動する。
+必要な形は設計 JSON をテスト内で組む。
+
+#### ★ 踏んだこと: `Table.destroy()` を直に呼ぶと二重に壊れる
+
+`Designer.tables` から外れないので、次の読み込みの `clearTables()` がもう一度 `destroy()` を
+呼び、`this.dom.mini.parentNode!.removeChild(...)` が **`null` で TypeError** になる。
+テストは `Designer.removeTable()` を通す。
+
+**1 つのハーネスを `beforeAll` で使い回す形だから出た** —— テストごとに作り直せば隠れる種類の
+制約で、記録しておかないと次に踏む。
+
+#### 実測
+
+| | 結果 |
+|---|---|
+| `tests/node/live-tree.test.ts` | **11 本**。修正前は **4 本が赤**（不変条件の 5 本は現行でも成り立っていた） |
+| `npm test` | **692 passed**（681 → 692） |
+| `npm run test:browser` | 219 passed（不変） |
+| **`npm run golden:update` の実走 → `git diff --stat tests/golden/`** | **0 files changed** |
+| `npm run test:dist` / `known-issues` | 7 / 1 passed |
+
+**★ golden は比較テストの緑で済ませず、生成し直して確かめた。** この修正だけは
+`clearTables()` 経由で **golden の全読み込みを通る**（`fromXML` → `clearTables` →
+`removeTable` → `Table.destroy` → `removeRow` → `Row.destroy`）。
+
+**実データで差が出ないのは、`tests/fixtures/**` と `tests/known-issues/fixtures/**` に
+複数のキーに属する行が 1 本も無いから**（2026-09-09 の走査で確認）。1 キーの行は `i = 0` で
+終わるので現行と同じ回数になる。
+
+#### 却下した案
+
+| 案 | 却下の理由 |
+|---|---|
+| `this.keys` のコピーを回す | 既存イディオム（`Table.destroy` / `clearTables`）から外れる。不変条件が成り立つ以上、採る理由が無い |
+| 後ろから走査する | 終端は構造的に保証されるが、**不変条件が壊れたときに黙って残骸を残す** —— それが #216 そのもの |
+| `Key.removeRow` に実行時ガードを足す | イディオム C に反する。**症状を隠すだけで、非対称が起きたことは誰にも見えない** |
+
+#### 申し送り
+
+- **★ 走査量が増えた** —— 複数のキーに属する行のぶん `removeRow` の呼び出しが増える
+  （現行が飛ばしていたぶん）。**#206 の実測はこの後**なので、数に出る見込みを先に書いておく
+- **★ `clearTables()` のテストが弱い** —— テーブルが全部消えるので不変条件の走査対象が
+  無くなり、実質「例外が出ない」しか見ていない。**この棚に #212 / #231 を積むときに厚くする**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

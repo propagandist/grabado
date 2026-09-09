@@ -516,6 +516,35 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 かつ `alert` / `prompt` を**その呼び出しの間だけ**差し替えられる（`openDesigner` が張る
 dialog ハンドラと衝突しない）。
 
+### ライブツリーを壊す操作 — golden の経路に出てこない層（#216）
+
+golden は fixture を**読んで書き出す**だけなので、**行やキーを壊す操作**（`destroy` /
+`removeRow`）は 1 ビットも通らない。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/live-tree.test.ts`](../tests/node/live-tree.test.ts) | **複数のキーに属する行を消すと、どのキーからも消えること**（#216）・消えた列が保存バイト列に出ないこと・`Table` ごと / `clearTables()` 経由でも残骸が出ないこと ＋ **キーと行の双方向リンクの不変条件** |
+
+**★ 不変条件をコードではなくテストで担保している。** `Row.destroy` の
+`while (this.keys.length)` が止まる根拠は「`Key.removeRow` が必ず縮める」ことだが、
+`Key.removeRow` は `indexOf` で早期 return するので**無条件には成り立たない**。成り立つのは
+
+> `k ∈ row.keys` ⟺ `row ∈ k.rows`
+
+が保たれているとき。実行時ガードを足さないイディオム C
+（[`../frontend/js/row.ts`](../frontend/js/row.ts) の KDoc）に従い、**この不変条件を見張る
+テストを置くことで担保する**。`Key.destroy` が作る**逆向きの**非対称（`key.rows` に残るが
+`row.keys` からは消える）もリテラルで固定してある —— こちらは行側から見えないので
+無限ループの原因にならない。
+
+**★ `Table.destroy()` を直に呼ばない。** `Designer.tables` から外れないので、次の読み込みの
+`clearTables()` が**二重に壊す**（`dom.mini.parentNode` が `null` で TypeError）。
+テストは `Designer.removeTable()` を通す。
+
+**★ golden は実走で確かめた** —— `npm run golden:update` を回して
+`git diff --stat tests/golden/` が **0 files changed**（2026-09-09）。この変更だけは
+`clearTables()` 経由で **golden の全読み込みを通る**ので、比較テストの緑だけで済ませない。
+
 ### リネームの伝播 — 置換の両側がユーザー入力だった（#213）
 
 `Row.setTitle` / `Table.setTitle` は、名前を変えたときに**追随する側の名前**を書き換える。

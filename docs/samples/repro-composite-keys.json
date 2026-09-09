@@ -1,0 +1,55 @@
+{
+  "formatVersion": 2,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "memberships",
+      "x": 20,
+      "y": 20,
+      "comment": "user_id が PRIMARY と UNIQUE の両方に属する。行を消すと片方に残っていた",
+      "columns": [
+        {
+          "name": "org_id",
+          "type": "uuid"
+        },
+        {
+          "name": "user_id",
+          "type": "uuid",
+          "comment": "2 つのキーに属する列。ここを消して Keys を開くのが確認手順"
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "default": "'member'"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "default": "now()"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "org_id",
+            "user_id"
+          ]
+        },
+        {
+          "type": "UNIQUE",
+          "columns": [
+            "user_id",
+            "role"
+          ]
+        },
+        {
+          "type": "INDEX",
+          "columns": [
+            "org_id"
+          ]
+        }
+      ]
+    }
+  ]
+}

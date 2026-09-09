@@ -235,8 +235,11 @@ docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" ghcr.io/propagandist/
 
 The left side of `-v` is the host directory holding your design files. **Create it first** — on
 Linux, if it is missing Docker creates it owned by root, and **the container, which runs as a
-non-root user, cannot write to it and exits**. **Dropping `-v` altogether does start the
-container**, but then it writes inside the container, so **the designs go away with it**.
+non-root user, cannot write to it and exits**.
+
+**Dropping `-v` altogether does not start the container.** Running without a source of truth
+would write inside the container, so **the designs would go away with it** — grabado stops before
+that happens (issue #202).
 
 Both amd64 and arm64 are included. **You can check what is inside without waiting for us to tell
 you** — the origin, version and license are in the OCI labels, and the bundled JRE and dependency

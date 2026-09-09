@@ -27,6 +27,7 @@
 
 import type { TypePalette } from "./palette.ts";
 import type { DesignModel, TableModel, RowModel, KeyModel } from "./model.ts";
+import { findDuplicateTableName } from "./validate.ts";
 import type {
     JsonDesign,
     JsonTable,
@@ -78,19 +79,20 @@ export function serializeDesignJson(
  * 一番たちの悪い壊れ方をする。正本が git 管理のファイルである以上、その状態を
  * ファイルに書かせない。db 無し / 型 id 無しと同じく **1 バイトも書かずに落ちる**。
  */
+/*
+ * grabado: #233。**規則の実体は js/io/validate.ts へ移した**（読み込み側も同じ規則を見る）。
+ * メッセージだけここが持つ —— 保存側は「保存できない」、読み込み側は「開けない」で、
+ * 利用者が次に打つ手が違う。
+ */
 function assertUniqueTableNames(model: DesignModel): void {
-    const seen = new Set<string>();
-    for (let i = 0; i < model.tables.length; i++) {
-        const name = model.tables[i]!.title;
-        if (seen.has(name)) {
-            throw new Error(
-                `テーブル名 "${name}" が重複している（tables[${i}]）。` +
-                    `設計 JSON は relation を名前で参照するため、` +
-                    `同名テーブルがあると読み戻したときに参照先が入れ替わる。` +
-                    `どちらかの名前を変えてから保存すること`
-            );
-        }
-        seen.add(name);
+    const dup = findDuplicateTableName(model);
+    if (dup) {
+        throw new Error(
+            `テーブル名 "${dup.name}" が重複している（tables[${dup.index}]）。` +
+                `設計 JSON は relation を名前で参照するため、` +
+                `同名テーブルがあると読み戻したときに参照先が入れ替わる。` +
+                `どちらかの名前を変えてから保存すること`
+        );
     }
 }
 

@@ -1,0 +1,150 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import { createHarness, type NodeHarness } from "./harness.ts";
+import { COLUMNS_PER_TABLE, syntheticDesign } from "../support/synthetic.ts";
+import {
+    installScaleProbe,
+    readScaleProbe,
+    resetScaleProbe,
+    type ScaleCounts,
+} from "../support/probe.ts";
+
+/*
+ * 規模の費用を**回数で**固定する（#206）。
+ *
+ * ★★ **実時間では判定しない。** 共有ランナーが不安定で、計装自体も実時間を歪める。
+ *   ここが守るのは「N に対する増え方」と「係数」で、**二次項が生えたらすぐ赤くなる**。
+ *
+ * ★★ **3 点で見る。** 2 点は必ず直線に乗るので、線形性の証明にならない。
+ *   10 / 50 / 100 の 3 点が同じ 1 次式に乗ることを見る（300 は tests/scale/ の browser 側）。
+ *
+ * ★ **係数の内訳をすべて分解してはいない。** rowUpdate（列の総数）と rowRedraw
+ *   （列の総数 ＋ キー登録数）と relationRedraw（関係の本数）は導出できるが、
+ *   offsetWidth と tableRedraw の係数は実測から当てはめた値。**守るのは線形性と係数**で、
+ *   内訳が要るのは「効く」と分かってからでよい。
+ *
+ * ★ jsdom で数えられないもの: alignTables()（折り返しが offsetWidth に依存する）／
+ *   Chromium の LayoutCount ／ 実時間。**この分担は docs/TESTING.md の
+ *   「なぜ 2 系統あるのか」と同じ形**で、新しい規律を作っていない。
+ */
+
+/** 測る段。300 は browser 側（jsdom で 4 段回すと npm test の増分が受け入れ基準を超える） */
+const STEPS = [10, 50, 100] as const;
+
+/**
+ * 1 次式 f(N) = p*N + q。**実測に完全一致する**（2026-09-09、この形の合成設計で）。
+ *
+ * 導出できるもの:
+ *   - rowUpdate = 列の総数。合成設計は 1 テーブル 9 列で、先頭だけ FK が無く 8 列
+ *   - rowRedraw = 列の総数 ＋ キー登録数（PRIMARY が N 本、INDEX が N-1 本、各 1 列）
+ *   - relationRedraw = 関係の本数（1 本鎖なので N-1）
+ * 実測から当てはめたもの:
+ *   - offsetWidth / offsetHeight / offsetTop / offsetLeft / tableRedraw
+ */
+const EXPECTED: Record<keyof ScaleCounts, (n: number) => number> = {
+    offsetWidth: (n) => 48 * n - 8,
+    offsetHeight: (n) => 48 * n - 8,
+    offsetTop: (n) => 4 * n - 4,
+    offsetLeft: (n) => 2 * n - 2,
+    rowRedraw: (n) => 11 * n - 2,
+    rowUpdate: (n) => COLUMNS_PER_TABLE * n - 1,
+    tableRedraw: (n) => 23 * n - 3,
+    relationRedraw: (n) => n - 1,
+};
+
+/** DOM ノード数。読み込み後 61N + 67（67 は設計と無関係な UI の分） */
+const EXPECTED_DOM = (n: number): number => 61 * n + 67;
+
+describe("規模の費用（#206）", () => {
+    let h: NodeHarness;
+    const measured = new Map<number, { counts: ScaleCounts; dom: number; domAfter: number }>();
+
+    beforeAll(async () => {
+        h = await createHarness();
+        h.useDatatypes("postgresql");
+
+        /*
+         * 計装は**生きている実体からプロトタイプを辿る**ので、先に最小の設計を読む
+         * （2 テーブルなら table / row / relation が揃う）。アプリに計装用の面は足さない。
+         */
+        h.loadJson(syntheticDesign(2));
+        installScaleProbe(h.window, {
+            table: h.designer.tables[0]!,
+            row: h.designer.tables[0]!.rows[0]!,
+            relation: h.designer.relations[0]!,
+        });
+
+        for (const n of STEPS) {
+            const json = syntheticDesign(n);
+            h.designer.clearTables();
+            resetScaleProbe(h.window);
+            h.loadJson(json);
+            const counts = readScaleProbe(h.window);
+            const dom = h.dom.window.document.querySelectorAll("*").length;
+            h.designer.clearTables();
+            const domAfter = h.dom.window.document.querySelectorAll("*").length;
+            measured.set(n, { counts, dom, domAfter });
+        }
+    }, 120_000);
+
+    describe("合成設計そのもの", () => {
+        it("同じ N なら 1 バイトも変わらない", () => {
+            expect(syntheticDesign(37)).toBe(syntheticDesign(37));
+        });
+
+        it("N が違えば違う（テーブル数がそのまま出る）", () => {
+            const parsed = JSON.parse(syntheticDesign(7)) as { tables: unknown[] };
+            expect(parsed.tables.length).toBe(7);
+        });
+
+        it("読み込んで書き戻すと 1 バイトも変わらない（正準形である）", () => {
+            const json = syntheticDesign(5);
+            h.designer.clearTables();
+            h.loadJson(json);
+            expect(h.toJson()).toBe(json);
+        });
+
+        it("1 未満は例外", () => {
+            expect(() => syntheticDesign(0)).toThrow();
+            expect(() => syntheticDesign(1.5)).toThrow();
+        });
+    });
+
+    describe("読み込みの費用は N の 1 次式", () => {
+        for (const key of Object.keys(EXPECTED) as (keyof ScaleCounts)[]) {
+            it(`${key} = ${EXPECTED[key](0)} + ${EXPECTED[key](1) - EXPECTED[key](0)}N`, () => {
+                for (const n of STEPS) {
+                    expect(measured.get(n)!.counts[key]).toBe(EXPECTED[key](n));
+                }
+            });
+        }
+
+        it("DOM ノード数も 1 次式", () => {
+            for (const n of STEPS) {
+                expect(measured.get(n)!.dom).toBe(EXPECTED_DOM(n));
+            }
+        });
+
+        /*
+         * ★★ **二次項が 1 つも無いことを、係数とは別に見る。** 上の式が全部合っていても
+         *   「式そのものを実測に合わせて書き換えた」だけかもしれない —— 増分の比を見れば、
+         *   式とは独立に次数が分かる。N が 10 倍なら、線形なら増分もおよそ 10 倍。
+         */
+        it("N を 10 倍にしても費用は 10 倍前後（二次なら 100 倍になる）", () => {
+            const small = measured.get(10)!.counts;
+            const large = measured.get(100)!.counts;
+            for (const key of Object.keys(EXPECTED) as (keyof ScaleCounts)[]) {
+                const ratio = large[key] / small[key];
+                expect(ratio).toBeGreaterThan(9);
+                expect(ratio).toBeLessThan(12);
+            }
+        });
+    });
+
+    describe("後始末", () => {
+        it("clearTables() で DOM が設計の分だけ戻る（N によらず同じ数）", () => {
+            const sizes = STEPS.map((n) => measured.get(n)!.domAfter);
+            expect(new Set(sizes).size).toBe(1);
+            expect(sizes[0]).toBe(EXPECTED_DOM(0) + 7);
+        });
+    });
+});

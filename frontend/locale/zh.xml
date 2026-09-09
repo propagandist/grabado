@@ -110,6 +110,7 @@
     <string name="http403">Forbidden</string>
     <string name="http404">找不到</string>
     <string name="http405">Method Not Allowed</string>
+    <string name="http413">Content Too Large</string>
     <string name="http429">Too Many Requests</string>
     <string name="http500">网络服务错误</string>
     <string name="http501">未执行</string>

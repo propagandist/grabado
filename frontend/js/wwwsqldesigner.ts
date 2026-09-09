@@ -45,6 +45,7 @@ import { generateDdl } from "./io/ddl/generate.ts";
 import { generateOrm } from "./io/orm/generate.ts";
 import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
 import { applyDesignModel } from "./io/apply.ts";
+import { assertLoadableDesign } from "./io/validate.ts";
 import { serializeDesignJson } from "./io/json-serializer.ts";
 import { parseDesignJson } from "./io/json-parser.ts";
 
@@ -206,7 +207,7 @@ export class Designer extends Visual<DesignerDom> {
     /* update area size */
     sync(): void {
         var w = this.minSize[0];
-        var h = this.minSize[0];
+        var h = this.minSize[1];
         for (var i = 0; i < this.tables.length; i++) {
             var t = this.tables[i]!;
             w = Math.max(w, t.x + t.width);
@@ -366,6 +367,20 @@ export class Designer extends Visual<DesignerDom> {
         this.options = new Options(this);
         this.window = new SqlWindow(this);
         this.dialogs = dialogs();
+
+        /*
+         * grabado: #214。**キャンバスの下限をここで測り直す。**
+         *
+         * コンストラクタ（上の _init 直後）で測った値は使えない —— #area の 3000x3000 は
+         * styles/base.css の `[data-theme^="material-"] #area` が持っており、その data-theme を
+         * 付けるのは applyStyle()（同ファイル）で、**minSize を読む行より後**にある。
+         * 結果、コンストラクタ側では **テーマ CSS が当たる前の #area**（幅はビューポート、
+         * 高さは 0）を測っていた。init2() は applyStyle() の後に走るので、ここなら実寸が採れる。
+         */
+        this.minSize = [
+            this.dom.container.offsetWidth,
+            this.dom.container.offsetHeight,
+        ];
 
         this.sync();
 
@@ -689,13 +704,23 @@ export class Designer extends Visual<DesignerDom> {
         var types = parseDatatypes(node);
         if (!types) {
             var model = parseDesignXml(node, this.palette);
+            /* grabado: #232 / #233。この経路は parse が clear より前なので守れる */
+            assertLoadableDesign(model);
             this.clearTables();
             applyDesignModel(this, model);
             return;
         }
         this.clearTables();
         this.palette.setRoot(types);
-        applyDesignModel(this, parseDesignXml(node, this.palette));
+        var embedded = parseDesignXml(node, this.palette);
+        /*
+         * grabado: #232 / #233。**ここは clear が先なので「今の設計を消さない」は守れない**
+         * （上の KDoc の順序制約）。それでも検査は掛ける —— 通してしまうと、
+         * relation が黙って別のテーブルに繋がった状態や、キーに存在しない列が載った状態が
+         * ライブツリーに入り、**保存もできない行き止まり**になる。
+         */
+        assertLoadableDesign(embedded);
+        applyDesignModel(this, embedded);
     }
 
     /*
@@ -722,6 +747,8 @@ export class Designer extends Visual<DesignerDom> {
      */
     fromJson(text: string): void {
         var model = parseDesignJson(text, this.palette);
+        /* grabado: #232 / #233。**clearTables() より前**（parse を前に置いてある理由と同じ） */
+        assertLoadableDesign(model);
         this.clearTables();
         applyDesignModel(this, model);
     }

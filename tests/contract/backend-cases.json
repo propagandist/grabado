@@ -120,6 +120,21 @@
       "virtual": true
     },
     {
+      "id": "save-too-large",
+      "note": "上限（grabado.max-design-bytes、既定 1 MiB）を超える body は 413。**413 を返すと決めたのは、返さなくても届くから** —— 前段に nginx（既定 client_max_body_size 1 MiB）を置いた瞬間、上限超過はアプリを通らずに 413 で返る。js/io.ts の check() が 413 を持たないと default: return true で成功に倒れる（#215）。body は bodyBytes で長さだけ宣言する（1 MiB のリテラルを表に置かない）",
+      "request": {
+        "method": "POST",
+        "action": "save",
+        "keyword": "too-large.json",
+        "bodyBytes": 1048577
+      },
+      "expect": {
+        "status": 413,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
       "id": "save-overwrites",
       "note": "既存があっても 201。upsert であることは実測どおり",
       "seed": {

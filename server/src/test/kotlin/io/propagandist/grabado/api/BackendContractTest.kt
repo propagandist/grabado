@@ -166,6 +166,21 @@ class BackendContractTest {
          *   upstream の語彙に乗せない（5-0 の決定）。表の側で URL の組み立て方が 2 通りに
          *   なるが、**どちらなのかはデータで分かる**（`request.path` の有無）。
          */
+        /**
+         * 送る body。**`bodyBytes` があれば、その長さを埋める**（issue #215）。
+         *
+         * ★ 1 MiB のリテラルを契約表に置かないため。表が持つのは「上限を 1 バイト超える」と
+         *   いう契約そのもので、そのバイト列の中身は契約ではない。仮想 backend 側は
+         *   `virtual: false` のケースを流さないので、解釈はここだけが持つ。
+         */
+        private fun bodyOf(request: JsonNode): ByteArray {
+            val size = request.path("bodyBytes").asInt(0)
+            if (size > 0) {
+                return ByteArray(size) { 'x'.code.toByte() }
+            }
+            return request.path("body").asString("").toByteArray(StandardCharsets.UTF_8)
+        }
+
         fun send(request: JsonNode, port: Int): HttpResponse<ByteArray> {
             val backend = request.path("backend").asString("file")
             val slash = if (request.path("trailingSlash").asBoolean(true)) "/" else ""
@@ -188,11 +203,7 @@ class BackendContractTest {
             val builder = HttpRequest.newBuilder(uri)
             when (val method = request.path("method").asString("GET")) {
                 "GET" -> builder.GET()
-                "POST" -> builder.POST(
-                    HttpRequest.BodyPublishers.ofByteArray(
-                        request.path("body").asString("").toByteArray(StandardCharsets.UTF_8),
-                    ),
-                )
+                "POST" -> builder.POST(HttpRequest.BodyPublishers.ofByteArray(bodyOf(request)))
 
                 else -> error("契約表が未対応の method を使っている: $method")
             }

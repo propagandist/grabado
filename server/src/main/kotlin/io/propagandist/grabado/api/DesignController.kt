@@ -3,6 +3,7 @@ package io.propagandist.grabado.api
 import io.propagandist.grabado.ai.AiReviewService
 import io.propagandist.grabado.config.GrabadoProperties
 import io.propagandist.grabado.design.DesignName
+import io.propagandist.grabado.design.DesignTooLargeException
 import io.propagandist.grabado.design.DesignStore
 import io.propagandist.grabado.design.ReadOnlyException
 import io.propagandist.grabado.introspect.IntrospectionModel
@@ -112,7 +113,19 @@ class DesignController(
         request: HttpServletRequest,
     ): ResponseEntity<Void> {
         val name = DesignName.parse(keyword)
-        val bytes = request.inputStream.use { it.readAllBytes() }
+        /*
+         * 段階#215: **上限を読み切る前に判定する。** readAllBytes() で全ボディをヒープへ
+         * 読んでから測ると、上限の意味が半分無くなる（大きな body は既に載っている）。
+         * limit + 1 バイトだけ読めば「超えたか」は決まる。
+         *
+         * ★ Content-Length は見ない —— chunked 転送では付かないので、**付いていないときに
+         *   抜ける**判定になる。実際に読んだ量で決めれば経路によらない。
+         */
+        val limit = properties.maxDesignBytes
+        val bytes = request.inputStream.use { it.readNBytes(limit + 1) }
+        if (bytes.size > limit) {
+            throw DesignTooLargeException(limit)
+        }
         /*
          * 段階5-4: 条件ヘッダがあれば「読む → 比べる → 書く」を store 側のロックで囲んで
          * 評価する。不一致は 412。**条件ヘッダを送らない既存フロントは今までどおり上書きできる**

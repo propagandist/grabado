@@ -516,6 +516,179 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 かつ `alert` / `prompt` を**その呼び出しの間だけ**差し替えられる（`openDesigner` が張る
 dialog ハンドラと衝突しない）。
 
+### ライブツリーを壊す操作 — golden の経路に出てこない層（#216）
+
+golden は fixture を**読んで書き出す**だけなので、**行やキーを壊す操作**（`destroy` /
+`removeRow`）は 1 ビットも通らない。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/live-tree.test.ts`](../tests/node/live-tree.test.ts) | **複数のキーに属する行を消すと、どのキーからも消えること**（#216）・消えた列が保存バイト列に出ないこと・`Table` ごと / `clearTables()` 経由でも残骸が出ないこと ＋ **キーと行の双方向リンクの不変条件**。**FK の伝播がサイクルで止まること**（#212 / #231）と、**非循環では伝播の回数が変わらないこと** ＋ **相互 FK が UI の経路で作れること** |
+
+**★ 不変条件をコードではなくテストで担保している。** `Row.destroy` の
+`while (this.keys.length)` が止まる根拠は「`Key.removeRow` が必ず縮める」ことだが、
+`Key.removeRow` は `indexOf` で早期 return するので**無条件には成り立たない**。成り立つのは
+
+> `k ∈ row.keys` ⟺ `row ∈ k.rows`
+
+が保たれているとき。実行時ガードを足さないイディオム C
+（[`../frontend/js/row.ts`](../frontend/js/row.ts) の KDoc）に従い、**この不変条件を見張る
+テストを置くことで担保する**。`Key.destroy` が作る**逆向きの**非対称（`key.rows` に残るが
+`row.keys` からは消える）もリテラルで固定してある —— こちらは行側から見えないので
+無限ループの原因にならない。
+
+**★★ サイクル検出は「訪問済み集合」ではなく「経路上の集合」**（#212 / #231）。
+再帰の前に足し、**後で外す**。大域の visited にすると**非循環でも訪問回数が減る** ——
+ダイヤモンド（A→B、A→C、B→C）で合流点は **2 回**更新されるのが現行の挙動で、visited だと
+1 回になる。経路上の集合なら DAG で枝刈りが 1 つも起きないので、**値だけでなく `redraw()` の
+回数まで不変**（#207 / #210 が数えているのがそれ）。
+
+**この主張は「修正前から緑になるテスト」で示している** —— ダイヤモンドの 2 回・3 段チェーンの
+`size` の到達・非循環リネームの 3 本は、修正の前後どちらでも通る。**それが「挙動を変えて
+いない」の実体**で、赤くなるのはサイクルの 4 本だけ。
+
+**★ 相互 FK の作成は塞がない**（#212 の判断）。SQL として正当な設計で、`rowClick` が弾くのは
+`r1 == r2` だけ。**この issue の前は目視でしか確かめられなかった**ものを、`rowManager` の
+`connecting` を立てて `rowClick` を直接叩くテストに落としてある。
+
+**★ `Table.destroy()` を直に呼ばない。** `Designer.tables` から外れないので、次の読み込みの
+`clearTables()` が**二重に壊す**（`dom.mini.parentNode` が `null` で TypeError）。
+テストは `Designer.removeTable()` を通す。
+
+**★ golden は実走で確かめた** —— `npm run golden:update` を回して
+`git diff --stat tests/golden/` が **0 files changed**（2026-09-09）。この変更だけは
+`clearTables()` 経由で **golden の全読み込みを通る**ので、比較テストの緑だけで済ませない。
+
+### 規模の費用 — 2 系統に分かれる 4 本目の層（#206）
+
+**10 / 50 / 100 / 300 テーブルの合成設計を通し、費用を数で記録する。**
+実時間ではなく**回数**で判定するのは、共有ランナーが不安定で計装自体が実時間を歪めるから。
+
+| ファイル | 実行系 | 担当 |
+|---|---|---|
+| [`../tests/node/scale.test.ts`](../tests/node/scale.test.ts) | jsdom（**CI に乗る**） | 10 / 50 / 100 の 3 点で**カウンタが 1 次式に乗ること**。合成設計が決定論で正準形であること。`clearTables()` で DOM が戻ること |
+| [`../tests/scale/load.spec.ts`](../tests/scale/load.spec.ts) | 実ブラウザ | 4 段の読み込み ＋ **`LayoutCount` と読み出し回数の比** |
+| [`../tests/scale/export.spec.ts`](../tests/scale/export.spec.ts) | 実ブラウザ | `toJson()` / `toDdl()` の費用とバイト数 |
+| [`../tests/scale/interaction.spec.ts`](../tests/scale/interaction.spec.ts) | 実ブラウザ | 読み込んだ後の**1 操作**あたりの費用 |
+
+**★★ 3 点で見る。2 点は必ず直線に乗る**ので、線形性の証明にならない。加えて
+**式とは独立に次数を見る 1 本**を置いてある（N が 10 倍で費用がおよそ 10 倍。二次なら 100 倍）
+—— 式が全部合っていても「式を実測に合わせて書き換えただけ」かもしれないため。
+
+**★★ 実ブラウザ側は `npm run test:browser` に入れない。** `ci-frontend.yml` がそれを回すので、
+**300 テーブルの実測が全 PR に載る**（`golden:update` も同じ project 指定なので、golden の
+再生成にも巻き込まれる）。`npm run test:scale` で別に回す。
+
+**★ 計装の正本は 1 本。** [`../tests/support/probe.ts`](../tests/support/probe.ts) を、
+Node は直接呼び、page 側は**ソース文字列として注入**する（`state.ts` と同じ形）。
+**アプリのコードは 1 行も触らない** —— 出荷コードが変わらず、バンドルの diff にも出ない。
+
+**★ jsdom で数えられないもの**: `LayoutCount`（jsdom はレイアウトしない）／ `alignTables()`
+（折り返しが `offsetWidth` に依存する）／ 実時間。**この分担は上の「なぜ 2 系統あるのか」と
+同じ形**で、新しい規律を作っていない。
+
+**★ 生成物はコミットしない。** `SCALE_DUMP=1` のときだけ `test-results/`（gitignore 済み）へ
+落ちる。既定で 1 バイトも書かない —— CI の最終ステップが `git diff --exit-code` を回す。
+
+**数の正本は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)**（測った日と機械つき）、
+費用モデルは [`ARCHITECTURE.md`](ARCHITECTURE.md) §5.7、運用は
+[`../tests/scale/README.md`](../tests/scale/README.md)。
+
+### 開いて使うサンプル — 母集団が表ではなくディレクトリ（#237）
+
+[`../docs/samples/`](../docs/samples/) に置いた**人が開く設計**が、現行のパーサで読めて
+**正準形である**ことを見る。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/samples.test.ts`](../tests/node/samples.test.ts) | `docs/samples/*.json` を `readdirSync` で全部拾い、`db` が実在プロファイルであること・CRLF が混ざっていないこと・**読み込んで書き戻すと 1 バイトも変わらないこと** |
+
+**★ assert は実質 1 つ（往復でバイト一致）で、それが 4 つを同時に押さえる:**
+
+| 押さえること | 落ちる契機 |
+|---|---|
+| 現行のパーサで読める | `formatVersion` ／ `db` 照合 ／ 未知の型 id |
+| **正準形である** | キー順 ／ 既定値と同じキーが出ている ／ 2 スペース ／ 末尾 LF ／ 展開形 |
+| 同名テーブルが無い | `json-serializer.ts` の `assertUniqueTableNames` が throw |
+| size の正規化に乗る | `length="0"` の型に `size` を書いている |
+
+**★★ 母集団は表ではなくディレクトリの実体。** [`../tests/node/fixture-set.test.ts`](../tests/node/fixture-set.test.ts)
+が表を持つのは **8 × 7 の格子が固定**だからで、`docs/samples/` は**可変長のリスト** ——
+表を持たせると保守だけが乗って利得が無い。**サンプルを足しても、テストに書き足すことは何も無い。**
+
+**★ 赤くなる契機はパレットから型を撤去したとき。** 対処は
+`npm run migrate:design -- docs/samples/*.json` で、これは**既にリポジトリ内の設計ファイルに
+要る作業**（[`../frontend/js/io/json-parser.ts`](../frontend/js/io/json-parser.ts) の KDoc）。
+**コストではなく、移行漏れを見る場所が 1 つ増える利得。**
+
+**★ 再現用サンプル（`repro-*.json`）が今も再現するかは追わない。** それは
+[`../tests/known-issues/`](../tests/known-issues/) の軸で、ここから追うと**不具合を直した日に
+docs のテストが赤くなる**。`repro-*` が持つのは**人が実ブラウザで確かめる手順**で、
+機械側は `tests/node/live-tree.test.ts` と `tests/node/rename.test.ts` が持っている。
+
+**★ `.gitattributes` に `docs/samples/*.json text eol=lf` が要る。** 無いと
+`core.autocrlf=true` の環境で CRLF になり、末尾 LF の比較が落ちる ——
+`tests/fixtures/**` を LF 固定しているのと同じ理由。
+
+### リネームの伝播 — 置換の両側がユーザー入力だった（#213）
+
+`Row.setTitle` / `Table.setTitle` は、名前を変えたときに**追随する側の名前**を書き換える。
+その置換が **旧名を正規表現へ、新名を置換文字列へ、どちらも生のまま**渡していた。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/rename.test.ts`](../tests/node/rename.test.ts) | **3 通りの壊れ方**（下表）＋ 置換文字列の展開 ＋ **これまでどおり追随すること**。規則の実体は [`../frontend/js/rename.ts`](../frontend/js/rename.ts) |
+
+**★ 壊れ方は 3 通りある**（2026-09-09 実測）。#213 のタイトルは crash だけを挙げているが、
+**本文が例に挙げている `Products (old)` は落ちない**:
+
+| 入力 | 修正前 |
+|---|---|
+| `a(b` / `a[b` / `*x` / `+x` / `?x` / `a)b` / `a{2,1}` | **SyntaxError** |
+| **`Products (old)`** / `price+tax` | valid だが**自分自身に当たらず、黙って追随しない**（`(old)` がキャプチャグループになる） |
+| `user.name` | `.` が任意 1 文字に当たり**誤置換** |
+| 新名に `$&` `` $` `` `$'` `$$` | 置換文字列として**展開され、一致テキストが注入される** |
+
+**★ 読み込み経路ではこのループが 1 度も走らない** ——
+[`../frontend/js/io/apply.ts`](../frontend/js/io/apply.ts) が relation を張る前に `setTitle` を
+呼ぶので、`relations` が空でループが 0 回になる。**だから golden は 1 バイトも動かず、
+この経路を見ているテストは #213 まで 1 本も無かった。**
+
+**★ `Table.setTitle` が書き換えるのは「自テーブルの行」**（子テーブルの行ではない）。
+内側ループは `row.relations` を辿るが、置換の対象はループ変数ではなく `row` 自身 ——
+**そのテーブルの行のうち、参照される側になっているもの**が対象になる。
+FK の既定命名パターン `%R_%T` が親テーブル名を含むので、house 既定に沿った設計でそのまま出る形。
+
+**★ ハーネスに `designer` を公開した**（[`../tests/node/harness.ts`](../tests/node/harness.ts)）。
+`createHarness` は前から掴んでいて、公開していたのが `io` だけだった。**ライブツリーの
+オブジェクトグラフを直接叩くテスト**を積むので口を開けてある（#216 / #212 も同じ口を使う）。
+
+### 座標系 — jsdom が 0 しか返さない層（#214）
+
+**ここは jsdom では成立しない。** `Designer.minSize` は `#area` の `offsetWidth` /
+`offsetHeight` から採られる（[`../frontend/js/wwwsqldesigner.ts`](../frontend/js/wwwsqldesigner.ts)）が、
+jsdom はレイアウトしないので両方 0 になる。[`../tests/support/state.ts`](../tests/support/state.ts) も
+同じ理由で**レイアウト由来の値を golden から全部除外している**（`table.width/height`、
+`dom.mini` の位置と大きさ、**relation path の `d` 属性**、`designer.width/height`）。
+
+結果、**この層を見ているテストは #214 まで 1 本も無かった。**
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/browser/canvas.spec.ts`](../tests/browser/canvas.spec.ts) | `minSize` が `#area` の実寸と一致すること・**幅と高さの下限が独立していること**（#214 の再現）・テーブルがあれば下限を超えること・**ミニマップの port が縦横で別々に追随すること**・`<svg>` の寸法属性が `designer` と一致すること |
+
+**★ CSS の値を焼かない。** `#area` は現在 3000x3000 の正方形（`styles/base.css` の
+`--area-size`）で、**正方形であるあいだ `minSize[0]` と `minSize[1]` は区別できない**。
+3000 をハードコードすると、縦横比を変えた日に**通ったまま意味を失う**。
+
+**★ #214 で 2 つ目が出た**（2026-09-09 実測）。`minSize` を読む行は `applyStyle()` より前に
+あり、**テーマ CSS（`[data-theme^="material-"] #area`）が当たる前の `#area`** を測っていた
+—— 実測 `[1264, 0]`。高さに `minSize[0]` を読んでいたバグが、**`minSize[1]` が 0 であることを
+隠していた**。測り直しは `init2()`（`applyStyle()` の後）に置いてある。
+
+**ここは今後も積む棚**。`relation.ts` / `map.ts` / `rubberband.ts` / `keymanager.ts` は
+まだテストからの参照が 0 で、ドラッグとラバーバンドは下の「見た目とキーボードの手動確認」に残る（#236）。
+
 ### 仮想 backend（§4 段階4-6）
 
 4-6 で保存が read-before-write（save の前に load を 1 回投げる）になり、**「サーバ上に何が
@@ -909,7 +1082,7 @@ dev server で緑でも `dist/` が壊れていては配布できないので、
 | 4 | Keys | `<<` / `>>` が押せる |
 | 5 | Options | **テーマを変えて OK を押した瞬間に切り替わる**（#172 で `applyStyle()` の欠落を塞いだ）。リロードは要らない |
 | 6 | Save / Load | 「保存」4 種が**行き先の絵で読み分けられる**（#170） |
-| 7 | ミニマップのドラッグ | port が動く（`map.ts` が `offsetWidth - 2` を前提にしている。#171 で `box-sizing` を固定した） |
+| 7 | ミニマップのドラッグ | port が動く（`map.ts` が `offsetWidth - 2` を前提にしている。#171 で `box-sizing` を固定した）。**port の大きさの計算は `canvas.spec.ts` が張る**が、**ドラッグ操作そのものは目視のまま**（#236） |
 | 8 | ラバーバンド | 枠が 1px で見える（#171 で `.2px` から直した） |
 
 ### キーボードだけで一巡する

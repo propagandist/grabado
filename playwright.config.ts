@@ -28,6 +28,18 @@ export default defineConfig({
             name: "known-issues",
             testDir: "tests/known-issues",
         },
+        /*
+         * 規模の実測（#206）。**characterization に混ぜない** —— ci-frontend.yml が
+         * npm run test:browser を回すので、300 テーブルの実測が全 PR に載ってしまう
+         * （golden:update も同じ project 指定）。別 config にもしない —— 既存 3 本の別 config は
+         * **配信先が違う**から分かれている（dist は vite preview、server は jar、image は compose）。
+         * ここは characterization と同じ Vite dev server・同じ固定 viewport を使うので、
+         * webServer ブロックの複製にしかならない。
+         */
+        {
+            name: "scale",
+            testDir: "tests/scale",
+        },
     ],
     webServer: {
         command: "npx vite",

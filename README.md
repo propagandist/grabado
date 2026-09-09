@@ -213,8 +213,10 @@ docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" ghcr.io/propagandist/
 
 `-v` の左側は**設計 JSON を置くホスト側のディレクトリ**。**先に作っておくこと** ——
 Linux では、無いまま実行すると Docker が root 所有で作ってしまい、**非 root で走るコンテナが
-書けずに落ちる**。**`-v` ごと省くと起動はする**が、書き先がコンテナの中になるので、
-**コンテナを捨てた時点で設計も消える**。
+書けずに落ちる**。
+
+**`-v` ごと省くと起動しない。** 正本を持たないまま動かすと、書き先がコンテナの中になり
+**コンテナを捨てた時点で設計が消える** —— そうなる前に止める（issue #202）。
 
 amd64 と arm64 の両方が入っている。**何が入っているかは、こちらの発表を待たずに確かめられる**
 —— 出所・版・ライセンスは OCI ラベルに、焼き込んだ JRE と依存の版は SBOM にある:
@@ -307,6 +309,7 @@ env の一覧は [`.env.example`](.env.example)（キー名と 1 行の用途）
 | [`docs/FORMAT.md`](docs/FORMAT.md) | 設計 JSON の形式 |
 | [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) | house 既定が各 DB で何になるか |
 | [`docs/TESTING.md`](docs/TESTING.md) | テストの構成と走らせ方 |
+| [`docs/samples/`](docs/samples/) | 開いて試せるサンプル ER と、introspection の実測 |
 | [`docs/BRANCHING.md`](docs/BRANCHING.md) | ブランチ運用 |
 | [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) | fork 以降の決定と、その理由のすべて |
 | [`CLAUDE.md`](CLAUDE.md) | 作業ルールと Hard Constraints |

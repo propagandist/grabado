@@ -1,0 +1,111 @@
+{
+  "formatVersion": 2,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "Products (old",
+      "x": 20,
+      "y": 20,
+      "comment": "括弧が閉じていないテーブル名。リネームすると RegExp が SyntaxError になっていた",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "Products (old_id",
+          "type": "uuid",
+          "nullable": true,
+          "comment": "テーブル名を含む列。リネームで追随する側"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "measurements",
+      "x": 420,
+      "y": 20,
+      "comment": "ドットと記号を含む列名。user.name の . が任意 1 文字に当たり userXname を誤置換していた",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "user.name",
+          "type": "text"
+        },
+        {
+          "name": "userXname",
+          "type": "text",
+          "comment": "user.name のリネームで巻き添えになっていた列"
+        },
+        {
+          "name": "price+tax",
+          "type": "decimal",
+          "size": "12,2"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "refs",
+      "x": 820,
+      "y": 20,
+      "comment": "上の 2 つを参照し、リネームの伝播が起きる形にする",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()"
+        },
+        {
+          "name": "old_ref",
+          "type": "uuid",
+          "nullable": true,
+          "references": [
+            {
+              "table": "Products (old",
+              "column": "Products (old_id"
+            }
+          ]
+        },
+        {
+          "name": "name_ref",
+          "type": "text",
+          "nullable": true,
+          "references": [
+            {
+              "table": "measurements",
+              "column": "user.name"
+            }
+          ]
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ]
+}

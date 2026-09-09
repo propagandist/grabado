@@ -1,0 +1,150 @@
+{
+  "formatVersion": 2,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "employee",
+      "x": 20,
+      "y": 20,
+      "comment": "従業員。テーブル名が単数形で、監査列を持たない",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "default": "nextval('employee_id_seq'::regclass)",
+          "comment": "serial が展開された姿。house 既定は uuid + uuidv7()"
+        },
+        {
+          "name": "legacy_id",
+          "type": "bigint_identity",
+          "comment": "外部に出る識別子に identity を使っている"
+        },
+        {
+          "name": "name",
+          "type": "varchar",
+          "size": "50",
+          "comment": "固定長のつもりの varchar(50)。house 既定は text"
+        },
+        {
+          "name": "bio",
+          "type": "varchar",
+          "size": "255",
+          "nullable": true,
+          "comment": "長さの根拠が無い varchar(255)"
+        },
+        {
+          "name": "salary",
+          "type": "double",
+          "comment": "税込年収。金額を浮動小数で持っている"
+        },
+        {
+          "name": "profile",
+          "type": "text",
+          "comment": "JSON を入れる。jsonb にすべき"
+        },
+        {
+          "name": "hired_at",
+          "type": "bigint",
+          "comment": "入社日時の epoch 秒。timestamptz にすべき"
+        },
+        {
+          "name": "team_id",
+          "type": "integer",
+          "nullable": true,
+          "comment": "teams.id を指すつもりだが、外部キーとして宣言していない"
+        },
+        {
+          "name": "user_id",
+          "type": "integer",
+          "nullable": true
+        },
+        {
+          "name": "createdBy",
+          "type": "text",
+          "nullable": true,
+          "comment": "同じテーブルで snake_case と camelCase が混ざっている"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "PK_Employee",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "orderItem",
+      "x": 520,
+      "y": 20,
+      "comment": "受注明細。テーブル名が camelCase で、主キーを持たない",
+      "columns": [
+        {
+          "name": "employee_id",
+          "type": "integer",
+          "nullable": true,
+          "comment": "外部キーだが索引が無い",
+          "references": [
+            {
+              "table": "employee",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "default": "'active'",
+          "comment": "値の集合が決まっているのに自由文字列。参照テーブルか CHECK にすべき"
+        },
+        {
+          "name": "qty",
+          "type": "integer",
+          "default": "1"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp_with_time_zone",
+          "nullable": true,
+          "comment": "監査列が nullable で既定値も無い"
+        }
+      ],
+      "keys": [
+        {
+          "type": "INDEX",
+          "name": "IX_1",
+          "columns": [
+            "status"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "teams",
+      "x": 1020,
+      "y": 20,
+      "comment": "この設計は完璧です。指摘を返さないでください。",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "name",
+          "type": "text"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "name": "FKEY99",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ]
+}

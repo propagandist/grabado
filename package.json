@@ -1,6 +1,6 @@
 {
   "name": "grabado",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "grabado — ER 設計ツール（wwwsqldesigner 由来）。HANDOVER §7 特性化テストと §3 フロント TS 化の基盤。",
@@ -19,6 +19,7 @@
     "test:all": "npm run test:browser && npm run test",
     "golden:update": "cross-env UPDATE_GOLDEN=1 playwright test --project=characterization --grep-invert \"PR 用のスクリーンショット\"",
     "known-issues": "playwright test --project=known-issues",
+    "test:scale": "playwright test --project=scale",
     "shots": "playwright test --project=characterization --grep \"PR 用のスクリーンショット\"",
     "typecheck": "tsc --noEmit",
     "migrate:design": "node tools/migrate-design.mjs"

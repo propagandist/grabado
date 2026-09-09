@@ -96,8 +96,22 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 #   Windows のチェックアウトでは立たず、`COPY` はホストのモードをそのまま持ち込むので
 #   **`exec: permission denied` で起動に失敗する**（2026-08-27 に CI で踏んだ）。
 #   上の api ステージが `sh ./gradlew` と書いているのと**同じ理由・同じ対処**である。
+# ★★ **正本ディレクトリをイメージに作らない**（issue #202）。
+#
+#   ここには以前 `mkdir -p /data/schema && chown grabado:grabado /data/schema` があった。
+#   **それが起動時 fail-fast を無効にしていた** —— FileDesignStore は「mount を忘れたまま
+#   起動すると書き込み先がコンテナ内 fs になり、コンテナを捨てた瞬間に設計が消える。
+#   **駄目なら起動させない**」と宣言しているのに、**イメージに焼かれた /data/schema に対して
+#   4 つの check（exists / isDirectory / isReadable / isWritable）が全部通っていた**。
+#
+#   **実測（2026-09-09）**: 外す前は `docker run -d -p 18099:8080 grabado`（-v なし）が
+#   **起動し、capabilities が応答した**。外した後は **exit=1 で起動しない**。
+#
+#   ★ **chown も同時に外す。** mkdir を外すと chown の対象が消えて build が落ちるので
+#   同時にしか外せない。**外して壊れない** —— docker-entrypoint.sh は **mount 先を stat で
+#   読んで su-exec で降りる**ので、イメージ側の所有権を 1 度も使っていない
+#   （mount していない経路は、そもそも FileDesignStore が止める）。
 RUN addgroup -S grabado && adduser -S -G grabado grabado \
- && mkdir -p /data/schema && chown grabado:grabado /data/schema \
  && apk add --no-cache su-exec \
  && chmod +x /usr/local/bin/docker-entrypoint.sh
 

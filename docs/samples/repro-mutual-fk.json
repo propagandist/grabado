@@ -1,0 +1,69 @@
+{
+  "formatVersion": 2,
+  "db": "postgresql",
+  "tables": [
+    {
+      "name": "nodes",
+      "x": 20,
+      "y": 20,
+      "comment": "相互 FK の片側。edges.id を指す。両端が PK 列 id になるのは house 既定どおりの形",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()",
+          "references": [
+            {
+              "table": "edges",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "label",
+          "type": "text"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "edges",
+      "x": 420,
+      "y": 20,
+      "comment": "相互 FK のもう片側。nodes.id を指す",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "default": "uuidv7()",
+          "references": [
+            {
+              "table": "nodes",
+              "column": "id"
+            }
+          ]
+        },
+        {
+          "name": "weight",
+          "type": "integer",
+          "default": "1"
+        }
+      ],
+      "keys": [
+        {
+          "type": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ]
+}

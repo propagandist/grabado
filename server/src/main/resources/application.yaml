@@ -18,6 +18,15 @@ grabado:
   # https へ強制する。値と preload を付けない理由は SecurityHeadersFilter.HSTS。
   hsts: ${GRABADO_HSTS:false}
 
+  # save が受け取る設計 1 本の上限（issue #215）。**既定 1 MiB。**
+  #
+  # 実測から出した値（#206）—— 300 テーブルの設計 JSON が 414 KiB なので、
+  # 1 MiB は 750 テーブル相当（AI レビューの宣言上限 100 の 7.5 倍）。
+  #
+  # ★ nginx の既定 client_max_body_size と同じ 1 MiB に揃えてある。前段にプロキシを
+  #   置くと 413 はアプリを通らずに返るので、境界を揃えておけば挙動が変わらない。
+  max-design-bytes: ${GRABADO_MAX_DESIGN_BYTES:1048576}
+
   # introspection の接続先（段階5-7a）。**既定は空＝無効。**
   #
   # ★ ここに列挙したものしか使えない。`?action=import&database=shop` の `shop` が選ぶのは

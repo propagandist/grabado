@@ -19,6 +19,7 @@
     "test:all": "npm run test:browser && npm run test",
     "golden:update": "cross-env UPDATE_GOLDEN=1 playwright test --project=characterization --grep-invert \"PR 用のスクリーンショット\"",
     "known-issues": "playwright test --project=known-issues",
+    "test:scale": "playwright test --project=scale",
     "shots": "playwright test --project=characterization --grep \"PR 用のスクリーンショット\"",
     "typecheck": "tsc --noEmit",
     "migrate:design": "node tools/migrate-design.mjs"

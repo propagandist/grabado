@@ -10,6 +10,7 @@ import { captureDesignState } from "../support/state.ts";
 import type { OzRequestCallback, OzRequestOptions } from "../../frontend/js/oz.ts";
 /* UI 層の型（段階4-3b。実体はバンドルの内側） */
 import type { IO } from "../../frontend/js/io.ts";
+import type { Designer } from "../../frontend/js/wwwsqldesigner.ts";
 /* バンドルが window に載せるハンドルの型（実体は tests/node/app-entry.ts） */
 import type { GrabadoTestApi } from "./app-entry.ts";
 
@@ -62,6 +63,14 @@ export interface NodeHarness {
     readonly window: JSDOM["window"];
     /** UI 層（js/io.ts）。段階4-3b の保存/読込経路を Node からも叩く */
     readonly io: IO;
+    /**
+     * 描画エンジンのライブツリーそのもの（#213 / #216 / #212）。
+     *
+     * createHarness は前からこの値を掴んでいて、公開していたのが io だけだった
+     * （`h.io.owner` でも届く）。**行やキーのオブジェクトグラフを直接叩くテスト**を
+     * 積むので、口を素直に開ける。
+     */
+    readonly designer: Designer;
     /** OZ.Request が受けたリクエストを取り出して空にする（発生順） */
     takeRequests(): RequestRecord[];
     /** 型パレットを差し替える（dbResponse() と同じ操作） */
@@ -506,6 +515,7 @@ export async function createHarness(): Promise<NodeHarness> {
         dom,
         window,
         io: designer.io,
+        designer,
         takeRequests: (): RequestRecord[] => requests.splice(0, requests.length),
         takeAlerts: takeAlerts,
         useDatatypes(db: string): void {

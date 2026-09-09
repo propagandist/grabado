@@ -23,6 +23,7 @@
 
 import { OZ } from "./oz.ts";
 import { identifierHint } from "./identifier-hint.ts";
+import { renameOccurrences } from "./rename.ts";
 import { publish } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import { Row, type RowData } from "./row.ts";
@@ -154,7 +155,7 @@ export class Table extends Visual<TableDom> {
                 if (r.row1 != row) {
                     continue;
                 }
-                var tt = row.getTitle().replace(new RegExp(old, "g"), t);
+                var tt = renameOccurrences(row.getTitle(), old, t);
                 if (tt != row.getTitle()) {
                     row.setTitle(tt);
                 }

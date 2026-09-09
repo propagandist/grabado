@@ -16987,6 +16987,63 @@ closed のものを後から書き換えない（#144 / #187 と同じ判断）�
 - **★ Docker Desktop（Win / macOS）は所有権を偽装する**（uid=0 gid=0 mode=777）。
   **mount していれば起動する**のは変わらない。**変わったのは「mount していない」経路だけ**
 
+### 2026-09-09 実 HTTP の E2E が 3 日間赤いままだった —— CI が回さない層の穴
+
+**#247**。`npm run test:server` の 1 本が落ちていた。**アプリは正しく動いており、落ちていたのは
+テストの側**。
+
+#### 何が起きていたか
+
+テストは `window.confirm` を差し替えて「confirm が呼ばれたか」を見ていたが、
+**#173（v0.3.0）で対話が `<dialog>` に載せ替わり、ネイティブの対話は 39 か所 → 0 になった**。
+`frontend/js/io.ts` の衝突処理は `dialogs().confirm(...)` を呼ぶので、
+**差し替えても 1 度も触られない** —— `messages` が空のままアサーションだけが落ちる。
+
+`tests/browser/harness.ts` の `loadFixture` は **#173 で `window.alert` から `d.dialogs.alert` へ
+移してある**（コメントに明記）。**`tests/server/` だけが追随していなかった。**
+
+#### ★★ なぜ 3 日以上気づかなかったか
+
+**`npm run test:server` は CI で回っていない。** `.github/workflows/ci-server.yml` が回すのは
+`./gradlew build` と `git diff --exit-code` だけで、**Playwright の実 HTTP E2E は手元専用の層**。
+
+**#173 は `npm test` / `test:browser` / `test:dist` を全部緑にしてマージされた** ——
+**そのどれもこのファイルを回さない。**
+
+#### 直し方（1 か所）
+
+`d.dialogs.confirm` を差し替える。`dialogs()` はシングルトン（`frontend/js/dialog.ts`）なので、
+`Designer.init2()` が持つ `d.dialogs` と同じ実体。`page.on("dialog", ...)` も外した ——
+**ネイティブの対話が出ないので発火しない**。
+
+**アプリのコードは 1 行も触っていない。**
+
+#### ★ `ai-e2e.spec.ts` の死んだハンドラは触らない
+
+同じ `page.on("dialog", ...)` が `tests/server/ai-e2e.spec.ts` にもあり、**同じ理由で死んでいる**
+（無害）。**触らないのは opt-in（実 API キーが要る）で検証できないから** ——
+**動かせないものを直したことにしない**。#247 にコメントで残す。
+
+#### ★ CI に載せるかは別に決める
+
+載せれば同じ取り残しを次から捕まえられるが、**実サーバを起こすぶん高価**で、`ci-server.yml` は
+今 Gradle だけで 1 分強で終わっている。`tests/orm-tools` にも「手元で回す層」の前例がある。
+
+**この issue では直すところまで。** 載せるかは **#206 の「時間で回すものは回されなくなる」と
+同じ軸**で別に決める。
+
+#### 実測
+
+| | 結果 |
+|---|---|
+| `npm run test:server` | **5 passed / 1 skipped**（skip は opt-in の AI E2E）。修正前は **1 failed** |
+| `npm run typecheck` | 緑 |
+
+#### 申し送り
+
+- **★ 手元専用の層は他にもある** —— `npm run test:orm-tools`（Docker ＋ ネットワーク）。
+  **同じ形で腐っていないかは確かめていない**
+
 ---
 
 ## 保持している upstream 資産（撤去予定を含む）

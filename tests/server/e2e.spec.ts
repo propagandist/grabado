@@ -113,19 +113,36 @@ test("外部で書き換わっていたら 412 を受けて confirm を出す", 
     const theirs = serverFile("e2e-conflict.json") + "\n";
     writeFileSync(join(SCHEMA_DIR, "e2e-conflict.json"), theirs, "utf8");
 
-    /* confirm は断る。1 バイトも上書きされないことを見る */
-    page.on("dialog", (dialog) => void dialog.dismiss());
+    /*
+     * ★★ **差し替えるのは `d.dialogs.confirm`。`window.confirm` ではない。**
+     *   #173 で対話が <dialog> へ載せ替わり、**ネイティブの対話は 0 件になった**
+     *   （js/io.ts の衝突処理は `dialogs().confirm(...)` を呼ぶ）。`window.confirm` を
+     *   差し替えても**アプリは 1 度も触らない**ので、messages が空のまま落ちていた（#247）。
+     *
+     *   `dialogs()` はシングルトン（js/dialog.ts）なので、`Designer.init2()` が持つ
+     *   `d.dialogs` と同じ実体。tests/browser/harness.ts の loadFixture が
+     *   `d.dialogs.alert` を差し替えているのと同じ形。
+     *
+     *   `page.on("dialog", ...)` も要らない —— ネイティブの対話が出ないので発火しない。
+     */
     const asked = await page.evaluate(async () => {
         const messages: string[] = [];
-        const original = window.confirm;
-        window.confirm = (message?: string) => {
+        const d = (
+            window as unknown as {
+                d: {
+                    dialogs: { confirm(message: string): Promise<boolean> };
+                    io: { serversave(e: undefined, k: string): void };
+                };
+            }
+        ).d;
+        const original = d.dialogs.confirm;
+        d.dialogs.confirm = (message: string) => {
             messages.push(String(message));
-            return false;
+            return Promise.resolve(false);
         };
-        const d = (window as unknown as { d: { io: { serversave(e: undefined, k: string): void } } }).d;
         d.io.serversave(undefined, "e2e-conflict");
         await new Promise((resolve) => setTimeout(resolve, 500));
-        window.confirm = original;
+        d.dialogs.confirm = original;
         return messages;
     });
 

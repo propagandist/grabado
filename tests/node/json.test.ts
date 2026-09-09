@@ -141,31 +141,41 @@ describe("設計 JSON 特性化（Node / jsdom）", () => {
     test("同名テーブルがある設計は 1 バイトも書かずに例外", () => {
         // 設計 JSON は relation を名前で参照するので、同名テーブルがあると
         // 読み戻したとき参照先が入れ替わる。形式では直さず保存を拒む（4-2 の決めごと）。
-        const duplicated = [
-            '<?xml version="1.0" encoding="utf-8" ?>',
-            "<sql>",
-            '<table x="10" y="10" name="users">',
-            '<row name="id" null="0" autoincrement="0">',
-            "<datatype>INTEGER</datatype>",
-            "</row>",
-            "</table>",
-            '<table x="200" y="10" name="users">',
-            '<row name="id" null="0" autoincrement="0">',
-            "<datatype>INTEGER</datatype>",
-            "</row>",
-            "</table>",
-            "</sql>",
-            "",
-        ].join("\n");
-
+        //
+        // ★ #233 で**読み込み側にも同じ関門が入った**ので、ファイルから同名テーブルを
+        //   持ち込む経路はもう無い（tests/node/design-guards.test.ts が見る）。
+        //   ここが見るのは**保存側のガードが生きていること**なので、ライブツリーを
+        //   直接組んで叩く —— UI から 2 つのテーブルに同じ名前を付ける経路は今も開いている。
         h.useDatatypes(SERIALIZER_DB);
-        h.loadFixture(duplicated);
+        h.loadJson(
+            JSON.stringify(
+                {
+                    formatVersion: 2,
+                    db: SERIALIZER_DB,
+                    tables: [
+                        {
+                            name: "users",
+                            x: 10,
+                            y: 10,
+                            columns: [{ name: "id", type: "integer" }],
+                        },
+                    ],
+                },
+                null,
+                2
+            ) + "\n"
+        );
+        const second = h.designer.addTable("accounts", 200, 10);
+        expect(() => h.toJson()).not.toThrow();
+
+        // UI と同じ経路で 2 つ目を同名にする
+        second.setTitle("users");
 
         expect(() => h.toJson()).toThrow(/users/);
         expect(() => h.toJson()).toThrow(/重複/);
 
         // 名前を分ければ通る（拒んでいるのが重複そのものであることの確認）
-        h.loadFixture(duplicated.replace('name="users">\n<row name="id" null="0"', 'name="accounts">\n<row name="id" null="0"'));
+        second.setTitle("accounts");
         expect(h.toJson()).toContain('"name": "accounts"');
     });
 });

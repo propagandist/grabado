@@ -45,6 +45,7 @@ import { generateDdl } from "./io/ddl/generate.ts";
 import { generateOrm } from "./io/orm/generate.ts";
 import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
 import { applyDesignModel } from "./io/apply.ts";
+import { assertLoadableDesign } from "./io/validate.ts";
 import { serializeDesignJson } from "./io/json-serializer.ts";
 import { parseDesignJson } from "./io/json-parser.ts";
 
@@ -703,13 +704,23 @@ export class Designer extends Visual<DesignerDom> {
         var types = parseDatatypes(node);
         if (!types) {
             var model = parseDesignXml(node, this.palette);
+            /* grabado: #232 / #233。この経路は parse が clear より前なので守れる */
+            assertLoadableDesign(model);
             this.clearTables();
             applyDesignModel(this, model);
             return;
         }
         this.clearTables();
         this.palette.setRoot(types);
-        applyDesignModel(this, parseDesignXml(node, this.palette));
+        var embedded = parseDesignXml(node, this.palette);
+        /*
+         * grabado: #232 / #233。**ここは clear が先なので「今の設計を消さない」は守れない**
+         * （上の KDoc の順序制約）。それでも検査は掛ける —— 通してしまうと、
+         * relation が黙って別のテーブルに繋がった状態や、キーに存在しない列が載った状態が
+         * ライブツリーに入り、**保存もできない行き止まり**になる。
+         */
+        assertLoadableDesign(embedded);
+        applyDesignModel(this, embedded);
     }
 
     /*
@@ -736,6 +747,8 @@ export class Designer extends Visual<DesignerDom> {
      */
     fromJson(text: string): void {
         var model = parseDesignJson(text, this.palette);
+        /* grabado: #232 / #233。**clearTables() より前**（parse を前に置いてある理由と同じ） */
+        assertLoadableDesign(model);
         this.clearTables();
         applyDesignModel(this, model);
     }

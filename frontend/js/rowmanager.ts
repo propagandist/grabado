@@ -220,6 +220,10 @@ export class RowManager {
     }
 
     redraw(): void {
+        /* grabado: #210。読み込み中は溜める（Designer.suspendRedraw の KDoc） */
+        if (this.owner.redrawSuspended) {
+            return;
+        }
         this.endCreate();
         this.endConnect();
         if (this.selected) {

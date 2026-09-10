@@ -127,13 +127,27 @@ function tableName(i: number): string {
  *   - offsetTop / offsetLeft / tableRedraw
  */
 export const SCALE_COUNTS: Record<keyof ScaleCounts, (n: number) => number> = {
-    offsetWidth: (n) => 25 * n - 5,
-    offsetHeight: (n) => 25 * n - 5,
+    /*
+     * ★ #210 で 25N - 5 から落ちた。**内訳は導出できる** ——
+     *   実際に描いた Table.redraw() が 3N 回（各 1 回読む）＋
+     *   Relation.measure() が N-1 本 x 2 回（両端のテーブル）＝ **5N - 2**。
+     */
+    offsetWidth: (n) => 5 * n - 2,
+    offsetHeight: (n) => 5 * n - 2,
     offsetTop: (n) => 4 * n - 4,
     offsetLeft: (n) => 2 * n - 2,
     rowRedraw: (n) => 11 * n - 2,
     rowUpdate: (n) => COLUMNS_PER_TABLE * n - 1,
-    tableRedraw: (n) => 23 * n - 3,
+    /*
+     * ★ #210 の後は「呼び出し回数」。早期 return で戻った分も入るので、
+     *   resumeRedraw() の N 回ぶんだけ #207 時点（23N - 3）より増えている。
+     */
+    tableRedraw: (n) => 24 * n - 3,
+    /**
+     * 実際に描いた回数（#210）。**resumeRedraw() の N ＋ ff hack の 2N。**
+     * 元は N(1 + 2C + P) + 2N で、house 既定の列数なら 1 桁違う。
+     */
+    tableRedrawWorked: (n) => 3 * n,
     relationRedraw: (n) => n - 1,
 };
 

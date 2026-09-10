@@ -312,6 +312,10 @@ export class Table extends Visual<TableDom> {
     }
 
     redraw(): void {
+        /* grabado: #210。読み込み中は溜める（Designer.suspendRedraw の KDoc） */
+        if (this.owner.redrawSuspended) {
+            return;
+        }
         var x = this.x;
         var y = this.y;
         if (this.selected) {

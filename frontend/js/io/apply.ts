@@ -35,8 +35,28 @@ import type {
  * その理由は同メソッドのコメントにある。ここで clear すると順序が崩れる。
  */
 export function applyDesignModel(designer: Designer, model: DesignModel): void {
-    for (var i = 0; i < model.tables.length; i++) {
-        applyTable(designer, model.tables[i]!);
+    /*
+     * grabado: #210。**テーブルの生成中だけ描き直しを溜める。**
+     * addRow() が列 1 本ごとに Table.redraw() を呼び、Row.redraw() が無条件で
+     * owner.redraw() と rowManager.redraw() を呼ぶので、N テーブル x C 列に比例して
+     * 積み上がっていた。**最終状態は変わらない**（resumeRedraw が全テーブルを描き直す）。
+     *
+     * ★★ **try / finally で必ず戻す。** applyRow は**パレットの範囲外の型添字**で
+     *   TypeError になる（2026-09-10 実測。関門はテーブル名の重複とキーが指す列の不在しか
+     *   見ておらず、型添字は見ていない）。旗が立ったまま抜けると
+     *   **以後すべての描画が止まる** —— 画面が固まったように見えて、原因が読み込み 1 回前に遡る。
+     *
+     * ★★ **ff hack より前に必ず流す。** 下の select() / deselect() は container の
+     *   left / top を ±1 動かすことが正体で、**束ねたまま通すと hack が意味を失う**。
+     *   relation を張る前でもある（Relation のコンストラクタが offsetLeft を読む）。
+     */
+    designer.suspendRedraw();
+    try {
+        for (var i = 0; i < model.tables.length; i++) {
+            applyTable(designer, model.tables[i]!);
+        }
+    } finally {
+        designer.resumeRedraw();
     }
 
     for (var i = 0; i < designer.tables.length; i++) {
@@ -100,8 +120,15 @@ function applyKey(table: Table, model: KeyModel): void {
     k.setType(model.type);
     k.setName(model.name);
     for (var i = 0; i < model.parts.length; i++) {
-        /* <part> には自テーブルの row 名しか書かれない前提（IO の不変条件）。
-           外れれば現行も addRow の r.owner で TypeError になる */
+        /*
+         * <part> には自テーブルの row 名しか書かれない前提（IO の不変条件）。
+         *
+         * ★ **訂正**（2026-09-10 実測。#210）—— 元は「外れれば現行も addRow の r.owner で
+         *   TypeError になる」と書いていた。**ならない。** findNamedRow が返す false は
+         *   Key.addRow の `r.owner != this.owner` で早期 return に落ちるだけで、
+         *   **<part> が黙って捨てられる**。#232 / #233 の関門が読み込みの側で拒むので
+         *   実害は残っていないが、**根拠が違う**ので消さずに直す。
+         */
         var row = table.findNamedRow(model.parts[i]!) as Row;
         k.addRow(row);
     }

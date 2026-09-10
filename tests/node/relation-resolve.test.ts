@@ -53,13 +53,19 @@ describe("リレーション解決（#208）", () => {
     }, 60_000);
 
     describe("先勝ち —— 同名があると先頭の一致に解決される", () => {
-        it("同名の行があると、参照は先頭の行に繋がる", () => {
-            /*
-             * 行名の重複は関門が見ていない（js/io/validate.ts が見るのはテーブル名の重複と
-             * キーが指す列の不在の 2 つ）。**XML の読み込みで実際に到達する。**
-             */
+        /*
+         * ★★ **訂正**（#263。2026-09-10）—— 元はここが
+         *   「同名の行があると、参照は先頭の行に繋がる」を **XML の読み込みで**固定していた。
+         *   **#263 が行名の重複を関門に足したので、その経路は閉じた。**
+         *
+         *   **黙って消さない。** 先勝ちそのものは下の 3 本目で残してある ——
+         *   **関門を通らない呼び手**（AI パッチの適用と introspection の取り込み）では
+         *   今も踏めるので、索引化が「先勝ち」を保っていることの検査は生きたまま。
+         */
+        it("同名の行がある設計は、読み込みの関門が拒む（#263）", () => {
             h.designer.clearTables();
-            h.loadFixture(`<?xml version="1.0" encoding="utf-8" ?>
+            expect(() =>
+                h.loadFixture(`<?xml version="1.0" encoding="utf-8" ?>
 <sql>
 <table x="20" y="20" name="parent">
 <row name="id" null="0" autoincrement="0"><datatype>INTEGER</datatype></row>
@@ -71,7 +77,20 @@ describe("リレーション解決（#208）", () => {
 <relation table="parent" row="id" />
 </row>
 </table>
-</sql>`);
+</sql>`)
+            ).toThrow(/重複/);
+        });
+
+        it("関門を通らない経路では、参照が先頭の行に繋がる（先勝ちは保たれている）", () => {
+            h.designer.clearTables();
+            applyDesignModel(h.designer, {
+                tables: [
+                    table("parent", 20, [row("id"), row("id")]),
+                    table("child", 320, [
+                        row("parent_id", [{ table: "parent", row: "id" }]),
+                    ]),
+                ],
+            });
 
             const parent = h.designer.tables[0]!;
             expect(parent.rows.length).toBe(2);

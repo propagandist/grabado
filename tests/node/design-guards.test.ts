@@ -170,6 +170,78 @@ describe("読み込みの関門", () => {
         });
     });
 
+    describe("同名の列がある（#263）", () => {
+        const DUP = J([
+            {
+                name: "parent",
+                x: 20,
+                y: 20,
+                columns: [
+                    { name: "id", type: "integer" },
+                    { name: "id", type: "text" },
+                ],
+            },
+        ]);
+
+        it("例外になる（現行は保存まで通り、実行できない DDL が出る）", () => {
+            const thrown = withOpenDesign(() => h.loadJson(DUP));
+            expect(errorMessage(thrown)).not.toBe(null);
+            expect(errorMessage(thrown)).toContain('"id"');
+            expect(errorMessage(thrown)).toContain('"parent"');
+        });
+
+        it("メッセージが位置を指す", () => {
+            const thrown = withOpenDesign(() => h.loadJson(DUP));
+            expect(errorMessage(thrown)).toContain("tables[0].columns[1]");
+        });
+
+        it("今開いている設計が残っている", () => {
+            withOpenDesign(() => h.loadJson(DUP));
+            expect(h.designer.tables.length).toBe(1);
+            expect(h.designer.tables[0]!.getTitle()).toBe("keeper");
+        });
+
+        it("別のテーブルに同じ列名があるのは通る（またいで見ない）", () => {
+            /* SQL が禁じるのは 1 つのテーブルの中の重複だけ */
+            const ok = J([
+                { name: "users", x: 20, y: 20, columns: [{ name: "id", type: "integer" }] },
+                { name: "orders", x: 400, y: 20, columns: [{ name: "id", type: "integer" }] },
+            ]);
+            h.loadJson(ok);
+            expect(h.toJson()).toBe(ok);
+        });
+
+        it("保存側も同じ規則を見ている（読めたものは保存できる）", () => {
+            /*
+             * ★★ **読み込みだけ足すと、#233 が潰したのと同じ非対称が新しくできる。**
+             *   画面で作った同名の列が保存できて開けない、という形。
+             *   ここは**ライブツリーに直接作って**、保存側が拒むことを見る。
+             */
+            h.loadJson(
+                J([
+                    {
+                        name: "t",
+                        x: 20,
+                        y: 20,
+                        columns: [{ name: "id", type: "integer" }],
+                    },
+                ])
+            );
+            /* 画面の「Add row」と同じ経路（列名の一意性は UI が拒んでいない） */
+            h.designer.tables[0]!.addRow("id");
+            expect(h.designer.tables[0]!.rows.length).toBe(2);
+
+            let thrown: unknown = null;
+            try {
+                h.toJson();
+            } catch (e) {
+                thrown = e;
+            }
+            expect(errorMessage(thrown)).not.toBe(null);
+            expect(errorMessage(thrown)).toContain('"id"');
+        });
+    });
+
     describe("XML 互換読み込みにも同じ関門が掛かる（#233 の判断）", () => {
         it("同梱パレットを持たない XML で、壊れていれば今の設計が残る", () => {
             const xml =

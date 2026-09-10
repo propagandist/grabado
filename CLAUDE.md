@@ -4,7 +4,7 @@
 
 **目的 = 会社のブランディングとして無料公開する OSS**（収益化しない）＋ **自社でも使う**。
 **社内ツールではない。** house 標準（Kotlin/Spring Boot + PostgreSQL 18 DDL）へ寄せ、**Docker で各自ローカル稼働**、**設計データは git 管理の JSON ファイルを正本**とする。
-根拠は `HANDOVER.md`。ただし **HANDOVER は社内版前提のまま**（§2 配布・§2.3 Railway・§6.2/§6.3 の house 規約・§8 ドキュメント）。齟齬の一覧は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
+根拠は `HANDOVER.md`（設計判断の確定版。**元の記述は残し、実態との差は各節の注記で足してある** —— **2026-09-11 に入れ終えた**。#182）。**★ 2026-08-15 に挙げた齟齬で残るのは §6.2/§6.3 の house 規約だけ**（公開ユーザーに強制するか。**#183 で判断待ち**）。一覧と判定の経緯は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
 
 ## プロジェクト概要
 - **配置**（**2026-08-27。段階2-6 で集約**）: フロントの実体は **`frontend/`**（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/`）、backend は **`server/`**。**`package.json` と `tests/` は root のまま** —— `tests/contract/` は backend と共有し、`tests/image/` は root の `compose.yaml` を叩くため（#107）。**vite の root は `frontend/`、出力は `frontend/dist/`。URL 空間は集約の前後で 1 バイトも変わっていない。**

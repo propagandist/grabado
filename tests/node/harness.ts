@@ -71,6 +71,14 @@ export interface NodeHarness {
      * 積むので、口を素直に開ける。
      */
     readonly designer: Designer;
+    /**
+     * OZ そのもの（#209）。**リスナー登録簿（OZ.Event._byID / _byName）を数える**ために要る
+     * —— 登録が単調増加していないことは、アプリから観測できる面が 1 つも無い。
+     *
+     * `designer` を開けたときと同じ判断（口を素直に開ける）。ハーネスは前から
+     * `__grabado.OZ` を掴んでおり、Request の差し替えに使っていた。
+     */
+    readonly oz: GrabadoTestApi["OZ"];
     /** OZ.Request が受けたリクエストを取り出して空にする（発生順） */
     takeRequests(): RequestRecord[];
     /** 型パレットを差し替える（dbResponse() と同じ操作） */
@@ -516,6 +524,7 @@ export async function createHarness(): Promise<NodeHarness> {
         window,
         io: designer.io,
         designer,
+        oz: api.OZ,
         takeRequests: (): RequestRecord[] => requests.splice(0, requests.length),
         takeAlerts: takeAlerts,
         useDatatypes(db: string): void {

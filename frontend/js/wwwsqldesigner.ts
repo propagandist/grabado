@@ -154,6 +154,15 @@ export class Designer extends Visual<DesignerDom> {
     declare dialogs: Dialogs;
     /** document.cookie の生値 -> 解析結果（#207。parsedCookie() を参照） */
     declare _cookieMemo: { raw: string; parsed: Record<string, string> } | null;
+    /**
+     * 描き直しを溜めているか（#210。suspendRedraw() / resumeRedraw() を参照）。
+     *
+     * ★★ **UI 操作の経路には決して入れない。** RowManager.redraw() は
+     *   endCreate() / endConnect() という副作用を持っており、FK 作成モードの解除が
+     *   実際にこの経路で起きている（rowmanager.ts の tableClick -> addRow ->
+     *   Row.redraw -> rowManager.redraw -> endCreate）。常時束ねると creating が落ちない。
+     */
+    declare redrawSuspended: boolean;
 
     constructor() {
         super();
@@ -161,6 +170,7 @@ export class Designer extends Visual<DesignerDom> {
         this.xhrheaders = {};
         /* getOption() はこの下の :vector から呼ばれるので、それより前に置く */
         this._cookieMemo = null;
+        this.redrawSuspended = false;
         this.tables = [];
         this.relations = [];
         this.title = document.title;
@@ -206,6 +216,37 @@ export class Designer extends Visual<DesignerDom> {
         this.requestLanguage();
         this.requestDB();
         this.applyStyle();
+    }
+
+    /**
+     * 読み込みのあいだ描き直しを溜める（#210）。**呼び手は applyDesignModel() ただ 1 つ。**
+     *
+     * ★★ **必ず try / finally で戻す。** applyRow はパレットの範囲外の型添字で TypeError に
+     *   なる（js/io/apply.ts の applyDesignModel）。旗が立ったまま抜けると**以後すべての
+     *   描画が止まる** —— 画面が固まったように見えて、原因が読み込み 1 回前に遡る。
+     */
+    suspendRedraw(): void {
+        this.redrawSuspended = true;
+    }
+
+    /**
+     * 溜めた描き直しを 1 度に流す（#210）。
+     *
+     * ★★ **dirty 集合を持たない。全テーブルを走査する。** 読み込みは全テーブルを触るので
+     *   「全部描き直す」と「触ったものだけ描き直す」の結果は一致する。集合を持つと
+     *   取りこぼしが**「描かれないテーブル」**として出て、**state golden はそれを見ない**
+     *   （レイアウト由来の値を採らないため）。N は小さいので単純な側を採る。
+     *   **レビューでここを「無駄だから dirty 集合に」と縮めない。**
+     *
+     * RowManager.redraw() は this.selected から UI の可否を組み直すだけの冪等な処理なので、
+     * 溜めた回数によらず**最後の 1 回**で同じ状態になる。
+     */
+    resumeRedraw(): void {
+        this.redrawSuspended = false;
+        for (var i = 0; i < this.tables.length; i++) {
+            this.tables[i]!.redraw();
+        }
+        this.rowManager.redraw();
     }
 
     /* update area size */

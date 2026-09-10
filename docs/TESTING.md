@@ -615,6 +615,36 @@ XML をテスト内で組んで踏ませている。
 | 行の開閉 5 回 | **+15**（**毎回 +3**） | **0** |
 | `clearTables()` の `Table.redraw` | C=4 で **25** / C=16 で **85** | どちらも **5** |
 
+### 読み込み中の再描画を束ねる旗（#210）
+
+`Designer.redrawSuspended` は**読み込みのあいだだけ**立ち、`Table.redraw()` と
+`RowManager.redraw()` の先頭で早期 return させる。**この旗が漏れると 2 つの形で壊れる。**
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/redraw-suspend.test.ts`](../tests/node/redraw-suspend.test.ts) | 読み込み後に旗が倒れていること・**例外で抜けても倒れる**こと（`try` / `finally`）・その後の読み込みで**全テーブルが描かれる**こと（`style.left` と mini の 4 値が入る）・**FK 作成モードの解除が効いたまま**であること |
+
+**★★ 旗が立ったまま抜けると、以後すべての描画が止まる。** 画面が固まったように見えて、
+**原因が読み込み 1 回前に遡る。** 落ちる経路は実在する ——
+**パレットの範囲外の型添字**で `Row.update()` が TypeError になる（2026-09-10 実測）。
+
+- **★ 関門（#232 / #233）は型添字を見ていない。** 見るのはテーブル名の重複とキーが指す列の
+  不在の 2 つだけ
+- **★ `<part>` の欠落では落ちない**（同日実測）。`findNamedRow` が返す `false` は
+  `Key.addRow` の `r.owner != this.owner` で早期 return に落ちるだけで、**黙って捨てられる**。
+  `js/io/apply.ts` のコメントが「TypeError になる」と書いていたのを同じ PR で直した
+
+**★★ 旗を UI 操作の経路に入れない。** `RowManager.redraw()` は `endCreate()` / `endConnect()`
+という**副作用**を持っており、FK 作成モードの解除が実際にこの経路で起きている
+（`tableClick` → `addRow` → `Row.redraw` → `rowManager.redraw` → `endCreate`）。
+テストはその経路を直接叩いて `creating` が落ちることを見る。
+
+**★ `try` / `finally` を外す変異で 1 本が赤**になることを確かめてある（2026-09-10）。
+
+**★ `toThrow(TypeError)` と書かない。** 落ちるのは **jsdom の realm** のコードなので、
+Node 側の `TypeError` とは別のコンストラクタになり `instanceof` が成立しない。
+メッセージで照合する。
+
 ### 規模の費用 — 2 系統に分かれる 4 本目の層（#206）
 
 **10 / 50 / 100 / 300 テーブルの合成設計を通し、費用を数で記録する。**

@@ -27,7 +27,10 @@
 
 import type { TypePalette } from "./palette.ts";
 import type { DesignModel, TableModel, RowModel, KeyModel } from "./model.ts";
-import { findDuplicateTableName } from "./validate.ts";
+import {
+    findDuplicateColumnName,
+    findDuplicateTableName,
+} from "./validate.ts";
 import type {
     JsonDesign,
     JsonTable,
@@ -41,6 +44,7 @@ export function serializeDesignJson(
     palette: TypePalette
 ): string {
     assertUniqueTableNames(model);
+    assertUniqueColumnNames(model);
 
     const tables = model.tables.map((t) => serializeJsonTable(t, palette));
 
@@ -91,6 +95,26 @@ function assertUniqueTableNames(model: DesignModel): void {
             `テーブル名 "${dup.name}" が重複している（tables[${dup.index}]）。` +
                 `設計 JSON は relation を名前で参照するため、` +
                 `同名テーブルがあると読み戻したときに参照先が入れ替わる。` +
+                `どちらかの名前を変えてから保存すること`
+        );
+    }
+}
+
+/*
+ * grabado: #263。**規則の実体は js/io/validate.ts**（上と同じ形）。
+ * メッセージだけここが持つ —— 保存側は「保存できない」、読み込み側は「開けない」。
+ *
+ * ★★ **読み込み側とセットで入れる。** 片方だけ足すと #233 が潰したのと同じ形の
+ *   非対称（読めるのに保存できない ／ 保存できたのに開けない）が新しくできる。
+ */
+function assertUniqueColumnNames(model: DesignModel): void {
+    const dup = findDuplicateColumnName(model);
+    if (dup) {
+        throw new Error(
+            `列 "${dup.column}" がテーブル "${dup.table}" に重複している` +
+                `（tables[${dup.tableIndex}].columns[${dup.index}]）。` +
+                `同名の列があると読み戻したときに relation の参照先が先頭に寄り、` +
+                `出力した DDL も実行できない。` +
                 `どちらかの名前を変えてから保存すること`
         );
     }

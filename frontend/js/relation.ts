@@ -29,6 +29,16 @@ export type RelationNode = SVGPathElement | HTMLDivElement;
  */
 export type RelationDom = [RelationNode, ...RelationNode[]];
 
+/**
+ * measure() が決めた描き方（#207）。**座標だけを持ち、DOM を 1 つも掴まない。**
+ *
+ * kind は redrawNormal / redrawSide のどちらへ渡すか（「テーブルが離れている」か
+ * 「隣り合う」か）で、判定は measure() の中にしかない。
+ */
+export type RelationPlan =
+    | { kind: "normal"; p1: [number, number]; p2: [number, number]; half: number }
+    | { kind: "side"; p1: [number, number]; p2: [number, number]; x: number };
+
 export class Relation extends Visual<RelationDom> {
     static _counter = 0;
 
@@ -229,10 +239,17 @@ export class Relation extends Visual<RelationDom> {
         }
     }
 
-    redraw(): void {
+    /**
+     * 描き方の指定（#207）。`measure()` が決め、`paint()` がそのまま書く。
+     *
+     * ★ **paint() は DOM を 1 度も読まない。** これが 2 パス化（全部読んでから全部書く）を
+     *   成り立たせている条件で、Table.redraw() が K 本の relation につき K 回起こしていた
+     *   強制同期レイアウトを 1 回に落とす。
+     */
+    measure(): RelationPlan | null {
         /* draw connector */
         if (this.hidden) {
-            return;
+            return null;
         }
         /*
          * grabado: 元は要素側も var t1 / var t2 で、下の「テーブル上端＋行の中心」を
@@ -282,11 +299,10 @@ export class Relation extends Visual<RelationDom> {
                 p2 = [l1, t1];
             }
             var half = Math.floor((p2[0] - p1[0]) / 2);
-            this.redrawNormal(p1, p2, half);
+            return { kind: "normal", p1: p1, p2: p2, half: half };
         } else {
             /* next to tables */
             var x = 0;
-            var l = 0;
             if (Math.abs(l1 - l2) < Math.abs(r1 - r2)) {
                 /* left of tables */
                 p1 = [l1, t1];
@@ -298,8 +314,24 @@ export class Relation extends Visual<RelationDom> {
                 p2 = [r2, t2];
                 x = Math.max(r1, r2) + CONFIG.RELATION_SPACING;
             }
-            this.redrawSide(p1, p2, x);
+            return { kind: "side", p1: p1, p2: p2, x: x };
         } /* line next to tables */
+    }
+
+    /** 書きだけ。**DOM を 1 度も読まない**（上の measure() の KDoc） */
+    paint(plan: RelationPlan): void {
+        if (plan.kind === "normal") {
+            this.redrawNormal(plan.p1, plan.p2, plan.half);
+        } else {
+            this.redrawSide(plan.p1, plan.p2, plan.x);
+        }
+    }
+
+    redraw(): void {
+        var plan = this.measure();
+        if (plan) {
+            this.paint(plan);
+        }
     }
 
     /*

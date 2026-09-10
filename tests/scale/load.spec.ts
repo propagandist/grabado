@@ -2,7 +2,7 @@ import { test, expect, type CDPSession, type Page } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadJson, openDesigner, useDatatypes } from "../browser/harness.ts";
-import { syntheticDesign } from "../support/synthetic.ts";
+import { SCALE_COUNTS, syntheticDesign } from "../support/synthetic.ts";
 import {
     installScaleProbe,
     readScaleProbe,
@@ -128,7 +128,10 @@ test("10 / 50 / 100 / 300 テーブルの費用を測る", async ({ page, contex
      */
     for (const r of rows) {
         /* 1. 読み出し回数が jsdom 側と一致する ―― 2 実行系で同じ経路を通っている証拠 */
-        expect(r.counts.offsetWidth, `N=${r.n} の offsetWidth`).toBe(48 * r.n - 8);
+        /* 式の正本は tests/support/synthetic.ts（#207 で 2 か所にあった重複を潰した） */
+        expect(r.counts.offsetWidth, `N=${r.n} の offsetWidth`).toBe(
+            SCALE_COUNTS.offsetWidth(r.n),
+        );
         /* 2. 実際にレイアウトが走った回数が、読み出し回数を超えない */
         expect(r.layoutCount, `N=${r.n} の LayoutCount`).toBeLessThanOrEqual(
             r.counts.offsetWidth + r.counts.offsetHeight,

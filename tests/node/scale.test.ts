@@ -1,6 +1,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createHarness, type NodeHarness } from "./harness.ts";
-import { COLUMNS_PER_TABLE, syntheticDesign } from "../support/synthetic.ts";
+import {
+    SCALE_COUNTS,
+    SCALE_DOM_NODES,
+    syntheticDesign,
+} from "../support/synthetic.ts";
 import {
     installScaleProbe,
     readScaleProbe,
@@ -30,29 +34,13 @@ import {
 /** 測る段。300 は browser 側（jsdom で 4 段回すと npm test の増分が受け入れ基準を超える） */
 const STEPS = [10, 50, 100] as const;
 
-/**
- * 1 次式 f(N) = p*N + q。**実測に完全一致する**（2026-09-09、この形の合成設計で）。
- *
- * 導出できるもの:
- *   - rowUpdate = 列の総数。合成設計は 1 テーブル 9 列で、先頭だけ FK が無く 8 列
- *   - rowRedraw = 列の総数 ＋ キー登録数（PRIMARY が N 本、INDEX が N-1 本、各 1 列）
- *   - relationRedraw = 関係の本数（1 本鎖なので N-1）
- * 実測から当てはめたもの:
- *   - offsetWidth / offsetHeight / offsetTop / offsetLeft / tableRedraw
+/*
+ * ★ **式の正本は tests/support/synthetic.ts の SCALE_COUNTS / SCALE_DOM_NODES**（#207）。
+ *   元はここと tests/scale/load.spec.ts が同じ式を別々に持っており、**#207 で片方だけ直り、
+ *   もう片方が赤くなって気づいた**（2026-09-10）。**2 か所に書かない。**
  */
-const EXPECTED: Record<keyof ScaleCounts, (n: number) => number> = {
-    offsetWidth: (n) => 48 * n - 8,
-    offsetHeight: (n) => 48 * n - 8,
-    offsetTop: (n) => 4 * n - 4,
-    offsetLeft: (n) => 2 * n - 2,
-    rowRedraw: (n) => 11 * n - 2,
-    rowUpdate: (n) => COLUMNS_PER_TABLE * n - 1,
-    tableRedraw: (n) => 23 * n - 3,
-    relationRedraw: (n) => n - 1,
-};
-
-/** DOM ノード数。読み込み後 61N + 67（67 は設計と無関係な UI の分） */
-const EXPECTED_DOM = (n: number): number => 61 * n + 67;
+const EXPECTED = SCALE_COUNTS;
+const EXPECTED_DOM = SCALE_DOM_NODES;
 
 describe("規模の費用（#206）", () => {
     let h: NodeHarness;

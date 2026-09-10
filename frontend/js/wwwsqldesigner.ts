@@ -152,11 +152,15 @@ export class Designer extends Visual<DesignerDom> {
      * プロトタイプではなくインスタンスの面として持つ。
      */
     declare dialogs: Dialogs;
+    /** document.cookie の生値 -> 解析結果（#207。parsedCookie() を参照） */
+    declare _cookieMemo: { raw: string; parsed: Record<string, string> } | null;
 
     constructor() {
         super();
 
         this.xhrheaders = {};
+        /* getOption() はこの下の :vector から呼ばれるので、それより前に置く */
+        this._cookieMemo = null;
         this.tables = [];
         this.relations = [];
         this.title = document.title;
@@ -444,10 +448,26 @@ export class Designer extends Visual<DesignerDom> {
         this.relations.splice(idx, 1);
     }
 
-    getCookie(): Record<string, string> {
-        var c = document.cookie;
+    /**
+     * `document.cookie` の**生値をキーにした memo**（#207）。
+     *
+     * ★★ **これは「読み込みの主要な費用の 1 つ」だった。** getOption() は
+     *   Row.redraw() が showtype / showsize で 1 行あたり 2 回引くので、読み込みで
+     *   **N x C x 2 回**払っていた（1 回ごとに cookie 文字列の split ＋ 正規表現 ＋
+     *   JSON.parse）。snap() だけの話ではない。
+     *
+     * ★ **生値をキーにするので、外から cookie を書き換えた場合も現行どおり反映される**
+     *   （tests/node/options-cookie.test.ts の beforeEach がその経路を実際に踏む）。
+     *   parseCookieValue は純関数なので、同じ生値からは必ず同じ表が出る。
+     */
+    parsedCookie(): Record<string, string> {
+        var raw = document.cookie;
+        var memo = this._cookieMemo;
+        if (memo && memo.raw === raw) {
+            return memo.parsed;
+        }
         var obj: Record<string, string> = {};
-        var parts = c.split(";");
+        var parts = raw.split(";");
         for (var i = 0; i < parts.length; i++) {
             var part = parts[i]!;
             var r = part.match(/wwwsqldesigner=([^;]*)/);
@@ -455,7 +475,22 @@ export class Designer extends Visual<DesignerDom> {
                 obj = parseCookieValue(r[1]!);
             }
         }
+        this._cookieMemo = { raw: raw, parsed: obj };
         return obj;
+    }
+
+    /**
+     * **毎回新しいオブジェクトを返す**（現行どおり）。setOption() が戻り値を書き換えて
+     * setCookie() に渡すので、memo の実体をそのまま返すと表が汚れる。
+     * 読むだけの getOption() は parsedCookie() を直接見る。
+     */
+    getCookie(): Record<string, string> {
+        var parsed = this.parsedCookie();
+        var copy: Record<string, string> = {};
+        for (var key in parsed) {
+            copy[key] = parsed[key]!;
+        }
+        return copy;
     }
 
     setCookie(obj: Record<string, string>): void {
@@ -472,7 +507,8 @@ export class Designer extends Visual<DesignerDom> {
     getOption(name: "style"): string;
     getOption(name: string): string | number | boolean;
     getOption(name: string): string | number | boolean {
-        var c = this.getCookie();
+        /* 読むだけなので memo をそのまま見る（コピーを作らない。#207） */
+        var c = this.parsedCookie();
         if (name in c) {
             return c[name]!;
         }
@@ -591,8 +627,19 @@ export class Designer extends Visual<DesignerDom> {
         var y = 10;
         var max = 0;
 
+        /*
+         * grabado: #207。**比較キーは sort の前に 1 回だけ採る。** 元は比較関数が
+         * 毎回 getRelations() を呼んでおり（結果は .length にしか使っていない）、
+         * O(K log K) 回の走査になっていた。sort の最中に relations は動かないので
+         * 値は同じで、**sort は安定**なので関係数が同じテーブル同士の相対順も現行のまま。
+         */
+        var counts = new Map<Table, number>();
+        for (var c = 0; c < this.tables.length; c++) {
+            var counted = this.tables[c]!;
+            counts.set(counted, counted.getRelations().length);
+        }
         var order = this.tables.slice().sort(function (a, b) {
-            return b.getRelations().length - a.getRelations().length;
+            return counts.get(b)! - counts.get(a)!;
         });
 
         for (var i = 0; i < order.length; i++) {

@@ -224,6 +224,21 @@ so the source of truth is the JSON file in your repository — reviewed and merg
 The format is documented in [`docs/FORMAT.md`](docs/FORMAT.md). XML designs from upstream
 wwwsqldesigner can still be read; grabado only writes JSON.
 
+### How large a design has been verified
+
+**Designs of up to 300 tables** have been measured end to end: opened, then emitted as DDL
+and as JSON. Only **loading** is expensive; export and single edits cost an order of
+magnitude less.
+
+**A single design is capped at 1 MiB on save** (the default; anything larger gets a `413`).
+A 300-table design serialises to roughly 414 KiB, so the cap is worth about **750 tables**.
+Raise or lower it with `GRABADO_MAX_DESIGN_BYTES`.
+
+Measured figures and how they were taken live in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.7; the contract for the cap is in §7.3.
+**Those documents are the source of truth** — the numbers are not repeated here, because
+wall-clock timings differ per machine.
+
 ## Quick start
 
 **A published image is available — no build required.**

@@ -2,6 +2,7 @@ package io.propagandist.grabado.api
 
 import io.propagandist.grabado.ai.AiBadRequestException
 import io.propagandist.grabado.ai.AiRateLimitedException
+import io.propagandist.grabado.ai.AiTooLargeException
 import io.propagandist.grabado.ai.AiUnavailableException
 import io.propagandist.grabado.ai.AiUpstreamException
 import io.propagandist.grabado.design.DesignTooLargeException
@@ -18,14 +19,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 /**
  * 例外 → HTTP status の**唯一の表**。
  *
- * ★ 段階5-1b が新しく返す status は **400 だけ**。§5 が最終的に増やすのは
- *   400 / 403 / 412 / 413 で、**そのどれも `js/io.ts` の `check()`（201/404/500/501/503）に
- *   無く、`default: return true` で「成功」に倒れる**。status を増やす PR では
- *   `check()` と `locale` を**同じ PR で**広げること（分けると無言で成功扱いの期間が
- *   できる＝ CLAUDE.md 制約1 違反）。
+ * ★ **`js/io.ts` の `check()` が知らない status は `default: return true` で「成功」に倒れる。**
+ *   status を増やす PR では `check()` と `locale` を**同じ PR で**広げること（分けると無言で
+ *   成功扱いの期間ができる＝ CLAUDE.md 制約1 違反）。抜けは `tests/node/backend-contract.test.ts`
+ *   が契約表と突き合わせて捕まえる。
  *
- *   5-1b で 400 を足しても既存フロントに影響しないのは、`js/io.ts` の `jsonKeyword()` が
- *   必ず `keyword` を付けるので**そもそも到達しない**から。最初に人の目に触れるのは 5-2。
+ *   段階5-1b の時点で `check()` が持っていたのは 201/404/500/501/503 だけで、§5 が増やした
+ *   400 / 403 / 412 / 413 はどれも無かった。**いまは 412 以外を持つ**（412 はフロントが握って
+ *   confirm に流す）。5-1b で 400 を足しても既存フロントに影響しなかったのは、`js/io.ts` の
+ *   `jsonKeyword()` が必ず `keyword` を付けるので**そもそも到達しない**から。
  */
 @RestControllerAdvice
 class ApiExceptionHandler {
@@ -62,12 +64,8 @@ class ApiExceptionHandler {
      * ★★ **413 は `check()` に足した**（`js/io.ts`）。上の★が「status を増やす PR では
      * `check()` と `locale` を同じ PR で広げること」と書いている、その最初の実行例。
      *
-     * ★ **AI 側が 400 に寄せていた理由は、これで消えた** ——
-     * [io.propagandist.grabado.ai.AiRequestCheck] と
-     * [io.propagandist.grabado.ai.AiReviewService] のコメントが「`check()` が 413 を
-     * 持たないから 400 に寄せる」と書いている。**寄せ直すかは別の判断**（あちらは
-     * 「テーブル数」と「バイト数」の 2 つを 1 つの status で返しており、分けると
-     * フロントの文言も分かれる）。
+     * ★ **AI 側が 400 に寄せていた理由は、これで消えた** —— #250 で AI も**バイト数の超過だけ**
+     * 413 に揃えた（下の [aiTooLarge]）。テーブル数の超過は 400 のまま。
      */
     @ExceptionHandler(DesignTooLargeException::class)
     fun designTooLarge(): ResponseEntity<Void> =
@@ -107,14 +105,25 @@ class ApiExceptionHandler {
         ResponseEntity.status(HttpStatus.FORBIDDEN).build()
 
     /**
-     * AI への入力が壊れている・大きすぎる（段階11-2a）。
+     * AI への入力が壊れている・テーブル数が上限を超えた（段階11-2a）。
      *
-     * **400**（413 ではない —— `check()` が 413 を持たないので 5-1c で足した 400 に寄せる）。
+     * **400**。テーブル数の超過を 413 にしないのは、大きすぎるのではなく分割して送るべき
+     * 上限だから（#250。[AiBadRequestException] の KDoc）。
      * ★ **message を body に出さない。** 入力の断片が載りうる。
      */
     @ExceptionHandler(AiBadRequestException::class)
     fun aiBadRequest(): ResponseEntity<Void> =
         ResponseEntity.status(HttpStatus.BAD_REQUEST).build()
+
+    /**
+     * AI への入力のバイト数が上限を超えた（#250）。
+     *
+     * **413**。[designTooLarge] と同じ status —— 前段のプロキシが返す 413 と揃い、
+     * 同じ「大きすぎる」が切られた場所で割れない。`check()` と locale は #215 で持っている。
+     */
+    @ExceptionHandler(AiTooLargeException::class)
+    fun aiTooLarge(): ResponseEntity<Void> =
+        ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).build()
 
     /**
      * AI の受付上限に当たった（段階11-2a）。

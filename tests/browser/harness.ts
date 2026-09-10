@@ -1,5 +1,9 @@
 import type { Page } from "@playwright/test";
 import { captureDesignState } from "../support/state.ts";
+import {
+    captureCanvasGeometry,
+    type GeometrySnapshot,
+} from "../support/geometry.ts";
 
 /**
  * 実ブラウザ（Chromium）で現行アプリを起こし、現行コードそのものから挙動を採取する。
@@ -231,4 +235,15 @@ export async function generateDdl(page: Page, db: string): Promise<string> {
         }
         return window.d!.toDdl();
     }, db);
+}
+
+/**
+ * 座標系のスナップショット（#236）。captureState と同じく採取関数をソース文字列として
+ * 注入する —— **jsdom 側には無い**（offsetWidth が常に 0 なので 0 と 0 を比べることに
+ * しかならない。docs/ARCHITECTURE.md §5）。
+ */
+export function captureGeometry(page: Page): Promise<GeometrySnapshot> {
+    return page.evaluate<GeometrySnapshot>(
+        `(${captureCanvasGeometry})(window.d)`,
+    );
 }

@@ -559,6 +559,32 @@ golden は fixture を**読んで書き出す**だけなので、**行やキー�
 `git diff --stat tests/golden/` が **0 files changed**（2026-09-09）。この変更だけは
 `clearTables()` 経由で **golden の全読み込みを通る**ので、比較テストの緑だけで済ませない。
 
+### リレーション解決 — 索引化しても解決先が変わらないこと（#208）
+
+**golden は「どの実体に繋がったか」を写さない。** 同名が絡む壊れ方は正常系の fixture に
+出てこないので、`applyRelations` を線形走査から索引へ変えるときの安全網が無かった。
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/relation-resolve.test.ts`](../tests/node/relation-resolve.test.ts) | **先勝ち**の 3 通り（同名の行は先頭へ ／ 同名テーブルでは子側の端まで先頭へ寄る ／ 引き直した先に行が無ければ黙って捨てる）・**`addRelation` の呼び出し順が入力順のまま**・**relation の復元が `findNamedTable` を 1 度も引かない**（索引化の効果） |
+
+**★ `applyDesignModel` を直に import している。** [`../frontend/js/io/apply.ts`](../frontend/js/io/apply.ts)
+は実行時 import が 0 本（型だけ）なので Node 側からそのまま呼べる
+（[`../tests/node/apply-patch.test.ts`](../tests/node/apply-patch.test.ts) と同じ立場）。
+
+**これは近道ではなく、必要な経路** —— **同名テーブルは #232 / #233 の関門が XML / JSON の
+読み込みで拒む**ので、`applyRelations` まで届くのは**関門を通らない 2 つの呼び手**だけ
+（AI パッチの適用と introspection の取り込み。`js/io.ts:1060` / `:1194`）。
+
+**★ 行名の重複は関門が見ていない**（`js/io/validate.ts` が見るのはテーブル名の重複と
+キーが指す列の不在の 2 つ）。**XML の読み込みで実際に到達する**ので、そちらは fixture 相当の
+XML をテスト内で組んで踏ませている。
+
+**★ 効果は回数で見る**（実時間ではない）。`relations` fixture（relation 5 本・`<part>` 5 個）で
+**`findNamedTable` 10 → 0** ／ **`findNamedRow` 15 → 5**（残るのは `applyKey` の分。
+2026-09-10 実測）。プロトタイプは**生きている実体から辿る** ——
+[`../tests/support/probe.ts`](../tests/support/probe.ts) と同じ形で、アプリに計装用の面を足さない。
+
 ### リスナー登録簿 — アプリから観測できる面が 1 つも無い層（#209）
 
 `OZ.Event._byID` / `_byName`（[`../frontend/js/oz.ts`](../frontend/js/oz.ts)）は `Map` ではなく

@@ -77,7 +77,21 @@ export const CONFIG = {
     RELATION_HIGHLIGHTED_COLOR: "#FF0000",
     RELATION_HIGHLIGHTED_THICKNESS: 5,
 
+    /**
+     * **実在する CSS の一覧**（`styles/<name>.css` と `<link title>` に 1:1）。
+     *
+     * ★★ **特殊値を混ぜない**（#235）。「OS に従う」は CSS ではないので
+     *   ここには入れず、下の STYLE_AUTO が別に持つ。読み手は js/options.ts の
+     *   セレクト生成 1 か所だけ（applyStyle() はこの配列を見ず、
+     *   getOption("style") と <link title> を突き合わせる）。
+     */
     STYLES: ["material-inspired", "material-dark", "original"],
+    /**
+     * 「OS に従う」を表す style の値（#235）。**cookie に入るのはこれ**で、
+     * `getOption("style")` が実在するテーマ名へ解決してから返す ——
+     * だから applyStyle() も Relation の色も、CSS 名しか見ないままでいられる。
+     */
+    STYLE_AUTO: "auto",
     MATERIAL_RELATION_COLORS: [
         "#323232",
         "#F44336",

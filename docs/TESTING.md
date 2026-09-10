@@ -790,6 +790,32 @@ FK の既定命名パターン `%R_%T` が親テーブル名を含むので、ho
 `createHarness` は前から掴んでいて、公開していたのが `io` だけだった。**ライブツリーの
 オブジェクトグラフを直接叩くテスト**を積むので口を開けてある（#216 / #212 も同じ口を使う）。
 
+### テーマの「OS に従う」 — jsdom では成立しない層（#172 / #235）
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/browser/theme.spec.ts`](../tests/browser/theme.spec.ts) | 3 テーマそれぞれで**有効な titled sheet がちょうど 1 本**になること・**ダークでリレーション線の色が変わる**こと ＋ **「OS に従う」**（cookie が無ければ OS を見る ／ `auto` を保存しても追従し続ける ／ 具体のテーマを選ぶと OS を無視する ／ **焼いたあとに戻せる** ／ セレクトに `auto` が並び既定で選択済み ／ **Options の OK を実際に押して焼いて・戻す**） |
+| [`../tests/node/options-cookie.test.ts`](../tests/node/options-cookie.test.ts) | 保存される値と解決が**別物**であること（`storedStyle()` は `auto` のまま、`getOption("style")` は実在のテーマ）・他の設定が巻き添えにならないこと |
+
+**★★ OS の配色を実際に切り替えられるのは Playwright だけ。** `Designer.prefersDark()` は
+`window.matchMedia` を見るが、**jsdom 30.0.1 にそれは無い**（同メソッドの KDoc）。
+Node 側では常に false なので、**`auto` は必ず `material-inspired` に解決する** ——
+分担は `page.emulateMedia({ colorScheme })` の側にある。
+
+**★★ 選択済みが映すのは「保存されている値」。** `getOption("style")` で比べると、
+**`auto` を選んでいるのに `material-dark` が選択済みに見え、OK を押した瞬間に本当に焼かれる**
+（#235 が直した経路そのもの）。**その 1 行を変異させると 1 本が赤**になることを確かめてある
+（2026-09-10）。
+
+**★ `save()` の前に `click()` を通す。** フィールドに現在の設定を書き戻すのは `click()` の仕事で、
+**通さずに `save()` だけ呼ぶと、まだ埋まっていない入力欄の値がそのまま保存される**
+（`snap` が `""` になる。2026-09-10 実測）。**利用者と同じ順序（開く → 変える → OK）で叩く。**
+
+**★ 開き直すときは同じ context に新しいページを開く**（2026-09-10 実測の 2 点）——
+`openDesigner` を同じ page に 2 度呼ぶと `page.on("dialog")` が二重に張られて
+**同じダイアログを 2 人が dismiss しようとして落ちる**。`page.reload()` は
+**"load" 待ちが返らずタイムアウトする**。cookie は context が持つので、新しいページで引き継がれる。
+
 ### 座標系 — jsdom が 0 しか返さない層（#214）
 
 **ここは jsdom では成立しない。** `Designer.minSize` は `#area` の `offsetWidth` /

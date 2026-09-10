@@ -56,6 +56,7 @@
     <string name="showsize">Show field size in table design?</string>
     <string name="showtype">Show field datatype in table design?</string>
     <string name="style">Style</string>
+    <string name="auto">Follow the OS</string>
 
     <!-- keys -->
     <string name="tablekeys">Keys</string>

@@ -81,4 +81,52 @@ describe("オプションの cookie（Node / jsdom）", () => {
             else win.matchMedia = saved;
         }
     });
+
+    describe("テーマの「OS に従う」（#235）", () => {
+        /*
+         * ★★ **jsdom には window.matchMedia が無い**（Designer.prefersDark の KDoc）。
+         *   よって prefersDark() は常に false で、"auto" は必ず material-inspired に
+         *   解決する。**OS を実際に切り替えて見るのは tests/browser/theme.spec.ts の側。**
+         *   ここが見るのは**保存される値**と、**解決と保存が別物であること**。
+         */
+        test("cookie が無いとき、保存されている値は auto（実効テーマではない）", () => {
+            expect(h.io.owner.storedStyle()).toBe("auto");
+            /* 描くときは実在のテーマに解決される */
+            expect(h.io.owner.getOption("style")).toBe("material-inspired");
+        });
+
+        test("auto を保存しても、描くのは実在のテーマ", () => {
+            h.io.owner.setOption("style", "auto");
+
+            expect(h.window.document.cookie).toContain("auto");
+            expect(h.io.owner.storedStyle()).toBe("auto");
+            expect(h.io.owner.getOption("style")).toBe("material-inspired");
+        });
+
+        test("具体のテーマを選ぶと、そのまま保存されて返る", () => {
+            h.io.owner.setOption("style", "material-dark");
+
+            expect(h.io.owner.storedStyle()).toBe("material-dark");
+            expect(h.io.owner.getOption("style")).toBe("material-dark");
+        });
+
+        test("★ 焼いたあとに auto へ戻せる（cookie を消さずに）", () => {
+            /* #235 の中心 —— 片道だった扉に戻り口を付けた */
+            h.io.owner.setOption("style", "material-dark");
+            expect(h.io.owner.storedStyle()).toBe("material-dark");
+
+            h.io.owner.setOption("style", "auto");
+
+            expect(h.io.owner.storedStyle()).toBe("auto");
+            expect(h.io.owner.getOption("style")).toBe("material-inspired");
+        });
+
+        test("他の設定は巻き添えにならない", () => {
+            h.io.owner.setOption("snap", "20");
+            h.io.owner.setOption("style", "material-dark");
+            h.io.owner.setOption("style", "auto");
+
+            expect(h.io.owner.getOption("snap")).toBe("20");
+        });
+    });
 });

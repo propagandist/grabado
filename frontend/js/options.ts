@@ -103,14 +103,32 @@ export class Options {
             }
         }
 
-        var styles = CONFIG.STYLES;
+        /*
+         * grabado: #235。**"auto" は CONFIG.STYLES に入れない** —— あれは
+         * 「実在する CSS の一覧」で、特殊値を混ぜると意味が変わる。出すのはここ 1 か所
+         * なので、先頭に足すのもここでよい。
+         */
+        var styles = [CONFIG.STYLE_AUTO as string].concat(CONFIG.STYLES);
+        /*
+         * ★★ **突き合わせるのは storedStyle()。** getOption("style") は "auto" を
+         *   実在のテーマへ解決して返すので、それで比べると **auto を選んでいるのに
+         *   material-dark が選択済みに見え、OK を押した瞬間に本当に焼かれる**。
+         */
+        var stored = this.owner.storedStyle();
         OZ.DOM.clear(this.dom.optionstyle);
         for (var i = 0; i < styles.length; i++) {
             var o = OZ.DOM.elm("option");
             o.value = styles[i]!;
-            o.innerHTML = styles[i]!;
+            /*
+             * 他の 3 本は CSS 名をそのまま出す（名前なので訳さない）。"auto" だけは
+             * 名前ではなく語なので _() を通す —— **キーが "auto" 自身**なので、
+             * 訳の無い locale では "auto" と出る（js/globals.ts の _()）。
+             * 21 本のうち 19 本は元から部分訳で、そこへ壊れたキー名を出さないための形。
+             */
+            o.innerHTML =
+                styles[i] === CONFIG.STYLE_AUTO ? _(CONFIG.STYLE_AUTO) : styles[i]!;
             this.dom.optionstyle.appendChild(o);
-            if (this.owner.getOption("style") == styles[i]) {
+            if (stored == styles[i]) {
                 this.dom.optionstyle.selectedIndex = i;
             }
         }

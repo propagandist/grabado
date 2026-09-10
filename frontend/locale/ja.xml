@@ -56,6 +56,7 @@
     <string name="showsize">フィールドサイズを表示</string>
     <string name="showtype">フィールドタイプを表示</string>
     <string name="style">スタイル</string>
+    <string name="auto">OS に従う</string>
 
     <!-- keys -->
     <string name="tablekeys">キーの設定</string>

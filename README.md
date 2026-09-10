@@ -202,6 +202,17 @@ ANTHROPIC_API_KEY=sk-ant-... GRABADO_AI_MODEL=<モデル名> docker compose up
 形式は [`docs/FORMAT.md`](docs/FORMAT.md)。upstream の XML 設計は**読み込みだけ**できる
 （grabado が書き出すのは JSON のみ）。
 
+### どこまでの規模で確かめてあるか
+
+**300 テーブルの設計まで、開いて DDL と JSON を出せることを実測してある。**
+重いのは**読み込みだけ**で、書き出しと 1 操作の費用は桁が違う。
+
+**保存は 1 本あたり 1 MiB まで**（既定。超えると `413`）。300 テーブルの設計 JSON が
+約 414 KiB なので、**750 テーブル相当**にあたる。上限は `GRABADO_MAX_DESIGN_BYTES` で変えられる。
+
+実測値と測り方は [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §5.7、上限の契約は同 §7.3。
+**数の正本はそちら**で、ここには写していない —— 環境が違えば実時間も違う。
+
 ## 起動
 
 **配布イメージがある。ビルドは要らない。**

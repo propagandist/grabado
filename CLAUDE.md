@@ -11,7 +11,10 @@
 - **座標**（**2026-08-27。#109**）: ルートパッケージは **`io.propagandist.grabado`**（サブは `.api` `.ai` `.config` `.design` `.introspect`）、Gradle の `group` も同じ。**製品ドメインの逆順（`dev.grabado`）から会社の名前空間へ移した。** ★ **grabado 固有の識別子は据え置き** —— `grabado.jar` ／ `GRABADO_*` env ／ `rootProject.name = "grabado-server"` ／ `@ConfigurationProperties("grabado")` ／ `GrabadoApplication`・`GrabadoProperties`。**これらは外向きの契約**で、パッケージとは別の軸。
 - frontend: 描画エンジンを温存しつつ**完全 TypeScript 化**（Vite / strict）。
 - backend: PHP を廃し **Kotlin/Spring Boot**。save/load は**マウント済みファイルの I/O**、introspection は `information_schema`→JSON、AI proxy を提供。
-- 正本: **git 管理の JSON ファイル**（`/data/schema` に mount）。共有は PR。編集ストアは **DB レス**（ブラウザ内 / IndexedDB）。
+- 正本: **git 管理の JSON ファイル**（`/data/schema` に mount）。共有は PR。編集ストアは **DB レス**（ブラウザ内）。**★ ブラウザに残す手段は `localStorage` 1 本で、手動のボタンだけ**（**2026-09-11 実測**。#211）—— **自動保存は無い**。1 本あたり **2,621,440 文字**（`json.length`）に達すると保存を拒む（`frontend/js/io.ts` の `clientlocalsave`）
+  - **訂正の元**: **元は「ブラウザ内 / IndexedDB」だった。消さずに残す** —— `indexedDB` の実装は
+    `frontend/` ／ `server/` ／ `tests/` のどこにも 1 行も無い（同日実測）。**HANDOVER §1 の到達点を
+    2026-08-09 に写したもので、実装されないまま 33 日残っていた**（HANDOVER の側にも同日の注記がある）
 - 配布: マルチステージ Docker（フロント dist を Spring Boot static に同梱）。app 単一コンテナ＋mount。
 - **対応 DB は 8 本**: `postgresql`（house 標準）/ `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` は撤去（6-1）。決定は `CUSTOMIZATIONS.md` の段階6-0。
 - 公開デモ（grabado.dev）は **`READONLY=true` 一択** — AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。編集体験はブラウザ内ストアで成立する。

@@ -499,8 +499,23 @@ export class Table extends Visual<TableDom> {
     destroy(): void {
         super.destroy();
         this.dom.mini.parentNode!.removeChild(this.dom.mini);
+        /*
+         * grabado: #209。**removeRow() を通さない** —— あれは 1 列ごとに redraw() を
+         * 呼ぶ（同ファイルの removeRow）。**これが clearTables() の本当の重さ**で、
+         * O(N^2) の splice ではなく **O(N x C) 回の Table.redraw()**（1 回ごとに
+         * 強制同期レイアウトが走る）。
+         *
+         * **最終状態は変わらない** —— この時点で container も mini も既に DOM から
+         * 外れており（直前の 2 行）、描き直しているのは「消える自分」と「この直後に
+         * 消える relation」だけ。removeRow() の indexOf（必ず 0 に当たる）も同時に落ちる。
+         *
+         * **this.rows は 1 本ずつ縮める**（先に空配列へ差し替えない）—— destroy() の
+         * 途中で Key.removeRow -> Row.removeKey -> Row.redraw -> Table.redraw と回って
+         * this.rows が読まれる経路が実在するので、途中の一貫性を崩さない側を採る。
+         */
         while (this.rows.length) {
-            this.removeRow(this.rows[0]!);
+            this.rows[0]!.destroy();
+            this.rows.splice(0, 1);
         }
         this._ec.forEach(OZ.Event.remove, OZ.Event);
     }

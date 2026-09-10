@@ -27,6 +27,8 @@
 - **配布**: Docker イメージ。各エンジニアが手元で `docker run`（または compose）。共有サーバ常設は主経路ではない。
 - **設計データの正本**: **git 管理の JSON ファイル**（例 `schema/<name>.json`）。共有・レビュー・履歴は PR / git log。
 - **編集ストア**: **DB レス**。編集中状態はブラウザ内メモリ／IndexedDB。app 単一コンテナ＋mount で最軽量（既定で PG コンテナを持たない）。
+  （**2026-09-11 に「IndexedDB」を訂正した** —— 実装されなかった。ブラウザに残す手段は
+  `localStorage` 1 本で、手動のボタンだけ。issue #211。判断は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の同日）
 - **backend**: Kotlin + Spring Boot。save/load をマウント済みファイルの I/O として実装。introspection と AI proxy を担う。
 - **frontend**: 完全 TypeScript 化（Vite / strict）。描画エンジンは温存し model/IO/DDL 層を型付きで巻く（Tier 2）。UI framework 全面移行は今回スコープ外。
 - **Railway**: 任意・従。同一イメージを読み取り専用ビューアとして立てられる（§2.3）。編集の正本にはしない。

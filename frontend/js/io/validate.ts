@@ -28,6 +28,42 @@ export function findDuplicateTableName(
     return null;
 }
 
+/**
+ * 同じテーブルに重複した列名がある最初の 1 件。無ければ null（#263）。
+ *
+ * ★★ **テーブル名の重複より壊れ方が重い。** 同名テーブルは「読めるのに保存できない
+ *   行き止まり」だったが（#233）、同名の列は**保存まで通ってしまう**うえ、
+ *   **出てくる DDL が実行できない**（`CREATE TABLE t (id INTEGER, id TEXT)`。
+ *   2026-09-10 実測）。加えて relation が黙って先頭の列へ繋がる。
+ *
+ * ★ **テーブルをまたいで見ない。** SQL が禁じるのは 1 つのテーブルの中の重複だけで、
+ *   別のテーブルに同じ列名があるのは正常（`users.id` と `orders.id`）。
+ */
+export function findDuplicateColumnName(model: DesignModel): {
+    table: string;
+    tableIndex: number;
+    column: string;
+    index: number;
+} | null {
+    for (let t = 0; t < model.tables.length; t++) {
+        const table = model.tables[t]!;
+        const seen = new Set<string>();
+        for (let r = 0; r < table.rows.length; r++) {
+            const name = table.rows[r]!.title;
+            if (seen.has(name)) {
+                return {
+                    table: table.title,
+                    tableIndex: t,
+                    column: name,
+                    index: r,
+                };
+            }
+            seen.add(name);
+        }
+    }
+    return null;
+}
+
 /** キーが指す列がそのテーブルに無い最初の 1 件。無ければ null */
 export function findMissingKeyColumn(model: DesignModel): {
     table: string;
@@ -80,6 +116,22 @@ export function assertLoadableDesign(model: DesignModel): void {
             `テーブル名 "${dup.name}" が重複している（tables[${dup.index}]）。` +
                 `設計は relation を名前で参照するため、同名テーブルがあると` +
                 `参照先が入れ替わり、保存もできなくなる。` +
+                `どちらかの名前を変えてから開くこと`
+        );
+    }
+
+    /*
+     * ★ 順序は「外側から」 —— テーブル名 -> 列名 -> キーが指す列。
+     *   同名の列が残っていると findMissingKeyColumn が「在る」と判定してしまうので、
+     *   **列の重複を先に落とす**ほうが、後から出るメッセージが素直になる。
+     */
+    const dupColumn = findDuplicateColumnName(model);
+    if (dupColumn) {
+        throw new Error(
+            `列 "${dupColumn.column}" がテーブル "${dupColumn.table}" に重複している` +
+                `（tables[${dupColumn.tableIndex}].columns[${dupColumn.index}]）。` +
+                `同名の列があると relation の参照先が先頭に寄り、` +
+                `出力した DDL も実行できない。` +
                 `どちらかの名前を変えてから開くこと`
         );
     }

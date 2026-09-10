@@ -551,6 +551,14 @@ export class Designer extends Visual<DesignerDom> {
         /* 読むだけなので memo をそのまま見る（コピーを作らない。#207） */
         var c = this.parsedCookie();
         if (name in c) {
+            /*
+             * grabado: #235。**"auto" は保存される値であって、返す値ではない。**
+             * ここで実在するテーマ名へ解決するので、applyStyle() も Relation の色も
+             * 「CSS 名しか来ない」という前提のままでいられる（下流は 1 行も触っていない）。
+             */
+            if (name === "style" && c[name] === CONFIG.STYLE_AUTO) {
+                return this.resolvedAutoStyle();
+            }
             return c[name]!;
         }
         /* defaults */
@@ -578,14 +586,18 @@ export class Designer extends Visual<DesignerDom> {
             case "style":
                 /*
                  * grabado: #172。**保存された値があればそれ、無ければ OS に従う。**
-                 * 副作用を 2 つ承知で採っている:
-                 *   1. Options を開いて OK を押すと、その時点の実効テーマが cookie に
-                 *      焼かれ、**以後 OS に追従しなくなる**
-                 *   2. **OS の切り替えに実行中は追従しない** —— matchMedia の change を
-                 *      張れば追従できるが、Relation の色は生成時に決まるので
-                 *      **線だけ前のテーマの色で残る**（却下した案）
+                 *
+                 * ★ **訂正**（#235。2026-09-10）—— 元はここに副作用 2 つが書いてあった。
+                 *   1 つ目（**Options で OK を押すと実効テーマが焼かれ、以後 OS に
+                 *   追従しなくなる**）は **#235 で解消した** —— cookie が無いときの
+                 *   既定は storedStyle() が "auto" を返す形になり、**OK を押しても
+                 *   焼かれるのは "auto"** になった。
+                 *
+                 *   2 つ目（**実行中の OS 切り替えに追従しない**）は**据え置き**。
+                 *   matchMedia の change を張れば追従できるが、Relation の色は生成時に
+                 *   決まるので**線だけ前のテーマの色で残る**（#235 で改めて却下した）。
                  */
-                return this.prefersDark() ? "material-dark" : "material-inspired";
+                return this.resolvedAutoStyle();
             default:
                 /*
                  * grabado: 戻り型に null を出していない（段階3-2 の判断）。呼び出しの
@@ -594,6 +606,32 @@ export class Designer extends Visual<DesignerDom> {
                  */
                 return null as unknown as string;
         }
+    }
+
+    /**
+     * `CONFIG.STYLE_AUTO` が指す実在のテーマ（#235）。
+     *
+     * **ここが「auto とは何か」の唯一の定義**で、cookie に "auto" が入っている場合も
+     * cookie がまだ無い場合も、同じこの 1 行を通る。
+     */
+    resolvedAutoStyle(): string {
+        return this.prefersDark() ? "material-dark" : "material-inspired";
+    }
+
+    /**
+     * **保存されている** style の設定値（#235）。**"auto" を解決しない。**
+     *
+     * ★★ `getOption("style")` は「今どのテーマで描くか」を返すので "auto" を潰すが、
+     *   Options のセレクトが出すべきは「**利用者が何を選んだか**」である。
+     *   潰した値を出すと、`auto` を選んでいるのに `material-dark` が選択済みに見え、
+     *   **OK を押した瞬間に本当に焼かれる**（#235 が直した経路そのもの）。
+     *
+     * ★ **cookie が無いときの既定は "auto"。** これが「OK を押しただけでテーマが
+     *   片道で焼かれる」を止めている実体。
+     */
+    storedStyle(): string {
+        var c = this.parsedCookie();
+        return "style" in c ? c["style"]! : CONFIG.STYLE_AUTO;
     }
 
     /**

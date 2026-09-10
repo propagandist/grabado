@@ -69,6 +69,18 @@ export class Row extends Visual<RowDom> {
     declare keys: Key[];
     declare selected: boolean;
     declare expanded: boolean;
+    /*
+     * grabado: #209。**登録 id を控える**（js/table.ts:68 と同じ名前・同じ型）。
+     * 控えていなかったので Row だけが OZ.Event.remove を 1 度も呼べず、
+     * clearTables() -> 読込 を繰り返すたびに OZ.Event._byID / _byName が
+     * 2 x N x C 件ずつ単調増加していた（素のオブジェクトなので GC も効かない）。
+     */
+    declare _ec: number[];
+    /**
+     * buildEdit() が張るぶん。**寿命が違う**（collapse() で要素ごと捨てられる）ので
+     * _ec と分けて持ち、collapse() と destroy() の両方で外す。
+     */
+    declare _ecEdit: number[];
 
     constructor(owner: Table, title: string, data?: Partial<RowData>) {
         super();
@@ -77,6 +89,8 @@ export class Row extends Visual<RowDom> {
         this.keys = [];
         this.selected = false;
         this.expanded = false;
+        this._ec = [];
+        this._ecEdit = [];
 
         this._init();
         this._build();
@@ -117,8 +131,16 @@ export class Row extends Visual<RowDom> {
         this.changeComment = this.changeComment.bind(this);
         this.syncSizeField = this.syncSizeField.bind(this);
 
-        OZ.Event.add(this.dom.container, "click", this.click.bind(this));
-        OZ.Event.add(this.dom.container, "dblclick", this.dblclick.bind(this));
+        this._ec.push(
+            OZ.Event.add(this.dom.container, "click", this.click.bind(this))
+        );
+        this._ec.push(
+            OZ.Event.add(
+                this.dom.container,
+                "dblclick",
+                this.dblclick.bind(this)
+            )
+        );
     }
 
     select(): void {
@@ -321,7 +343,7 @@ export class Row extends Visual<RowDom> {
         this.dom.name = OZ.DOM.elm("input");
         this.dom.name.type = "text";
         elms.push(["name", this.dom.name]);
-        OZ.Event.add(this.dom.name, "keypress", this.enter);
+        this._ecEdit.push(OZ.Event.add(this.dom.name, "keypress", this.enter));
 
         this.dom.type = this.buildTypeSelect(this.data.type);
         elms.push(["type", this.dom.type]);
@@ -332,7 +354,9 @@ export class Row extends Visual<RowDom> {
          * 閉じる形になる」と送っていた項目）。DDL 側は 6-8d が塞いだので出力は
          * 壊れないが、打った値が黙って消えるのは UI として不親切。
          */
-        OZ.Event.add(this.dom.type, "change", this.syncSizeField);
+        this._ecEdit.push(
+            OZ.Event.add(this.dom.type, "change", this.syncSizeField)
+        );
 
         this.dom.size = OZ.DOM.elm("input");
         this.dom.size.type = "text";
@@ -361,7 +385,9 @@ export class Row extends Visual<RowDom> {
         this.dom.commentbtn.id = "commentbtn";
         this.dom.commentbtn.value = _("comment");
 
-        OZ.Event.add(this.dom.commentbtn, "click", this.changeComment);
+        this._ecEdit.push(
+            OZ.Event.add(this.dom.commentbtn, "click", this.changeComment)
+        );
 
         for (var i = 0; i < elms.length; i++) {
             var row = elms[i]!;
@@ -423,6 +449,20 @@ export class Row extends Visual<RowDom> {
             nll: this.dom.nll.checked,
             ai: this.dom.ai.checked,
         };
+
+        /*
+         * grabado: #209。**要素を捨てる前に外す。** OZ.DOM.clear() は DOM から
+         * 外すだけで、OZ.Event._byID / _byName は掴んだままになる（素のオブジェクト
+         * なので GC も効かない）—— 開閉のたびに 3 件ずつ残っていた。
+         *
+         * **自分の dispatch 中に外しても安全** —— collapse() は enter（keypress）から
+         * 呼ばれるが、removeEventListener は実行中のハンドラを中断しない。
+         *
+         * buildEdit() が空の _ecEdit から始まる根拠は expand() の早期 return
+         * （expanded が true なら buildEdit まで届かない）。
+         */
+        this._ecEdit.forEach(OZ.Event.remove, OZ.Event);
+        this._ecEdit = [];
 
         OZ.DOM.clear(this.dom.container);
         this.dom.container.appendChild(this.dom.content);
@@ -586,6 +626,12 @@ export class Row extends Visual<RowDom> {
         while (this.keys.length) {
             this.keys[0]!.removeRow(this);
         }
+        /*
+         * grabado: #209。**Table.destroy() と同じイディオム**（js/table.ts:505）。
+         * _ecEdit も外すのは、開いたままの行が破棄されうるため（collapse を通らない）。
+         */
+        this._ec.forEach(OZ.Event.remove, OZ.Event);
+        this._ecEdit.forEach(OZ.Event.remove, OZ.Event);
     }
 
     /*

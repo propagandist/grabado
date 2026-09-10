@@ -4,6 +4,7 @@ import type {
     JsonKey,
     JsonTable,
 } from "../../frontend/js/io/json-format.ts";
+import type { ScaleCounts } from "./probe.ts";
 
 /*
  * 規模の実測に使う合成設計（#206）。
@@ -107,3 +108,48 @@ function syntheticTable(i: number): JsonTable {
 function tableName(i: number): string {
     return `t${i}`;
 }
+
+/**
+ * 合成設計 N 段の読み込みで、各カウンタが取る値（1 次式）。**この表が正本**。
+ *
+ * ★★ **2 か所に書かない。** 元は tests/node/scale.test.ts と tests/scale/load.spec.ts が
+ *   同じ式を別々に持っており、**#207 で片方だけ直り、もう片方が赤くなって気づいた**
+ *   （2026-09-10）。実行系は違うが**読み出し回数は同じ**でなければならず、
+ *   それ自体が「2 実行系で同じ経路を通っている」証拠になる。
+ *
+ * 導出できるもの:
+ *   - rowUpdate = 列の総数（1 テーブル 9 列で、先頭だけ FK が無く 8 列）
+ *   - rowRedraw = 列の総数 ＋ キー登録数（PRIMARY が N 本、INDEX が N-1 本、各 1 列）
+ *   - relationRedraw = 関係の本数（1 本鎖なので N-1）
+ *   - offsetWidth / offsetHeight = **48N - 8 から tableRedraw を引いた値**（#207。
+ *     Table.redraw() の 2 回読みが 1 回になった分）
+ * 実測から当てはめたもの:
+ *   - offsetTop / offsetLeft / tableRedraw
+ */
+export const SCALE_COUNTS: Record<keyof ScaleCounts, (n: number) => number> = {
+    /*
+     * ★ #210 で 25N - 5 から落ちた。**内訳は導出できる** ——
+     *   実際に描いた Table.redraw() が 3N 回（各 1 回読む）＋
+     *   Relation.measure() が N-1 本 x 2 回（両端のテーブル）＝ **5N - 2**。
+     */
+    offsetWidth: (n) => 5 * n - 2,
+    offsetHeight: (n) => 5 * n - 2,
+    offsetTop: (n) => 4 * n - 4,
+    offsetLeft: (n) => 2 * n - 2,
+    rowRedraw: (n) => 11 * n - 2,
+    rowUpdate: (n) => COLUMNS_PER_TABLE * n - 1,
+    /*
+     * ★ #210 の後は「呼び出し回数」。早期 return で戻った分も入るので、
+     *   resumeRedraw() の N 回ぶんだけ #207 時点（23N - 3）より増えている。
+     */
+    tableRedraw: (n) => 24 * n - 3,
+    /**
+     * 実際に描いた回数（#210）。**resumeRedraw() の N ＋ ff hack の 2N。**
+     * 元は N(1 + 2C + P) + 2N で、house 既定の列数なら 1 桁違う。
+     */
+    tableRedrawWorked: (n) => 3 * n,
+    relationRedraw: (n) => n - 1,
+};
+
+/** DOM ノード数。読み込み後 61N + 67（67 は設計と無関係な UI の分） */
+export const SCALE_DOM_NODES = (n: number): number => 61 * n + 67;

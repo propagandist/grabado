@@ -28,7 +28,16 @@ export interface ScaleCounts {
     /** 描画メソッドの呼び出し */
     rowRedraw: number;
     rowUpdate: number;
+    /** Table.redraw() の**呼び出し**回数（#210 の早期 return で戻った分も含む） */
     tableRedraw: number;
+    /**
+     * そのうち**実際に描いた**回数（#210）。
+     *
+     * ★★ **呼び出し回数だけでは #210 の効果が測れない。** 読み込み中の抑止は
+     *   Table.redraw() の先頭の早期 return なので、**呼び出しは減らない**
+     *   （resumeRedraw() の分だけむしろ増える）。**費用が乗るのは本体を通った回数**。
+     */
+    tableRedrawWorked: number;
     relationRedraw: number;
 }
 
@@ -61,6 +70,7 @@ export function installScaleProbe(win: unknown, sample: ProbeSample): void {
         rowRedraw: 0,
         rowUpdate: 0,
         tableRedraw: 0,
+        tableRedrawWorked: 0,
         relationRedraw: 0,
     };
     w["__scaleProbe"] = { counts };
@@ -109,6 +119,26 @@ export function installScaleProbe(win: unknown, sample: ProbeSample): void {
     wrapMethod(sample.row, "redraw", "rowRedraw");
     wrapMethod(sample.row, "update", "rowUpdate");
     wrapMethod(sample.table, "redraw", "tableRedraw");
+    /*
+     * ★ **旗を読むのはここだけ。** #210 の抑止は Table.redraw() の先頭の早期 return なので、
+     *   呼び出し回数では効果が測れない。**同じ条件を 1 つだけ写して**、本体を通った回数を
+     *   別に数える —— 写しているのは真偽 1 つで、どちらが速いかの判断は含まない。
+     */
+    {
+        const proto = Object.getPrototypeOf(sample.table) as Record<
+            string,
+            unknown
+        >;
+        const original = proto["redraw"] as (...args: unknown[]) => unknown;
+        proto["redraw"] = function (this: unknown, ...args: unknown[]) {
+            const owner = (this as { owner?: { redrawSuspended?: boolean } })
+                .owner;
+            if (!owner || !owner.redrawSuspended) {
+                counts["tableRedrawWorked"]!++;
+            }
+            return original.apply(this, args);
+        };
+    }
     wrapMethod(sample.relation, "redraw", "relationRedraw");
 }
 
@@ -129,6 +159,7 @@ export function readScaleProbe(win: unknown): ScaleCounts {
         rowRedraw: c["rowRedraw"]!,
         rowUpdate: c["rowUpdate"]!,
         tableRedraw: c["tableRedraw"]!,
+        tableRedrawWorked: c["tableRedrawWorked"]!,
         relationRedraw: c["relationRedraw"]!,
     };
 }

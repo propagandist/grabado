@@ -35,8 +35,28 @@ import type {
  * その理由は同メソッドのコメントにある。ここで clear すると順序が崩れる。
  */
 export function applyDesignModel(designer: Designer, model: DesignModel): void {
-    for (var i = 0; i < model.tables.length; i++) {
-        applyTable(designer, model.tables[i]!);
+    /*
+     * grabado: #210。**テーブルの生成中だけ描き直しを溜める。**
+     * addRow() が列 1 本ごとに Table.redraw() を呼び、Row.redraw() が無条件で
+     * owner.redraw() と rowManager.redraw() を呼ぶので、N テーブル x C 列に比例して
+     * 積み上がっていた。**最終状態は変わらない**（resumeRedraw が全テーブルを描き直す）。
+     *
+     * ★★ **try / finally で必ず戻す。** applyRow は**パレットの範囲外の型添字**で
+     *   TypeError になる（2026-09-10 実測。関門はテーブル名の重複とキーが指す列の不在しか
+     *   見ておらず、型添字は見ていない）。旗が立ったまま抜けると
+     *   **以後すべての描画が止まる** —— 画面が固まったように見えて、原因が読み込み 1 回前に遡る。
+     *
+     * ★★ **ff hack より前に必ず流す。** 下の select() / deselect() は container の
+     *   left / top を ±1 動かすことが正体で、**束ねたまま通すと hack が意味を失う**。
+     *   relation を張る前でもある（Relation のコンストラクタが offsetLeft を読む）。
+     */
+    designer.suspendRedraw();
+    try {
+        for (var i = 0; i < model.tables.length; i++) {
+            applyTable(designer, model.tables[i]!);
+        }
+    } finally {
+        designer.resumeRedraw();
     }
 
     for (var i = 0; i < designer.tables.length; i++) {
@@ -100,8 +120,15 @@ function applyKey(table: Table, model: KeyModel): void {
     k.setType(model.type);
     k.setName(model.name);
     for (var i = 0; i < model.parts.length; i++) {
-        /* <part> には自テーブルの row 名しか書かれない前提（IO の不変条件）。
-           外れれば現行も addRow の r.owner で TypeError になる */
+        /*
+         * <part> には自テーブルの row 名しか書かれない前提（IO の不変条件）。
+         *
+         * ★ **訂正**（2026-09-10 実測。#210）—— 元は「外れれば現行も addRow の r.owner で
+         *   TypeError になる」と書いていた。**ならない。** findNamedRow が返す false は
+         *   Key.addRow の `r.owner != this.owner` で早期 return に落ちるだけで、
+         *   **<part> が黙って捨てられる**。#232 / #233 の関門が読み込みの側で拒むので
+         *   実害は残っていないが、**根拠が違う**ので消さずに直す。
+         */
         var row = table.findNamedRow(model.parts[i]!) as Row;
         k.addRow(row);
     }
@@ -116,8 +143,51 @@ function applyKey(table: Table, model: KeyModel): void {
  * リレーションが壊れる既知の不具合の本体で、オブジェクト参照に変えると**バグが直り、
  * テストが 1 本も落ちないまま挙動が変わる**。id 参照へ移すかは formatVersion: 1 を
  * 決める 4-2 の判断（CUSTOMIZATIONS.md 段階4-0a の申し送り）。
+ *
+ * ★ **到達経路は #232 / #233 で狭まった**（2026-09-10 に確認）。同名テーブルは
+ *   `assertLoadableDesign` が XML / JSON の読み込みで拒むので、ここまで届くのは
+ *   **関門を通らない 2 つの呼び手**だけ —— AI パッチの適用（js/io.ts:1060）と
+ *   introspection の取り込み（同 :1194）。**「既知の不具合」は消えていないが、
+ *   普通の読み込みでは踏めない。**
+ *
+ * ★★ **索引は「先勝ち」で組む**（#208）。findNamedTable / findNamedRow が返すのは
+ *   **先頭の一致**なので、Map も**既にあるキーを上書きしない**形にすれば解決先が
+ *   1 つも変わらない —— 上の既知の挙動はそのまま保たれる。
+ *   **性能の変更に機能の変更を混ぜない**（CLAUDE.md 制約 1）。
  */
 function applyRelations(designer: Designer, model: DesignModel): void {
+    /*
+     * テーブルの索引は 1 回だけ組む。**この関数の実行中に designer.tables は動かない**
+     * —— addRelation() が作るのは Relation で、テーブルも行も増減しない。
+     */
+    var tableIndex = new Map<string, Table>();
+    for (var t = 0; t < designer.tables.length; t++) {
+        var live = designer.tables[t]!;
+        var liveName = live.getTitle();
+        if (!tableIndex.has(liveName)) {
+            tableIndex.set(liveName, live);
+        }
+    }
+
+    /* 行の索引は**実際に引かれたテーブルの分だけ**組む（触らないテーブルの費用を払わない） */
+    var rowIndexes = new Map<Table, Map<string, Row>>();
+    function rowsOf(owner: Table): Map<string, Row> {
+        var found = rowIndexes.get(owner);
+        if (found) {
+            return found;
+        }
+        var index = new Map<string, Row>();
+        for (var i = 0; i < owner.rows.length; i++) {
+            var r = owner.rows[i]!;
+            var name = r.getTitle();
+            if (!index.has(name)) {
+                index.set(name, r);
+            }
+        }
+        rowIndexes.set(owner, index);
+        return index;
+    }
+
     for (var i = 0; i < model.tables.length; i++) {
         var table = model.tables[i]!;
         for (var j = 0; j < table.rows.length; j++) {
@@ -125,20 +195,20 @@ function applyRelations(designer: Designer, model: DesignModel): void {
             for (var k = 0; k < row.relations.length; k++) {
                 var ref = row.relations[k]!;
 
-                var t1 = designer.findNamedTable(ref.table);
+                var t1 = tableIndex.get(ref.table);
                 if (!t1) {
                     continue;
                 }
-                var r1 = t1.findNamedRow(ref.row);
+                var r1 = rowsOf(t1).get(ref.row);
                 if (!r1) {
                     continue;
                 }
 
-                var t2 = designer.findNamedTable(table.title);
+                var t2 = tableIndex.get(table.title);
                 if (!t2) {
                     continue;
                 }
-                var r2 = t2.findNamedRow(row.title);
+                var r2 = rowsOf(t2).get(row.title);
                 if (!r2) {
                     continue;
                 }

@@ -28,7 +28,7 @@ import { publish } from "./globals.ts";
 import { Visual, type VisualDom, type VisualData } from "./visual.ts";
 import { Row, type RowData } from "./row.ts";
 import { Key } from "./key.ts";
-import type { Relation } from "./relation.ts";
+import type { Relation, RelationPlan } from "./relation.ts";
 import type { Designer } from "./wwwsqldesigner.ts";
 
 export interface TableDom extends VisualDom {
@@ -193,11 +193,22 @@ export class Table extends Visual<TableDom> {
 
     getRelations(): Relation[] {
         var arr: Relation[] = [];
+        /*
+         * grabado: #207。**初出順の push はそのまま。** 変えるのは「もう入っているか」の
+         * 引き方だけで、arr.indexOf(r) の累積線形走査（O(K^2)）が O(K) になる。
+         *
+         * **キャッシュは持たない** —— 無効化の契機が addRelation / removeRelation /
+         * addRow / removeRow / Row.destroy の 5 か所に散り、しかも取りこぼしは
+         * 「relation が描き直されない」という形で出る。state golden はレイアウト由来の
+         * 値を採らないので気づけない（安全網の境界。docs/TESTING.md の「幾何の棚」）。
+         */
+        var seen = new Set<Relation>();
         for (var i = 0; i < this.rows.length; i++) {
             var row = this.rows[i]!;
             for (var j = 0; j < row.relations.length; j++) {
                 var r = row.relations[j]!;
-                if (arr.indexOf(r) == -1) {
+                if (!seen.has(r)) {
+                    seen.add(r);
                     arr.push(r);
                 }
             }
@@ -301,6 +312,10 @@ export class Table extends Visual<TableDom> {
     }
 
     redraw(): void {
+        /* grabado: #210。読み込み中は溜める（Designer.suspendRedraw の KDoc） */
+        if (this.owner.redrawSuspended) {
+            return;
+        }
         var x = this.x;
         var y = this.y;
         if (this.selected) {
@@ -310,11 +325,28 @@ export class Table extends Visual<TableDom> {
         this.dom.container.style.left = x + "px";
         this.dom.container.style.top = y + "px";
 
+        /*
+         * grabado: #207。**読みは 1 か所にまとめる。** 元は offsetWidth / offsetHeight を
+         * 2 回ずつ読んでおり、1 回の redraw() で強制同期レイアウトが 2 回走っていた。
+         *
+         * **2 回目が 1 回目と必ず同値である根拠**: 間にあるのは dom.mini への書き込みだけで、
+         * その親 #minimap は position: fixed（styles/base.css の material-* ／
+         * styles/original.css）。フローに戻らないので dom.container の実測に影響しない。
+         * **CSS を読んで判定しない** —— 実際に極端な値を書いてテーブルが動かないことを
+         * tests/browser/canvas.spec.ts が見張っている。
+         *
+         * ★ **container への書き込み（left / top）より後で読む順序は崩さない。**
+         *   .table は幅を持たない絶対配置なので、left によって shrink-to-fit の上限
+         *   （#area の右端まで）が変わりうる。関数の先頭へ動かすと、そこだけ同値でなくなる。
+         */
+        var cw = this.dom.container.offsetWidth;
+        var ch = this.dom.container.offsetHeight;
+
         var ratioX = this.owner.map.width / this.owner.width;
         var ratioY = this.owner.map.height / this.owner.height;
 
-        var w = this.dom.container.offsetWidth * ratioX;
-        var h = this.dom.container.offsetHeight * ratioY;
+        var w = cw * ratioX;
+        var h = ch * ratioY;
         var x = this.x * ratioX;
         var y = this.y * ratioY;
 
@@ -323,12 +355,25 @@ export class Table extends Visual<TableDom> {
         this.dom.mini.style.left = Math.round(x) + "px";
         this.dom.mini.style.top = Math.round(y) + "px";
 
-        this.width = this.dom.container.offsetWidth;
-        this.height = this.dom.container.offsetHeight;
+        this.width = cw;
+        this.height = ch;
 
+        /*
+         * grabado: #207。**2 パスにする（全部読んでから全部書く）。** 元は 1 本ごとに
+         * 読み → 書きを交互に行っており、K 本の relation につき K 回の強制同期レイアウトが
+         * 走っていた。前提は「relation の書き先がテーブルの実測に影響しない」ことで、
+         * **その前提そのもの**を tests/browser/canvas.spec.ts がテストにしている。
+         */
         var rs = this.getRelations();
+        var plans: (RelationPlan | null)[] = [];
         for (var i = 0; i < rs.length; i++) {
-            rs[i]!.redraw();
+            plans.push(rs[i]!.measure());
+        }
+        for (var i = 0; i < rs.length; i++) {
+            var plan = plans[i]!;
+            if (plan) {
+                rs[i]!.paint(plan);
+            }
         }
     }
 
@@ -499,8 +544,23 @@ export class Table extends Visual<TableDom> {
     destroy(): void {
         super.destroy();
         this.dom.mini.parentNode!.removeChild(this.dom.mini);
+        /*
+         * grabado: #209。**removeRow() を通さない** —— あれは 1 列ごとに redraw() を
+         * 呼ぶ（同ファイルの removeRow）。**これが clearTables() の本当の重さ**で、
+         * O(N^2) の splice ではなく **O(N x C) 回の Table.redraw()**（1 回ごとに
+         * 強制同期レイアウトが走る）。
+         *
+         * **最終状態は変わらない** —— この時点で container も mini も既に DOM から
+         * 外れており（直前の 2 行）、描き直しているのは「消える自分」と「この直後に
+         * 消える relation」だけ。removeRow() の indexOf（必ず 0 に当たる）も同時に落ちる。
+         *
+         * **this.rows は 1 本ずつ縮める**（先に空配列へ差し替えない）—— destroy() の
+         * 途中で Key.removeRow -> Row.removeKey -> Row.redraw -> Table.redraw と回って
+         * this.rows が読まれる経路が実在するので、途中の一貫性を崩さない側を採る。
+         */
         while (this.rows.length) {
-            this.removeRow(this.rows[0]!);
+            this.rows[0]!.destroy();
+            this.rows.splice(0, 1);
         }
         this._ec.forEach(OZ.Event.remove, OZ.Event);
     }

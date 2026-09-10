@@ -421,4 +421,90 @@ test.describe("幾何の棚", () => {
             expect(Math.abs(t.height - b.height / 2)).toBeLessThanOrEqual(1);
         }
     });
+
+    test("ミニマップを極端な位置へ描いても、テーブルの実測は動かない（#207 の読み 1 回化の前提）", async () => {
+        /*
+         * ★★ **Table.redraw() が offsetWidth を 2 回読んでいた根拠を消す条件。**
+         *   1 回目と 2 回目のあいだにあるのは dom.mini への書き込みだけで、
+         *   #minimap は position: fixed（styles/base.css の material-* ／
+         *   styles/original.css）。**fixed なら中身をどう書いてもフローに戻らない**ので
+         *   2 回目の読みは必ず 1 回目と同値になる。
+         *
+         *   ★ **CSS を読んで判定しない。** position の値を assert すると
+         *   「その宣言があること」しか言えず、テーマが増えた日に落ちる。
+         *   **実際に極端な値を書いて、テーブルが動かないことを見る。**
+         */
+        const seen = await page.evaluate(() => {
+            const d = window.d!;
+            const measure = () =>
+                d.tables.map((t) => {
+                    const el = t.dom.container;
+                    return [
+                        el.offsetLeft,
+                        el.offsetTop,
+                        el.offsetWidth,
+                        el.offsetHeight,
+                    ];
+                });
+
+            const before = measure();
+            for (const t of d.tables) {
+                const mini = t.dom.mini.style;
+                mini.width = "9000px";
+                mini.height = "9000px";
+                mini.left = "9000px";
+                mini.top = "9000px";
+            }
+            const after = measure();
+
+            /* 元に戻す（redraw() が mini の 4 値を全部書き直す） */
+            d.tables.forEach((t) => t.redraw());
+            return { before, after, restored: measure() };
+        });
+
+        expect(seen.after).toEqual(seen.before);
+        expect(seen.restored).toEqual(seen.before);
+    });
+
+    test("2 パスで描いた d と、1 本ずつ描いた d が一致する（#207 の等価性）", async () => {
+        /*
+         * ★★ **#207 の主張「出力を 1 ビットも変えていない」そのもの。**
+         *   Table.redraw() は全 relation を measure() してから paint() する（2 パス）。
+         *   1 本ずつ redraw()（読み → 書きを交互）した結果と一致するなら、
+         *   **relation の書き込みが他の relation の読み出しを汚していない**。
+         *
+         *   ★ **同一ページ内で突き合わせる**ので、フォントにも viewport にも依らない。
+         *   一致しないなら 2 パス化が不正、と読める。
+         */
+        const seen = await page.evaluate(() => {
+            const d = window.d!;
+            /*
+             * 読むのは Designer.relations（正本の一覧）。テーブル越しに集めると
+             * 2 テーブルにまたがる relation が 2 回出る（5 本が 9 要素になる）。
+             */
+            const paths = () => d.relations.map((r) => r.dom[0].getAttribute("d"));
+
+            /*
+             * ★ **動かした直後に採る。** 落ち着いた盤面で 2 回描き直しても
+             *   「読みが古い値を掴んでいる」形の壊れ方は出ない ——
+             *   moveTo() が style.left を書いた後で measure() しているか、が争点。
+             */
+            const moved = d.tables[1]!;
+            const at: [number, number] = [moved.x, moved.y];
+            moved.moveTo(moved.x + 120, moved.y + 90);
+            const twoPass = paths();
+
+            /* 1 パス（#207 より前の順序。Relation.redraw() は measure + paint のまま） */
+            for (const r of d.relations) {
+                r.redraw();
+            }
+            const onePass = paths();
+
+            moved.moveTo(at[0], at[1]);
+            return { twoPass, onePass };
+        });
+
+        expect(seen.twoPass.length).toBe(5);
+        expect(seen.onePass).toEqual(seen.twoPass);
+    });
 });

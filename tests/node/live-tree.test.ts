@@ -553,4 +553,102 @@ describe("ライブツリー", () => {
             expect(d.relations.length).toBe(0);
         });
     });
+
+    describe("テーブルのリネームは relation の本数に依らない（#234）", () => {
+        /**
+         * 親テーブル 1 本と、その列を参照する子テーブルを `refs` 個。
+         * **子行が親側になっている relation の本数**が、そのまま置換の回数になっていた。
+         */
+        function parentWithRefs(refs: number): string {
+            const tables: unknown[] = [
+                {
+                    name: "users",
+                    x: 20,
+                    y: 20,
+                    columns: [{ name: "users_id", type: "integer" }],
+                },
+            ];
+            for (let i = 0; i < refs; i++) {
+                tables.push({
+                    name: `child${i}`,
+                    x: 400 + i * 300,
+                    y: 20,
+                    columns: [
+                        {
+                            name: `c${i}`,
+                            type: "integer",
+                            references: [{ table: "users", column: "users_id" }],
+                        },
+                    ],
+                });
+            }
+            return J(tables);
+        }
+
+        /** users テーブルを rename して、親の列名がどうなったかを返す */
+        function renameUsers(refs: number, to: string): string {
+            h.loadJson(parentWithRefs(refs));
+            const users = h.designer.tables[0]!;
+            expect(users.rows[0]!.relations.length).toBe(refs);
+            users.setTitle(to);
+            return users.rows[0]!.getTitle();
+        }
+
+        it("新名が旧名を含んでも、置換は 1 回だけ効く", () => {
+            /* 修正前は users_v2_v2_id（relation 2 本ぶん置換が走っていた） */
+            expect(renameUsers(2, "users_v2")).toBe("users_v2_id");
+        });
+
+        it("relation が 3 本でも結果が変わらない（本数に依らない）", () => {
+            expect(renameUsers(3, "users_v2")).toBe("users_v2_id");
+        });
+
+        it("relation が 1 本のときは現行と同じ", () => {
+            expect(renameUsers(1, "users_v2")).toBe("users_v2_id");
+        });
+
+        it("新名が旧名を含まないときは現行と同じ", () => {
+            expect(renameUsers(2, "members")).toBe("members_id");
+        });
+
+        it("参照されていない列は追随しない（判定の意味が残っている）", () => {
+            /*
+             * ★ 内側ループの `r.row1 != row` は「**参照される側であるときだけ**
+             *   子行名を追随させる」という判定。畳んでも意味を保つ。
+             */
+            h.loadJson(
+                J([
+                    {
+                        name: "users",
+                        x: 20,
+                        y: 20,
+                        columns: [
+                            { name: "users_id", type: "integer" },
+                            { name: "users_memo", type: "integer" },
+                        ],
+                    },
+                    {
+                        name: "orders",
+                        x: 400,
+                        y: 20,
+                        columns: [
+                            {
+                                name: "p",
+                                type: "integer",
+                                references: [
+                                    { table: "users", column: "users_id" },
+                                ],
+                            },
+                        ],
+                    },
+                ])
+            );
+            const users = h.designer.tables[0]!;
+            users.setTitle("members");
+
+            expect(users.rows[0]!.getTitle()).toBe("members_id");
+            /* 参照されていない列は据え置き */
+            expect(users.rows[1]!.getTitle()).toBe("users_memo");
+        });
+    });
 });

@@ -150,15 +150,32 @@ export class Table extends Visual<TableDom> {
         var old = this.getTitle();
         for (var i = 0; i < this.rows.length; i++) {
             var row = this.rows[i]!;
+            /*
+             * grabado: #234。**内側ループを畳んだ。** 元は row.relations を回して
+             * 1 本ごとに置換していたが、**置換の対象は row 自身**で、ループ変数は
+             * continue の判定にしか使われていなかった —— つまり「その行が親側に
+             * なっている relation の本数」だけ同じ書き換えが繰り返される。
+             *
+             * **新名が旧名を含むと 2 回目以降も一致する**（users -> users_v2 で
+             * users_v2_id -> users_v2_v2_id）。踏む条件は 2 つとも普通で、
+             * FK の既定命名パターン %R_%T が親名を含むぶん house 既定ほど当たりやすい。
+             *
+             * **判定の意味は変えていない** —— 「**参照される側であるときだけ**
+             * 子行名を追随させる」。1 本でもあれば足りるので break で抜ける。
+             */
+            var referenced = false;
             for (var j = 0; j < row.relations.length; j++) {
-                var r = row.relations[j]!;
-                if (r.row1 != row) {
-                    continue;
+                if (row.relations[j]!.row1 == row) {
+                    referenced = true;
+                    break;
                 }
-                var tt = renameOccurrences(row.getTitle(), old, t);
-                if (tt != row.getTitle()) {
-                    row.setTitle(tt);
-                }
+            }
+            if (!referenced) {
+                continue;
+            }
+            var tt = renameOccurrences(row.getTitle(), old, t);
+            if (tt != row.getTitle()) {
+                row.setTitle(tt);
             }
         }
         super.setTitle(t);

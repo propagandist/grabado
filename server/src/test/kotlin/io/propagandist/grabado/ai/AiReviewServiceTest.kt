@@ -92,17 +92,26 @@ class AiReviewServiceTest {
     /* ------------------------- 入力の検査 -------------------------- */
 
     @Test
-    fun `大きすぎる入力はパースの前に落とす`() {
+    fun `大きすぎる入力はパースの前に落とす（413 相当）`() {
         val stub = Stub()
         val service = AiReviewService(properties(enabled(maxRequestBytes = 16)), stub)
 
         assertThatThrownBy { service.review(body(minimal)) }
-            .isInstanceOf(AiBadRequestException::class.java)
+            .isInstanceOf(AiTooLargeException::class.java)
         assertThat(stub.calls).describedAs("上流まで行かない").isZero()
     }
 
     @Test
-    fun `テーブル数の上限を超えたら落とす`() {
+    fun `パースの前なので、JSON でなくても大きさで落ちる`() {
+        // 順序の固定（サイズ検査 -> ハッシュ -> ... -> 形の検査）。形の検査が先だと 400 になる
+        val service = AiReviewService(properties(enabled(maxRequestBytes = 16)), Stub())
+
+        assertThatThrownBy { service.review(body("x".repeat(17))) }
+            .isInstanceOf(AiTooLargeException::class.java)
+    }
+
+    @Test
+    fun `テーブル数の上限を超えたら落とす（400 相当。大きすぎるのではない）`() {
         val service = AiReviewService(properties(enabled(maxTables = 1)), Stub())
         val two = """{"aiRequestVersion":1,"dialect":"postgresql","tables":[{"name":"a"},{"name":"b"}]}"""
 

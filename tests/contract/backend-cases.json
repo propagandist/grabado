@@ -21,6 +21,8 @@
     "  request.action ?action= の値。null なら action を付けない",
     "  request.keyword ?keyword= の値。null なら付けない（省略時の 400 を試すため）",
     "  request.body   POST の body",
+    "  request.bodyBytes POST の body を長さだけで宣言する（issue #215）。**あれば body より優先し、",
+    "                その長さの x を送る** —— 上限を 1 バイト超えるという契約に、中身のリテラルは要らない",
     "  request.backend パスの <backend名>。省略時は file（段階5-5 でフロントが固定した値）。",
     "                サーバはこの値を読まないので、何を入れても同じ結果になる",
     "  request.trailingSlash パス末尾の / の有無。省略時 true（実測 URL の形）",
@@ -796,7 +798,7 @@
     },
     {
       "id": "ai-too-many-tables",
-      "note": "テーブル数の上限超。AiContractTest は max-tables=2 で起動するので 3 件で落ちる。413 ではなく 400（check() は 413 を持たない）",
+      "note": "テーブル数の上限超。AiContractTest は max-tables=2 で起動するので 3 件で落ちる。**413 ではなく 400**（#250）—— 大きすぎるのではなく「分割して送るべき」上限で、body は数バイトでも落ちる。バイト数の超過は ai-too-large の 413",
       "serverMode": "ai",
       "request": {
         "method": "POST",
@@ -805,6 +807,21 @@
       },
       "expect": {
         "status": 400,
+        "body": ""
+      },
+      "virtual": false
+    },
+    {
+      "id": "ai-too-large",
+      "note": "body のバイト数の上限（grabado.ai.max-request-bytes、既定 256 KiB）超は 413（#250）。save-too-large と同じ status —— 前段にプロキシを置くと、それを超える body はアプリを通らずに 413 で返るので、アプリも 413 で揃える。パースの前に落とすので、中身が JSON でなくても 413",
+      "serverMode": "ai",
+      "request": {
+        "method": "POST",
+        "path": "/api/ai/review",
+        "bodyBytes": 262145
+      },
+      "expect": {
+        "status": 413,
         "body": ""
       },
       "virtual": false

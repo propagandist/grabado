@@ -877,7 +877,8 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 | 入力 | **`aiRequestVersion: 1`**（§8.2）。**設計 JSON v2 ではない** —— 座標を持たず、型は SQL 名 |
 | 出力 | 提案の配列。**structured outputs（`output_config.format` の `json_schema`）でスキーマを強制**し、自由テキストをパースしない |
 | 403 | READONLY / `ANTHROPIC_API_KEY` 未設定 / `GRABADO_AI_MODEL` 未設定 |
-| 400 | 入力が壊れている・大きすぎる |
+| 400 | 入力が壊れている・テーブル数が上限を超えた |
+| 413 | body のバイト数が上限を超えた（#250。save の上限と同じ status） |
 | 429 | 自分のレート制限、または上流の 429 |
 | 503 | 上流の失敗・タイムアウト |
 
@@ -889,6 +890,12 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 呼ばず、**429 が `check()` に届く経路が存在しなかった**（5-1b で 400 を足したときと同じ形）。
 到達しない status は無言で成功扱いにならない。**11-3 の配線と同時に広げた**ので、いまは
 `check()` が `case 429` を、locale が `http429` を持っている。
+
+**413 は #250 で足した**が、**フロントは 1 行も触っていない** —— `check()` の `case 413` と
+21 locale の `http413` は、save の上限（#215）が先に入れていた。11-2a が 413 ではなく 400 を
+返していたのは「`check()` が 413 を持たないから」で、**その理由が #215 で消えた**ので寄せた。
+**寄せたのはバイト数の超過だけ**で、テーブル数の超過は 400 のまま（大きすぎるのではなく、
+分割して送るべき上限）。
 
 status の写像は [`ApiExceptionHandler`](../server/src/main/kotlin/io/propagandist/grabado/api/ApiExceptionHandler.kt)
 の 1 つの表にある（例外 → status を 2 か所に書かない）。**403 は理由を区別しない** ——
@@ -978,8 +985,8 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 | `ANTHROPIC_API_KEY` | 空（＝ AI 無効） | 各自のコンテナ env（実質 BYOK）。**localStorage には置かない** |
 | `GRABADO_AI_MODEL` | **無し（必須）** | 未設定なら AI 無効。**既定を焼き込まない** —— 書いた瞬間に古くなる。選び方は[モデル一覧](https://platform.claude.com/docs/en/about-claude/models/overview)から引く |
 | `GRABADO_READONLY` | `false` | AI サービスの Bean を**そもそも登録しない**（5-3 と同じ形） |
-| `GRABADO_AI_MAX_TABLES` | `100` | 1 リクエストのテーブル数。超えたら **400** |
-| `GRABADO_AI_MAX_REQUEST_BYTES` | `262144`（256 KiB） | body の大きさ。超えたら **400**（**パースの前に見る**） |
+| `GRABADO_AI_MAX_TABLES` | `100` | 1 リクエストのテーブル数。超えたら **400**（**413 ではない** —— 大きすぎるのではなく、分割して送るべき上限。#250） |
+| `GRABADO_AI_MAX_REQUEST_BYTES` | `262144`（256 KiB） | body の大きさ。超えたら **413**（**パースの前に見る**。#250） |
 | `GRABADO_AI_RATE_PER_MINUTE` | `10` | 1 分あたりの受付数。超えたら **429** |
 | `GRABADO_AI_MAX_CONCURRENT` | `2` | 同時に上流へ流す数。超えたら **429**（**待たせない**） |
 | `GRABADO_AI_CACHE_ENTRIES` / `GRABADO_AI_CACHE_TTL` | `64` / `1h` | 結果キャッシュ（§8.5） |

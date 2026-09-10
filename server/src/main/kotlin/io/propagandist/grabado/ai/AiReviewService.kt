@@ -52,7 +52,8 @@ class AiReviewService(
      *
      * @param body 送られてきた生バイト（`aiRequestVersion: 1`）
      * @throws AiUnavailableException キー / モデル / 実装のどれかが無い（HTTP 403）
-     * @throws AiBadRequestException 入力が壊れている・大きすぎる（HTTP 400）
+     * @throws AiTooLargeException body のバイト数が上限を超えた（HTTP 413）
+     * @throws AiBadRequestException 入力が壊れている・テーブル数が上限を超えた（HTTP 400）
      * @throws AiRateLimitedException 自分の上限に当たった（HTTP 429）
      * @throws AiUpstreamException 上流の失敗・タイムアウト（HTTP 503）
      */
@@ -82,13 +83,28 @@ class AiReviewService(
 class AiUnavailableException : RuntimeException("このデプロイでは AI が使えない")
 
 /**
- * 入力が壊れている・大きすぎる。HTTP **400**。
+ * 入力が壊れている・テーブル数が上限を超えた。HTTP **400**。
  *
  * ★ **message を body に出さない**（`ApiExceptionHandler`）。入力の断片や上流の事情が
  * 載りうる（org security-baseline §4.5）。message は開発者がログで読むためのもの。
- * 413 ではなく 400 なのは `js/io.ts` の `check()` が 413 を持たないため（5-1c で足した 400 に寄せる）。
+ *
+ * ★ **テーブル数の超過は 413 にしない**（#250）。`maxTables` は「大きすぎる」ではなく
+ * 「分割して送るべき」上限で、body が数十バイトでも落ちる —— Content Too Large と呼ぶと
+ * 嘘になる。バイト数の超過は [AiTooLargeException]。
  */
 class AiBadRequestException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+
+/**
+ * body のバイト数が上限（`grabado.ai.max-request-bytes`）を超えた。HTTP **413**（#250）。
+ *
+ * save の上限（`DesignTooLargeException`、#215）と**同じ status に揃える** —— 前段に
+ * プロキシを置くと、プロキシの上限を超える body は**アプリを通らずに 413 で返る**。
+ * アプリが 400 を返すと、同じ「大きすぎる」がどこで切られたかで 400 と 413 に割れる。
+ *
+ * 11-2a が 400 に寄せていたのは「`js/io.ts` の `check()` が 413 を持たないから」で、
+ * **その理由は #215 で消えた**（`check()` と 21 locale の `http413` が入った）。
+ */
+class AiTooLargeException(message: String) : RuntimeException(message)
 
 /**
  * 自分のレート制限に当たった。HTTP **429**。

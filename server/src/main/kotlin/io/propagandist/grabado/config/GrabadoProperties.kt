@@ -39,7 +39,8 @@ import java.time.Duration
  *
  *   ★ 超過は **413**。AI 側が 400 に寄せていた（[AiRequestCheck]）のは
  *   「`js/io.ts` の `check()` が 413 を持たないから」で、**この issue でそれを塞いだ**ので
- *   寄せる理由が消えた。
+ *   寄せる理由が消えた。**#250 で AI もバイト数の超過を 413 に揃えた**
+ *   （[AiProperties.maxRequestBytes]。テーブル数は 400 のまま）。
  */
 @ConfigurationProperties("grabado")
 data class GrabadoProperties(
@@ -66,9 +67,10 @@ data class GrabadoProperties(
  *   env にキーを入れる行為がそれ自体で同意になる。決めたこと 3）
  * @property model `GRABADO_AI_MODEL`。**空なら AI は無効**
  * @property maxTables 1 リクエストのテーブル数。**100** は house の実運用（数個〜十数個）を
- *   大きく超える値で、それ以上は分割して送るべきもの。超えたら 400
+ *   大きく超える値で、それ以上は分割して送るべきもの。超えたら 400（**413 ではない** ——
+ *   大きすぎるのではなく分割すべき上限。#250）
  * @property maxRequestBytes リクエスト body の上限。**256 KiB** は 100 テーブル × 2 KiB強 で、
- *   `maxTables` と同じ側から来た値。超えたら 400
+ *   `maxTables` と同じ側から来た値。超えたら **413**（#250。[maxDesignBytes] と同じ status）
  * @property ratePerMinute 1 分あたりの受付数。**10** は「人が画面から押す」速度の上限で、
  *   自動化された連打を止めるためのもの。超えたら 429
  * @property maxConcurrent 同時に上流へ流す数。**2**。単一コンテナのローカル運用が前提で、

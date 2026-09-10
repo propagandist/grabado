@@ -42,11 +42,11 @@ object AiRequestCheck {
      * **パースの前に呼ぶ。** 巨大な body をパースしてから落とすと、拒むための計算が
      * いちばん高くつく。ハッシュを取る前でもあるので、キャッシュも汚さない。
      *
-     * @throws AiBadRequestException 上限超（HTTP 400。`check()` は 413 を持たない）
+     * @throws AiTooLargeException 上限超（HTTP 413。#250 —— save の上限と同じ status）
      */
     fun checkSize(body: ByteArray, limits: AiProperties) {
         if (body.size > limits.maxRequestBytes) {
-            throw AiBadRequestException("リクエストが大きすぎる（${body.size} > ${limits.maxRequestBytes}）")
+            throw AiTooLargeException("リクエストが大きすぎる（${body.size} > ${limits.maxRequestBytes}）")
         }
     }
 
@@ -56,7 +56,8 @@ object AiRequestCheck {
      * 見るのは 4 つだけ —— **JSON として読めるか / 版が [VERSION] か / `dialect` があるか /
      * `tables` が配列で件数が上限内か**。中身（列・キー・参照）には触らない。
      *
-     * @throws AiBadRequestException どれかを満たさない（HTTP 400）
+     * @throws AiBadRequestException どれかを満たさない（HTTP 400。**テーブル数の超過も 400** ——
+     *   大きすぎるのではなく分割して送るべきもの。[AiBadRequestException] の KDoc）
      */
     fun parse(body: ByteArray, limits: AiProperties): JsonNode {
         val root = try {

@@ -87,6 +87,10 @@ cd server && \
 **ORM 出力を実物の道具に通す**（issue #120）。**要 Docker ＋ ネットワーク** ——
 使い捨てコンテナに `kotlinc` / `prisma` / `drizzle-orm` を都度入れる（`devDependencies` は
 増やさない）。**`npm test` にも CI にも入らない。**
+**回すのは版を切るとき**（[`BRANCHING.md`](BRANCHING.md) の「リリース」。#251）。
+道具の版のうち **typescript と kotlin は本体から読む**（`package-lock.json` と
+`server/gradle/libs.versions.toml`）。**写しを持たない** —— 写していた時期に、Dependabot が
+本体だけ上げて 12 日ずれた。
 
 ```bash
 npm run test:orm-tools             # 3 本とも

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { ORM_EXTENSIONS, ORM_TARGETS } from "../../frontend/js/io/orm/generate.ts";
 import { EXCLUSIONS, PRISMA_URLS, TOOLS } from "../orm-tools/cases.ts";
-import { DB_PROFILES, GOLDEN_DIR, ormGoldenCases } from "../support/fixtures.ts";
+import { DB_PROFILES, GOLDEN_DIR, REPO_ROOT, ormGoldenCases } from "../support/fixtures.ts";
 
 /*
  * 「通す一覧」の整合検査（issue #120）。
@@ -91,5 +91,26 @@ describe("ORM の実物検証: 通す一覧（issue #120）", () => {
         for (const one of found) {
             expect(PRISMA_URLS[one], `provider ${one} の URL が無い`).toBeDefined();
         }
+    });
+
+    /*
+     * ★ 道具の版のうち typescript と kotlin は、**本体から読む**（cases.ts の repoVersion。#251）。
+     *   写していた時期に、typescript は #131（2026-08-30）で本体だけ 7 に上がり、写しは 12 日
+     *   5.9.3 のままだった —— Dependabot は本体を上げても写しを直さない。
+     *
+     *   ここが見るのは 2 つ: **本体が読めていること**（形が変わって読めなくなれば、cases.ts の
+     *   import の時点で落ちる）と、**表が写しに戻っていないこと**（戻れば、本体が次に上がった
+     *   PR で赤くなる。package-lock.json と libs.versions.toml はどちらも ci-frontend の paths にある）。
+     */
+    test("道具の版のうち本体にあるものは、本体から読んでいる（typescript / kotlin）", () => {
+        const tool = (target: string) => TOOLS.find((t) => t.target === target)!.versions;
+
+        const lock = JSON.parse(readFileSync(join(REPO_ROOT, "package-lock.json"), "utf8"));
+        expect(tool("drizzle")["typescript"]).toBe(lock.packages["node_modules/typescript"].version);
+        expect(tool("drizzle")["typescript"]).toMatch(/^\d+\.\d+\.\d+/);
+
+        const toml = readFileSync(join(REPO_ROOT, "server/gradle/libs.versions.toml"), "utf8");
+        expect(tool("jpa")["kotlin"]).toBe(/^kotlin\s*=\s*"([^"]+)"/m.exec(toml)?.[1]);
+        expect(tool("jpa")["kotlin"]).toMatch(/^\d+\.\d+\.\d+/);
     });
 });

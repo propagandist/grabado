@@ -44,6 +44,11 @@ git push -u origin feature/ts-serializer
 ## リリース
 
 ```bash
+# ★ 切る前に、CI が回さない 3 層を develop の上で 1 回ずつ回す（#251。下の★）
+npm run test:server        # 要 JDK 25
+npm run test:orm-tools     # 要 Docker ＋ ネットワーク
+npm run test:scale
+
 git checkout -b release/0.1.0 develop
 # 版番号更新・最終微修正のみ（新機能は入れない）
 # PR: release/0.1.0 -> main
@@ -65,6 +70,14 @@ gh api -X PATCH repos/propagandist/grabado/milestones/<N> -f state=closed
 gh api -X POST repos/propagandist/grabado/milestones \
   -f title='v0.2.0 — <到達点の名前>' -f description='<何が成立したら閉じるかを 1 文で>'
 ```
+
+**★ CI が回さない層は、版を切るたびに手元で回す**（**2026-09-11**。#251）—— `test:server` ／
+`test:orm-tools` ／ `test:scale` は **`npm test` にも CI にも入らない**ので、**回す契機が無いと
+回されない**。**#247 で `test:server` が 3 日赤いまま気づかれず**、**#251 で `test:orm-tools` の
+TypeScript が本体から 12 日ずれていた**（どちらも回した日に初めて分かった）。
+**契機を時間ではなく版を切る行為に紐づける** —— 頻度で回すものは回されなくなる（申し送りから
+起票へ拾う契機を行為に紐づけたのと同じ理由。`CLAUDE.md` の「作業の型」）。**結果は版を閉じる記録に書く。**
+**赤なら版を切らない** —— 直すのが先（配るものに、確かめていない層を混ぜない）。
 
 **★★ `release/*` はマージした瞬間に消える**（**2026-09-05 実測**）—— リポジトリの
 **`delete_branch_on_merge: true`** が head ブランチを自動削除する（**`--delete-branch` を

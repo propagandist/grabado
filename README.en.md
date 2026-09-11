@@ -229,6 +229,9 @@ a rate limit for repeated sends. Settings are in [`.env.example`](.env.example);
 - **The house rubric applies to `postgresql` only.** The other seven get the six generic checks
 - **There is no option to mask names before sending** (masking would leave nothing to judge)
 - **Nothing totals up what you have spent.** The server enforces limits (rate, request size), not a budget
+  - **Watch the cost in the Anthropic Console instead** — create a workspace for grabado and pass a key
+    created in it: **its usage and cost show up on their own**, and the workspace's **spend limits give
+    you a monthly cap and alerts** (workspaces are an organization feature)
 - Words from another language occasionally appear in the Japanese output (1 of 16, **measured 2026-08-24**)
 
 ## Designs are files, not rows in a database

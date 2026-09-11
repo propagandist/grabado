@@ -997,6 +997,12 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 [`AiProperties`](../server/src/main/kotlin/io/propagandist/grabado/config/GrabadoProperties.kt) の KDoc にある。
 **費用が自社負担**なので上限はサーバが持ち、クライアントの自己申告を上限にしない。
 
+**使った総額は数えない**（#181。2026-09-11 に決めた）。上の上限は**速さの上限**で、予算ではない。
+**総額と月の上限は Anthropic の Console が持つ** —— grabado 用のワークスペースを作ってそこのキーを
+渡せば、その分だけが Usage / Cost に出て、ワークスペースの Spend limits で月の上限と通知を置ける。
+道具の側で額を出すにはモデル別の単価表が要り、**書いた日から古くなる**（モデル名を焼き込まないのと
+同じ理由）。1 リクエストごとの使用量は `AnthropicSuggestionSource` がログに出す（費用の実測はそこから採る）。
+
 `?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」**∧ 実装がある**。
 **実装があっても使えないなら false**（5-7a と同じ）。**11-2b で
 [`AnthropicSuggestionSource`](../server/src/main/kotlin/io/propagandist/grabado/ai/AnthropicSuggestionSource.kt)

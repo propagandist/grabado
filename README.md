@@ -68,6 +68,19 @@ ER 設計ツールの多くは、設計そのものをツールの側（DB か S
 [`docs/TYPE-MAPPING.md`](docs/TYPE-MAPPING.md) —— **あの表は手で書いていない**。実装の出力と
 1 セルずつ突き合わせるテストが持っている。
 
+### 既定には意見がある
+
+**grabado の既定は、自社の設計規約そのもの**（PostgreSQL 18 を前提にしたもの）で、業界の標準では
+ない。**ほとんどは出発点で、作ったあとで変えられる。変えられないのは 2 つだけ。**
+
+| 既定 | 変えられるか |
+|---|---|
+| 新しいテーブルの初期列 —— `id uuid DEFAULT uuidv7()` と `created_at` / `updated_at`（`timestamptz NOT NULL DEFAULT now()`） | **変えられる**（作ったあとで列を消す・型を変える） |
+| キーの名前 —— `<table>_pkey` ／ `<table>_<cols>_key` ／ `idx_<table>_<cols>` | **変えられる**（キーに名前を付ければ、その名前を使う） |
+| テーブル名は snake_case ・複数形 | **強制しない**（単数形でも警告は出ない。指摘するのは任意の [AI レビュー](#ai-レビュー) だけ） |
+| **外部キーの名前 —— `fk_<table>_<column>`** | **変えられない**（設計ファイルに外部キーの名前を置く場所が無い） |
+| **PostgreSQL のパレットに `serial` / `char(n)` / `timestamp` / `money` / `json` が無い** | **変えられない**（代わりに identity ／ `text` ／ `timestamptz` ／ `numeric` ／ `jsonb`） |
+
 ## AI レビュー
 
 描いた設計を送ると、**規約に照らした指摘が返る**。任意の機能で、**自分の API キーで動かす**

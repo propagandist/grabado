@@ -77,6 +77,20 @@ export time, so the saved file is identical whichever profile you export to.
 and that table is not left to rot: a test reads it and compares every cell against what the
 implementation actually emits.
 
+### The defaults have opinions
+
+**grabado's defaults are the design conventions of the company that builds it** (written for
+PostgreSQL 18), not an industry standard. **Most of them are starting points you can change
+afterwards. Only two cannot be changed.**
+
+| Default | Can you change it? |
+|---|---|
+| Initial columns of a new table — `id uuid DEFAULT uuidv7()` plus `created_at` / `updated_at` (`timestamptz NOT NULL DEFAULT now()`) | **Yes** (delete the columns or change their types after creating the table) |
+| Key names — `<table>_pkey` / `<table>_<cols>_key` / `idx_<table>_<cols>` | **Yes** (give the key a name and that name is used) |
+| Table names in snake_case, plural | **Not enforced** (singular names raise no warning; only the optional [AI review](#ai-review) points them out) |
+| **Foreign key names — `fk_<table>_<column>`** | **No** (the design file has nowhere to store a foreign key name) |
+| **The PostgreSQL palette has no `serial` / `char(n)` / `timestamp` / `money` / `json`** | **No** (use identity / `text` / `timestamptz` / `numeric` / `jsonb` instead) |
+
 ## AI review
 
 Send the design you drew and **get back review comments checked against a rubric**. It is optional
@@ -215,6 +229,9 @@ a rate limit for repeated sends. Settings are in [`.env.example`](.env.example);
 - **The house rubric applies to `postgresql` only.** The other seven get the six generic checks
 - **There is no option to mask names before sending** (masking would leave nothing to judge)
 - **Nothing totals up what you have spent.** The server enforces limits (rate, request size), not a budget
+  - **Watch the cost in the Anthropic Console instead** — create a workspace for grabado and pass a key
+    created in it: **its usage and cost show up on their own**, and the workspace's **spend limits give
+    you a monthly cap and alerts** (workspaces are an organization feature)
 - Words from another language occasionally appear in the Japanese output (1 of 16, **measured 2026-08-24**)
 
 ## Designs are files, not rows in a database

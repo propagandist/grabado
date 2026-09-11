@@ -4,6 +4,7 @@ import io.propagandist.grabado.config.GrabadoProperties
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import tools.jackson.databind.JsonNode
+import java.io.InputStream
 
 /**
  * AI レビューの入口（段階11-2a）。契約は `docs/ARCHITECTURE.md` §8。
@@ -16,9 +17,14 @@ import tools.jackson.databind.JsonNode
  * ## 順序に意味がある
  *
  * ```
- * サイズ検査 -> ハッシュ -> キャッシュ引き -> （miss なら）形の検査 -> レート制限 -> 上流
+ * 使えるか -> 読む（上限 + 1 バイトまで）-> サイズ検査 -> ハッシュ -> キャッシュ引き
+ *   -> （miss なら）形の検査 -> レート制限 -> 上流
  * ```
  *
+ * - **使えるかが先** —— キー・モデル名・実装の有無だけで決まり、body を 1 バイトも要らない。
+ *   先に読むと、**AI を使っていないコンテナにも巨大な body がヒープに載る**（#273）
+ * - **読むのは上限 + 1 バイトまで** —— それだけ読めば「超えたか」は決まる。全部読んでから
+ *   測ると、上限はメモリを守らない（save の `DesignController` と同じ。#215）
  * - **サイズが先** —— 拒むための計算をいちばん安く済ませる
  * - **キャッシュが形の検査より先** —— 一度通った入力は同じバイト列なら必ず通る。
  *   壊れた入力は上流まで行かないのでキャッシュに入らず、次も同じ 400 になる
@@ -48,6 +54,21 @@ class AiReviewService(
     fun isConfigured(): Boolean = source != null && properties.ai.hasCredentials()
 
     /**
+     * HTTP の入口（#273）。**使えるかを見てから読み、読むのは上限 + 1 バイトまで**（クラス KDoc の順序）。
+     *
+     * **Content-Length は見ない** —— chunked 転送では付かないので、付いていないときに抜ける
+     * 判定になる。実際に読んだ量で決めれば経路によらない（`DesignController` と同じ）。
+     *
+     * @param input リクエストの body。**閉じるのは呼び手**
+     * @throws AiUnavailableException キー / モデル / 実装のどれかが無い（HTTP 403）。**1 バイトも読まない**
+     * @see review 読んだあとの検査と例外
+     */
+    fun review(input: InputStream): List<JsonNode> {
+        available()
+        return review(input.readNBytes(properties.ai.maxRequestBytes + 1))
+    }
+
+    /**
      * 設計を見て提案を返す。
      *
      * @param body 送られてきた生バイト（`aiRequestVersion: 1`）
@@ -58,10 +79,7 @@ class AiReviewService(
      * @throws AiUpstreamException 上流の失敗・タイムアウト（HTTP 503）
      */
     fun review(body: ByteArray): List<JsonNode> {
-        val upstream = source ?: throw AiUnavailableException()
-        if (!properties.ai.hasCredentials()) {
-            throw AiUnavailableException()
-        }
+        val upstream = available()
 
         AiRequestCheck.checkSize(body, properties.ai)
         val key = SuggestionCache.keyOf(body)
@@ -72,6 +90,10 @@ class AiReviewService(
         cache.put(key, suggestions)
         return suggestions
     }
+
+    /** 使えるなら上流を返し、使えなければ 403 相当で落とす。**body を見ない**（[isConfigured] と同じ判定）。 */
+    private fun available(): SuggestionSource =
+        source?.takeIf { properties.ai.hasCredentials() } ?: throw AiUnavailableException()
 }
 
 /**

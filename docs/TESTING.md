@@ -87,6 +87,10 @@ cd server && \
 **ORM 出力を実物の道具に通す**（issue #120）。**要 Docker ＋ ネットワーク** ——
 使い捨てコンテナに `kotlinc` / `prisma` / `drizzle-orm` を都度入れる（`devDependencies` は
 増やさない）。**`npm test` にも CI にも入らない。**
+**回すのは版を切るとき**（[`BRANCHING.md`](BRANCHING.md) の「リリース」。#251）。
+道具の版のうち **typescript と kotlin は本体から読む**（`package-lock.json` と
+`server/gradle/libs.versions.toml`）。**写しを持たない** —— 写していた時期に、Dependabot が
+本体だけ上げて 12 日ずれた。
 
 ```bash
 npm run test:orm-tools             # 3 本とも
@@ -1085,6 +1089,7 @@ server/src/test/kotlin/io/propagandist/grabado/
   api/ReadOnlyContractTest.kt   同じ表の serverMode: readonly（§5 段階5-3）
   ai/AiContractTest.kt          同じ表の serverMode: ai（§11 段階11-2a）
   ai/AiReviewServiceTest.kt     上限・キャッシュ・レート制限を HTTP なしで
+  ai/AiControllerTest.kt        body をどこまで読むか（使えないなら 0 バイト・上限 + 1 バイトまで。#273）
   ai/ReviewSchemaTest.kt        スキーマと js/io/ai/suggestion.ts の語彙を突き合わせる
   ai/AnthropicSuggestionSourceTest.kt 上流に出ずに済む部分（503 の三分岐・429 の写像・起動時の検査。#180）
   ai/AnthropicIntegrationTest.kt 実キーで 1 往復（opt-in。§11 段階11-2b）

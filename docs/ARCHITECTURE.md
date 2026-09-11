@@ -876,7 +876,7 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 | URL | **`POST /api/ai/review`**（`/backend/<name>/?action=` は使わない。`/api/` は §11 が始める） |
 | 入力 | **`aiRequestVersion: 1`**（§8.2）。**設計 JSON v2 ではない** —— 座標を持たず、型は SQL 名 |
 | 出力 | 提案の配列。**structured outputs（`output_config.format` の `json_schema`）でスキーマを強制**し、自由テキストをパースしない |
-| 403 | READONLY / `ANTHROPIC_API_KEY` 未設定 / `GRABADO_AI_MODEL` 未設定 |
+| 403 | READONLY / `ANTHROPIC_API_KEY` 未設定 / `GRABADO_AI_MODEL` 未設定。**body を 1 バイトも読まずに断る**（#273） |
 | 400 | 入力が壊れている・テーブル数が上限を超えた |
 | 413 | body のバイト数が上限を超えた（#250。save の上限と同じ status） |
 | 429 | 自分のレート制限、または上流の 429 |
@@ -986,7 +986,7 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 | `GRABADO_AI_MODEL` | **無し（必須）** | 未設定なら AI 無効。**既定を焼き込まない** —— 書いた瞬間に古くなる。選び方は[モデル一覧](https://platform.claude.com/docs/en/about-claude/models/overview)から引く |
 | `GRABADO_READONLY` | `false` | AI サービスの Bean を**そもそも登録しない**（5-3 と同じ形） |
 | `GRABADO_AI_MAX_TABLES` | `100` | 1 リクエストのテーブル数。超えたら **400**（**413 ではない** —— 大きすぎるのではなく、分割して送るべき上限。#250） |
-| `GRABADO_AI_MAX_REQUEST_BYTES` | `262144`（256 KiB） | body の大きさ。超えたら **413**（**パースの前に見る**。#250） |
+| `GRABADO_AI_MAX_REQUEST_BYTES` | `262144`（256 KiB） | body の大きさ。超えたら **413**（#250）。**判定は読み切る前**（上限 + 1 バイトまでしか読まない。#273 —— save の `GRABADO_MAX_DESIGN_BYTES` と同じ形） |
 | `GRABADO_AI_RATE_PER_MINUTE` | `10` | 1 分あたりの受付数。超えたら **429** |
 | `GRABADO_AI_MAX_CONCURRENT` | `2` | 同時に上流へ流す数。超えたら **429**（**待たせない**） |
 | `GRABADO_AI_CACHE_ENTRIES` / `GRABADO_AI_CACHE_TTL` | `64` / `1h` | 結果キャッシュ（§8.5） |
@@ -996,6 +996,12 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 **上限の既定値は実測ではなく判断**で、根拠は
 [`AiProperties`](../server/src/main/kotlin/io/propagandist/grabado/config/GrabadoProperties.kt) の KDoc にある。
 **費用が自社負担**なので上限はサーバが持ち、クライアントの自己申告を上限にしない。
+
+**使った総額は数えない**（#181。2026-09-11 に決めた）。上の上限は**速さの上限**で、予算ではない。
+**総額と月の上限は Anthropic の Console が持つ** —— grabado 用のワークスペースを作ってそこのキーを
+渡せば、その分だけが Usage / Cost に出て、ワークスペースの Spend limits で月の上限と通知を置ける。
+道具の側で額を出すにはモデル別の単価表が要り、**書いた日から古くなる**（モデル名を焼き込まないのと
+同じ理由）。1 リクエストごとの使用量は `AnthropicSuggestionSource` がログに出す（費用の実測はそこから採る）。
 
 `?action=capabilities` の `ai` は「キー設定済み ∧ モデル設定済み ∧ `!READONLY`」**∧ 実装がある**。
 **実装があっても使えないなら false**（5-7a と同じ）。**11-2b で

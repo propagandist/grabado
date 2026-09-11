@@ -71,6 +71,11 @@ on:
       - 'server/build.gradle.kts'
       - '.github/workflows/ci-server.yml'
       - '.github/workflows/ci-frontend.yml'
+      # orm-tools.test.ts の入力（issue #251）。tests/orm-tools/cases.ts が kotlin の版を
+      # この toml から読む（写しを持たない）。toml の形が変わって読めなくなれば落ちる ——
+      # 外すと、toml を触る PR でこの検査が走らない（typescript 側の入力は
+      # package-lock.json で、上に既にある）。
+      - 'server/gradle/libs.versions.toml'
 
 # 既定に頼らず最小を明示する。checkout してテストを回すだけなら write は要らない。
 permissions:

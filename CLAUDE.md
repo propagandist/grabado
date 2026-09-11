@@ -4,7 +4,7 @@
 
 **目的 = 会社のブランディングとして無料公開する OSS**（収益化しない）＋ **自社でも使う**。
 **社内ツールではない。** house 標準（Kotlin/Spring Boot + PostgreSQL 18 DDL）へ寄せ、**Docker で各自ローカル稼働**、**設計データは git 管理の JSON ファイルを正本**とする。
-根拠は `HANDOVER.md`（設計判断の確定版。**元の記述は残し、実態との差は各節の注記で足してある** —— **2026-09-11 に入れ終えた**。#182）。**★ 2026-08-15 に挙げた齟齬で残るのは §6.2/§6.3 の house 規約だけ**（公開ユーザーに強制するか。**#183 で判断待ち**）。一覧と判定の経緯は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
+根拠は `HANDOVER.md`（設計判断の確定版。**元の記述は残し、実態との差は各節の注記で足してある** —— **2026-09-11 に入れ終えた**。#182）。**★ 2026-08-15 に挙げた齟齬は、2026-09-11 に全部閉じた**（最後の §6.2/§6.3 は #183 で案 A —— 意見のある既定）。一覧と判定の経緯は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
 
 ## プロジェクト概要
 - **配置**（**2026-08-27。段階2-6 で集約**）: フロントの実体は **`frontend/`**（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/`）、backend は **`server/`**。**`package.json` と `tests/` は root のまま** —— `tests/contract/` は backend と共有し、`tests/image/` は root の `compose.yaml` を叩くため（#107）。**vite の root は `frontend/`、出力は `frontend/dist/`。URL 空間は集約の前後で 1 バイトも変わっていない。**
@@ -40,6 +40,9 @@
 - テーブル名: snake_case・複数形。監査列 `created_at`/`updated_at` = `timestamptz NOT NULL DEFAULT now()`。
 - 型: `text` 優先、`timestamptz` 固定、`jsonb`（not json）、`numeric`（not money）。`serial`/`char(n)`/`timestamp`/`money`/`json` はパレットから外す。enum=参照テーブル/CHECK 既定。
 - 命名: `fk_<table>_<ref>` / `idx_<table>_<cols>`。
+- **★ 公開ユーザーにも同じ既定を当てる**（**2026-09-11**。#183。案 A —— 意見のある既定）。
+  **変えられないのは FK の名前と PG のパレットの 2 点だけ**で、雛形とキーの名前は出発点、
+  単数形は警告しない。利用者向けの説明は README の「既定には意見がある」、再考の条件は `CUSTOMIZATIONS.md` の同日
 
 ## 着手前の必須確認
 - パス・action 名・レスポンス形式は未検証。現行 backend を `php -S localhost:8000` で起動し実通信を確認、差分を `CUSTOMIZATIONS.md` に記録してから実装。

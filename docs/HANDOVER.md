@@ -5,6 +5,14 @@
 > 設計判断の確定版。実装は `CLAUDE.md` の運用ルールに従い Claude Code が進める。
 > 由来は `ondras/wwwsqldesigner`。house 標準（Kotlin/Spring Boot + PostgreSQL 18 の DDL 生成）へ寄せ、**Docker イメージで各自ローカル稼働**、**設計データは git 管理の JSON ファイルを正本**とする。旧版の「PHP 維持・非移行・ビルド不要・共有サーバ＋外部 PG」前提は**撤廃済み**。
 
+> **注記（2026-09-11 / issue #182）**: **本書には目的が書かれていなかった。** grabado は
+> **会社のブランディングとして無料公開する OSS**（収益化しない）で、**同時に自社でも使う道具**。
+> 「各自ローカル稼働」は**編集の主経路**として今も正しいが、それだけではない ——
+> **同じイメージを公開ユーザーにも配り**（`ghcr.io/propagandist/grabado`。v0.2.0 から）、
+> **公開デモ `https://grabado.dev/`（READONLY）を常設している**（2026-08-31 から）。
+> **判断の正は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の「2026-08-15 プロジェクトの目的を
+> 記録する」**（HANDOVER = 入口 / CUSTOMIZATIONS = 正）。**すぐ上の引用は着手時の要件のまま。**
+
 ---
 
 ## 0. 最初のタスク（他に優先・順序厳守）
@@ -25,8 +33,13 @@
 
 ### 到達点
 - **配布**: Docker イメージ。各エンジニアが手元で `docker run`（または compose）。共有サーバ常設は主経路ではない。
+  （**注記（2026-09-11 / issue #182）**: **共有サーバは常設になった** —— 公開デモ `https://grabado.dev/`。
+  ただし READONLY で、保存も introspection も AI も止めてある。**編集の主経路が手元の `docker run` で
+  あることは変わらない**。詳しくは冒頭の注記。**この 1 行は着手時の要件のまま**）
 - **設計データの正本**: **git 管理の JSON ファイル**（例 `schema/<name>.json`）。共有・レビュー・履歴は PR / git log。
 - **編集ストア**: **DB レス**。編集中状態はブラウザ内メモリ／IndexedDB。app 単一コンテナ＋mount で最軽量（既定で PG コンテナを持たない）。
+  （**2026-09-11 に「IndexedDB」を訂正した** —— 実装されなかった。ブラウザに残す手段は
+  `localStorage` 1 本で、手動のボタンだけ。issue #211。判断は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の同日）
 - **backend**: Kotlin + Spring Boot。save/load をマウント済みファイルの I/O として実装。introspection と AI proxy を担う。
 - **frontend**: 完全 TypeScript 化（Vite / strict）。描画エンジンは温存し model/IO/DDL 層を型付きで巻く（Tier 2）。UI framework 全面移行は今回スコープ外。
 - **Railway**: 任意・従。同一イメージを読み取り専用ビューアとして立てられる（§2.3）。編集の正本にはしない。
@@ -149,6 +162,14 @@ ENTRYPOINT ["java","-jar","app.jar"]
 ## 6. 機能カスタマイズ（確定）
 
 ### 6.1 PostgreSQL 18 型パレット
+
+> **注記（2026-09-11 / issue #182）**: **このパレットは既定のもので、対応 DB は 8 本ある**
+> （`postgresql` / `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`）。
+> **設計は PG18 の型で描き、出力の直前に他 7 本の型へ写す** —— 保存されるファイルは、どの DB 向けに
+> 出しても同じ。型ごとの写り方は [`TYPE-MAPPING.md`](TYPE-MAPPING.md)（手で書いた表ではなく、
+> テストが実装の出力と 1 セルずつ突き合わせている）。**決定は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)
+> の段階6-0**。**以下の 3 行は着手時の要件のまま。**
+
 追加・維持: `uuid`（既定 `uuidv7()`／露出用 `gen_random_uuid()`＝v4）、`bigint GENERATED ALWAYS AS IDENTITY`、`text`（原則。制約実在時のみ `varchar(n)`）、`timestamptz`/`date`/`time`/`interval`、`boolean`、`integer`/`smallint`/`bigint`、`numeric(p,s)`、`jsonb`、`type[]`、`bytea`、（必要時）`inet`/`cidr`、生成列。
 外す・非推奨: `money`→`numeric`、`timestamp`→`timestamptz`、`char(n)`→`text`、`serial`/`bigserial`→identity、`json`→`jsonb`。
 enum: 参照テーブル/CHECK 既定、native enum は例外。
@@ -176,12 +197,24 @@ enum: 参照テーブル/CHECK 既定、native enum は例外。
 
 ## 8. 自社差分の分離とドキュメント台帳
 
+> **注記（2026-09-11 / issue #182）**: **公開向けの文書が加わった。** 利用者の入口は
+> [`../README.md`](../README.md)（日本語）と [`../README.en.md`](../README.en.md)（英語）で、
+> **文書の一覧は README の「文書」の節が持つ**（ここに写さない —— 1 本増えた日に古くなる）。
+> 下の 2 本は今もあり、役割も変わっていない。**以下の 2 行は着手時の要件のまま。**
+
 - カスタマイズは core に埋め込まず独立ファイルへ（`db/*.custom.xml`、`io/serializer.ts`、export 規約、AI モジュール等）。
 - `ARCHITECTURE.md`（現行の作り＋新アーキテクチャ対応図）と `CUSTOMIZATIONS.md`（差分台帳）をフォーク直後に配置。
 
 ---
 
 ## 9. 実装順序
+
+> **注記（2026-09-11 / issue #182）**: **9 項目はすべて閉じた**（最後は 9 の §6.4。issue #118、
+> 2026-08-28）。8 の後半（Railway の読み取り専用ビューア）だけは段階の外で、公開デモとして
+> issue #84 が 2026-08-31 に立てた。**以後の作業は `段階N-M` に属さず、版（マイルストーン）で
+> 束ねている**（issue #141 / #174）—— **次に何をするかは GitHub の Issues とマイルストーンを見る。**
+> 節を消さないのは、[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階番号がこの順序を指しているため。
+> **以下は着手時の順序のまま。**
 
 1. §0 現物確認 → `ARCHITECTURE.md`/`CUSTOMIZATIONS.md` 初版。
 2. §7 特性化テストを緑化。
@@ -196,6 +229,11 @@ enum: 参照テーブル/CHECK 既定、native enum は例外。
 ---
 
 ## 10. 確定事項
+
+> **注記（2026-09-11 / issue #182）**: **確定事項に目的が無かった。** 目的は冒頭の注記のとおり
+> （**無料公開の OSS ＋ 自社でも使う**）で、確定したのは [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)
+> の「2026-08-15 プロジェクトの目的を記録する」。**「Railway=任意」の行は 2026-08-30 に外れた** ——
+> 公開デモの置き場所として決まった（§2.3 の注記）。**以下の 10 行は着手時の確定事項のまま。**
 
 - [x] 配布=Docker、各自ローカル稼働、**DB レス既定**（app 単一コンテナ＋mount）
 - [x] 設計データ正本=**git 管理の JSON ファイル**、共有=PR
@@ -247,4 +285,12 @@ enum: 参照テーブル/CHECK 既定、native enum は例外。
 - テスト: **LLM 呼び出しはモック**。固定提案 JSON → 適用 → モデル差分、を決定論的に検証。特性化テストの規律を崩さない。
 
 ### 11.5 プライバシー
+
+> **注記（2026-09-11 / issue #182）**: **既定挙動は段階11-0 で確定した** —— 匿名化せず素のまま送り、
+> 送る前にそのバイト列を見せる（§11 冒頭の注記）。**公開デモでは AI が動かない** ——
+> `READONLY=true` のとき AI の Bean は登録されず、`POST /api/ai/review` は 403、
+> `?action=capabilities` の `ai` は false で、**ボタンも押せない**。API の費用が自社負担になるためで、
+> 判断は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の「2026-08-15 プロジェクトの目的を記録する」。
+> **以下の 1 行は着手時の要件のまま。**
+
 - スキーマ（テーブル名・カラム名）が API に送られる。機微なドメインモデルを扱う場合の選択肢として、送信前の匿名化オプション／機能のオプトイン制を設計に残す。既定挙動は着手時に確定。

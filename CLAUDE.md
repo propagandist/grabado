@@ -4,14 +4,17 @@
 
 **目的 = 会社のブランディングとして無料公開する OSS**（収益化しない）＋ **自社でも使う**。
 **社内ツールではない。** house 標準（Kotlin/Spring Boot + PostgreSQL 18 DDL）へ寄せ、**Docker で各自ローカル稼働**、**設計データは git 管理の JSON ファイルを正本**とする。
-根拠は `HANDOVER.md`。ただし **HANDOVER は社内版前提のまま**（§2 配布・§2.3 Railway・§6.2/§6.3 の house 規約・§8 ドキュメント）。齟齬の一覧は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
+根拠は `HANDOVER.md`（設計判断の確定版。**元の記述は残し、実態との差は各節の注記で足してある** —— **2026-09-11 に入れ終えた**。#182）。**★ 2026-08-15 に挙げた齟齬で残るのは §6.2/§6.3 の house 規約だけ**（公開ユーザーに強制するか。**#183 で判断待ち**）。一覧と判定の経緯は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
 
 ## プロジェクト概要
 - **配置**（**2026-08-27。段階2-6 で集約**）: フロントの実体は **`frontend/`**（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/`）、backend は **`server/`**。**`package.json` と `tests/` は root のまま** —— `tests/contract/` は backend と共有し、`tests/image/` は root の `compose.yaml` を叩くため（#107）。**vite の root は `frontend/`、出力は `frontend/dist/`。URL 空間は集約の前後で 1 バイトも変わっていない。**
 - **座標**（**2026-08-27。#109**）: ルートパッケージは **`io.propagandist.grabado`**（サブは `.api` `.ai` `.config` `.design` `.introspect`）、Gradle の `group` も同じ。**製品ドメインの逆順（`dev.grabado`）から会社の名前空間へ移した。** ★ **grabado 固有の識別子は据え置き** —— `grabado.jar` ／ `GRABADO_*` env ／ `rootProject.name = "grabado-server"` ／ `@ConfigurationProperties("grabado")` ／ `GrabadoApplication`・`GrabadoProperties`。**これらは外向きの契約**で、パッケージとは別の軸。
 - frontend: 描画エンジンを温存しつつ**完全 TypeScript 化**（Vite / strict）。
 - backend: PHP を廃し **Kotlin/Spring Boot**。save/load は**マウント済みファイルの I/O**、introspection は `information_schema`→JSON、AI proxy を提供。
-- 正本: **git 管理の JSON ファイル**（`/data/schema` に mount）。共有は PR。編集ストアは **DB レス**（ブラウザ内 / IndexedDB）。
+- 正本: **git 管理の JSON ファイル**（`/data/schema` に mount）。共有は PR。編集ストアは **DB レス**（ブラウザ内）。**★ ブラウザに残す手段は `localStorage` 1 本で、手動のボタンだけ**（**2026-09-11 実測**。#211）—— **自動保存は無い**。1 本あたり **2,621,440 文字**（`json.length`）に達すると保存を拒む（`frontend/js/io.ts` の `clientlocalsave`）
+  - **訂正の元**: **元は「ブラウザ内 / IndexedDB」だった。消さずに残す** —— `indexedDB` の実装は
+    `frontend/` ／ `server/` ／ `tests/` のどこにも 1 行も無い（同日実測）。**HANDOVER §1 の到達点を
+    2026-08-09 に写したもので、実装されないまま 33 日残っていた**（HANDOVER の側にも同日の注記がある）
 - 配布: マルチステージ Docker（フロント dist を Spring Boot static に同梱）。app 単一コンテナ＋mount。
 - **対応 DB は 8 本**: `postgresql`（house 標準）/ `mysql` / `mariadb` / `mssql` / `oracle` / `sqlite` / `h2` / `sql-standard`。`cubrid` / `vfp9` / `web2py` / `sqlalchemy` は撤去（6-1）。決定は `CUSTOMIZATIONS.md` の段階6-0。
 - 公開デモ（grabado.dev）は **`READONLY=true` 一択** — AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。編集体験はブラウザ内ストアで成立する。

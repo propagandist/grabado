@@ -1086,6 +1086,7 @@ server/src/test/kotlin/io/propagandist/grabado/
   ai/AiContractTest.kt          同じ表の serverMode: ai（§11 段階11-2a）
   ai/AiReviewServiceTest.kt     上限・キャッシュ・レート制限を HTTP なしで
   ai/ReviewSchemaTest.kt        スキーマと js/io/ai/suggestion.ts の語彙を突き合わせる
+  ai/AnthropicSuggestionSourceTest.kt 上流に出ずに済む部分（503 の三分岐・429 の写像・起動時の検査。#180）
   ai/AnthropicIntegrationTest.kt 実キーで 1 往復（opt-in。§11 段階11-2b）
   design/DesignNameTest.kt      keyword の検証規則（純粋な表テスト）
   design/FileDesignStoreTest.kt 実 FS への I/O（@TempDir）
@@ -1141,6 +1142,20 @@ URL 往復と `%2F` の扱いが含まれ、どちらもサーブレットコン
 **なぜ両方要るか。** スキーマ側だけだと「Claude はこのスキーマを受け付けるはずだ」という
 **我々の信念を符号化したもの**でしかなく、信念が間違っていれば全部緑のまま本番が 400 になる
 （`PostgresCatalogIntegrationTest` が書いている構図と同じ）。逆に実 API 側だけだと CI で回せない。
+
+**上流に出ない層もある**（#180。**既定で走る**）—— `ai/AnthropicSuggestionSourceTest.kt`。
+実 API 側は**正常系しか踏まない**ので、「そう作った」ことが判断の中心なのに通っていなかった
+3 つをここが持つ: **応答から提案を取り出せなければ 503**（本文が無い ／ JSON でない ／
+`suggestions` が配列でない）・**上流の 429 は自分の 429、それ以外は 503**・**`effort` が不正なら
+起動しない**。
+
+- **`Message` は API の応答と同じ JSON から組む**（SDK の `jsonMapper()`）。builder は必須が
+  8 つ（`usage` がさらに 9 つ）あり、**SDK の版が上がって必須が増えるたびにテストだけが壊れる**
+- **起動しないことは `ApplicationContextRunner` で見る** —— Web サーバも他の Bean も起こさず、
+  `grabado.ai.effort` が `@ConfigurationProperties` の束縛を通って Bean に届く経路だけを通す。
+  **正しい値では起動する**ことも同じ文脈で見て、「何を渡しても落ちる」で緑にならないようにしてある
+- **main を 3 か所わざと壊すと、対応する 3 本だけが赤になる**（2026-09-11 実測。429 を 503 に倒す ／
+  配列の検査を外す ／ 不正な `effort` を黙って既定に落とす）
 
 **さらにもう 1 層ある** —— `tests/server/ai-e2e.spec.ts`（§11 段階11-5。opt-in）。
 ブラウザ（実 XHR）→ Vite dev proxy → Kotlin → Anthropic を通しで動かす唯一の場所で、

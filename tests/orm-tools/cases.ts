@@ -11,6 +11,46 @@
  *   規則であって一覧ではない —— `empty` の出力規則が変わった日に、書いた一覧は黙って腐る。
  */
 
+import { readFileSync } from "node:fs";
+
+/**
+ * 本体の版を読む（#251）。**道具の版のうち、本体にあるものは写さない。**
+ *
+ * ★ 写していた時期がある —— `typescript` は #131（2026-08-30。Dependabot）で本体だけ
+ *   5.9.3 -> 7.0.2 に上がり、**ここの写しは 12 日 5.9.3 のままだった**。Dependabot は本体を
+ *   上げても、この表の文字列までは直さない。**そしてこの層は手元でしか回らないので、
+ *   ずれは回した日にしか見えない。** 読めば、ずれそのものが起きない。
+ *
+ * ★ 写しを残して「揃っているか」をテストで見る形（`toolchain.test.ts` が Node / JDK でやっている）
+ *   は採らない —— あれは**本体を読めない場所**（Dockerfile ・ CI の yml）のための形。ここは読める。
+ *
+ * **読めなければ例外にする**（黙って古い版で回さない）。`tests/node/orm-tools.test.ts` が
+ * このファイルを import するので、**本体の形が変わって読めなくなったら `npm test` が落ちる**。
+ */
+export const repoVersion = Object.freeze({
+    typescript(): string {
+        const lock = JSON.parse(repoFile("package-lock.json")) as {
+            packages?: Record<string, { version?: string }>;
+        };
+        const version = lock.packages?.["node_modules/typescript"]?.version;
+        if (!version) {
+            throw new Error("package-lock.json に node_modules/typescript の版が無い");
+        }
+        return version;
+    },
+    kotlin(): string {
+        const version = /^kotlin\s*=\s*"([^"]+)"/m.exec(repoFile("server/gradle/libs.versions.toml"))?.[1];
+        if (!version) {
+            throw new Error("server/gradle/libs.versions.toml に kotlin の版が無い");
+        }
+        return version;
+    },
+});
+
+function repoFile(rel: string): string {
+    return readFileSync(new URL("../../" + rel, import.meta.url), "utf8");
+}
+
 /** 道具 1 つぶん。`target` は `tests/golden/orm/<target>/` のディレクトリ名 */
 export interface ToolSpec {
     readonly target: string;
@@ -39,8 +79,8 @@ export const TOOLS: readonly ToolSpec[] = Object.freeze([
         image: "eclipse-temurin:25-jdk",
         what: "Kotlin コンパイラが受け付けるか（jakarta.persistence を classpath に置く）",
         versions: Object.freeze({
-            /* server/gradle/libs.versions.toml の kotlin と揃える（Gradle は通さない） */
-            kotlin: "2.4.10",
+            /* server の kotlin を読む（Gradle は通さない）。写しを持たない —— repoVersion の KDoc */
+            kotlin: repoVersion.kotlin(),
             /* Spring Boot 4.1.1 = Jakarta EE 11 の世代 */
             "jakarta.persistence-api": "3.2.0",
         }),
@@ -57,8 +97,8 @@ export const TOOLS: readonly ToolSpec[] = Object.freeze([
         what: "drizzle-orm の型定義に照らして tsc --strict が通るか",
         versions: Object.freeze({
             "drizzle-orm": "0.45.2",
-            /* repo の typescript と揃える（TS を 2 種類走らせない） */
-            typescript: "5.9.3",
+            /* repo の typescript を読む（TS を 2 種類走らせない）。写しを持たない —— repoVersion の KDoc */
+            typescript: repoVersion.typescript(),
         }),
     },
 ]);

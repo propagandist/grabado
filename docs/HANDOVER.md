@@ -175,10 +175,24 @@ ENTRYPOINT ["java","-jar","app.jar"]
 enum: 参照テーブル/CHECK 既定、native enum は例外。
 
 ### 6.2 初期テーブルテンプレート
+
+> **注記（2026-09-11 / issue #183）**: **公開ユーザーにも、この雛形を既定として当てる**（案 A ——
+> 意見のある既定）。**雛形は出発点**で、新しいテーブルを作ったあとで列を消せるし型も変えられる。
+> 8 プロファイルとも `db/<db>/datatypes.xml` の `<template>` が持つ。**判断は
+> [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の同日。以下の 2 行は着手時の要件のまま。**
+
 - 既定 `id uuid PRIMARY KEY DEFAULT uuidv7()`（例外1: 外部露出=`gen_random_uuid()`／例外2: 完全内部=`bigint identity`）。
 - `created_at`/`updated_at` = `timestamptz NOT NULL DEFAULT now()`。
 
 ### 6.3 SQL エクスポート規約
+
+> **注記（2026-09-11 / issue #183）**: **公開ユーザーにも同じ規約を既定として当てる**（案 A）。
+> **強制に近いのは FK の名前だけ** —— `fk_<table>_<ref>` の `<ref>` は参照元の列名で（段階6-5b）、
+> 設計ファイルに FK の名前を置く場所が無いので変えられない。index ・ PK ・ UNIQUE は、キーに名前を
+> 付ければそれを使う。**snake_case ・複数形は警告しない**（指摘するのは任意の AI レビューだけ）。
+> 利用者向けの説明は [`../README.md`](../README.md) の「既定には意見がある」。
+> **以下の 2 行は着手時の要件のまま。**
+
 - snake_case、テーブル名は複数形（予約語回避／単数形化時は予約語ポリシーを台帳に明記）。
 - FK `fk_<table>_<ref>`、index `idx_<table>_<cols>`、監査カラム込み。
 

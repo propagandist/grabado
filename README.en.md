@@ -77,6 +77,20 @@ export time, so the saved file is identical whichever profile you export to.
 and that table is not left to rot: a test reads it and compares every cell against what the
 implementation actually emits.
 
+### The defaults have opinions
+
+**grabado's defaults are the design conventions of the company that builds it** (written for
+PostgreSQL 18), not an industry standard. **Most of them are starting points you can change
+afterwards. Only two cannot be changed.**
+
+| Default | Can you change it? |
+|---|---|
+| Initial columns of a new table — `id uuid DEFAULT uuidv7()` plus `created_at` / `updated_at` (`timestamptz NOT NULL DEFAULT now()`) | **Yes** (delete the columns or change their types after creating the table) |
+| Key names — `<table>_pkey` / `<table>_<cols>_key` / `idx_<table>_<cols>` | **Yes** (give the key a name and that name is used) |
+| Table names in snake_case, plural | **Not enforced** (singular names raise no warning; only the optional [AI review](#ai-review) points them out) |
+| **Foreign key names — `fk_<table>_<column>`** | **No** (the design file has nowhere to store a foreign key name) |
+| **The PostgreSQL palette has no `serial` / `char(n)` / `timestamp` / `money` / `json`** | **No** (use identity / `text` / `timestamptz` / `numeric` / `jsonb` instead) |
+
 ## AI review
 
 Send the design you drew and **get back review comments checked against a rubric**. It is optional

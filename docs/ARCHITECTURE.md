@@ -876,7 +876,7 @@ backend を起こしていなければ ECONNREFUSED になるだけで、5-1b �
 | URL | **`POST /api/ai/review`**（`/backend/<name>/?action=` は使わない。`/api/` は §11 が始める） |
 | 入力 | **`aiRequestVersion: 1`**（§8.2）。**設計 JSON v2 ではない** —— 座標を持たず、型は SQL 名 |
 | 出力 | 提案の配列。**structured outputs（`output_config.format` の `json_schema`）でスキーマを強制**し、自由テキストをパースしない |
-| 403 | READONLY / `ANTHROPIC_API_KEY` 未設定 / `GRABADO_AI_MODEL` 未設定 |
+| 403 | READONLY / `ANTHROPIC_API_KEY` 未設定 / `GRABADO_AI_MODEL` 未設定。**body を 1 バイトも読まずに断る**（#273） |
 | 400 | 入力が壊れている・テーブル数が上限を超えた |
 | 413 | body のバイト数が上限を超えた（#250。save の上限と同じ status） |
 | 429 | 自分のレート制限、または上流の 429 |
@@ -986,7 +986,7 @@ grabado に undo は無いが、**気に入らなければ保存せず読み直�
 | `GRABADO_AI_MODEL` | **無し（必須）** | 未設定なら AI 無効。**既定を焼き込まない** —— 書いた瞬間に古くなる。選び方は[モデル一覧](https://platform.claude.com/docs/en/about-claude/models/overview)から引く |
 | `GRABADO_READONLY` | `false` | AI サービスの Bean を**そもそも登録しない**（5-3 と同じ形） |
 | `GRABADO_AI_MAX_TABLES` | `100` | 1 リクエストのテーブル数。超えたら **400**（**413 ではない** —— 大きすぎるのではなく、分割して送るべき上限。#250） |
-| `GRABADO_AI_MAX_REQUEST_BYTES` | `262144`（256 KiB） | body の大きさ。超えたら **413**（**パースの前に見る**。#250） |
+| `GRABADO_AI_MAX_REQUEST_BYTES` | `262144`（256 KiB） | body の大きさ。超えたら **413**（#250）。**判定は読み切る前**（上限 + 1 バイトまでしか読まない。#273 —— save の `GRABADO_MAX_DESIGN_BYTES` と同じ形） |
 | `GRABADO_AI_RATE_PER_MINUTE` | `10` | 1 分あたりの受付数。超えたら **429** |
 | `GRABADO_AI_MAX_CONCURRENT` | `2` | 同時に上流へ流す数。超えたら **429**（**待たせない**） |
 | `GRABADO_AI_CACHE_ENTRIES` / `GRABADO_AI_CACHE_TTL` | `64` / `1h` | 結果キャッシュ（§8.5） |

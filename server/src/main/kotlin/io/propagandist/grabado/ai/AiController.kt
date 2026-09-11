@@ -27,6 +27,10 @@ import tools.jackson.databind.JsonNode
  *   （生バイトをそのまま受ける）と実装が一致する。再発防止として、契約表に
  *   `contentType` つきのケースを足してある。
  *
+ * ★ **読むのは [AiReviewService]。ここでは読まない**（#273）。以前はここで `readAllBytes()` し、
+ *   **使えるかを見る前に body を全部ヒープに載せていた** —— キーを渡していないコンテナでも。
+ *   いまは「使えるか → 上限 + 1 バイトまで読む」の順で、読む量は `AiControllerTest` が数えている。
+ *
  * ★ **429 は §5 の語彙に無い新しい status。** 11-2a では `js/io.ts` の `check()` を広げなかった
  *   —— `ApiExceptionHandler` の KDoc は「status を増やす PR では `check()` と `locale` を同じ
  *   PR で広げること」と書いているが、**当時はフロントがこの URL を 1 度も呼ばず、429 が
@@ -56,9 +60,10 @@ class AiController(
     @PostMapping("/review")
     fun review(request: HttpServletRequest): ResponseEntity<List<JsonNode>> {
         val upstream = service ?: throw AiUnavailableException()
-        val body = request.inputStream.use { it.readAllBytes() }
+        /* 読むのはサービス —— 使えるかを見てから、上限 + 1 バイトまで（#273） */
+        val suggestions = request.inputStream.use { upstream.review(it) }
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_JSON)
-            .body(upstream.review(body))
+            .body(suggestions)
     }
 }

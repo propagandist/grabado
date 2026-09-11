@@ -68,17 +68,26 @@ class AnthropicSuggestionSource(
     }
 
     override fun review(request: JsonNode): List<JsonNode> {
-        val message = try {
-            client.messages().create(params(request))
-        } catch (e: RateLimitException) {
-            /* 上流の 429 は自分の 429 に写す（503 に倒さない） */
-            throw AiRateLimitedException("上流のレート制限（${e.javaClass.simpleName}）")
-        } catch (e: Exception) {
-            throw AiUpstreamException(e)
-        }
+        val message = callUpstream { client.messages().create(params(request)) }
 
         report(message)
         return extract(message)
+    }
+
+    /**
+     * 上流を 1 回呼び、SDK の例外を自分の例外に写す（クラス KDoc の「例外の写像」）。
+     *
+     * **`internal` なのはテストのため**（#180）—— 呼び口を渡せば、上流に出ずに写像だけを
+     * 確かめられる。中身は [review] に直書きしていた try/catch そのままで、`params` の組み立てと
+     * クライアントの生成（`by lazy`）も従来どおり try の内側で起きる。
+     */
+    internal fun callUpstream(create: () -> Message): Message = try {
+        create()
+    } catch (e: RateLimitException) {
+        /* 上流の 429 は自分の 429 に写す（503 に倒さない） */
+        throw AiRateLimitedException("上流のレート制限（${e.javaClass.simpleName}）")
+    } catch (e: Exception) {
+        throw AiUpstreamException(e)
     }
 
     private fun params(request: JsonNode): MessageCreateParams {
@@ -128,8 +137,10 @@ class AnthropicSuggestionSource(
      * structured outputs が効いているので text ブロックは**スキーマに拘束された JSON**。
      * それでも読めなければ 503 にする —— `refusal`（安全上の拒否）と `max_tokens`（途中で
      * 切れた）はスキーマに従わないことがあり、**そのときは「提案が得られなかった」が正しい**。
+     *
+     * **`internal` なのはテストのため**（#180）。応答オブジェクトを渡せば動くので、上流は要らない。
      */
-    private fun extract(message: Message): List<JsonNode> {
+    internal fun extract(message: Message): List<JsonNode> {
         val text = message.content()
             .mapNotNull { block -> block.text().orElse(null)?.text() }
             .joinToString("")

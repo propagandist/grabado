@@ -50,6 +50,13 @@ import "../js/io.ts";
 import "../js/tablemanager.ts";
 import "../js/rowmanager.ts";
 import "../js/keymanager.ts";
+/*
+ * #288 で新設した履歴の層（undo / redo）。history.ts は import が 0 本なので順序の制約は
+ * 無いが、唯一の消費者である historymanager.ts の直前に置く。historymanager.ts は
+ * io/ と js/ のどちらにも値依存しない（extract / apply / validate はこの上で読まれている）。
+ */
+import "../js/history.ts";
+import "../js/historymanager.ts";
 import "../js/window.ts";
 import "../js/options.ts";
 import "../js/wwwsqldesigner.ts";

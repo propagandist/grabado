@@ -53,4 +53,28 @@ describe("読み込み後の状態 特性化（Node / jsdom）", () => {
 
         expect(second).toBe(first);
     });
+
+    /*
+     * grabado: #288。**undo の復元は読み込みと同じ経路**（clearTables() ->
+     * applyDesignModel()）なので、上の冪等テストと同じ形で押さえられる。
+     *
+     * ★ **選択も展開も採らない状態で見る。** DesignModel はどちらも持たないので
+     *   （js/io/extract.ts）、選択したまま undo すると captureState() は割れる ——
+     *   それは仕様（戻らないものとして記録してある）で、テストが見るのは設計の側。
+     */
+    test("編集して undo すると、状態が編集前と一致する（#288）", () => {
+        h.useDatatypes(SERIALIZER_DB);
+        h.loadFixture(readFixture(SERIALIZER_DB, "relations"));
+        const history = h.designer.historyManager;
+        history.reset();
+        const before = h.captureState();
+
+        h.designer.addTable("extra", 500, 500);
+        history.commit();
+        expect(h.captureState()).not.toBe(before);
+
+        history.undo();
+
+        expect(h.captureState()).toBe(before);
+    });
 });

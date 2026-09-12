@@ -129,6 +129,12 @@ export class RowManager {
         r2.update({ type: this.owner.palette.fkIndexFor(r1.data.type) });
         r2.update({ ai: false });
         this.owner.addRelation(r1, r2);
+        /*
+         * grabado: #288。**1 クリックで addRow ＋ update ×2 ＋ addRelation の 4 変更**が
+         * 起きるので、モデルを触る側ではなくここで 1 手にする。creating でなければ
+         * 上で return しているので、ここは関係が張られた後。
+         */
+        this.owner.historyManager.commit();
     }
 
     rowClick(e: { target: unknown; data: unknown }): void {
@@ -145,6 +151,8 @@ export class RowManager {
         }
 
         this.owner.addRelation(r1, r2);
+        /* grabado: #288 */
+        this.owner.historyManager.commit();
     }
 
     foreigncreate(e?: Event): void {
@@ -180,6 +188,8 @@ export class RowManager {
             }
         }
         this.redraw();
+        /* grabado: #288 */
+        this.owner.historyManager.commit();
     }
 
     endCreate(): void {
@@ -195,11 +205,19 @@ export class RowManager {
     up(e?: Event): void {
         (this.selected as Row).up();
         this.redraw();
+        /*
+         * grabado: #288。★ **連打を畳まない。** 1 回ずつ戻れるほうが読める
+         * （ドラッグと違い、1 回ごとに「どこへ動いたか」が目に見える操作なので）。
+         * 先頭行で Row.up() が早期 return した場合は commit() が同値で弾く。
+         */
+        this.owner.historyManager.commit();
     }
 
     down(e?: Event): void {
         (this.selected as Row).down();
         this.redraw();
+        /* grabado: #288 */
+        this.owner.historyManager.commit();
     }
 
     async remove(e?: Event): Promise<void> {
@@ -217,6 +235,8 @@ export class RowManager {
             next = t.rows[t.rows.length - 1]!;
         }
         this.select(next);
+        /* grabado: #288。confirm が false なら上で return しているので、ここは削除が起きた後 */
+        this.owner.historyManager.commit();
     }
 
     redraw(): void {

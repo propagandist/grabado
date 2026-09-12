@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { down, IMAGE_SCHEMA_DIR, REPO_ROOT, up } from "./compose.ts";
+import { removeContainers } from "./docker-run.ts";
 
 /*
  * イメージを build して起こす（段階2-4）。**通常モード** —— READONLY は
@@ -12,6 +13,11 @@ export default function globalSetup(): void {
      *   掴んだままのディレクトリを消すことになる（Windows では失敗する）。
      */
     down();
+    /*
+     * ★ **compose の外で起こしたものは compose では片付かない**（issue #286 の公開デモの形）。
+     *   前回クラッシュした残骸が 8080 を掴んだままだと、**compose の up が謎のポート衝突で落ちる**。
+     */
+    removeContainers();
 
     /*
      * ★ **ディレクトリは先に作る。** 無いと compose が root 所有で作り、

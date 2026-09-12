@@ -124,6 +124,26 @@ export function down(): void {
     run(["down"]);
 }
 
+/**
+ * compose が build したイメージの名前。**`docker run` で起こす側（issue #286）が要る唯一の情報。**
+ *
+ * ★ compose が `image:` を持たないとき、名前は `<project>-<service>` になる（**2026-09-12 実測**:
+ *   `grabado-image-e2e-app`）。**up していなくても引ける**ので、compose を落としたあとでも使える。
+ * ★ **読めなければ落とす**（`ci-image.yml` の Playwright の版読みと同じ判断）—— 書式が変わって
+ *   空や複数行になったら、**空振りを緑にしない**。
+ */
+export function imageName(): string {
+    const lines = capture(["config", "--images"])
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== "");
+    const first = lines[0] ?? "";
+    if (lines.length !== 1 || !/^[a-z0-9][a-z0-9._/:-]*$/.test(first)) {
+        throw new Error(`docker compose config --images が読めない: ${JSON.stringify(lines)}`);
+    }
+    return first;
+}
+
 /** compose が見ている健康状態。**READONLY でも healthy であること**の観測点 */
 export function health(): string {
     const raw = capture(["ps", "--format", "json"]).trim();

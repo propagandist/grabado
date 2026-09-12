@@ -35,11 +35,16 @@ npm run test:server   # server/ の jar を作ってから Playwright を回す
 「単一プロセスが static と API の両方を配る」を確かめられるのはここだけ。
 
 ```bash
-npm run test:image    # 通常モードで一巡 → READONLY で起こし直して一巡 → down まで
+npm run test:image    # 通常モードで一巡 → READONLY で起こし直して一巡
+                      # → 公開デモの形（docker run。mount 無し）でもう一巡 → down まで
 ```
 
 **3.0 分**（フロントか backend を変えた場合）／ **35 秒**（変えていない場合。ビルドがキャッシュに
 当たる。2026-08-26 実測）。
+★ **再測（2026-09-12。issue #286 で 6 本足したあと）—— 19 本で 5.0 分**（backend を変えたので
+build が丸ごと走った場合）／ **42 秒**（キャッシュに当たる場合。13 本のときは 35 秒）。
+**足した 6 本ぶんは 13〜18 秒**（起こし直し 7.9〜11.1 秒 ＋ fail-fast 5.5〜6.7 秒）で、
+**残りの差は build のぶん**（日も中身も違うので、**3.0 → 5.0 を #286 の代償として読まない**）。
 
 **CI では [`ci-image.yml`](../.github/workflows/ci-image.yml) が回す**（段階2-5。paths は
 `.dockerignore` の許可リストが正本）。**ジョブ 131〜147 秒**（2 run の幅） —— うち**イメージの build が 78 秒**
@@ -474,7 +479,15 @@ introspection の入力（5-6）と同じ扱いで、**除外を暗黙にしな�
 | ファイル | 担当 |
 |---|---|
 | [`../tests/image/smoke.spec.ts`](../tests/image/smoke.spec.ts) | 通常モード。**単一プロセスが classpath の static を配る**こと・Rollup グラフ外の資産・**セキュリティヘッダ 5 本 × 4 経路**・**`Cache-Control` の経路別**・条件付き GET の 304・**bind mount への write-through**・**CSP 違反 0 件のまま主要操作が一巡**すること |
-| [`../tests/image/readonly.spec.ts`](../tests/image/readonly.spec.ts) | 公開デモと同じ条件。**READONLY でも healthy**・save / import が 403・list / load は 200（ホストが置いたファイルが読める）・**画面のボタンが押せない** |
+| [`../tests/image/readonly.spec.ts`](../tests/image/readonly.spec.ts) | 公開デモと同じ**条件**（compose ＋ mount あり）。**READONLY でも healthy**・save / import が 403・list / load は 200（ホストが置いたファイルが読める）・**画面のボタンが押せない** |
+| [`../tests/image/demo.spec.ts`](../tests/image/demo.spec.ts) | 公開デモと同じ**形**（**イメージ ＋ env 2 本、mount 無し**。§9.7）。`capabilities` が `readonly:true`・**`list` が 200 の 0 バイト**・save が 403・**トップが 200 ＋ HSTS が `preload` 無し**・**READONLY でなければ mount 無しは exit=1**（#202 の保持） |
+
+★ **下の 2 本は「条件」と「形」で分かれている**（issue #286）—— **`readonly.spec.ts` は compose 経由で
+必ず mount する**ので、**公開デモの形（mount 無し）を 1 度も通っていなかった**。
+**その穴が 2026-09-12 に `grabado.dev` の 502 として出た**（v0.4.0 以降が §9.7 の形で起動しない）。
+**`demo.spec.ts` は `docker run` で起こす** —— 公開デモは `compose.yaml` を読まないので、
+**compose 経由では「誰も叩いていなかった形」にならない**（起こし方は
+[`../tests/image/docker-run.ts`](../tests/image/docker-run.ts)。**8080 を奪うので最後に回す**）。
 
 コンテナの起こし方は [`../tests/image/compose.ts`](../tests/image/compose.ts)（`--wait` で healthy を待つ。
 **落ちたときだけコンテナのログを出す** —— `--wait` は「healthy にならなかった」としか言わないので、
@@ -1080,6 +1093,7 @@ tests/
                  ブラウザ → proxy → Kotlin → fs ／ AI は上流まで（opt-in）
   image/         配布イメージの E2E（§2 段階2-4）。**要 Docker**。
                  compose で起こして通しで叩く ／ READONLY で起こし直してもう一巡
+                 ／ 公開デモの形（docker run。mount 無し）でもう一巡（issue #286）
   orm-tools/     ORM 出力を実物の道具に通す（issue #120）。**要 Docker ＋ ネットワーク**。
                  使い捨てコンテナで kotlinc / prisma validate / tsc に golden を食わせる
 

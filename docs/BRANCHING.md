@@ -51,7 +51,7 @@ npm run test:scale
 
 git checkout -b release/0.1.0 develop
 # 版番号更新・最終微修正のみ（新機能は入れない）
-# PR: release/0.1.0 -> main
+# PR: release/0.1.0 -> main   ← ★ ここで公開デモが入れ替わる（下の★★★）
 # main マージ後にタグ
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin v0.1.0
@@ -78,6 +78,14 @@ TypeScript が本体から 12 日ずれていた**（どちらも回した日に
 **契機を時間ではなく版を切る行為に紐づける** —— 頻度で回すものは回されなくなる（申し送りから
 起票へ拾う契機を行為に紐づけたのと同じ理由。`CLAUDE.md` の「作業の型」）。**結果は版を閉じる記録に書く。**
 **赤なら版を切らない** —— 直すのが先（配るものに、確かめていない層を混ぜない）。
+
+**★★★ `main` へ入れた時点で、公開デモ（`grabado.dev`）が入れ替わる**（**2026-09-12 から**）——
+**タグでも Release でもなく、`main` への push が契機**（Railway の deployment trigger）。
+**タグを打つ前に、もう配られている。** 起動できない版はデプロイが失敗扱いになり、
+**前の版が返り続ける**（実走で確認済み）が、**失敗は履歴の 1 行にしか出ず、誰にも通知されない**。
+**押した結果・確かめ方・その日の実走は [`grabado-ops`](https://github.com/propagandist/grabado-ops)**
+（**ここは「アプリが期待すること」までを持つ**。契約は `docs/ARCHITECTURE.md` §9.7）。
+**配布物が公開デモの形で起動することは、PR の `ci-image` が毎回見ている**（issue #286）。
 
 **★★ `release/*` はマージした瞬間に消える**（**2026-09-05 実測**）—— リポジトリの
 **`delete_branch_on_merge: true`** が head ブランチを自動削除する（**`--delete-branch` を

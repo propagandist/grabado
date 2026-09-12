@@ -57,5 +57,21 @@ export default defineConfig({
             testMatch: /readonly\.spec\.ts$/,
             dependencies: ["readonly-setup"],
         },
+        /*
+         * ★ **公開デモの形（issue #286）は最後に置く。** compose を落として 8080 を奪うので、
+         *   ここから先 compose は要らない —— **1 度落としたら二度と起こさない順序**にしてある。
+         *   起こし方だけが compose ではない（`tests/image/docker-run.ts`）—— 公開デモは
+         *   `compose.yaml` を読まず、**イメージ ＋ env 2 本だけ**で起きるため（§9.7）。
+         */
+        {
+            name: "demo-setup",
+            testMatch: /demo\.setup\.ts$/,
+            dependencies: ["image-readonly"],
+        },
+        {
+            name: "image-demo",
+            testMatch: /demo\.spec\.ts$/,
+            dependencies: ["demo-setup"],
+        },
     ],
 });

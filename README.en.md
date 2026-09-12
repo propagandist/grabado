@@ -271,7 +271,8 @@ non-root user, cannot write to it and exits**.
 
 **Dropping `-v` altogether does not start the container.** Running without a source of truth
 would write inside the container, so **the designs would go away with it** — grabado stops before
-that happens (issue #202).
+that happens (issue #202). **Read-only mode is the one exception**, and there `-v` is not needed
+(see "Read-only mode" below).
 
 Both amd64 and arm64 are included. **You can check what is inside without waiting for us to tell
 you** — the origin, version and license are in the OCI labels, and the bundled JRE and dependency
@@ -315,6 +316,13 @@ GRABADO_READONLY=true docker compose up
 Saving, introspection and AI are disabled; `list` and `load` still work. **This is the only mode a
 public demo can run in** — the AI calls would be billed to us and introspection is an SSRF pivot, so
 **neither belongs anywhere strangers can reach**.
+
+**This mode needs no mount.** Nothing is saved, so no place to save to is required — **one line
+brings up a read-only viewer** (the server lists no designs; editing happens in the browser):
+
+```bash
+docker run --rm -p 8080:8080 -e GRABADO_READONLY=true ghcr.io/propagandist/grabado
+```
 
 ### Note for Linux hosts
 

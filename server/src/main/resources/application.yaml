@@ -9,6 +9,8 @@ grabado:
   # 副作用（保存・introspection・AI）を止める。**公開デモは true 一択**
   # —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。
   # 落ちるのはその 3 つだけで、list / load は生きている（読み取りビューア）。
+  # ★ true のときは schema-dir が無くても起動する（設計 0 件。issue #286）——
+  #   保存しないので書き先も要らない。mount を持たない公開デモの形（§9.7）。
   readonly: ${GRABADO_READONLY:${READONLY:false}}
 
   # Strict-Transport-Security を出すか（issue #84）。**既定は false。**

@@ -20,6 +20,10 @@ import java.time.Duration
  *   落ちるのはその 3 つだけで、`list` / `load` は生きている（読み取りビューア）。
  *   編集ストアはブラウザ内なので、READONLY でも「読んで・描いて・DDL を出す」体験は
  *   完全に提供できる。
+ *
+ *   ★ **READONLY のときは、[schemaDir] が無くても起動する**（**2026-09-12**。issue #286）。
+ *   **落ちる条件が 1 つ増えたのではなく、起動の条件が 1 つ緩んだ** —— 無ければ設計 0 件で
+ *   起き、`list` は 0 件、`load` は 404 を返す（mount を持たない公開デモの形。§9.7）。
  * @property hsts `Strict-Transport-Security` を出すか（issue #84）。**既定は `false`。**
  *   TLS を終端するのは前段（公開デモは Railway）で、**アプリが見るのは平文の口**だから
  *   —— `request.isSecure` では判断できない。**「このデプロイは TLS の後ろにいる」と

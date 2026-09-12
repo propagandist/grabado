@@ -107,6 +107,14 @@ COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 #   **実測（2026-09-09）**: 外す前は `docker run -d -p 18099:8080 grabado`（-v なし）が
 #   **起動し、capabilities が応答した**。外した後は **exit=1 で起動しない**。
 #
+#   ★★ **ただし `GRABADO_READONLY=true` なら起動する**（**2026-09-12**。issue #286）——
+#   保存できないデプロイでは「捨てた瞬間に消える」事故が原理的に起きないので、
+#   **正本ディレクトリが無ければ設計 0 件で起こす**（判定は FileDesignStore の absent）。
+#   **mkdir は戻していない** —— 戻すと「書けると誤認したまま起動する」ので、
+#   READONLY を外した瞬間に #202 の事故が戻る。**外したまま、アプリ側で条件を緩めた。**
+#   ここを外したことで **v0.4.0 以降のすべての版が公開デモの形で起動しなくなっていた**
+#   （2026-09-12 に grabado.dev が 502。実測は CUSTOMIZATIONS.md の同日）。
+#
 #   ★ **chown も同時に外す。** mkdir を外すと chown の対象が消えて build が落ちるので
 #   同時にしか外せない。**外して壊れない** —— docker-entrypoint.sh は **mount 先を stat で
 #   読んで su-exec で降りる**ので、イメージ側の所有権を 1 度も使っていない

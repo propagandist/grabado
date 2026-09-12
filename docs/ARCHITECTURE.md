@@ -252,8 +252,9 @@ io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
       →  io/extract.ts  →  io/xml-parser.ts  →  io/apply.ts  →  io/ddl/generate.ts
       →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
       →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.ts  →  io.ts
-      →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts  →  window.ts  →  options.ts
-      →  wwwsqldesigner.ts
+      →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts
+      →  history.ts  →  historymanager.ts
+      →  window.ts  →  options.ts  →  wwwsqldesigner.ts
 ```
 
 `io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。段階6-5a まで
@@ -278,6 +279,10 @@ io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
   （本ファイルは js/ のどこにも依存しなくなった）。
 - `visual.ts` → `row.ts` / `table.ts` / `relation.ts` / `key.ts` が描画中核（Tier 2 で温存）。
   **段階2 で ES クラス階層になり、段階3-2 で `.ts` 化した**（§5.4）。
+- `history.ts` / `historymanager.ts` は **undo / redo**（#288 / #289。§5.8）。前者は
+  **`import` が 0 本で `string` しか知らない**ので位置の制約が無く、唯一の消費者である
+  後者の直前に置いてある。後者は `io/extract.ts` / `io/apply.ts` / `io/validate.ts` を
+  値で import するが、これは `wwwsqldesigner.ts` が既に張っている辺と同じ向き（描画 → io）。
 - `wwwsqldesigner.js` の `SQL.Designer` が全体のオーナー（オプション・cookie・XHR ヘッダ・`toXML()`）。
   **段階2 でクラス（`SQL.Designer`）と唯一のインスタンス（`SQL.designer`）に分離**した。
 - **`.ts` 化はこの読み込み順の先頭から進める**（§5.5）。葉から進めると未 `.ts` のグローバルに対する
@@ -744,6 +749,51 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 **数の正本は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)**（測った日と機械つき）。
 測り方は [`../tests/scale/README.md`](../tests/scale/README.md)。
 
+### 5.8 編集の履歴（#288 / #289。2026-09-12）
+
+**undo / redo はスナップショット方式。** 積むのは `JSON.stringify(extractModel(designer))` の
+**文字列 1 本**で、復元は `clearTables()` → `applyDesignModel()`（`js/io.ts` の `aiapply()` と
+同じ形）。差分コマンドを 16 本書くと `js/io/model.ts` が拒んでいる「第 2 の真実」になる。
+
+| | |
+|---|---|
+| [`../frontend/js/history.ts`](../frontend/js/history.ts) | 純粋なスタック（past / present / future）。**`import` 0 本**で `string` しか知らない。上限は **50 手 ＋ 16,000,000 文字**で、どちらかに当たったら古い側から捨てる（★ **最低 1 手は残す** —— 1 件で上限を超える設計でも直前には戻れる） |
+| [`../frontend/js/historymanager.ts`](../frontend/js/historymanager.ts) | 確定・復元・関門・UI（ボタン 2 つと `document` への 5 本目の keydown）。`Designer.historyManager` として `init2()` が持つ |
+
+**文字列で持つ理由**（N=300 の実測）: オブジェクトのままだと 1 件 532KB / live オブジェクト
+7,197 個、文字列なら 313KB / **1 個**。効くのはメモリ量より**参照の寿命**で、`OZ.Event._byID` は
+素のオブジェクトで GC が効かない（#209）—— **スタックが文字列なら、破棄済みの Table / Row を
+構造的に掴めない**。
+
+**1 手 = 1 つの UI のジェスチャ。** 確定点（`commit()`）は 6 ファイルの **UI 入口 16 箇所**に
+撒いてあり、モデルを触る側（`addTable` / `addRow` / `Row.update`）には置かない —— 置くと
+テーブル 1 個作るのに `Ctrl+Z` が 6 回、キー名を 8 文字打って 8 回になる。`<dialog>` の
+`close` が OK / cancel / Esc の 3 経路を 1 箇所に集める。
+
+★★ **`undo()` は先に `commit()` を呼ぶ。** 撒き忘れた経路の変更も、undo の瞬間に 1 手として
+確定してから巻き戻る —— **漏れの代償は粒度だけ**で、「最後の編集が消える / 飛ばされる」は
+構造的に起きない。確定点は人が撒く以上、漏れは「起きるか」ではなく「起きたとき何が壊れるか」
+で設計してある。
+
+**関門 2 つ**（どちらも `commit` / `redo` の入口で見る）:
+
+- **型パレットが差し替わったら履歴を捨てる** —— `RowModel.type` は添字（§5.6）なので、
+  範囲外なら `Row.update()` が `TypeError`、**範囲内なら黙って別の型になる**。差し替えの
+  呼び出し箇所に置かないのは、`dbResponse` が `init2()` より前にも走るため
+- **同名テーブルがあるあいだは積まない** —— 復元すると relation が先頭へ寄る（`io/apply.ts` の
+  既知の不具合）。★ **復元側に `assertLoadableDesign` を掛けない** —— 関門は「外から来た
+  バイト列」に掛けるもので、掛けると**手で同名テーブルを作った瞬間に undo が壊れる**
+
+**戻らないもの**: textarea の内容 ／ 選択・展開・スクロール（`DesignModel` が持たない）／
+保存（**undo は保存を取り消さない**）／ options ／ **タブを閉じたあと**（履歴は localStorage に
+残さない —— 「自動保存は無い」と衝突する）。
+
+**費用**（§5.7 の実測から）: `commit()` は N=300 で数 ms（`extractModel` は DOM を 1 度も
+読まない）、**undo 1 回は読み込みと同じ 1.25〜2.15 秒**。
+★★ **`tests/node/scale.test.ts` の 10 カウンタは、この機能の事故を 1 ビットも検出しない** ——
+`tests/support/probe.ts` が数えるのはレイアウト読み出しと `redraw` / `update` の呼び出しだけで、
+`extractModel` はどれも通らない。**「読み込み 1 回でスタックが 1 件しか増えない」が唯一の計器。**
+
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 
 走らせ方・golden の更新手順・fixture の追加手順は [`TESTING.md`](TESTING.md) に集約した。ここでは現行構成との対応だけ示す。
@@ -986,6 +1036,12 @@ op が何を書き換えるかは次のとおりで、**書き込み先はモデ
 ★ **適用は保存ではない。** 正本は git 管理のファイルで `save` するまで 1 バイトも変わらない。
 grabado に undo は無いが、**気に入らなければ保存せず読み直せば戻る** —— それを結果の
 1 枚が毎回書く（`js/io/ai/notice.ts` の `applyNotice`）。
+
+★★ **訂正（2026-09-12。#290）—— 上の段落は 2026-08-24 時点の契約として残す。**
+**#288 / #289 で undo が入り、戻り方が 1 つから 2 つになった** —— `aiapply()` は末尾で
+`historyManager.commit()` を **1 回だけ**呼ぶので、**何件当たっても undo 1 手で丸ごと戻る**
+（保存した状態まで戻すのは、いまも読み直し）。**結果の 1 枚が毎回書く、という要件のほうは
+変わっていない** —— 変わったのは、そこに書く内容が 2 つになったこと。詳しくは §5.8。
 
 ★ **`rationale` を HTML として描画しない。** モデルが書いた自由文で、org security-baseline
 §5.2 が「崩れる変更」に名指ししている（11-2b の実測でも他言語の語が混じった例がある）。

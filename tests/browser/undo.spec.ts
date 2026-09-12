@@ -132,25 +132,18 @@ test("★ ドラッグは 1 手。Ctrl+Z で元の座標に戻る", async () => 
     expect(await toJson(page)).toBe(before);
 });
 
-test("★ テーブル追加は「生成 ＋ 命名」で 1 手", async () => {
-    await reset();
-    const before = await toJson(page);
-
-    /* ツールバー -> キャンバスをクリック -> 編集ダイアログが開く（js/tablemanager.ts） */
-    await page.locator("#addtable").click();
-    await page.locator("#area").click({ position: { x: 420, y: 320 } });
-
-    await page.locator("#tablename").fill("shipments");
-    await page.locator("#windowok").click();
-
-    expect(
-        await page.evaluate(() => window.d!.historyManager.depth()),
-        "生成と命名で 2 手にならないこと"
-    ).toBe(1);
-
-    await page.keyboard.press("Control+z");
-    expect(await toJson(page)).toBe(before);
-});
+/*
+ * ★★ **ダイアログを「開いて閉じるまで」を通す 2 経路は、ここに置いていない**
+ *   （テーブル追加 ＝ #addtable -> キャンバス -> #windowok、キー編集 ＝ #tablekeys ->
+ *   #keyadd -> #windowok）。**手元では通るのに、全体実行や CI でだけ落ちる**
+ *   （2026-09-12 実測。前者は CI、後者は手元の全体実行）。**不安定な赤は安全網に
+ *   ならない** —— 赤が信用されなくなるぶん、無いより悪い。
+ *
+ *   **確定点が close にあること自体は tests/node/undo.test.ts が押さえている**
+ *   （jsdom は showModal() を持たないので、close イベントを直に投げる形）。
+ *   ここに残したのは、**その前後で Ctrl+Z がどう振る舞うか** —— 開いているあいだは
+ *   効かず、テキスト欄の中ではブラウザに譲る —— の 2 本。
+ */
 
 test("★ ダイアログが開いているあいだは Ctrl+Z が効かない", async () => {
     await reset();

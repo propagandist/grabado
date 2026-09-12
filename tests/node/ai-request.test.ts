@@ -220,11 +220,20 @@ describe("適用結果の見せ方（段階11-4）", () => {
         expect(notice).toContain("見送り: gone（rename-table） —— patchtablemissing");
     });
 
-    test("**保存していないことを必ず書く**（undo が無い代わり）", () => {
+    test("**保存していないことと、戻り方を必ず書く**", () => {
         const notice = applyNotice([one("a")], [null], asIs);
 
         expect(notice).toContain("まだ保存していない");
-        expect(notice).toContain("読み直せば元に戻る");
+        /*
+         * ★ #290。**元は「読み直せば元に戻る（grabado に undo は無い）」だけだった。**
+         *   #288 / #289 で undo が入り、**戻り方が 1 つから 2 つになった** ——
+         *   直前の適用は undo 1 手、保存した状態までは読み直し。
+         *
+         * ★★ **「丸ごと」が要る。** rejections があるので**実際に当たった件数は選んだ
+         *   件数以下**で、N 手にすると「何回 Ctrl+Z を押せばいいか」が画面から読めない。
+         */
+        expect(notice).toContain("undo 1 回で丸ごと戻る");
+        expect(notice).toContain("保存せずに読み直す");
     });
 
     test("落ちた理由は kind をそのまま渡す（訳すのは呼び手）", () => {

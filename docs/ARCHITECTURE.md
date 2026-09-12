@@ -1293,7 +1293,8 @@ curl が `application/x-www-form-urlencoded` を送り、**Tomcat がパラメ�
 [`TESTING.md`](TESTING.md)、決定と実測は `CUSTOMIZATIONS.md` の段階2-4。
 
 ```bash
-npm run test:image   # compose で build → 通常モードで一巡 → READONLY で起こし直して一巡 → down
+npm run test:image   # compose で build → 通常モードで一巡 → READONLY で起こし直して一巡
+                     # → 公開デモの形（docker run。env 2 本・mount 無し）でもう一巡 → down
 ```
 
 **実測（2026-08-26、段階2-4。Docker 29.5.3 / Docker Compose v5.1.4）**
@@ -1383,7 +1384,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | 層 | grabado では |
 |---|---|
 | **① 手元**（0 分） | 導入時に 1 回。**gitleaks は 2026-08-26 に実走**（331 コミット / 0 件）、**actionlint も同日**（1.7.12 / 0 件。**壊して拾うことも確かめた**） |
-| **② 自動テスト**（増分 0 分） | 上の 3 本に相乗り —— CSP とヘッダ（`csp.test.ts` ＋ イメージ E2E）・env の写し（`env-contract.test.ts`）・READONLY・契約表 |
+| **② 自動テスト**（増分 0 分） | 上の 3 本に相乗り —— CSP とヘッダ（`csp.test.ts` ＋ イメージ E2E）・env の写し（`env-contract.test.ts`）・READONLY・契約表・**公開デモの形**（env 2 本・mount 無し。**2026-09-12 に入った**。issue #286） |
 | **③ 週次 cron** | **置かない** |
 
 **★ ③ を置かない**（**2026-08-26 の判断を 2026-09-04 に引き直し、結論は変えなかった**。#164）。

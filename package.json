@@ -25,9 +25,9 @@
     "migrate:design": "node tools/migrate-design.mjs"
   },
   "devDependencies": {
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.1",
     "cross-env": "^10.1.0",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",

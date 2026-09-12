@@ -826,8 +826,20 @@ SQL 型情報を返し、型 id への解決はフロントの `TypePalette` が
 
 | env | 既定 | 用途 |
 |---|---|---|
-| `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ） |
+| `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ）。★ **READONLY のときは「無い」だけが例外**（下の行。issue #286） |
 | `GRABADO_READONLY`（`READONLY` も読む） | `false` | save を **403** にする（段階5-3 で実装）。introspection は 5-7、AI は §11 で同じ扱いになる。**公開デモは `true` 一択** —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。READONLY のときは正本ディレクトリの**書き込み可能性を要求しない**（読み取り専用マウントでも起動する） |
+
+★ **READONLY のときは、正本ディレクトリが「無い」ことも許す**（**2026-09-12**。issue #286）——
+**設計 0 件で起動し、`list` は 0 件・`load` は 404 を返す**（起動時に INFO を 1 行出す）。
+**上の 2 行はここで初めて噛み合う** —— 元は「読み書きを検証し、駄目なら起動失敗」と
+「**読み取り専用マウント**でも起動する」が同じ表に並んでおり、**マウントそのものが無い場合に
+どちらが効くのかが書かれていなかった**（**公開デモは mount を持たない契約**。§9.7）。
+
+**軸は「ディレクトリが在るか」ではなく「書き込み先が要るか（＝ `!readonly`）」。** #202 が防ぐ事故は
+「保存したものがコンテナを捨てた瞬間に消える」で、**保存できないデプロイでは原理的に起きない**。
+**例外にするのは「無い」だけ** —— 在るのにファイルだったり読めなかったりするのは
+**mount を意図した人が居て、それが失敗している**状態なので、READONLY でも起動しない。
+**READONLY でなければ、無い＝起動失敗のまま**（#202 は 1 つも緩んでいない）。
 | `GRABADO_HSTS` | `false` | `Strict-Transport-Security` を出す（issue #84）。**TLS の後ろに置いたデプロイだけ `true`** —— TLS を終端するのは前段（公開デモは Railway）で、アプリが見る口はいつも平文なので `request.isSecure` では判断できない。**既定で出すと手元が壊れる**（`http://localhost:8080` を開いたブラウザが以後 localhost を https へ強制し、消すにはブラウザの設定を触るしかない） |
 | `GRABADO_MAX_DESIGN_BYTES` | `1048576`（1 MiB） | save が受け取る設計 1 本の上限。超えたら **413**（issue #215）。**実測から出した値**（#206）—— 300 テーブルの設計 JSON が 414 KiB なので **750 テーブル相当**。★ **nginx の既定 `client_max_body_size` と同じ 1 MiB に揃えてある** —— 前段にプロキシを置くと 413 は**アプリを通らずに返る**ので、境界が揃っていれば「プロキシの裏かどうか」で挙動が変わらない。判定は**読み切る前**（`readNBytes(limit+1)`）|
 | introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする）。**入るのは 5-7** |
@@ -1148,6 +1160,10 @@ compose が root 所有で作る（**その場合は entrypoint が既定の `gr
 #103）。
 `GRABADO_SCHEMA_DIR` は**コンテナ内のパス**なので、これだけ変えても mount 先は動かない
 （ずれれば起動時の検証で落ちる —— 黙って別の場所へ書くことはない）。
+★ **`GRABADO_READONLY=true` のときだけ、ずれても落ちずに設計 0 件で起動する**（issue #286。§7.3）
+—— **保存しないので、黙って別の場所へ書きようがない**。**気づける口は起動時の INFO 1 行だけ**
+なので、READONLY で mount するつもりなら**そこを読む**（`docs/ARCHITECTURE.md` §9.7 の公開デモは
+mount しない構成なので、これが正常）。
 
 **introspection の接続先は、env の名前そのものが表のキーを持つ** ——
 `GRABADO_INTROSPECT_SOURCES_<名前>_URL` / `_USER` / `_PASSWORD` / `_SCHEMA`（Spring の
@@ -1244,6 +1260,10 @@ GRABADO_READONLY=true docker compose up  # 公開デモと同じ条件（save / 
 
 compose を使わないなら `docker build -t grabado .` ＋
 `docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado`。
+★ **この「compose を使わない」起こし方は、2026-09-12 から機械が叩く**（issue #286。
+[`../tests/image/docker-run.ts`](../tests/image/docker-run.ts)）—— ただし叩くのは
+**公開デモの形（`-e GRABADO_READONLY=true` ＋ `-v` 無し）**で、**`-v` 付きの形は
+`release-image.yml` の担当のまま**。
 **★ 配布イメージ（`ghcr.io/propagandist/grabado`）を出すのは #165** —— **それまでは build が
 唯一の経路**（§9.1。**2026-09-04 に「配る」と決めた**）。
 
@@ -1285,6 +1305,20 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | READONLY への入れ替え | `docker compose up -d --wait` の再実行で **12.2 秒**（`Recreated` → `Healthy`） |
 | 後片付け | `down` でコンテナもネットワークも残らない |
 
+★ **再測（2026-09-12。issue #286 で 6 本足したあと。同じ手元の Docker Desktop for Windows）**
+
+| 確かめたこと | 結果 |
+|---|---|
+| 通し | **19 本が緑**（通常 8 ＋ READONLY 5 ＋ **公開デモの形 6**） |
+| 公開デモの形への入れ替え | **11.1 秒**（compose を `down` → `docker run`（env 2 本・mount 無し）→ `capabilities` が返るまで） |
+| #202 の fail-fast（mount 無し ＋ READONLY 無し） | **6.7 秒で exit=1** |
+| 通し（build 込み） | **5.0 分** |
+| 通し（ビルドがキャッシュに当たる場合） | **42 秒**（13 本のときは 35 秒） |
+
+**上の 2026-08-26 の表は消さない** —— **13 本だったときの値**で、比べる相手として要る。
+★ **ただし 3.0 分 → 5.0 分の差を #286 の代償として読まない** —— **足した 6 本ぶんは 18 秒ほど**
+（11.1 ＋ 6.7）で、**残りは build のぶん**。**日も中身も違う**（2 週間ぶんの依存とフロントが乗っている）。
+
 ★ **`--wait` は healthy まで待つ**（同日実測）。だから **Dockerfile に `HEALTHCHECK` を
 置かない** —— 判定間隔と猶予の正本を `compose.yaml` の 1 か所に保つ（2-3 が 2-4 に預けた判断）。
 
@@ -1303,7 +1337,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 |---|---|---|---:|
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
 | [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
-| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
+| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 19 本**（通常 8 ＋ READONLY 5 ＋ **公開デモの形 6**） | **131〜147 秒**（★ 6 本を足す前） |
 | [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **約 2.5 分** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
@@ -1438,13 +1472,23 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 | ビルド元 | **`main`** | `BRANCHING.md` の `main` ＝ リリース済み。**正本は git のまま**で、デモは下流（`HANDOVER.md` §2.3） |
 | ポート | **8080**（Railway 側の target port で指定） | `PORT` をアプリに実装しない —— **ポートの決め方を 2 つにしない**（8080 は既に `Dockerfile` / `compose.yaml` / docs / tests に写しを持つ） |
 | env | **`GRABADO_READONLY=true`** ＋ **`GRABADO_HSTS=true`** の 2 本だけ | READONLY は一択（§7.3）。HSTS は**TLS の後ろにいるデプロイだけ**が立てる（§9.4） |
-| mount | **無し** | READONLY なので `/data/schema` は書けなくてよい（イメージが作って所有権を渡している。§9.1）。**`list` は 0 件を返す** |
+| mount | **無し** | READONLY なので `/data/schema` は書けなくてよい（**アプリが「無い」を許す**。§7.3 ／ issue #286）。**`list` は 0 件を返す** |
 | ドメイン | **`grabado.dev`**（apex） | 公開の顔。**Porkbun は ALIAS を持つ**ので apex に CNAME 相当を置ける |
 | TLS | **Railway が発行**（Let's Encrypt。2026-08-30 に証明書を実見） | `.dev` は **TLD ごと HSTS プリロード済み**＝常時 HTTPS 強制 |
 | CAA | **置く**（`issue "letsencrypt.org"` ＋ `iodef`） | org security-baseline §4.2。**判断した記録が要る**ほうの要件 |
 
 **★ CAA は証明書が出てから置く。** 発行者を推測で書くと、**間違えたときに発行が黙って止まる**。
 **DNS を Railway へ向ける → 発行させる → issuer を実見する → CAA を置く**の順。
+
+★★ **mount の行の括弧の中は、2026-09-09 から 2026-09-12 まで偽だった**（issue #286）。
+**元は「イメージが作って所有権を渡している（§9.1）」** —— #246 が `Dockerfile` から
+`mkdir -p /data/schema` を外した日に**その根拠が消えた**のに、この行は残っていた。
+**表の結論（mount 無し）は動いていない**が、**それを支えていたものが入れ替わった** ——
+**イメージが作るのをやめ、アプリが「無い」を許すようになった**（§7.3）。
+**代償は 3 日間**で、**v0.4.0 〜 v0.8.0 は、この節の形では起動しない**
+（2026-09-12 に `grabado.dev` が **502**。実走は `grabado-ops#5`、判断は `CUSTOMIZATIONS.md` の同日）。
+**この節の形を叩く検査が 1 つも無かったこと**が本体の穴で、
+**`tests/image/demo.spec.ts` がそれを塞いだ**（下の「確かめ方」）。
 
 #### 確かめ方（機械で見える 4 つ）
 
@@ -1486,4 +1530,20 @@ curl -s -H 'accept: application/dns-json' \
 `http://127.0.0.1:8080` で叩くので、**`GRABADO_HSTS` を立てない**。
 **アプリが出すこと自体は `HstsEnabledTest` が見る**（§9.4）が、
 **公開 URL に載っていることは上の `curl` でしか分からない。**
+
+★★ **範囲が狭まった**（**2026-09-12**。issue #286）—— **この節の形（env 2 本・mount 無し）で
+イメージを起こす層ができた**ので、`tests/image/demo.spec.ts` が **`GRABADO_HSTS=true` を立てて
+叩く**ようになった。**新しく見えるようになったのは 2 つ**:
+
+- **`GRABADO_HSTS` という env の名前で効くこと** —— `HstsEnabledTest` が登録しているのは
+  **Spring のプロパティ `grabado.hsts`** で、**env 名の鎖はどこも通っていなかった**（同日実測）
+- **`preload` が付いていないこと**（上の `curl` の 1 本目と同じもの）。**値そのものは見ない**
+  —— 正本は `SecurityHeadersFilter.HSTS` で、`HstsTest` が持つ（**写しを 3 つ目にしない**）
+
+**依然として見えないのは「HTTPS で出ていること」と「公開 URL に載っていること」**で、
+**そこは上の `curl` のまま。** 上の★を消さないのは、**半分は今も正しい**ため。
+
+★ **上の 4 本のうち 3 本は、PR ごとに機械が見るようになった**（同日）——
+`capabilities` ／ save の 403 ／ HSTS の `preload` 無し。**外側にしか無いのは CAA と、
+公開 URL に載っていること**（TLS の後ろにいるかどうかは、アプリからは見えない）。
 

@@ -23,6 +23,13 @@ class FileDesignStoreTest {
 
     private fun store() = FileDesignStore(GrabadoProperties(root))
 
+    /**
+     * READONLY のときだけ許す例外（issue #286）—— **公開デモは mount を持たない**（§9.7）。
+     * 保存できないデプロイでは「捨てた瞬間に消える」事故が原理的に起きないので、
+     * **正本ディレクトリが無ければ設計 0 件で起こす。**
+     */
+    private fun readOnlyStore(dir: Path) = FileDesignStore(GrabadoProperties(dir, readonly = true))
+
     @Test
     fun `保存したバイト列がそのままファイルになる（内容を解釈しない）`() {
         val bytes = "{\"formatVersion\":2}\n".toByteArray(StandardCharsets.UTF_8)
@@ -98,9 +105,44 @@ class FileDesignStoreTest {
     fun `正本ディレクトリが無ければ起動しない`() {
         val missing = root.resolve("does-not-exist")
 
+        // ★ readonly は既定の false。**その既定がこのテストの主語**（issue #286 で READONLY
+        //   だけが例外になったので、ここが「READONLY でない側」を押さえている）。
         assertThatThrownBy { FileDesignStore(GrabadoProperties(missing)) }
             .isInstanceOf(IllegalStateException::class.java)
             .hasMessageContaining("正本ディレクトリが無い")
+    }
+
+    @Test
+    fun `READONLY なら、正本ディレクトリが無くても起動して list は 0 件`() {
+        // mount を持たない公開デモの形（§9.7）。**v0.4.0 〜 v0.8.0 は、ここで落ちていた。**
+        assertThat(readOnlyStore(root.resolve("does-not-exist")).list()).isEmpty()
+    }
+
+    @Test
+    fun `READONLY で正本ディレクトリが無いとき、load は null（HTTP 404 になる）`() {
+        // list だけ直して load を忘れると、症状は「0 件なのに開ける名前がある」になる
+        assertThat(readOnlyStore(root.resolve("does-not-exist")).load(DesignName.parse("orders.json")))
+            .isNull()
+    }
+
+    @Test
+    fun `0 件で起きても、正本ディレクトリを作らない`() {
+        // 「無ければ作る」で直すと、**書き先がコンテナ内 fs に戻る** ＝ issue #202 の事故に戻る
+        val missing = root.resolve("does-not-exist")
+
+        readOnlyStore(missing).list()
+
+        assertThat(Files.notExists(missing)).isTrue()
+    }
+
+    @Test
+    fun `READONLY でも、在るのにディレクトリでなければ起動しない`() {
+        // **例外にするのは「無い」だけ。** 在るものが壊れているのは mount の失敗で、
+        // 0 件で起こすと**その人の設計が見えないまま正常に見える**。
+        val file = root.resolve("not-a-dir")
+        Files.write(file, "x".toByteArray())
+
+        assertThatThrownBy { readOnlyStore(file) }.isInstanceOf(IllegalStateException::class.java)
     }
 
     @Test

@@ -7,7 +7,7 @@
 #   ワークフローごと起動しなければ 0 分——だから分ける。
 #
 # ★ なぜ 1 ジョブなのか
-#   build → 起動 → 13 本は**直列依存**で、分けても切り分けやすくならない。課金は
+#   build → 起動 → 19 本は**直列依存**で、分けても切り分けやすくならない。課金は
 #   ジョブ単位で 1 分未満切り上げ（org ci-strategy §2）なので、分けた本数ぶん損をするだけ。
 #
 # ★ **このリポジトリは public なので、この検査は org の枠を食わない**（2026-08-26 実測。
@@ -67,7 +67,7 @@ jobs:
   check:
     name: 検査
     runs-on: ubuntu-latest
-    # build（npm ci ＋ vite build ＋ bootJar）から 13 本までを 1 ジョブで通す。
+    # build（npm ci ＋ vite build ＋ bootJar）から 19 本までを 1 ジョブで通す。
     # ハングした run が既定の 6 時間まわり続けるのを防ぐ。必ず付ける。
     timeout-minutes: 30
 
@@ -131,12 +131,13 @@ jobs:
       - name: Chromium の取得
         run: npx playwright install --with-deps chromium
 
-      # compose が build → 通常モードで一巡 → READONLY で起こし直して一巡 → down まで。
+      # compose が build → 通常モードで一巡 → READONLY で起こし直して一巡 →
+      # **公開デモの形（docker run。env 2 本・mount 無し。issue #286）でもう一巡** → down まで。
       # **docker / docker compose は ubuntu-latest に同梱**（別途の setup action は要らない）。
       #
       # ★ **ここが Linux ホストの bind mount を機械が見る唯一の場所**。手元は Docker Desktop
       #   for Windows で所有権を無視するが、ここでは効く（段階2-1 / 2-3 / 2-4 の申し送り）。
-      - name: 配布イメージの E2E（通常 8 ＋ READONLY 5）
+      - name: 配布イメージの E2E（通常 8 ＋ READONLY 5 ＋ 公開デモの形 6）
         run: npm run test:image
 
       # E2E は tests/tmp-image-schema/ にしか書かない（.gitignore 済み）。ここで

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <locale>
+    <!-- history -->
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+
     <!-- tabell management -->
     <string name="addtable">Skapa tabell</string>
     <string name="edittable">Redigera tabell</string>

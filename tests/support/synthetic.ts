@@ -151,5 +151,11 @@ export const SCALE_COUNTS: Record<keyof ScaleCounts, (n: number) => number> = {
     relationRedraw: (n) => n - 1,
 };
 
-/** DOM ノード数。読み込み後 61N + 67（67 は設計と無関係な UI の分） */
-export const SCALE_DOM_NODES = (n: number): number => 61 * n + 67;
+/**
+ * DOM ノード数。読み込み後 **61N + 72**（72 は設計と無関係な UI の分）。
+ *
+ * ★ 定数項は **#289 で 67 -> 72 に動いた** —— ツールバーに undo / redo の 2 群
+ *   （span 2 ＋ input 2 ＋ 区切りの hr 1）を足したため。**設計あたりの係数 61 は
+ *   動いていない**ので、増えたのは「ページが最初から持っている要素」の側。
+ */
+export const SCALE_DOM_NODES = (n: number): number => 61 * n + 72;

@@ -117,6 +117,36 @@ describe("リスナー登録が単調増加しない（#209）", () => {
 
         expect(byId()).toBe(empty);
     });
+
+    /*
+     * grabado: #288。undo / redo は clearTables() -> applyDesignModel() を**繰り返す** ——
+     * 読み込みとまったく同じ経路なので上の 4 本が担保している性質がそのまま効くはずだが、
+     * **ツリーを丸ごと作り直す操作が新しく増えた**ので、ここが新しい網の目になる。
+     *
+     * ★ スタックが**ライブオブジェクトを掴まない**ことも、ここが間接的に見ている ——
+     *   _byID は素のオブジェクトで GC が効かないので、破棄済みの Table / Row を
+     *   履歴が持つと、リスナーを外しても参照だけが残る（js/history.ts の冒頭）。
+     */
+    it("undo / redo を繰り返してもリスナー登録が増えない", () => {
+        h.designer.clearTables();
+        h.loadJson(DESIGN);
+        const history = h.designer.historyManager;
+        history.reset();
+
+        h.designer.addTable("extra", 100, 100);
+        history.commit();
+        const ids = byId();
+        const names = byName();
+
+        for (let i = 0; i < 50; i++) {
+            history.undo();
+            history.redo();
+        }
+
+        expect(byId()).toBe(ids);
+        expect(byName()).toBe(names);
+        expect(byName()).toBe(byId());
+    });
 });
 
 describe("clearTables() の費用（#209）", () => {

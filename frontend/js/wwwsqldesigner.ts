@@ -35,6 +35,7 @@ import { Toggle } from "./toggle.ts";
 import { TableManager } from "./tablemanager.ts";
 import { RowManager } from "./rowmanager.ts";
 import { KeyManager } from "./keymanager.ts";
+import { HistoryManager } from "./historymanager.ts";
 import { IO } from "./io.ts";
 import { Options } from "./options.ts";
 import { Window as SqlWindow } from "./window.ts";
@@ -143,6 +144,11 @@ export class Designer extends Visual<DesignerDom> {
     declare tableManager: TableManager;
     declare rowManager: RowManager;
     declare keyManager: KeyManager;
+    /**
+     * 編集の履歴（#288）。**keyManager の直後に生成する** —— コンストラクタではなく
+     * init2() なのは、生成時に extractModel() で最初のスナップショットを採るため。
+     */
+    declare historyManager: HistoryManager;
     declare io: IO;
     declare options: Options;
     declare window: SqlWindow;
@@ -408,6 +414,7 @@ export class Designer extends Visual<DesignerDom> {
         this.tableManager = new TableManager(this);
         this.rowManager = new RowManager(this);
         this.keyManager = new KeyManager(this);
+        this.historyManager = new HistoryManager(this);
         this.io = new IO(this);
         this.options = new Options(this);
         this.window = new SqlWindow(this);

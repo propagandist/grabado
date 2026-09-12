@@ -56,6 +56,14 @@ export class Window {
          */
         OZ.Event.add(this.dom.container, "close", () => {
             this.state = 0;
+            /*
+             * grabado: #288。**OK / cancel / Esc の 3 経路がここに集まる。**
+             * ok() は callback -> close() の順なので、モデルが変わった後に届く。
+             * キー編集はダイアログの中で即座にモデルを変える（OK を待たない）ので、
+             * **「閉じたとき」でないと 1 手にまとまらない**。テーブルの追加も、直後に
+             * edit() が開くのでここで「生成 ＋ 命名」が 1 手になる。
+             */
+            this.owner.historyManager.commit();
         });
 
         this.state = 0;

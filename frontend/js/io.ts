@@ -480,6 +480,12 @@ export class IO {
 
             case "xml":
                 this.fromXMLText(text);
+                /*
+                 * grabado: #288。XML は**型パレットを差し替えうる**唯一の経路
+                 * （同梱の <datatypes>）。差し替わっていれば guardPalette() が履歴ごと
+                 * 捨てるので、ここは「パレットが同じなら 1 手」になる。
+                 */
+                this.owner.historyManager.commit();
                 return;
 
             case "json":
@@ -489,6 +495,14 @@ export class IO {
                     void dialogs().alert(_("jsonerror") + ": " + (e as Error).message);
                     return;
                 }
+                /*
+                 * grabado: #288。**読み直しても前の設計に戻れる。** 既存の関門
+                 * （assertLoadableDesign）が守るのは「壊れた入力で今の設計を消さない」
+                 * までで、**正しい JSON を間違ったタイミングで開いた**ときは何も起きない。
+                 * window.close() より前に置くのは、ダイアログを経ない経路
+                 * （ファイル / クリップボード / localStorage）があるため。
+                 */
+                this.owner.historyManager.commit();
                 this.owner.window.close();
                 return;
 
@@ -1060,6 +1074,12 @@ export class IO {
         applyDesignModel(this.owner, result.model);
         /* 落ちた理由は locale の語（js/io/ は locale を通せないので、訳すのはこちら） */
         this.dom.ta.value = applyNotice(chosen, result.rejections, _);
+        /*
+         * grabado: #288。★★ **適用 1 回 = undo 1 手。** 何件当たっても 1 回で丸ごと戻る。
+         * ここは**唯一、編集を選んだのが人ではない経路**で、しかも prompt の既定の答えが
+         * "all"（提案は 16 件規模）—— Enter を押しただけで 16 か所変わる。
+         */
+        this.owner.historyManager.commit();
     }
 
     check(code: number): boolean {
@@ -1199,6 +1219,11 @@ export class IO {
          * DDL / ORM の変換注記と同じ場所で、ユーザーが「何が起きたか」を 1 か所で読めるため。
          */
         this.dom.ta.value = importNotice(converted.losses);
+        /*
+         * grabado: #288。**取り込み前の設計に、座標ごと戻せる。** すぐ上の alignTables() が
+         * 並べ直すので、取り込みは「自分で並べた座標が全部失われる」操作でもある。
+         */
+        this.owner.historyManager.commit();
     }
 
     press(e: KeyboardEvent): void {

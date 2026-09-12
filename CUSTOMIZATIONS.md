@@ -18816,6 +18816,9 @@ env を立てるとヘッダが増えることだけで、それは `HstsEnabled
 | #202 の fail-fast（mount 無し ＋ READONLY 無し） | **6.7 秒で exit=1** |
 | **検出の確認**（`FileDesignStore` の修正だけを `git stash` で戻して回す） | **`demo-setup` が 1 failed。** しかも**タイムアウトではなく、コンテナのログ（`正本ディレクトリが無い: /data/schema`）付きで即死**した —— `waitUntilReady` が毎回 `State.Running` を見ているため |
 
+**★ CI（PR #287。3 本とも緑）** —— **`ci-image` は 154 秒**（13 本のときは 131〜147 秒）。
+**E2E のステップは 96〜97 → 104 秒で、増えたのは 7〜8 秒**。`ci-frontend` 73 ／ `ci-server` 84。
+
 **★ 4 象限は検査が覆っている** —— READONLY × mount の 2×2 が、
 `smoke`（書ける ＋ mount）／ `readonly`（READONLY ＋ mount）／ `demo`（READONLY ＋ mount 無し）／
 `demo` の 5 本目（書ける ＋ mount 無し ＝ exit=1）に 1 つずつ対応する。

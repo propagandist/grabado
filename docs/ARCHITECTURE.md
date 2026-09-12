@@ -1338,7 +1338,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 |---|---|---|---:|
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
 | [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
-| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 19 本**（通常 8 ＋ READONLY 5 ＋ **公開デモの形 6**） | **131〜147 秒**（★ 6 本を足す前） |
+| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 19 本**（通常 8 ＋ READONLY 5 ＋ **公開デモの形 6**） | **154 秒**（2026-09-12。19 本）／ 131〜147 秒（13 本のとき） |
 | [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **約 2.5 分** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
@@ -1354,6 +1354,12 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | `ci-server` の `./gradlew build` | 93 |
 
 **3 本は並列に走る**ので、**PR の待ち時間は最長の 131〜147 秒**（合計ではない）。
+
+★ **再測（2026-09-12。issue #286 で 6 本足したあとの PR #287。3 本とも緑）** ——
+**`ci-image` は 154 秒**（`ci-frontend` 73 ／ `ci-server` 84）。**E2E のステップは 96〜97 → 104 秒**で、
+**増えたのは 7〜8 秒**（公開デモの形で起こし直すぶん ＋ fail-fast の `docker run`）。
+**Chromium の取得は 14 秒**（キャッシュに当たった）。**上の 2026-08-26 の内訳は消さない** ——
+**13 本だったときの値**で、**増分がどこに乗ったかは、並べないと読めない**。
 
 **★ 幅は 2 run の実測**（2026-08-26。**同じ内容で回した**）。**ぶれているのは Chromium の取得だけ**
 （24 秒 → 39 秒）で、**イメージ build 78 秒・13 本 11 秒・E2E ステップ 96〜97 秒は 2 run とも動かない**。

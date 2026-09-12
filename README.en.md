@@ -22,6 +22,8 @@ PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a
 ## What it does
 
 - **Draw** — tables, columns, keys, foreign key constraints, indexes and comments, in the browser
+- **Undo** — `Ctrl+Z` steps back through your edits one gesture at a time (a drag is one step,
+  so is an AI apply). **Saving cannot be undone**, and **closing the tab clears the history**
 - **Export DDL** — eight database profiles from one design (see the table below)
 - **Export ORM models** — JPA (Kotlin), Prisma and Drizzle
 - **Import an existing database** — introspection reads `information_schema` and `pg_catalog`, and returns JSON
@@ -158,14 +160,14 @@ Pick what to apply with `all` or `1,4,11`. Afterwards you get:
 ```
 grabado: 3 件のうち 2 件を適用した。
 **まだ保存していない** —— 保存するまで正本のファイルは変わらない。
-気に入らなければ保存せずに読み直せば元に戻る（grabado に undo は無い）。
+**適用は undo 1 回で丸ごと戻る**（Ctrl+Z）。保存した状態まで戻すなら、保存せずに読み直す。
 
   適用: employees.id（change-type）
   見送り: gone.name（rename-column） —— そのテーブルが設計にありません
 ```
 
-**Applying is not saving.** grabado has no undo, but **reloading without saving puts everything
-back**.
+**Applying is not saving.** If you do not like the result, **one undo (`Ctrl+Z`)** takes you back
+to before the apply, and **reloading without saving** takes you back to the last save.
 
 ### Suggestions cannot destroy a design
 
@@ -271,7 +273,8 @@ non-root user, cannot write to it and exits**.
 
 **Dropping `-v` altogether does not start the container.** Running without a source of truth
 would write inside the container, so **the designs would go away with it** — grabado stops before
-that happens (issue #202).
+that happens (issue #202). **Read-only mode is the one exception**, and there `-v` is not needed
+(see "Read-only mode" below).
 
 Both amd64 and arm64 are included. **You can check what is inside without waiting for us to tell
 you** — the origin, version and license are in the OCI labels, and the bundled JRE and dependency
@@ -315,6 +318,13 @@ GRABADO_READONLY=true docker compose up
 Saving, introspection and AI are disabled; `list` and `load` still work. **This is the only mode a
 public demo can run in** — the AI calls would be billed to us and introspection is an SSRF pivot, so
 **neither belongs anywhere strangers can reach**.
+
+**This mode needs no mount.** Nothing is saved, so no place to save to is required — **one line
+brings up a read-only viewer** (the server lists no designs; editing happens in the browser):
+
+```bash
+docker run --rm -p 8080:8080 -e GRABADO_READONLY=true ghcr.io/propagandist/grabado
+```
 
 ### Note for Linux hosts
 

@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <locale>
+    <!-- history -->
+    <string name="undo">元に戻す</string>
+    <string name="redo">やり直す</string>
+
     <!-- table management -->
     <string name="addtable">テーブルを追加</string>
     <string name="edittable">テーブルを編集</string>

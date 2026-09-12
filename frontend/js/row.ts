@@ -469,6 +469,12 @@ export class Row extends Visual<RowDom> {
 
         this.update(data);
         this.setTitle(this.dom.name.value);
+        /*
+         * grabado: #288。行の属性編集（update）と改名（setTitle）を 1 手にまとめる。
+         * deselect() がここを通るので、他をクリックして抜けた場合も確定する。
+         * 開いて何も変えずに閉じた場合は commit() が同値で弾く。
+         */
+        this.owner.owner.historyManager.commit();
     }
 
     load(): void {

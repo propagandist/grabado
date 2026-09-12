@@ -135,4 +135,28 @@ describe("規模の費用（#206）", () => {
             expect(sizes[0]).toBe(EXPECTED_DOM(0) + 7);
         });
     });
+
+    describe("履歴（#288）", () => {
+        /*
+         * ★★ **上の 10 カウンタは、undo / redo の事故を 1 ビットも検出しない。**
+         *   tests/support/probe.ts が数えるのはレイアウト読み出し 4 つと
+         *   redraw / update の呼び出しだけで、**extractModel はどれも通らない**。
+         *   確定点を低レベルの変異点（addTable / addRow / Row.update）に置くと
+         *   読み込み 1 回で N x C 回スナップショットを採ることになるが、
+         *   **全カウンタが緑のまま、次数判定も緑、タイムアウトもしない**。
+         *
+         *   **スタックの深さを見るのが唯一の計器。**
+         */
+        it("読み込み 1 回でスタックが 1 件しか増えない", () => {
+            h.designer.clearTables();
+            h.designer.io.loadDesignText(syntheticDesign(10));
+            const history = h.designer.historyManager;
+            history.reset();
+
+            /* 実経路（UI と同じ入口）で、100 テーブルを読む */
+            h.designer.io.loadDesignText(syntheticDesign(100));
+
+            expect(history.depth()).toBe(1);
+        });
+    });
 });

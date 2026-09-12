@@ -87,11 +87,7 @@ export class TableManager {
         OZ.Event.add(this.dom.removetable, "click", this.remove.bind(this));
         OZ.Event.add(this.dom.cleartables, "click", this.clear.bind(this));
         OZ.Event.add(this.dom.addrow, "click", this.addRow.bind(this));
-        OZ.Event.add(
-            this.dom.aligntables,
-            "click",
-            this.owner.alignTables.bind(this.owner)
-        );
+        OZ.Event.add(this.dom.aligntables, "click", this.align.bind(this));
         OZ.Event.add(this.dom.edittable, "click", this.edit.bind(this));
         OZ.Event.add(this.dom.tablekeys, "click", this.keys.bind(this));
         OZ.Event.add(document, "keydown", this.press.bind(this));
@@ -235,6 +231,18 @@ export class TableManager {
         }
     }
 
+    /**
+     * 自動整列（#288）。
+     *
+     * ★ **Designer.alignTables() の中に commit を置かない** —— IO.importresponse() と
+     *   Designer.fromXMLText() が内部で呼んでおり、そちらは取り込み全体で 1 手にしたい。
+     *   関数に置くと二重に積まれるので、**ボタンの側で包む**。
+     */
+    align(e?: Event): void {
+        this.owner.alignTables();
+        this.owner.historyManager.commit();
+    }
+
     async clear(e?: Event): Promise<void> {
         /* remove all tables */
         if (!this.owner.tables.length) {
@@ -245,6 +253,8 @@ export class TableManager {
             return;
         }
         this.owner.clearTables();
+        /* grabado: #288。confirm が false なら上で return している */
+        this.owner.historyManager.commit();
     }
 
     async remove(e?: Event): Promise<void> {
@@ -264,6 +274,8 @@ export class TableManager {
         for (var i = 0; i < sel.length; i++) {
             this.owner.removeTable(sel[i]!);
         }
+        /* grabado: #288。confirm が false なら上で return しているので、ここは削除が起きた後 */
+        this.owner.historyManager.commit();
     }
 
     edit(e?: Event): void {

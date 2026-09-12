@@ -556,6 +556,13 @@ export class Table extends Visual<TableDom> {
         OZ.Event.remove(this.documentMove);
         OZ.Event.remove(this.documentUp);
         this.owner.sync();
+        /*
+         * grabado: #288。**ドラッグを 1 手に畳む。** move() は mousemove ごとに
+         * moveTo() を呼ぶので、そちらに置くと数百手が積まれる（N=300 では 1 回あたり
+         * 数 ms の extractModel も払うことになる）。複数選択の同時ドラッグもここで
+         * 1 手になる。掴んだだけで動かさなかった場合は commit() が同値で弾く。
+         */
+        this.owner.historyManager.commit();
     }
 
     destroy(): void {

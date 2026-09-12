@@ -252,8 +252,9 @@ io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
       →  io/extract.ts  →  io/xml-parser.ts  →  io/apply.ts  →  io/ddl/generate.ts
       →  visual.ts  →  row.ts  →  table.ts  →  relation.ts
       →  key.ts  →  rubberband.ts  →  map.ts  →  toggle.ts  →  io.ts
-      →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts  →  window.ts  →  options.ts
-      →  wwwsqldesigner.ts
+      →  tablemanager.ts  →  rowmanager.ts  →  keymanager.ts
+      →  history.ts  →  historymanager.ts
+      →  window.ts  →  options.ts  →  wwwsqldesigner.ts
 ```
 
 `io/palette.ts` が先頭なのは `js/` のどこにも依存しないため（段階4-0b）。段階6-5a まで
@@ -278,6 +279,10 @@ io/palette.ts  →  oz.ts  →  config.ts  →  globals.ts
   （本ファイルは js/ のどこにも依存しなくなった）。
 - `visual.ts` → `row.ts` / `table.ts` / `relation.ts` / `key.ts` が描画中核（Tier 2 で温存）。
   **段階2 で ES クラス階層になり、段階3-2 で `.ts` 化した**（§5.4）。
+- `history.ts` / `historymanager.ts` は **undo / redo**（#288 / #289。§5.8）。前者は
+  **`import` が 0 本で `string` しか知らない**ので位置の制約が無く、唯一の消費者である
+  後者の直前に置いてある。後者は `io/extract.ts` / `io/apply.ts` / `io/validate.ts` を
+  値で import するが、これは `wwwsqldesigner.ts` が既に張っている辺と同じ向き（描画 → io）。
 - `wwwsqldesigner.js` の `SQL.Designer` が全体のオーナー（オプション・cookie・XHR ヘッダ・`toXML()`）。
   **段階2 でクラス（`SQL.Designer`）と唯一のインスタンス（`SQL.designer`）に分離**した。
 - **`.ts` 化はこの読み込み順の先頭から進める**（§5.5）。葉から進めると未 `.ts` のグローバルに対する
@@ -744,6 +749,51 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 **数の正本は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md)**（測った日と機械つき）。
 測り方は [`../tests/scale/README.md`](../tests/scale/README.md)。
 
+### 5.8 編集の履歴（#288 / #289。2026-09-12）
+
+**undo / redo はスナップショット方式。** 積むのは `JSON.stringify(extractModel(designer))` の
+**文字列 1 本**で、復元は `clearTables()` → `applyDesignModel()`（`js/io.ts` の `aiapply()` と
+同じ形）。差分コマンドを 16 本書くと `js/io/model.ts` が拒んでいる「第 2 の真実」になる。
+
+| | |
+|---|---|
+| [`../frontend/js/history.ts`](../frontend/js/history.ts) | 純粋なスタック（past / present / future）。**`import` 0 本**で `string` しか知らない。上限は **50 手 ＋ 16,000,000 文字**で、どちらかに当たったら古い側から捨てる（★ **最低 1 手は残す** —— 1 件で上限を超える設計でも直前には戻れる） |
+| [`../frontend/js/historymanager.ts`](../frontend/js/historymanager.ts) | 確定・復元・関門・UI（ボタン 2 つと `document` への 5 本目の keydown）。`Designer.historyManager` として `init2()` が持つ |
+
+**文字列で持つ理由**（N=300 の実測）: オブジェクトのままだと 1 件 532KB / live オブジェクト
+7,197 個、文字列なら 313KB / **1 個**。効くのはメモリ量より**参照の寿命**で、`OZ.Event._byID` は
+素のオブジェクトで GC が効かない（#209）—— **スタックが文字列なら、破棄済みの Table / Row を
+構造的に掴めない**。
+
+**1 手 = 1 つの UI のジェスチャ。** 確定点（`commit()`）は 6 ファイルの **UI 入口 16 箇所**に
+撒いてあり、モデルを触る側（`addTable` / `addRow` / `Row.update`）には置かない —— 置くと
+テーブル 1 個作るのに `Ctrl+Z` が 6 回、キー名を 8 文字打って 8 回になる。`<dialog>` の
+`close` が OK / cancel / Esc の 3 経路を 1 箇所に集める。
+
+★★ **`undo()` は先に `commit()` を呼ぶ。** 撒き忘れた経路の変更も、undo の瞬間に 1 手として
+確定してから巻き戻る —— **漏れの代償は粒度だけ**で、「最後の編集が消える / 飛ばされる」は
+構造的に起きない。確定点は人が撒く以上、漏れは「起きるか」ではなく「起きたとき何が壊れるか」
+で設計してある。
+
+**関門 2 つ**（どちらも `commit` / `redo` の入口で見る）:
+
+- **型パレットが差し替わったら履歴を捨てる** —— `RowModel.type` は添字（§5.6）なので、
+  範囲外なら `Row.update()` が `TypeError`、**範囲内なら黙って別の型になる**。差し替えの
+  呼び出し箇所に置かないのは、`dbResponse` が `init2()` より前にも走るため
+- **同名テーブルがあるあいだは積まない** —— 復元すると relation が先頭へ寄る（`io/apply.ts` の
+  既知の不具合）。★ **復元側に `assertLoadableDesign` を掛けない** —— 関門は「外から来た
+  バイト列」に掛けるもので、掛けると**手で同名テーブルを作った瞬間に undo が壊れる**
+
+**戻らないもの**: textarea の内容 ／ 選択・展開・スクロール（`DesignModel` が持たない）／
+保存（**undo は保存を取り消さない**）／ options ／ **タブを閉じたあと**（履歴は localStorage に
+残さない —— 「自動保存は無い」と衝突する）。
+
+**費用**（§5.7 の実測から）: `commit()` は N=300 で数 ms（`extractModel` は DOM を 1 度も
+読まない）、**undo 1 回は読み込みと同じ 1.25〜2.15 秒**。
+★★ **`tests/node/scale.test.ts` の 10 カウンタは、この機能の事故を 1 ビットも検出しない** ——
+`tests/support/probe.ts` が数えるのはレイアウト読み出しと `redraw` / `update` の呼び出しだけで、
+`extractModel` はどれも通らない。**「読み込み 1 回でスタックが 1 件しか増えない」が唯一の計器。**
+
 ## 6. 特性化テストの構成（HANDOVER §7・実装済み）
 
 走らせ方・golden の更新手順・fixture の追加手順は [`TESTING.md`](TESTING.md) に集約した。ここでは現行構成との対応だけ示す。
@@ -826,8 +876,20 @@ SQL 型情報を返し、型 id への解決はフロントの `TypePalette` が
 
 | env | 既定 | 用途 |
 |---|---|---|
-| `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ） |
+| `GRABADO_SCHEMA_DIR`（`SCHEMA_DIR` も読む） | `/data/schema` | 正本ディレクトリ。**起動時に存在・種別・読み書きを検証し、駄目なら起動失敗**（mount 忘れでコンテナ内 fs に書く事故を塞ぐ）。★ **READONLY のときは「無い」だけが例外**（下の行。issue #286） |
 | `GRABADO_READONLY`（`READONLY` も読む） | `false` | save を **403** にする（段階5-3 で実装）。introspection は 5-7、AI は §11 で同じ扱いになる。**公開デモは `true` 一択** —— AI は API 費用が自社負担、introspection は SSRF の踏み台になるため。READONLY のときは正本ディレクトリの**書き込み可能性を要求しない**（読み取り専用マウントでも起動する） |
+
+★ **READONLY のときは、正本ディレクトリが「無い」ことも許す**（**2026-09-12**。issue #286）——
+**設計 0 件で起動し、`list` は 0 件・`load` は 404 を返す**（起動時に INFO を 1 行出す）。
+**上の 2 行はここで初めて噛み合う** —— 元は「読み書きを検証し、駄目なら起動失敗」と
+「**読み取り専用マウント**でも起動する」が同じ表に並んでおり、**マウントそのものが無い場合に
+どちらが効くのかが書かれていなかった**（**公開デモは mount を持たない契約**。§9.7）。
+
+**軸は「ディレクトリが在るか」ではなく「書き込み先が要るか（＝ `!readonly`）」。** #202 が防ぐ事故は
+「保存したものがコンテナを捨てた瞬間に消える」で、**保存できないデプロイでは原理的に起きない**。
+**例外にするのは「無い」だけ** —— 在るのにファイルだったり読めなかったりするのは
+**mount を意図した人が居て、それが失敗している**状態なので、READONLY でも起動しない。
+**READONLY でなければ、無い＝起動失敗のまま**（#202 は 1 つも緩んでいない）。
 | `GRABADO_HSTS` | `false` | `Strict-Transport-Security` を出す（issue #84）。**TLS の後ろに置いたデプロイだけ `true`** —— TLS を終端するのは前段（公開デモは Railway）で、アプリが見る口はいつも平文なので `request.isSecure` では判断できない。**既定で出すと手元が壊れる**（`http://localhost:8080` を開いたブラウザが以後 localhost を https へ強制し、消すにはブラウザの設定を触るしかない） |
 | `GRABADO_MAX_DESIGN_BYTES` | `1048576`（1 MiB） | save が受け取る設計 1 本の上限。超えたら **413**（issue #215）。**実測から出した値**（#206）—— 300 テーブルの設計 JSON が 414 KiB なので **750 テーブル相当**。★ **nginx の既定 `client_max_body_size` と同じ 1 MiB に揃えてある** —— 前段にプロキシを置くと 413 は**アプリを通らずに返る**ので、境界が揃っていれば「プロキシの裏かどうか」で挙動が変わらない。判定は**読み切る前**（`readNBytes(limit+1)`）|
 | introspection の接続先 | 空（＝ introspection 無効） | **名前付きの表で列挙**する。`?action=import&database=<name>` が選ぶのは表のキーだけで、**JDBC URL をリクエストで受けない**（SSRF を不可能にする）。**入るのは 5-7** |
@@ -974,6 +1036,12 @@ op が何を書き換えるかは次のとおりで、**書き込み先はモデ
 ★ **適用は保存ではない。** 正本は git 管理のファイルで `save` するまで 1 バイトも変わらない。
 grabado に undo は無いが、**気に入らなければ保存せず読み直せば戻る** —— それを結果の
 1 枚が毎回書く（`js/io/ai/notice.ts` の `applyNotice`）。
+
+★★ **訂正（2026-09-12。#290）—— 上の段落は 2026-08-24 時点の契約として残す。**
+**#288 / #289 で undo が入り、戻り方が 1 つから 2 つになった** —— `aiapply()` は末尾で
+`historyManager.commit()` を **1 回だけ**呼ぶので、**何件当たっても undo 1 手で丸ごと戻る**
+（保存した状態まで戻すのは、いまも読み直し）。**結果の 1 枚が毎回書く、という要件のほうは
+変わっていない** —— 変わったのは、そこに書く内容が 2 つになったこと。詳しくは §5.8。
 
 ★ **`rationale` を HTML として描画しない。** モデルが書いた自由文で、org security-baseline
 §5.2 が「崩れる変更」に名指ししている（11-2b の実測でも他言語の語が混じった例がある）。
@@ -1148,6 +1216,10 @@ compose が root 所有で作る（**その場合は entrypoint が既定の `gr
 #103）。
 `GRABADO_SCHEMA_DIR` は**コンテナ内のパス**なので、これだけ変えても mount 先は動かない
 （ずれれば起動時の検証で落ちる —— 黙って別の場所へ書くことはない）。
+★ **`GRABADO_READONLY=true` のときだけ、ずれても落ちずに設計 0 件で起動する**（issue #286。§7.3）
+—— **保存しないので、黙って別の場所へ書きようがない**。**気づける口は起動時の INFO 1 行だけ**
+なので、READONLY で mount するつもりなら**そこを読む**（`docs/ARCHITECTURE.md` §9.7 の公開デモは
+mount しない構成なので、これが正常）。
 
 **introspection の接続先は、env の名前そのものが表のキーを持つ** ——
 `GRABADO_INTROSPECT_SOURCES_<名前>_URL` / `_USER` / `_PASSWORD` / `_SCHEMA`（Spring の
@@ -1244,6 +1316,10 @@ GRABADO_READONLY=true docker compose up  # 公開デモと同じ条件（save / 
 
 compose を使わないなら `docker build -t grabado .` ＋
 `docker run --rm -p 8080:8080 -v "$PWD/schema:/data/schema" grabado`。
+★ **この「compose を使わない」起こし方は、2026-09-12 から機械が叩く**（issue #286。
+[`../tests/image/docker-run.ts`](../tests/image/docker-run.ts)）—— ただし叩くのは
+**公開デモの形（`-e GRABADO_READONLY=true` ＋ `-v` 無し）**で、**`-v` 付きの形は
+`release-image.yml` の担当のまま**。
 **★ 配布イメージ（`ghcr.io/propagandist/grabado`）を出すのは #165** —— **それまでは build が
 唯一の経路**（§9.1。**2026-09-04 に「配る」と決めた**）。
 
@@ -1273,7 +1349,8 @@ curl が `application/x-www-form-urlencoded` を送り、**Tomcat がパラメ�
 [`TESTING.md`](TESTING.md)、決定と実測は `CUSTOMIZATIONS.md` の段階2-4。
 
 ```bash
-npm run test:image   # compose で build → 通常モードで一巡 → READONLY で起こし直して一巡 → down
+npm run test:image   # compose で build → 通常モードで一巡 → READONLY で起こし直して一巡
+                     # → 公開デモの形（docker run。env 2 本・mount 無し）でもう一巡 → down
 ```
 
 **実測（2026-08-26、段階2-4。Docker 29.5.3 / Docker Compose v5.1.4）**
@@ -1284,6 +1361,20 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | 所要 | **3.0 分**（フロントか backend を変えた場合）／ **35 秒**（変えていない場合。ビルドがキャッシュに当たる） |
 | READONLY への入れ替え | `docker compose up -d --wait` の再実行で **12.2 秒**（`Recreated` → `Healthy`） |
 | 後片付け | `down` でコンテナもネットワークも残らない |
+
+★ **再測（2026-09-12。issue #286 で 6 本足したあと。同じ手元の Docker Desktop for Windows）**
+
+| 確かめたこと | 結果 |
+|---|---|
+| 通し | **19 本が緑**（通常 8 ＋ READONLY 5 ＋ **公開デモの形 6**） |
+| 公開デモの形への入れ替え | **11.1 秒**（compose を `down` → `docker run`（env 2 本・mount 無し）→ `capabilities` が返るまで） |
+| #202 の fail-fast（mount 無し ＋ READONLY 無し） | **6.7 秒で exit=1** |
+| 通し（build 込み） | **5.0 分** |
+| 通し（ビルドがキャッシュに当たる場合） | **42 秒**（13 本のときは 35 秒） |
+
+**上の 2026-08-26 の表は消さない** —— **13 本だったときの値**で、比べる相手として要る。
+★ **ただし 3.0 分 → 5.0 分の差を #286 の代償として読まない** —— **足した 6 本ぶんは 18 秒ほど**
+（11.1 ＋ 6.7）で、**残りは build のぶん**。**日も中身も違う**（2 週間ぶんの依存とフロントが乗っている）。
 
 ★ **`--wait` は healthy まで待つ**（同日実測）。だから **Dockerfile に `HEALTHCHECK` を
 置かない** —— 判定間隔と猶予の正本を `compose.yaml` の 1 か所に保つ（2-3 が 2-4 に預けた判断）。
@@ -1303,7 +1394,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 |---|---|---|---:|
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
 | [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
-| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 13 本**（通常 8 ＋ READONLY 5） | **131〜147 秒** |
+| [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 19 本**（通常 8 ＋ READONLY 5 ＋ **公開デモの形 6**） | **154 秒**（2026-09-12。19 本）／ 131〜147 秒（13 本のとき） |
 | [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **約 2.5 分** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
 
@@ -1319,6 +1410,12 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | `ci-server` の `./gradlew build` | 93 |
 
 **3 本は並列に走る**ので、**PR の待ち時間は最長の 131〜147 秒**（合計ではない）。
+
+★ **再測（2026-09-12。issue #286 で 6 本足したあとの PR #287。3 本とも緑）** ——
+**`ci-image` は 154 秒**（`ci-frontend` 73 ／ `ci-server` 84）。**E2E のステップは 96〜97 → 104 秒**で、
+**増えたのは 7〜8 秒**（公開デモの形で起こし直すぶん ＋ fail-fast の `docker run`）。
+**Chromium の取得は 14 秒**（キャッシュに当たった）。**上の 2026-08-26 の内訳は消さない** ——
+**13 本だったときの値**で、**増分がどこに乗ったかは、並べないと読めない**。
 
 **★ 幅は 2 run の実測**（2026-08-26。**同じ内容で回した**）。**ぶれているのは Chromium の取得だけ**
 （24 秒 → 39 秒）で、**イメージ build 78 秒・13 本 11 秒・E2E ステップ 96〜97 秒は 2 run とも動かない**。
@@ -1349,7 +1446,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | 層 | grabado では |
 |---|---|
 | **① 手元**（0 分） | 導入時に 1 回。**gitleaks は 2026-08-26 に実走**（331 コミット / 0 件）、**actionlint も同日**（1.7.12 / 0 件。**壊して拾うことも確かめた**） |
-| **② 自動テスト**（増分 0 分） | 上の 3 本に相乗り —— CSP とヘッダ（`csp.test.ts` ＋ イメージ E2E）・env の写し（`env-contract.test.ts`）・READONLY・契約表 |
+| **② 自動テスト**（増分 0 分） | 上の 3 本に相乗り —— CSP とヘッダ（`csp.test.ts` ＋ イメージ E2E）・env の写し（`env-contract.test.ts`）・READONLY・契約表・**公開デモの形**（env 2 本・mount 無し。**2026-09-12 に入った**。issue #286） |
 | **③ 週次 cron** | **置かない** |
 
 **★ ③ を置かない**（**2026-08-26 の判断を 2026-09-04 に引き直し、結論は変えなかった**。#164）。
@@ -1438,13 +1535,23 @@ standard runner / 言語 5 種）。**分類 B に置く層は ① ＋ ② ま�
 | ビルド元 | **`main`** | `BRANCHING.md` の `main` ＝ リリース済み。**正本は git のまま**で、デモは下流（`HANDOVER.md` §2.3） |
 | ポート | **8080**（Railway 側の target port で指定） | `PORT` をアプリに実装しない —— **ポートの決め方を 2 つにしない**（8080 は既に `Dockerfile` / `compose.yaml` / docs / tests に写しを持つ） |
 | env | **`GRABADO_READONLY=true`** ＋ **`GRABADO_HSTS=true`** の 2 本だけ | READONLY は一択（§7.3）。HSTS は**TLS の後ろにいるデプロイだけ**が立てる（§9.4） |
-| mount | **無し** | READONLY なので `/data/schema` は書けなくてよい（イメージが作って所有権を渡している。§9.1）。**`list` は 0 件を返す** |
+| mount | **無し** | READONLY なので `/data/schema` は書けなくてよい（**アプリが「無い」を許す**。§7.3 ／ issue #286）。**`list` は 0 件を返す** |
 | ドメイン | **`grabado.dev`**（apex） | 公開の顔。**Porkbun は ALIAS を持つ**ので apex に CNAME 相当を置ける |
 | TLS | **Railway が発行**（Let's Encrypt。2026-08-30 に証明書を実見） | `.dev` は **TLD ごと HSTS プリロード済み**＝常時 HTTPS 強制 |
 | CAA | **置く**（`issue "letsencrypt.org"` ＋ `iodef`） | org security-baseline §4.2。**判断した記録が要る**ほうの要件 |
 
 **★ CAA は証明書が出てから置く。** 発行者を推測で書くと、**間違えたときに発行が黙って止まる**。
 **DNS を Railway へ向ける → 発行させる → issuer を実見する → CAA を置く**の順。
+
+★★ **mount の行の括弧の中は、2026-09-09 から 2026-09-12 まで偽だった**（issue #286）。
+**元は「イメージが作って所有権を渡している（§9.1）」** —— #246 が `Dockerfile` から
+`mkdir -p /data/schema` を外した日に**その根拠が消えた**のに、この行は残っていた。
+**表の結論（mount 無し）は動いていない**が、**それを支えていたものが入れ替わった** ——
+**イメージが作るのをやめ、アプリが「無い」を許すようになった**（§7.3）。
+**代償は 3 日間**で、**v0.4.0 〜 v0.8.0 は、この節の形では起動しない**
+（2026-09-12 に `grabado.dev` が **502**。実走は `grabado-ops#5`、判断は `CUSTOMIZATIONS.md` の同日）。
+**この節の形を叩く検査が 1 つも無かったこと**が本体の穴で、
+**`tests/image/demo.spec.ts` がそれを塞いだ**（下の「確かめ方」）。
 
 #### 確かめ方（機械で見える 4 つ）
 
@@ -1486,4 +1593,20 @@ curl -s -H 'accept: application/dns-json' \
 `http://127.0.0.1:8080` で叩くので、**`GRABADO_HSTS` を立てない**。
 **アプリが出すこと自体は `HstsEnabledTest` が見る**（§9.4）が、
 **公開 URL に載っていることは上の `curl` でしか分からない。**
+
+★★ **範囲が狭まった**（**2026-09-12**。issue #286）—— **この節の形（env 2 本・mount 無し）で
+イメージを起こす層ができた**ので、`tests/image/demo.spec.ts` が **`GRABADO_HSTS=true` を立てて
+叩く**ようになった。**新しく見えるようになったのは 2 つ**:
+
+- **`GRABADO_HSTS` という env の名前で効くこと** —— `HstsEnabledTest` が登録しているのは
+  **Spring のプロパティ `grabado.hsts`** で、**env 名の鎖はどこも通っていなかった**（同日実測）
+- **`preload` が付いていないこと**（上の `curl` の 1 本目と同じもの）。**値そのものは見ない**
+  —— 正本は `SecurityHeadersFilter.HSTS` で、`HstsTest` が持つ（**写しを 3 つ目にしない**）
+
+**依然として見えないのは「HTTPS で出ていること」と「公開 URL に載っていること」**で、
+**そこは上の `curl` のまま。** 上の★を消さないのは、**半分は今も正しい**ため。
+
+★ **上の 4 本のうち 3 本は、PR ごとに機械が見るようになった**（同日）——
+`capabilities` ／ save の 403 ／ HSTS の `preload` 無し。**外側にしか無いのは CAA と、
+公開 URL に載っていること**（TLS の後ろにいるかどうかは、アプリからは見えない）。
 

@@ -33,6 +33,11 @@ schema_dir="${GRABADO_SCHEMA_DIR:-/data/schema}"
 if [ ! -d "$schema_dir" ]; then
     # 起動時 fail-fast は FileDesignStore の仕事。ここでは判断せず、そのまま渡す
     # （「無い」と「書けない」を別の場所で二重に判定しない）。
+    #
+    # ★ **この分岐は 2026-09-12 から正常系でもある**（issue #286）——
+    #   GRABADO_READONLY=true なら、あちらは落とさずに設計 0 件で起動する
+    #   （mount を持たない公開デモの形。docs/ARCHITECTURE.md §9.7）。
+    #   **ここは 1 行も変えていない**。判断を持たない形にしてあったので、そのまま通った。
     exec su-exec grabado "$@"
 fi
 

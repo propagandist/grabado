@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { SERIALIZER_DB, readFixture } from "../support/fixtures.ts";
 import { createHarness, type NodeHarness } from "./harness.ts";
+import { collectEdges } from "../../frontend/js/io/layout/apply.ts";
 
 /*
  * UI 層（js/io.ts）の保存/読込経路の検査。HANDOVER §4 段階4-3b。
@@ -852,6 +853,55 @@ describe("UI の保存/読込経路（Node / jsdom）", () => {
             h.io.check(413);
             /* 未訳なら "http413" というキーがそのまま出る（globals.ts の _()） */
             expect(h.io.dom.ta.value).not.toContain("http413");
+        });
+    });
+
+    describe("整列（#297）", () => {
+        test("整列してもサーバへ 1 バイトも飛ばない", () => {
+            h.takeRequests();
+            h.designer.alignTables();
+            expect(h.takeRequests()).toHaveLength(0);
+        });
+
+        /*
+         * ★ jsdom は offsetWidth が 0 を返すので、**寸法が全部 0 の盤面**になる ――
+         * 実測では作れない入力だが、**純関数はそれでも落ちない**（layout.test.ts の
+         * 異常系「寸法 0」と同じ形）。ここで見たいのは座標の質ではなく、
+         * **経路が副作用を持たないこと**。
+         */
+        test("整列は例外を投げず、テーブルの本数も順序も変えない", () => {
+            const before = h.designer.tables.map((t) => t.getTitle());
+            h.designer.alignTables();
+            expect(h.designer.tables.map((t) => t.getTitle())).toEqual(before);
+        });
+
+        /*
+         * ★★ **辺の向きはここでしか押さえられない。** 純関数のテスト（layout.test.ts）は
+         *   添字の辺を直に組むので、**ライブツリーから辺を読む側**を 1 行も通らない。
+         *   実ブラウザの棚も、**辺が 1 本も取れなくなる変異を緑のまま通す**（不変条件は
+         *   全部成り立つ ―― 全テーブルが孤立成分になるだけなので）。2026-09-13 に実測した。
+         */
+        test("FK の向きを row2（子）-> row1（親）で写す", () => {
+            h.loadFixture(readFixture(SERIALIZER_DB, "relations"));
+            const tables = h.designer.tables;
+            const titles = tables.map((t) => t.getTitle());
+            const named = collectEdges(tables)
+                .map((e) => `${titles[e.from]} -> ${titles[e.to]}`)
+                .sort();
+
+            /* 自己参照 1 ＋ projects 2 ＋ employee_projects 2 */
+            expect(named).toEqual([
+                "employee_projects -> employees",
+                "employee_projects -> projects",
+                "employees -> employees",
+                "projects -> employees",
+                "projects -> teams",
+            ]);
+        });
+
+        test("同じ relation を両端から 2 度拾わない", () => {
+            h.loadFixture(readFixture(SERIALIZER_DB, "relations"));
+            expect(collectEdges(h.designer.tables)).toHaveLength(5);
         });
     });
 });

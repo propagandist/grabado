@@ -508,3 +508,122 @@ test.describe("幾何の棚", () => {
         expect(seen.onePass).toEqual(seen.twoPass);
     });
 });
+
+/*
+ * 整列（#297）。**採取側（tests/support/geometry.ts）に 1 行も足していない** ――
+ * 見たいものは既に採れている（実測の left/top/width/height、モデルの x/y、designer の寸法、
+ * relation の端点）。
+ *
+ * ★★ **実ブラウザでしか見られないのは「実測寸法での重なり」と「2 回で動かないこと」。**
+ *   純関数は渡された寸法の上では重ならないことを Node で保証しているが、**その寸法が
+ *   実際の DOM と一致しているか**はここでしか分からない。とくに shrink-to-fit
+ *   （js/table.ts の「left によって上限が変わりうる」）は、**置いた後に測り直して初めて出る**。
+ */
+test.describe("整列", () => {
+    test.beforeAll(async () => {
+        await loadFixture(page, readFixture(SERIALIZER_DB, "relations"));
+    });
+
+    test.afterAll(async () => {
+        await page.evaluate(() => {
+            window.d!.clearTables();
+            window.d!.sync();
+        });
+    });
+
+    async function align(): Promise<void> {
+        await page.evaluate(() => {
+            window.d!.alignTables();
+        });
+    }
+
+    /** 実測の矩形で 1 対も重ならないこと。**モデルの x/y ではなく left/top を見る** */
+    function expectNoOverlap(snap: GeometrySnapshot): void {
+        for (let i = 0; i < snap.tables.length; i++) {
+            for (let j = i + 1; j < snap.tables.length; j++) {
+                const a = snap.tables[i]!;
+                const b = snap.tables[j]!;
+                const apart =
+                    a.left + a.width <= b.left ||
+                    b.left + b.width <= a.left ||
+                    a.top + a.height <= b.top ||
+                    b.top + b.height <= a.top;
+                expect(
+                    apart,
+                    `${a.title} と ${b.title} が重なっている`,
+                ).toBe(true);
+            }
+        }
+    }
+
+    test("実測寸法で箱が 1 対も重ならない", async () => {
+        await align();
+        expectNoOverlap(await captureGeometry(page));
+    });
+
+    test("2 回続けて整列しても座標が 1 つも動かない", async () => {
+        await align();
+        const first = await captureGeometry(page);
+        await align();
+        const second = await captureGeometry(page);
+
+        /*
+         * ★ shrink-to-fit を捕まえるのはこの 1 本だけ。折り返し幅が #area の右端に
+         * 届くと、置いた後の実測幅が置く前と違い、2 回目が別の結果を出す。
+         */
+        expect(second.tables.map((t) => [t.title, t.x, t.y])).toEqual(
+            first.tables.map((t) => [t.title, t.x, t.y]),
+        );
+        expect(second.tables.map((t) => [t.left, t.top, t.width])).toEqual(
+            first.tables.map((t) => [t.left, t.top, t.width]),
+        );
+    });
+
+    test("端点がアンカーに乗り続ける", async () => {
+        await align();
+        const snap = await captureGeometry(page);
+        expect(snap.relations.length).toBe(5);
+        /* 新しい判定を書かない ―― 既存の不変条件をそのまま当てる */
+        expectEndpointsOnAnchors(snap);
+    });
+
+    test("盤面寸法が全テーブルを含む", async () => {
+        /*
+         * ★ **この 1 本は現状の fixture では弱い。** sync() の下限は minSize（#area の
+         * 実寸 3000x3000）なので、**4 テーブルでは sync() を呼ばなくても通る**
+         * （2026-09-13 に変異で実測）。**効きはじめるのは盤面を超える規模から**。
+         * それでも置くのは、「整列が盤面の外へ置く」が起きたときに**最初に落ちる場所**
+         * だからで、**捕まえられない変異があることを承知で残している**。
+         */
+        await align();
+        const snap = await captureGeometry(page);
+        for (const t of snap.tables) {
+            expect(snap.designer.width).toBeGreaterThanOrEqual(t.x + t.width);
+            expect(snap.designer.height).toBeGreaterThanOrEqual(t.y + t.height);
+        }
+    });
+
+    test("選択中のテーブルがあっても、上が全部成り立つ", async () => {
+        /* 選択中は縁も中心も 1px ずれる（relation.ts の分岐）。整列がそれを壊さないこと */
+        await page.evaluate(() => {
+            window.d!.tables[0]!.select();
+        });
+        try {
+            await align();
+            const first = await captureGeometry(page);
+            expect(first.tables.some((t) => t.selected)).toBe(true);
+            expectNoOverlap(first);
+            expectEndpointsOnAnchors(first);
+
+            await align();
+            const second = await captureGeometry(page);
+            expect(second.tables.map((t) => [t.x, t.y])).toEqual(
+                first.tables.map((t) => [t.x, t.y]),
+            );
+        } finally {
+            await page.evaluate(() => {
+                window.d!.tables[0]!.deselect();
+            });
+        }
+    });
+});

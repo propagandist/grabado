@@ -46,6 +46,7 @@ import { generateDdl } from "./io/ddl/generate.ts";
 import { generateOrm } from "./io/orm/generate.ts";
 import { parseDatatypes, parseDesignXml } from "./io/xml-parser.ts";
 import { applyDesignModel } from "./io/apply.ts";
+import { applyLayeredLayout } from "./io/layout/apply.ts";
 import { assertLoadableDesign } from "./io/validate.ts";
 import { serializeDesignJson } from "./io/json-serializer.ts";
 import { parseDesignJson } from "./io/json-parser.ts";
@@ -225,11 +226,13 @@ export class Designer extends Visual<DesignerDom> {
     }
 
     /**
-     * 読み込みのあいだ描き直しを溜める（#210）。**呼び手は applyDesignModel() ただ 1 つ。**
+     * 描き直しを溜める（#210）。**呼び手は 2 つ** —— js/io/apply.ts の applyDesignModel()
+     * と、js/io/layout/apply.ts の applyLayeredLayout()（#297 で足した）。
      *
      * ★★ **必ず try / finally で戻す。** applyRow はパレットの範囲外の型添字で TypeError に
      *   なる（js/io/apply.ts の applyDesignModel）。旗が立ったまま抜けると**以後すべての
-     *   描画が止まる** —— 画面が固まったように見えて、原因が読み込み 1 回前に遡る。
+     *   描画が止まる** —— 画面が固まったように見えて、原因が 1 回前の操作に遡る。
+     *   **整列の側も同じ要求を負う**（moveTo() は snap() の中で例外になりうる）。
      */
     suspendRedraw(): void {
         this.redrawSuspended = true;
@@ -695,56 +698,26 @@ export class Designer extends Visual<DesignerDom> {
         this.setTitle(false);
     }
 
-    /*
-     * grabado: 段階4-4 で known-issue #7 を直した。現行は this.tables を直接 sort() して
-     * いたので、再配置するだけのつもりが**保存されるテーブル順まで変わって**いた
-     * （js/io.ts の importresponse がロード直後に呼ぶため、サーバ import 経由で開くと
-     * 保存内容の順序が入れ替わる）。
+    /**
+     * FK の接続を見て座標を決める（#297）。**中身は js/io/layout/ にある。**
      *
-     * 不具合は「配列を破壊すること」で、「関係数の降順に座標を割り当てること」は仕様。
-     * そこで並べ替えた**コピー**を配置順としてだけ使う。this.tables の順序は入力のまま
-     * 保たれ、moveTo() が動かす座標は従来と 1 ピクセルも変わらない
-     * （sort は安定なので、関係数が同じテーブル同士の相対順も現行と同じ）。
+     * ★ **旧実装は接続を 1 度も見ていなかった。** FK の**本数**で降順に並べ、
+     * ウィンドウ幅で折り返して敷き詰めるだけで、「どのテーブルと繋がっているか」は
+     * 数えるだけ（getRelations().length）だった。かつ折り返し幅が OZ.DOM.win() だったので、
+     * **同じ設計を 1920px と 1366px の画面で整列すると別の座標が出た** —— 座標は
+     * 設計 JSON の一部（docs/FORMAT.md）なので、**git diff に「誰がどの画面で押したか」が
+     * 出ていた**。正本が git 管理のファイルであること（CLAUDE.md の制約2）と serializer が
+     * 決定論であること（制約3）の**前段に、決定論でない座標生成器が刺さっていた**。
+     *
+     * 旧実装の逐語は tests/node/layout.test.ts に参照実装として残してある
+     * （indexOfTypeNameLegacy と同じ立場）——**比較の相手としてだけ生きている**。
+     *
+     * ★ known-issue #7（段階4-4）の性質は引き継がれている。**this.tables の順序を
+     * 壊さない** —— 純関数が添字で受けて添字で返すので、**並べ替える余地がそもそも無い**
+     * （js/io/layout/model.ts の「受け取らないもの 3 つ」）。
      */
     alignTables(): void {
-        var win = OZ.DOM.win();
-        var avail = win[0] - OZ.$("bar").offsetWidth;
-        var x = 10;
-        var y = 10;
-        var max = 0;
-
-        /*
-         * grabado: #207。**比較キーは sort の前に 1 回だけ採る。** 元は比較関数が
-         * 毎回 getRelations() を呼んでおり（結果は .length にしか使っていない）、
-         * O(K log K) 回の走査になっていた。sort の最中に relations は動かないので
-         * 値は同じで、**sort は安定**なので関係数が同じテーブル同士の相対順も現行のまま。
-         */
-        var counts = new Map<Table, number>();
-        for (var c = 0; c < this.tables.length; c++) {
-            var counted = this.tables[c]!;
-            counts.set(counted, counted.getRelations().length);
-        }
-        var order = this.tables.slice().sort(function (a, b) {
-            return counts.get(b)! - counts.get(a)!;
-        });
-
-        for (var i = 0; i < order.length; i++) {
-            var t = order[i]!;
-            var w = t.dom.container.offsetWidth;
-            var h = t.dom.container.offsetHeight;
-            if (x + w > avail) {
-                x = 10;
-                y += 10 + max;
-                max = 0;
-            }
-            t.moveTo(x, y);
-            x += 10 + w;
-            if (h > max) {
-                max = h;
-            }
-        }
-
-        this.sync();
+        applyLayeredLayout(this);
     }
 
     /** 見つからなければ undefined を返す（js/io/apply.ts が if (!t1) continue で消費する） */

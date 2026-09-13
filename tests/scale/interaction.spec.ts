@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { loadJson, openDesigner, useDatatypes } from "../browser/harness.ts";
-import { syntheticDesign } from "../support/synthetic.ts";
+import { ALIGN_COUNTS, syntheticDesign } from "../support/synthetic.ts";
 import {
     installScaleProbe,
     readScaleProbe,
@@ -38,8 +38,8 @@ test("1 操作あたりの費用を測る", async ({ page }) => {
     );
 
     const lines = [
-        "| N | sync() ms | sync() の offsetW+H | 型変更 ms | 型変更の rowUpdate |",
-        "|---|---|---|---|---|",
+        "| N | sync() ms | sync() の offsetW+H | 型変更 ms | 型変更の rowUpdate | 整列 ms | 整列の offsetW |",
+        "|---|---|---|---|---|---|---|",
     ];
 
     for (const n of STEPS) {
@@ -77,9 +77,36 @@ test("1 操作あたりの費用を測る", async ({ page }) => {
          */
         expect(updateCounts.rowUpdate, `N=${n} の伝播`).toBe(2);
 
+        /*
+         * (3) 整列（#297）。**回数は実行系によらない。**
+         *
+         * ★★ **ここが「2 実行系で一致する」を見る唯一の場所。** 折り返しの結果は
+         *   `#area` の実寸で決まるので jsdom と実ブラウザで**座標は違う**が、
+         *   **読み出しの回数は同じ式に乗る** —— 計算が純関数で、DOM を 1 度も読まないため。
+         *   式の正本は tests/support/synthetic.ts の ALIGN_COUNTS（**2 か所に書かない**）。
+         */
+        await page.evaluate(`(${resetScaleProbe})(window)`);
+        const t2 = Date.now();
+        await page.evaluate(() => window.d!.alignTables());
+        const alignMs = Date.now() - t2;
+        const alignCounts = (await page.evaluate(
+            `(${readScaleProbe})(window)`,
+        )) as ScaleCounts;
+
+        expect(alignCounts.offsetWidth, `N=${n} の整列 offsetWidth`).toBe(
+            ALIGN_COUNTS.offsetWidth(n),
+        );
+        expect(alignCounts.offsetHeight, `N=${n} の整列 offsetHeight`).toBe(
+            ALIGN_COUNTS.offsetHeight(n),
+        );
+        expect(alignCounts.tableRedrawWorked, `N=${n} の整列 tableRedrawWorked`).toBe(
+            ALIGN_COUNTS.tableRedrawWorked(n),
+        );
+
         lines.push(
             `| ${n} | ${syncMs} | ${syncCounts.offsetWidth + syncCounts.offsetHeight} |` +
-                ` ${updateMs} | ${updateCounts.rowUpdate} |`,
+                ` ${updateMs} | ${updateCounts.rowUpdate} |` +
+                ` ${alignMs} | ${alignCounts.offsetWidth} |`,
         );
     }
 

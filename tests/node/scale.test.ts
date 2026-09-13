@@ -1,10 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { createHarness, type NodeHarness } from "./harness.ts";
 import {
+    ALIGN_COUNTS,
     SCALE_COUNTS,
     SCALE_DOM_NODES,
     syntheticDesign,
 } from "../support/synthetic.ts";
+import { collectEdges } from "../../frontend/js/io/layout/apply.ts";
+import { layoutLayered } from "../../frontend/js/io/layout/layered.ts";
 import {
     installScaleProbe,
     readScaleProbe,
@@ -26,9 +29,10 @@ import {
  *   offsetWidth と tableRedraw の係数は実測から当てはめた値。**守るのは線形性と係数**で、
  *   内訳が要るのは「効く」と分かってからでよい。
  *
- * ★ jsdom で数えられないもの: alignTables()（折り返しが offsetWidth に依存する）／
- *   Chromium の LayoutCount ／ 実時間。**この分担は docs/TESTING.md の
- *   「なぜ 2 系統あるのか」と同じ形**で、新しい規律を作っていない。
+ * ★ jsdom で数えられないもの: **alignTables() の折り返しの結果**（#297 から `#area` の実寸に
+ *   依存する。jsdom は 0 を返すので既定値へ落ちる。**回数そのものは jsdom でも数えられる** ——
+ *   計算が純関数で DOM を 1 度も読まないため）／ Chromium の LayoutCount ／ 実時間。
+ *   **この分担は docs/TESTING.md の「なぜ 2 系統あるのか」と同じ形**で、新しい規律を作っていない。
  */
 
 /** 測る段。300 は browser 側（jsdom で 4 段回すと npm test の増分が受け入れ基準を超える） */
@@ -44,7 +48,10 @@ const EXPECTED_DOM = SCALE_DOM_NODES;
 
 describe("規模の費用（#206）", () => {
     let h: NodeHarness;
-    const measured = new Map<number, { counts: ScaleCounts; dom: number; domAfter: number }>();
+    const measured = new Map<
+        number,
+        { counts: ScaleCounts; align: ScaleCounts; dom: number; domAfter: number }
+    >();
 
     beforeAll(async () => {
         h = await createHarness();
@@ -68,9 +75,19 @@ describe("規模の費用（#206）", () => {
             h.loadJson(json);
             const counts = readScaleProbe(h.window);
             const dom = h.dom.window.document.querySelectorAll("*").length;
+
+            /*
+             * ★ 整列は**読み込みを測り終えてから**回す（#297）。DOM ノード数は動かないので
+             *   dom / domAfter には影響しないが、**カウンタは読み込みのぶんと混ざる**ので
+             *   必ずリセットしてから測る。
+             */
+            resetScaleProbe(h.window);
+            h.designer.alignTables();
+            const align = readScaleProbe(h.window);
+
             h.designer.clearTables();
             const domAfter = h.dom.window.document.querySelectorAll("*").length;
-            measured.set(n, { counts, dom, domAfter });
+            measured.set(n, { counts, align, dom, domAfter });
         }
     }, 120_000);
 
@@ -157,6 +174,73 @@ describe("規模の費用（#206）", () => {
             h.designer.io.loadDesignText(syntheticDesign(100));
 
             expect(history.depth()).toBe(1);
+        });
+    });
+
+    /*
+     * 整列の費用（#297）。
+     *
+     * ★★ **ここは jsdom でも測れる。** 折り返しの結果は `#area` の実寸に依存するので
+     *   jsdom では既定値へ落ちるが、**回数はレイアウトの有無に関係なく決まる** ——
+     *   計算が純関数で、DOM を 1 度も読まないため。**この 1 点が #297 の設計の帰結**で、
+     *   現行 `alignTables()` は `offsetWidth` を計算の途中で読んでいたので測れなかった。
+     */
+    describe("整列の費用（#297）", () => {
+        for (const n of STEPS) {
+            it(`N=${n} の整列 1 回が ALIGN_COUNTS に一致する`, () => {
+                const align = measured.get(n)!.align;
+                const expected: Record<string, number> = {};
+                for (const key of Object.keys(align) as (keyof ScaleCounts)[]) {
+                    expected[key] = ALIGN_COUNTS[key](n);
+                }
+                expect({ ...align }).toEqual(expected);
+            });
+        }
+
+        /*
+         * ★ **3 点で見る**（上の読み込みと同じ理由）。2 点は必ず直線に乗る。
+         *   ALIGN_COUNTS が 1 次式であることは表の形で自明だが、**実測がその式に乗ることは
+         *   自明ではない** —— 上の 3 本がそれを見ている。ここは**二次項が生えていないこと**を
+         *   比で見る（N を 10 倍して回数が 100 倍にならないこと）。
+         */
+        it("N を 10 倍しても回数は約 10 倍（二次項が生えていない）", () => {
+            const small = measured.get(10)!.align.offsetWidth;
+            const large = measured.get(100)!.align.offsetWidth;
+            expect(large / small).toBeLessThan(15);
+            expect(large / small).toBeGreaterThan(5);
+        });
+
+        /*
+         * ★★ **計算区間の DOM 読み出しが 0 回であることの、機械的な証明。**
+         *
+         *   純関数が DOM を import していないことは目で読めば分かるが、**目で読むのは
+         *   検査ではない**。実際に計装したまま呼び、**全カウンタが 0 のまま**であることを見る。
+         *   ここが 1 でも増えたら、純関数のどこかが DOM に触れている。
+         */
+        it("純関数は DOM を 1 度も読まない（全カウンタが 0）", () => {
+            h.designer.clearTables();
+            h.loadJson(syntheticDesign(100));
+            const boxes = h.designer.tables.map(() => ({ width: 100, height: 60 }));
+            const edges = collectEdges(h.designer.tables);
+
+            resetScaleProbe(h.window);
+            const points = layoutLayered(boxes, edges);
+            const after = readScaleProbe(h.window);
+
+            expect(points).toHaveLength(100);
+            expect({ ...after }).toEqual({
+                offsetWidth: 0,
+                offsetHeight: 0,
+                offsetTop: 0,
+                offsetLeft: 0,
+                rowRedraw: 0,
+                rowUpdate: 0,
+                tableRedraw: 0,
+                tableRedrawWorked: 0,
+                relationRedraw: 0,
+            });
+
+            h.designer.clearTables();
         });
     });
 });

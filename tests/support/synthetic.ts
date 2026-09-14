@@ -152,6 +152,44 @@ export const SCALE_COUNTS: Record<keyof ScaleCounts, (n: number) => number> = {
 };
 
 /**
+ * 合成設計 N 段を**整列 1 回**したときに、各カウンタが取る値（1 次式）。**この表が正本**
+ * （#297。上の `SCALE_COUNTS` と同じ理由で **2 か所に書かない**）。
+ *
+ * ★★ **内訳は全部導出できる。** 実測から当てはめた係数が 1 つも無い ——
+ * `js/io/layout/apply.ts` が測る / 計算 / 書く の 3 段に分かれているので、
+ * **どの段が何回読むかが構造から決まる**:
+ *
+ *   1. 測る段     —— テーブル N 本の `offsetWidth` / `offsetHeight` を 1 回ずつ ＝ **N**
+ *                    ＋ `#area` の `offsetWidth` を 1 回（**幅だけ。高さは読まない**）
+ *   2. 計算       —— **0 回**。純関数は DOM を知らない
+ *   3. 書く       —— `moveTo()` が N 回。`suspendRedraw()` 中なので `Table.redraw()` は
+ *                    先頭で戻り、**読まない**（`tableRedraw` は増えるが `tableRedrawWorked`
+ *                    は増えない）
+ *   4. `resumeRedraw()` —— `Table.redraw()` が N 回**本体を通る**（各 1 回読む ＝ **N**）。
+ *                    その中で `Relation.measure()` が **2(N-1) 回**呼ばれ、
+ *                    **各回が両端のテーブルを 1 回ずつ読む ＝ 4(N-1)**
+ *
+ * 合計すると `offsetWidth` は **N + 1 + N + 4(N-1) = 6N - 3**、`offsetHeight` は
+ * `#area` を読まないぶん 1 少なくて **6N - 4**。
+ *
+ * ★ **`rowRedraw` / `rowUpdate` / `relationRedraw` は 0**。整列は行に触らず、
+ * `Relation.redraw()` も通らない（`Table.redraw()` が `measure()` と `paint()` を直に呼ぶ）。
+ */
+export const ALIGN_COUNTS: Record<keyof ScaleCounts, (n: number) => number> = {
+    offsetWidth: (n) => 6 * n - 3,
+    offsetHeight: (n) => 6 * n - 4,
+    offsetTop: (n) => 8 * n - 8,
+    offsetLeft: (n) => 4 * n - 4,
+    rowRedraw: () => 0,
+    rowUpdate: () => 0,
+    /** moveTo() の N ＋ resumeRedraw() の N。**前者は早期 return で戻る** */
+    tableRedraw: (n) => 2 * n,
+    /** 実際に描いたのは resumeRedraw() の N だけ */
+    tableRedrawWorked: (n) => n,
+    relationRedraw: () => 0,
+};
+
+/**
  * DOM ノード数。読み込み後 **61N + 72**（72 は設計と無関係な UI の分）。
  *
  * ★ 定数項は **#289 で 67 -> 72 に動いた** —— ツールバーに undo / redo の 2 群

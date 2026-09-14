@@ -33,7 +33,15 @@
 
 ## 型・品質
 - 型は TypeScript（最終 `strict`）。純粋ロジック（serializer / DDL 生成 / 型マッピング / introspection 変換 / AI patch 適用）は**テスト必須**。
-- Prettier / ESLint 準拠。
+- **★ 整形は人が持つ。エディタの自動整形を切る**（**2026-09-12**。#296）—— **設定ファイルを
+  置かない**（`.prettierrc` / `eslint.config.*` / `.editorconfig` のどれも）。**周囲のコードに
+  合わせる** —— インデントは **4 スペース**が実体。`.vscode/settings.json` が `formatOnSave` を
+  切ってあるので VSCode では止まるが、**他のエディタを使うなら各自で切る**。実測と判断は
+  `CUSTOMIZATIONS.md` の同日
+  - **訂正の元**: **元は「Prettier / ESLint 準拠。」だった。消さずに残す** —— **設定ファイルが
+    1 つも無く、`devDependencies` にも入っていなかった**ので、**準拠の対象が存在しなかった**
+    （2026-09-12 実測）。**機械へ渡すと、最良の設定（`tabWidth 4` / `printWidth 100`）でも
+    99 本 / 3637 行が動く** —— 幅を広げても減らない（120 で 116 本、140 で 118 本と**増える**）
 
 ## スキーマ既定（`HANDOVER.md` §6 準拠）
 - PK: 既定 `id uuid DEFAULT uuidv7()`（外部露出=v4 / 完全内部=bigint identity）。

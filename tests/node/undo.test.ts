@@ -163,24 +163,6 @@ interface Path {
 /** イベントループを 1 回回す（<dialog> の close イベントが同期とは限らない） */
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-/** 整列で必ず座標が動くよう、格子から外した位置に置く */
-const CROOKED = J([
-    {
-        name: "orders",
-        x: 37,
-        y: 53,
-        columns: [{ name: "id", type: "integer" }],
-        keys: [],
-    },
-    {
-        name: "items",
-        x: 411,
-        y: 97,
-        columns: [{ name: "id", type: "integer" }],
-        keys: [],
-    },
-]);
-
 function rowOf(table: string, row: string): Row {
     const r = tableNamed(table).rows.find((x) => x.getTitle() === row);
     if (!r) {
@@ -190,11 +172,6 @@ function rowOf(table: string, row: string): Row {
 }
 
 const PATHS: Path[] = [
-    {
-        name: "自動整列",
-        design: CROOKED,
-        run: () => h.designer.tableManager.align(),
-    },
     {
         name: "行の上移動（★ 連打を畳まない）",
         design: ONE,

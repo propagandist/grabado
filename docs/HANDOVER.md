@@ -114,6 +114,12 @@ ENTRYPOINT ["java","-jar","app.jar"]
 
 ## 3. 開発環境 / フロント現代化（Tier 2）
 
+> **注記（2026-09-12 / issue #296）**: **Prettier と ESLint は入っていない。** 設定ファイルが
+> 1 つも無く、`devDependencies` にも無い（同日実測）。**整形は人が持ち、エディタの自動整形を
+> 切る**（`.vscode/settings.json`）—— 機械へ渡すと、最良の設定でも **99 本 / 3637 行が動く**。
+> **判断と実測は [`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の 2026-09-12。**
+> **すぐ下の一覧は着手時の要件のまま。**
+
 - ツールチェーン: `package.json` + npm scripts、Vite、Vitest、Prettier、ESLint、`tsconfig`（最終 `strict`）。ビルドはイメージ内に隠蔽。
 - 段階移行（挙動保存）: Vite で既存 JS を束ねる（`allowJs`）→ `checkJs`+JSDoc → 依存の薄い順（型定義→DDL 生成→シリアライザ→描画中核）に `.ts` 化 → 全 `.ts` 後に `strict`。
 

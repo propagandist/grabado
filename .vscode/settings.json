@@ -1,0 +1,11 @@
+{
+  // grabado は整形を人が持つ（CLAUDE.md の「型・品質」、issue #296）。
+  // 設定ファイル（.prettierrc / eslint.config.* / .editorconfig）は 1 つも置かない。
+  // 自動整形を有効にすると、手で組んだ表 —— frontend/js/io/ddl/keywords.ts の予約語が
+  // 6 語 × 14 行で並んでいるようなもの —— が 1 語 1 行に展開され、読む順が失われる。
+  // 最良の設定（tabWidth 4 / printWidth 100）でも 99 本 / 3637 行が動く。
+  // 実測と判断は CUSTOMIZATIONS.md の 2026-09-12。
+  "editor.formatOnSave": false,
+  "editor.formatOnPaste": false,
+  "editor.formatOnType": false
+}

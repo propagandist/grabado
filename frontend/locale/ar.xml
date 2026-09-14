@@ -8,7 +8,6 @@
     <string name="addtable">إنشاء جدول</string>
     <string name="edittable">تحرير جدول</string>
     <string name="removetable">حذف جدول</string>
-    <string name="aligntables">محاذاة الجداول</string>
     <string name="cleartables">حذف جميع البيانات</string>
     <string name="confirmall">هل أنت متأكد من أنك تريد حذف جميع البيانات</string>
     <string name="newtable">new table</string>

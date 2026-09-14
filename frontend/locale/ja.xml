@@ -9,7 +9,6 @@
     <string name="edittable">テーブルを編集</string>
     <string name="removetable">テーブルを削除</string>
     <string name="removetables">選択テーブルを削除</string>
-    <string name="aligntables">テーブルを整列</string>
     <string name="cleartables">全テーブルを削除</string>
     <string name="confirmall">全テーブルを削除しますか</string>
     <string name="newtable">新規テーブル</string>

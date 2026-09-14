@@ -9,7 +9,6 @@
     <string name="edittable">Επεξεργασία πίνακα</string>
     <string name="removetable">Διαγραφή πίνακα</string>
     <string name="removetables">Διαγραφή πινάκων</string>
-    <string name="aligntables">Στοίχιση Πινάκων</string>
     <string name="cleartables">Καθαρισμός πινάκων</string>
     <string name="confirmall">Διαγραφή όλων των πινάκων</string>
     <string name="newtable">Νέος πίνακας</string>

@@ -9,7 +9,6 @@
     <string name="edittable">테이블 수정</string>
     <string name="removetable">테이블 삭제</string>
     <string name="removetables">선택한 테이블 삭제</string>
-    <string name="aligntables">테이블 정렬</string>
     <string name="cleartables">전체 테이블 삭제</string>
     <string name="confirmall">정말로 전체 테이블을 삭제하시겠습니까</string>
     <string name="newtable">신규 테이블</string>

@@ -715,6 +715,12 @@ export class Designer extends Visual<DesignerDom> {
      * ★ known-issue #7（段階4-4）の性質は引き継がれている。**this.tables の順序を
      * 壊さない** —— 純関数が添字で受けて添字で返すので、**並べ替える余地がそもそも無い**
      * （js/io/layout/model.ts の「受け取らないもの 3 つ」）。
+     *
+     * ★★ **呼び手は introspection の取り込み 1 つだけ**（**2026-09-14**。#306 でツールバーの
+     * ボタンを外した）—— introspection の応答は x / y を持たない（js/io/introspect-parser.ts が
+     * 0 で埋める）ので、**配置を決めないと全テーブルが原点に重なる**。
+     * **設計ファイル（JSON / XML）の読み込みでは呼ばない** —— 座標はファイルが持っている。
+     * テスト（tests/browser/canvas.spec.ts の幾何の棚、tests/scale/）は直に叩く。
      */
     alignTables(): void {
         applyLayeredLayout(this);

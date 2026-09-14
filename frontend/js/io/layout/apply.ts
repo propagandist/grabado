@@ -100,14 +100,13 @@ function wrapWidthFor(area: number): number {
 /**
  * 整列を 1 回行う。**Designer.alignTables() の中身そのもの。**
  *
- * ★ **確定点（historyManager.commit）をここに置かない。** 入口の TableManager.align() が
- * 包んでいる —— IO.importresponse() と Designer.fromXMLText() が内部で alignTables() を
- * 呼ぶので、ここに置くと**読み込みのたびに余分な 1 手が積まれる**（#288 の配線）。
+ * ★ **確定点（historyManager.commit）をここに置かない。** 呼び手は IO.importresponse()
+ * （introspection の取り込み）**ただ 1 つ**で、そこが取り込み全体を 1 手として包んでいる ——
+ * ここに置くと**二重に積まれる**（#288 の配線）。
  *
  * ★ **resumeRedraw() は中立な対ではない。** rowManager.redraw() -> endCreate() /
- * endConnect() を呼ぶので、**整列すると FK 作成モードが解除される**。現行は解除しない
- * ので挙動の変化だが、作成モード中に整列を押す導線が無いので実害はほぼ無い。
- * **意図として引き受ける**（#297 の申し送り）。
+ * endConnect() を呼ぶので、**FK 作成モードが解除される**。**取り込みの直後にしか走らない**
+ * ので、作成モードが立っていることはない（#306 でツールバーのボタンを外した）。
  */
 export function applyLayeredLayout(designer: Designer, options?: LayoutOptions): void {
     const tables = designer.tables;

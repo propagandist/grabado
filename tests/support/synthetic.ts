@@ -195,5 +195,9 @@ export const ALIGN_COUNTS: Record<keyof ScaleCounts, (n: number) => number> = {
  * ★ 定数項は **#289 で 67 -> 72 に動いた** —— ツールバーに undo / redo の 2 群
  *   （span 2 ＋ input 2 ＋ 区切りの hr 1）を足したため。**設計あたりの係数 61 は
  *   動いていない**ので、増えたのは「ページが最初から持っている要素」の側。
+ *
+ * ★★ **#306 で 72 -> 70 へ戻った**（**2026-09-14**）—— 整列ボタンを外したため
+ *   （span 1 ＋ input 1 の **2 ノード**）。**係数 61 はここでも動いていない** ——
+ *   **ツールバーの増減は定数項にしか出ない**ことが、これで 2 度確かめられた。
  */
-export const SCALE_DOM_NODES = (n: number): number => 61 * n + 72;
+export const SCALE_DOM_NODES = (n: number): number => 61 * n + 70;

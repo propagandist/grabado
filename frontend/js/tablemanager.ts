@@ -27,7 +27,6 @@ export interface TableManagerDom {
     comment: HTMLTextAreaElement;
     addtable: HTMLInputElement;
     removetable: HTMLInputElement;
-    aligntables: HTMLInputElement;
     cleartables: HTMLInputElement;
     addrow: HTMLInputElement;
     edittable: HTMLInputElement;
@@ -56,7 +55,6 @@ export class TableManager {
         var ids = [
             "addtable",
             "removetable",
-            "aligntables",
             "cleartables",
             "addrow",
             "edittable",
@@ -87,7 +85,6 @@ export class TableManager {
         OZ.Event.add(this.dom.removetable, "click", this.remove.bind(this));
         OZ.Event.add(this.dom.cleartables, "click", this.clear.bind(this));
         OZ.Event.add(this.dom.addrow, "click", this.addRow.bind(this));
-        OZ.Event.add(this.dom.aligntables, "click", this.align.bind(this));
         OZ.Event.add(this.dom.edittable, "click", this.edit.bind(this));
         OZ.Event.add(this.dom.tablekeys, "click", this.keys.bind(this));
         OZ.Event.add(document, "keydown", this.press.bind(this));
@@ -229,18 +226,6 @@ export class TableManager {
             this.oldvalue = this.dom.addtable.value;
             this.dom.addtable.value = "[" + _("addpending") + "]";
         }
-    }
-
-    /**
-     * 自動整列（#288）。
-     *
-     * ★ **Designer.alignTables() の中に commit を置かない** —— IO.importresponse() と
-     *   Designer.fromXMLText() が内部で呼んでおり、そちらは取り込み全体で 1 手にしたい。
-     *   関数に置くと二重に積まれるので、**ボタンの側で包む**。
-     */
-    align(e?: Event): void {
-        this.owner.alignTables();
-        this.owner.historyManager.commit();
     }
 
     async clear(e?: Event): Promise<void> {

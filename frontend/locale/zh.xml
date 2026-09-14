@@ -8,7 +8,6 @@
     <string name="addtable">添加表</string>
     <string name="edittable">修改表</string>
     <string name="removetable">移除表</string>
-    <string name="aligntables">重组表格位置</string>
     <string name="cleartables">删除所有表</string>
     <string name="confirmall">真的要删除所有表么</string>
     <string name="newtable">表名称</string>

@@ -25,7 +25,7 @@ PHP backend was replaced with Kotlin/Spring Boot, and the whole thing ships as a
 - **Undo** — `Ctrl+Z` steps back through your edits one gesture at a time (a drag is one step,
   so is an AI apply). **Saving cannot be undone**, and **closing the tab clears the history**
 - **Export DDL** — eight database profiles from one design (see the table below)
-- **Export ORM models** — JPA (Kotlin), Prisma and Drizzle
+- **Export ORM models** — JPA (Kotlin), JPA (Java), Prisma and Drizzle
 - **Import an existing database** — introspection reads `information_schema` and `pg_catalog`, and returns JSON
 - **[Have the AI review it](#ai-review)** — optional, bring your own key. Comments come back
   checked against a rubric, and are applied through the same deterministic path as everything

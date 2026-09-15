@@ -563,7 +563,8 @@ TS2339 381 / TS2532+2531 251 / TS7006 210 で、**本丸は `dom` バッグの 3
 **ライブ側は形式非依存なので一度だけ書く。形式が増えると形式側だけが増える。**
 JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済んだのが、この形の実利。
 **段階6-9d で ORM 出力（`orm/`）が 3 本目として入ったときも同じ**（ターゲットは
-6-9d の JPA・6-9e の Prisma・**6-9f の Drizzle** で 3 本）—— ライブ側にも
+6-9d の JPA (Kotlin)・6-9e の Prisma・**6-9f の Drizzle**、そこへ **2026-09-15 の
+JPA (Java)** が加わって 4 本）—— ライブ側にも
 設計 JSON の形式にも 1 行も触っていない。ORM は db プロファイルではなく**出力の別の軸**で、
 下敷きのプロファイルの上に乗る（同じ設計から DDL と ORM の両方が出せる）。
 型は正規型（`<type kind="...">`。段階6-9c）を介して写す。
@@ -577,7 +578,7 @@ JSON を足したとき（4-2）にライブ側 2 本へ 1 行も触らずに済
 | [`extract.ts`](../frontend/js/io/extract.ts) | 出・ライブ | ライブツリー → `DesignModel`。描画エンジンを知っている唯一の出力側 |
 | [`json-serializer.ts`](../frontend/js/io/json-serializer.ts) | 出・形式 | `DesignModel` → 設計 JSON（決定論。書けない設計は 1 バイトも書かずに throw） |
 | [`ddl/`](../frontend/js/io/ddl/) | 出・形式 | `DesignModel` → **DDL**（段階6-5a）。`generate.ts` が入口、`shared.ts` が型解決と既定値の引用、残る 5 本がプロファイルごとの逐語移植 |
-| [`orm/`](../frontend/js/io/orm/) | 出・形式 | `DesignModel` → **ORM のモデル定義**（段階6-9d〜6-9f）。`generate.ts` が入口で `ORM_TARGETS` を持ち、`naming.ts` が言語に依らない名前の変換、`jpa.ts` / `prisma.ts` / `drizzle.ts` がターゲットごと。**db プロファイルではなく出力の別の軸**で、型は正規型（`kind`）を介して写す。**db を見るのは Prisma（provider）と Drizzle（core）だけ**で、理由も違う —— **Drizzle は型そのものが core 依存**なので表を **3 本**持つ（**issue #120 の実測で `mssql-core` が実在しないと分かり、4 本から減った**。8 プロファイルのうち core に対応があるのは 4 本で、残りは pg-core の形で出して理由をコメントで言う） |
+| [`orm/`](../frontend/js/io/orm/) | 出・形式 | `DesignModel` → **ORM のモデル定義**（段階6-9d〜6-9f）。`generate.ts` が入口で `ORM_TARGETS` を持ち、`naming.ts` が言語に依らない名前の変換、`jpa.ts` / `jpa-java.ts` / `prisma.ts` / `drizzle.ts` がターゲットごと（**1 ファイル 1 生成器。JPA は同じ仕様だが 2 本ある** —— 注釈の書き方も宣言の形も違うので括っていない）。★ **`jpa` という id は Kotlin を指す**（`jpa-kotlin` へ改名していない —— golden のパスであり `npm run test:orm-tools -- jpa` の引数でもあるため。曖昧さは `ORM_LABELS` が引き受ける）。**db プロファイルではなく出力の別の軸**で、型は正規型（`kind`）を介して写す。**db を見るのは Prisma（provider）と Drizzle（core）だけ**で、理由も違う —— **Drizzle は型そのものが core 依存**なので表を **3 本**持つ（**issue #120 の実測で `mssql-core` が実在しないと分かり、4 本から減った**。8 プロファイルのうち core に対応があるのは 4 本で、残りは pg-core の形で出して理由をコメントで言う） |
 | [`json-format.ts`](../frontend/js/io/json-format.ts) | 形式の定義 | 設計 JSON の形とキー順の契約（型だけ・emit 空）。散文は [`FORMAT.md`](FORMAT.md) |
 | [`model.ts`](../frontend/js/io/model.ts) | モデルの定義 | `DesignModel` の型（型だけ・emit 空）。上の格子の説明もここ |
 | [`palette.ts`](../frontend/js/io/palette.ts) | 参照 | 型パレット層（`db/<db>/datatypes.xml` の包み）。`window.DATATYPES` の後継で `Designer.palette` |
@@ -841,7 +842,7 @@ XSLT が TS になって中間 XML が要らなくなったので、書き出し
 | 高速回帰 | Node（jsdom）。同じ fixture・**同じ golden**を読むだけ | — |
 | 既知の不具合 | 実ブラウザ。golden を持たず「現在こう壊れている」を直接アサート | `tests/known-issues/` |
 | 配布物（§3 で追加） | 実ブラウザ。`vite build` → `vite preview` に対するスモーク | `tests/dist/`（golden は読むだけ） |
-| **ORM 出力が道具に通るか**（issue #120 で追加） | **使い捨てコンテナ**（`kotlinc` / `prisma validate` / `tsc`）。**要 Docker ＋ ネットワーク。`npm test` にも CI にも入らない** | `tests/orm-tools/`（golden は読むだけ。**構文と型しか見ない** —— 複合 PK の脱落は捕まらない。#123） |
+| **ORM 出力が道具に通るか**（issue #120 で追加） | **使い捨てコンテナ**（`kotlinc` / `javac` / `prisma validate` / `tsc`）。**要 Docker ＋ ネットワーク。`npm test` にも CI にも入らない** | `tests/orm-tools/`（golden は読むだけ。**構文と型しか見ない** —— 複合 PK の脱落は捕まらない。#123） |
 
 - **golden は実ブラウザ採取のものが唯一の正**。Node 側は書き込まない。
 - 現行コードは抽出せずそのまま動かす。モデル層が描画 DOM と密結合（§5）なうえ、先に抽出すると「抽出後のコード」を特性化することになり安全網の意味が消えるため。抽出は HANDOVER §4 の仕事。

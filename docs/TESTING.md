@@ -90,7 +90,7 @@ cd server && \
 ```
 
 **ORM 出力を実物の道具に通す**（issue #120）。**要 Docker ＋ ネットワーク** ——
-使い捨てコンテナに `kotlinc` / `prisma` / `drizzle-orm` を都度入れる（`devDependencies` は
+使い捨てコンテナに `kotlinc` / `javac` / `prisma` / `drizzle-orm` を都度入れる（`devDependencies` は
 増やさない）。**`npm test` にも CI にも入らない。**
 **回すのは版を切るとき**（[`BRANCHING.md`](BRANCHING.md) の「リリース」。#251）。
 道具の版のうち **typescript と kotlin は本体から読む**（`package-lock.json` と
@@ -98,11 +98,11 @@ cd server && \
 本体だけ上げて 12 日ずれた。
 
 ```bash
-npm run test:orm-tools             # 3 本とも
+npm run test:orm-tools             # 4 本とも
 npm run test:orm-tools -- drizzle  # 1 本だけ
 ```
 
-**確かめるのは構文と型だけ** —— JPA は Kotlin コンパイラ、Prisma は `prisma validate`、
+**確かめるのは構文と型だけ** —— JPA は Kotlin コンパイラと `javac`、Prisma は `prisma validate`、
 Drizzle は `drizzle-orm` の型定義に照らした `tsc --strict`。**`drizzle-kit generate` /
 `prisma migrate diff` は走らせない**（設定と接続情報が要り、使い捨てで完結しなくなる）。
 
@@ -281,7 +281,7 @@ UI の `#textarea` に入る値と一致する。
 
 ### ORM golden — `tests/golden/orm/<target>/<db>/<fixture>.<ext>`（§6 段階6-9d で新設）
 
-**ターゲット 1 本につき 14 本**（6-9e で Prisma、**6-9f で Drizzle** が入って 42 本）。DDL のように 8 × 7 = 56 本にはしていない。** ORM 出力は「型の写像」と
+**ターゲット 1 本につき 14 本**（6-9e で Prisma、**6-9f で Drizzle**、**2026-09-15 で JPA (Java)** が入って **56 本**）。DDL のように 8 × 7 = 56 本にはしていない。** ORM 出力は「型の写像」と
 「構造の組み立て」に分かれ、**構造の側はプロファイルに依らない**（生成器が見るのは
 正規型 `kind` と関係とキーだけで、SQL 型名も識別子の引用も通らない）:
 
@@ -292,7 +292,8 @@ UI の `#textarea` に入る値と一致する。
 
 母集団の定義は [`../tests/support/fixtures.ts`](../tests/support/fixtures.ts) の
 `ormGoldenCases`、拡張子は [`../frontend/js/io/orm/generate.ts`](../frontend/js/io/orm/generate.ts) の
-`ORM_EXTENSIONS`。ORM が 4 本になっても 56 本で、DDL の 56 本と同じ桁に収まる。
+`ORM_EXTENSIONS`。**★ 4 本目（JPA (Java)）が入って、予告どおり 56 本で着地した** ——
+DDL の 56 本と同じ桁に収まっている。
 
 **`db/` にディレクトリを作っていない**のが要点 —— 作った瞬間 `DB_PROFILES` に入り、
 ORM が型パレットの契約（`strict` / `<template>` / `newrowtype` / 全型網羅）を背負うことになる。

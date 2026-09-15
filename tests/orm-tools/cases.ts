@@ -56,6 +56,14 @@ export interface ToolSpec {
     readonly target: string;
     /** 使い捨てコンテナのイメージ。**タグ止め**（digest は実行のたびに印字する） */
     readonly image: string;
+    /**
+     * コンテナの作業ディレクトリ。
+     *
+     * ★ **4 本目を足す日に型へ持たせた**（2026-09-15）—— それまで verify.ts が
+     * `target === "jpa" ? "/tmp" : "/work"` という 2 分岐で持っており、
+     * **足したターゲットが黙って /work 側に落ちていた**。ここに置けば埋め忘れが型で止まる。
+     */
+    readonly workdir: string;
     /** この道具が何を確かめるのか（1 行） */
     readonly what: string;
     /**
@@ -77,6 +85,7 @@ export const TOOLS: readonly ToolSpec[] = Object.freeze([
     {
         target: "jpa",
         image: "eclipse-temurin:25-jdk",
+        workdir: "/tmp",
         what: "Kotlin コンパイラが受け付けるか（jakarta.persistence を classpath に置く）",
         versions: Object.freeze({
             /* server の kotlin を読む（Gradle は通さない）。写しを持たない —— repoVersion の KDoc */
@@ -86,14 +95,34 @@ export const TOOLS: readonly ToolSpec[] = Object.freeze([
         }),
     },
     {
+        target: "jpa-java",
+        image: "eclipse-temurin:25-jdk",
+        workdir: "/tmp",
+        what: "javac が受け付けるか（ファイルへ分けてから jakarta.persistence を classpath に置く）",
+        versions: Object.freeze({
+            /*
+             * ★ **javac の版は持たない。** イメージのタグが既にピンしており、
+             * digest も実行のたびに出る（kotlinc は curl で別に取るので版が要った）。
+             *
+             * ★ **--release は「生成物を受け取る側の下限」。** server の jvmToolchain(25) は
+             * **自社の backend を焼く JDK** で、**別の軸**なので repoVersion から読まない。
+             * jakarta.persistence-api 3.2.0 は Jakarta EE 11 の世代で、その下限が Java 17。
+             */
+            "--release": "17",
+            "jakarta.persistence-api": "3.2.0",
+        }),
+    },
+    {
         target: "prisma",
         image: "node:24",
+        workdir: "/work",
         what: "prisma validate が受け付けるか",
         versions: Object.freeze({ prisma: "6.19.1" }),
     },
     {
         target: "drizzle",
         image: "node:24",
+        workdir: "/work",
         what: "drizzle-orm の型定義に照らして tsc --strict が通るか",
         versions: Object.freeze({
             "drizzle-orm": "0.45.2",

@@ -19,12 +19,13 @@
  * 8 プロファイルどれで設計していても ORM を出せる。
  */
 
-import { buildDdlModel } from "../ddl/shared.ts";
+import { buildDdlModel, type DdlTable } from "../ddl/shared.ts";
 import type { TypeLoss } from "../convert.ts";
 import { convertDesign } from "../convert.ts";
 import type { DesignModel } from "../model.ts";
 import type { TypePalette } from "../palette.ts";
 import { generateJpa } from "./jpa.ts";
+import { generateJpaJava } from "./jpa-java.ts";
 import { generateDrizzle } from "./drizzle.ts";
 import { generatePrisma } from "./prisma.ts";
 
@@ -35,18 +36,31 @@ import { generatePrisma } from "./prisma.ts";
  * 理由と**再考の条件**は CUSTOMIZATIONS.md の同日の記録 —— **見直すなら「復活」ではなく
  * 新規開発**である）。
  *
- * ★ **3 本の性質は揃っていない。**
+ * ★ **2026-09-15 に 4 本目を足した。ただし SQLAlchemy ではない** —— **JPA (Java)**。
+ * **3 本で確定した根拠の 1 つ（「JPA と合わせて JVM 圏も埋まっている」）が、シェアで
+ * 検算すると成立しなかった** —— サーバサイド JVM の多数派は Java で、埋まっていたのは
+ * house と同じスタックの側だけだった。**SQLAlchemy を外した判断は動いていない**
+ * （Python 圏への訴求が実際に要るときに、別 issue で見直す）。
+ *
+ * ★ **4 本の性質は揃っていない。**
  *   - **Prisma だけは逆参照を形式が要求する**（6-9d の「出さない」を 6-9e で決め直した）
  *   - **Drizzle だけは型の表が core ごとに要る**（6-9e の「表 1 つで書ける」という見立ては
  *     6-9f の実測で外れた。pg / mysql / sqlite / mssql で関数名も表せる意味も変わる）
+ *   - **JPA だけが 2 本ある。** `jpa` が Kotlin で `jpa-java` が Java ——
+ *     **`jpa` を `jpa-kotlin` へ改名していない。** golden 14 本のパスであり、
+ *     `npm run test:orm-tools -- jpa` という**公開された手順の引数**でもあるため、
+ *     機能追加と同じ diff に混ぜない判断。**id が非対称なのは承知のうえ**で、
+ *     曖昧さは下の ORM_LABELS が引き受けている（`prisma` / `drizzle` が製品名で
+ *     言語の接尾辞を持たないのと同じで、id はキーであって説明ではない）
  */
-export const ORM_TARGETS = ["jpa", "prisma", "drizzle"] as const;
+export const ORM_TARGETS = ["jpa", "jpa-java", "prisma", "drizzle"] as const;
 
 export type OrmTarget = (typeof ORM_TARGETS)[number];
 
 /** select に出す表示名。locale を通さない —— 製品名なので翻訳しない */
 export const ORM_LABELS: Readonly<Record<OrmTarget, string>> = {
     jpa: "JPA (Kotlin)",
+    "jpa-java": "JPA (Java)",
     prisma: "Prisma",
     drizzle: "Drizzle",
 };
@@ -54,6 +68,7 @@ export const ORM_LABELS: Readonly<Record<OrmTarget, string>> = {
 /** golden の拡張子。**ターゲットの性質なのでここに置く**（tests/ に散らさない） */
 export const ORM_EXTENSIONS: Readonly<Record<OrmTarget, string>> = {
     jpa: "kt",
+    "jpa-java": "java",
     prisma: "prisma",
     /* Drizzle のスキーマは素の TypeScript */
     drizzle: "ts",
@@ -62,6 +77,26 @@ export const ORM_EXTENSIONS: Readonly<Record<OrmTarget, string>> = {
 export function isOrmTarget(target: string): target is OrmTarget {
     return (ORM_TARGETS as readonly string[]).includes(target);
 }
+
+/**
+ * ターゲット -> 生成器。
+ *
+ * **db を見るのは Prisma と Drizzle**（JPA は 2 本とも見ない）。ただし理由が違う ——
+ * Prisma は datasource の provider が要るだけだが、**Drizzle は型そのものが core 依存**
+ * （段階6-9f）。どちらも 8 本中 5 本にしか対応が無い。
+ *
+ * ★ **4 本目で三項演算子の連鎖をやめた**（2026-09-15）。4 段になると読めなくなるうえ、
+ * **連鎖の末尾は fallback なので、足したターゲットが黙って Drizzle として出る**。
+ * Record にすると**型が網羅を強制する** —— 1 本足して埋め忘れれば typecheck が落ちる。
+ */
+const GENERATORS: Readonly<
+    Record<OrmTarget, (tables: readonly DdlTable[], db: string | null) => string>
+> = {
+    jpa: (tables) => generateJpa(tables),
+    "jpa-java": (tables) => generateJpaJava(tables),
+    prisma: (tables, db) => generatePrisma(tables, db),
+    drizzle: (tables, db) => generateDrizzle(tables, db),
+};
 
 /**
  * ORM のモデル定義を作る。
@@ -87,17 +122,7 @@ export function generateOrm(
     const converted = convertDesign(model, palette, output);
     const tables = buildDdlModel(converted.model, output);
     /* trim するのは DDL 側（js/io/ddl/generate.ts）と同じ —— golden も同じ形になる */
-    /*
-     * **db を見るのは Prisma と Drizzle**（JPA は見ない）。ただし理由が違う ——
-     * Prisma は datasource の provider が要るだけだが、**Drizzle は型そのものが core 依存**
-     * （段階6-9f）。どちらも 8 本中 5 本にしか対応が無い。
-     */
-    const body =
-        target === "jpa"
-            ? generateJpa(tables).trim()
-            : target === "prisma"
-              ? generatePrisma(tables, output.db()).trim()
-              : generateDrizzle(tables, output.db()).trim();
+    const body = GENERATORS[target](tables, output.db()).trim();
 
     if (body === "") {
         return body;

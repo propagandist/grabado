@@ -22,7 +22,7 @@ Kotlin/Spring Boot に置き換え、**単一の Docker イメージ**として�
 - **戻せる** —— `Ctrl+Z` で編集が 1 手ずつ戻る（ドラッグ 1 回も、AI の適用 1 回も 1 手）。
   **保存は取り消せない**し、**タブを閉じると履歴も消える**
 - **DDL を出す** —— 1 つの設計から 8 プロファイル（下の表）
-- **ORM モデルを出す** —— JPA（Kotlin）・Prisma・Drizzle
+- **ORM モデルを出す** —— JPA（Kotlin）・JPA（Java）・Prisma・Drizzle
 - **既存の DB を読み取る** —— introspection が `information_schema` と `pg_catalog` を読んで JSON で返す
 - **[AI にレビューさせる](#ai-レビュー)** —— 任意・BYOK。規約に照らした指摘が返り、
   **適用は他と同じ決定論パスに合流する**。**自動適用はしない**

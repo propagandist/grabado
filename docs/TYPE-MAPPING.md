@@ -79,32 +79,47 @@ house 標準が `timestamptz` 固定なのでここは必ず踏む。**UTC で�
 
 ---
 
-## ORM 3 本での写り方
+## ORM 4 本での写り方
 
-grabado は同じ設計から **JPA (Kotlin) / Prisma / Drizzle** のモデル定義も出せる。ORM は
-**DB プロファイルとは別の軸**で（「どの言語で出すか」と「どの DB を下敷きにするか」）、
-8 プロファイルのどれで設計していても 3 本とも出せる。
+grabado は同じ設計から **JPA (Kotlin) / JPA (Java) / Prisma / Drizzle** のモデル定義も出せる。
+ORM は **DB プロファイルとは別の軸**で（「どの言語で出すか」と「どの DB を下敷きにするか」）、
+8 プロファイルのどれで設計していても 4 本とも出せる。
 
-| 設計（postgresql） | JPA (Kotlin) | Prisma | Drizzle pg-core | Drizzle mysql-core | Drizzle sqlite-core |
-|---|---|---|---|---|---|
-| `UUID` | `UUID` | `String` | `uuid()` | `text()` | `text()` |
-| `TEXT` | `String` | `String` | `text()` | `text()` | `text()` |
-| `NUMERIC(12,2)` | `BigDecimal` | `Decimal` | `numeric()` | `decimal()` | `text()` |
-| `INTEGER` | `Int` | `Int` | `integer()` | `int()` | `integer()` |
-| `BOOLEAN` | `Boolean` | `Boolean` | `boolean()` | `boolean()` | `integer()` |
-| `DATE` | `LocalDate` | `DateTime` | `date()` | `date()` | `text()` |
-| `TIMESTAMPTZ` | `OffsetDateTime` | `DateTime` | `timestamp({ withTimezone: true })` | `timestamp()` | `text()` |
-| `JSONB` | `String` | `Json` | `jsonb()` | `json()` | `text()` |
+| 設計（postgresql） | JPA (Kotlin) | JPA (Java) | Prisma | Drizzle pg-core | Drizzle mysql-core | Drizzle sqlite-core |
+|---|---|---|---|---|---|---|
+| `UUID` | `UUID` | `UUID` | `String` | `uuid()` | `text()` | `text()` |
+| `TEXT` | `String` | `String` | `String` | `text()` | `text()` | `text()` |
+| `NUMERIC(12,2)` | `BigDecimal` | `BigDecimal` | `Decimal` | `numeric()` | `decimal()` | `text()` |
+| `INTEGER` | `Int` | `Integer` | `Int` | `integer()` | `int()` | `integer()` |
+| `BOOLEAN` | `Boolean` | `Boolean` | `Boolean` | `boolean()` | `boolean()` | `integer()` |
+| `DATE` | `LocalDate` | `LocalDate` | `DateTime` | `date()` | `date()` | `text()` |
+| `TIMESTAMPTZ` | `OffsetDateTime` | `OffsetDateTime` | `DateTime` | `timestamp({ withTimezone: true })` | `timestamp()` | `text()` |
+| `JSONB` | `String` | `String` | `Json` | `jsonb()` | `json()` | `text()` |
 
 **Drizzle の 3 列は「PG の設計をそのプロファイルへ写してから出したもの」。** 上の DDL の表が
 先に効いていて、たとえば `TIMESTAMPTZ` が sqlite で `TEXT` になるのは Drizzle の都合ではなく
 **SQLite に時刻型が無いから**。列名は表から落としてある（実際の出力は `text("created_at")`）。
 
-### JPA と Prisma は 1 列で足りる
+### JPA 2 本と Prisma は 1 列で足りる
 
-**どちらも下敷きの DB に依らない。** JPA は Kotlin の型、Prisma はスカラー 9 つで、
+**どれも下敷きの DB に依らない。** JPA は言語の型、Prisma はスカラー 9 つで、
 **provider は `datasource` ブロックにしか現れない**。だから mysql 向けに出しても mssql 向けに
 出しても、この列は 1 文字も変わらない。
+
+### JPA の 2 本が違うのは 1 行だけ
+
+表のとおり、**Kotlin と Java で綴りが変わるのは `INTEGER` の行だけ**（`Int` と `Integer`）。
+Kotlin が `java.time` / `java.math` をそのまま使っているので、残りは同じ名前になる。
+表に出ていない差がもう 1 つあり、**`BYTEA` などのバイナリは `ByteArray` と `byte[]`** で分かれる。
+
+**Java 版は型を必ずボクシングする**（`int` ではなく `Integer`）。primitive は null を表せず、
+outer join・部分ロード・未保存判定が壊れるため。**NOT NULL は型ではなく
+`@Column(nullable = false)` が表す**ので、設計の null 許容を 1 ビット変えても型名は動かない。
+
+**Java 版の出力は 1 クラス 1 ファイルに分けてから使う。** Java は 1 つのコンパイル単位に
+public なクラスを 1 つしか置けず、複合 PK の id クラスも public を要求される。生成物は
+**完結したコンパイル単位の連結**で、区切りの行が次のファイルの始まりを示し、そこに書いてある
+名前がファイル名になる（**import もファイルごとに付けてある**）。
 
 ### Drizzle の core は 4 プロファイルにしかない
 
@@ -126,12 +141,13 @@ pg-core の形で出しているので読み替えること」と出る。黙っ
 
 ### ORM 側で知っておくこと
 
-- **サイズは 3 本とも出さない。** `NUMERIC(12,2)` は `numeric()` / `Decimal` / `BigDecimal` に
+- **サイズは 4 本とも出さない。** `NUMERIC(12,2)` は `numeric()` / `Decimal` / `BigDecimal` に
   なり、**桁数は落ちる**。Prisma は native type 属性（`@db.*`）を出さないと決めていて
-  （[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階6-9c）、JPA と Drizzle も同じ扱いに
+  （[`../CUSTOMIZATIONS.md`](../CUSTOMIZATIONS.md) の段階6-9c）、JPA 2 本と Drizzle も同じ扱いに
   揃えてある。**DDL 側には桁数が出る**ので、スキーマの正本はそちら
-- **null 許容は表に出していない。** 実際には JPA が `String?`、Prisma が `String?` を出す
-  （Drizzle は `.notNull()` の有無で表す）。表は NOT NULL の列で採っている
+- **null 許容は表に出していない。** 実際には JPA (Kotlin) が `String?`、Prisma が `String?` を
+  出す（Drizzle は `.notNull()` の有無、**JPA (Java) は `@Column(nullable = …)`** で表す）。
+  表は NOT NULL の列で採っている
 - **JPA の `JSONB` が `String` になる**のは、JPA の標準に json 型が無いため（Hibernate の
   拡張なら書けるが標準ではない）。**丸めた列には理由のコメントが付く**
 - **`uuid()` を持つのは pg-core だけ。** mysql / sqlite では文字列になる

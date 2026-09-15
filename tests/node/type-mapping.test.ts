@@ -33,7 +33,7 @@ const DOC = join(REPO_ROOT, "docs", "TYPE-MAPPING.md");
 
 /** 表のある節。**見出しで区切る**（下の sectionLines の★） */
 const DDL_SECTION = "## house 既定 8 型の写り方";
-const ORM_SECTION = "## ORM 3 本での写り方";
+const ORM_SECTION = "## ORM 4 本での写り方";
 
 /** house 既定（CLAUDE.md「スキーマ既定」）で実際に使う型。`<datatype>` の綴りで書く */
 const HOUSE_TYPES: ReadonlyArray<{ readonly column: string; readonly datatype: string }> =
@@ -49,7 +49,7 @@ const HOUSE_TYPES: ReadonlyArray<{ readonly column: string; readonly datatype: s
     ]);
 
 /**
- * ORM 表の列（issue #122）。**JPA と Prisma は 1 列で足りる** —— どちらも正規型（kind）から
+ * ORM 表の列（issue #122）。**JPA 2 本と Prisma は 1 列で足りる** —— どれも正規型（kind）から
  * 型が決まり、**下敷きの DB に依らない**（Prisma の provider は `datasource` ブロックだけ）。
  *
  * ★ **Drizzle だけ 3 列要る。** 型そのものが core 依存で、6-9e の「表 1 つで書ける」という
@@ -58,6 +58,7 @@ const HOUSE_TYPES: ReadonlyArray<{ readonly column: string; readonly datatype: s
  */
 const ORM_COLUMNS = Object.freeze([
     { head: "JPA (Kotlin)", target: "jpa", db: "postgresql" },
+    { head: "JPA (Java)", target: "jpa-java", db: "postgresql" },
     { head: "Prisma", target: "prisma", db: "postgresql" },
     { head: "Drizzle pg-core", target: "drizzle", db: "postgresql" },
     { head: "Drizzle mysql-core", target: "drizzle", db: "mysql" },
@@ -167,6 +168,13 @@ function typeCells(target: string, code: string): string[] {
     for (const line of code.split("\n")) {
         if (target === "jpa") {
             const m = /^ {4}var \w+: ([^,]+?)(?: = null)?,$/.exec(line);
+            if (m) {
+                out.push(m[1]!);
+            }
+        } else if (target === "jpa-java") {
+            /* `    private Integer id;`。**型は \S+**（byte[] の [] を落とさないため）。
+             * accessor の行は public で始まるので混ざらない */
+            const m = /^ {4}private (\S+) \S+;$/.exec(line);
             if (m) {
                 out.push(m[1]!);
             }

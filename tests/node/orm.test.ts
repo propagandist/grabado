@@ -119,6 +119,20 @@ describe("ORM 出力（Node）", () => {
                 expect(kotlinIdentifier("a`b")).toBe("a_b");
                 expect(kotlinIdentifier("")).toBe("_");
             });
+
+            test("★ No / Nl / $ は裸で書けないので囲む段に落ちる（#340。kotlinc で実測）", () => {
+                /*
+                 * **2026-09-16 に kotlinc 2.4.10 で測った** —— 裸の `a½` / `aⅧ` / `a$b` は
+                 * どれも syntax error で、**囲めば 3 つとも通る**。
+                 * **Java とは違う**（javac は Nl と $ を受け、No だけを拒む）ので、
+                 * **jpa-java.ts の文字集合を写すと直らない。**
+                 */
+                expect(kotlinIdentifier("a½")).toBe("`a½`");
+                expect(kotlinIdentifier("aⅧ")).toBe("`aⅧ`");
+                expect(kotlinIdentifier("a$b")).toBe("`a$b`");
+                /* Nd（普通の数字）は裸で書けるので、囲まない */
+                expect(kotlinIdentifier("a1")).toBe("a1");
+            });
         });
     });
 
@@ -204,6 +218,45 @@ describe("ORM 出力（Node）", () => {
             expect(kt).toContain(
                 'uniqueConstraints = [UniqueConstraint(name = "users_email_key", columnNames = ["email"])]',
             );
+        });
+
+        test("★ クラス名もフィールド名も一意化する（#340。潰れた名前は衝突しうる）", () => {
+            /*
+             * 第 3 段（`_` への置換）に落ちるのは JVM が使えない文字を含むときだけだが、
+             * **落ちれば衝突する** —— `a.b` と `a/b` はどちらも `A_b` になる。
+             * **Kotlin でも 1 つのファイルに同名のクラスは置けない。**
+             *
+             * ★ **golden には無い形なので、ここで設計を直接組む** —— 母集団（14 本）を
+             *   変えずに退行を捕まえるため。
+             */
+            h.useDatatypes("postgresql");
+            h.loadFixture(
+                [
+                    '<?xml version="1.0" encoding="utf-8" ?>',
+                    "<sql>",
+                    '<table x="10" y="20" name="a.b">',
+                    '<row name="x.y" null="0" autoincrement="0"><datatype>INTEGER</datatype></row>',
+                    '<row name="x/y" null="0" autoincrement="0"><datatype>INTEGER</datatype></row>',
+                    "</table>",
+                    '<table x="10" y="60" name="a/b">',
+                    '<row name="id" null="0" autoincrement="0"><datatype>INTEGER</datatype></row>',
+                    "</table>",
+                    "</sql>",
+                ].join("\n"),
+            );
+            const kt = h.toOrm("jpa");
+
+            /* 同じ名前が 2 回出ていない（出すと kotlinc が拒む） */
+            expect(kt).toContain("class A_b(");
+            expect(kt).toContain("class A_b_2(");
+            expect(kt).toContain("var x_y: Int");
+            expect(kt).toContain("var x_y_2: Int");
+
+            const classes = kt.split("\n").flatMap((line) => {
+                const m = /^class (\S+)\(/.exec(line);
+                return m === null ? [] : [m[1]!];
+            });
+            expect(new Set(classes).size).toBe(classes.length);
         });
 
         test("identity 列は @GeneratedValue（型の identity 句と ai チェックの両方）", () => {

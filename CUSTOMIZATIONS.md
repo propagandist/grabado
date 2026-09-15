@@ -19800,6 +19800,163 @@ curl -s https://grabado.dev/ | grep -c 'id="undo"'     -> 1
   「**現行の挙動に擁護者がいない**」から出発したが、**その根拠が雑だった**（敷き詰めには
   用途があった）。**機能の存否は、アルゴリズムの良し悪しより先に決まる**
 
+### 2026-09-15 root は整理しない —— 指し先が動いたときに黙って外れるものが 3 件あった
+
+#### 発端
+
+「`CUSTOMIZATIONS.md` はなぜ `docs/` ではないのか」から「**そもそも root が乱雑ではないか**」へ広がった。
+**どちらも配置の記録が無かった**ので実測した。
+
+#### 決めたこと 1: root は整理しない
+
+**org 33 本**（archive 除く）の実測:
+
+| | grabado | 2 位 cartera | 中央値 |
+|---|---|---|---|
+| 合計エントリ | **34（1 位）** | 28 | 11 |
+| ファイル | **22（1 位）** | 19 | — |
+| ディレクトリ | 12 | 9 | — |
+| 設定系 | **17（1 位）** | 11 | — |
+
+**org で 1 位。中央値の 3.1 倍。** ただし**ディレクトリ 12 は Kerberos / corporate-web-site の 11 と
+ほぼ同じ**で、押し上げているのは**ファイル側**。
+
+原因は**他のどのリポジトリにも無い 2 層**:
+
+- **テスト 5 本** —— `vitest.config.ts` ＋ `playwright.*.config.ts` 4 本
+- **Docker 6 本** —— `Dockerfile` / `.dockerignore` / `compose.yaml` / `compose.e2e.yaml` /
+  `docker-entrypoint.sh` / `.env.example`
+
+**この 11 本を引くと 23** で 3 位タイと並ぶ。**4 ランタイム（Node / JVM / Docker）と 5 系統のテストを
+1 リポジトリで抱えている帰結**で、整理の怠慢ではない。playwright が 4 本なのは**配信先が違う**から
+（vite dev / vite preview / jar / compose）で、`webServer` と `globalSetup` は config 単位・
+`playwright.server.config.ts` は**config 評価時に `rmSync`** する・前提ツールチェーンが
+Node / Java 25 / Docker で違う。**増やす方向は既に 1 回止めている**（`playwright.scale.config.ts` の却下）。
+
+**減らせるが、減らすと悪くなる。** 22 ファイルの判定は **A（root でないと動かない）11 ／
+B（設定で移せる）6 ／ C（慣習）6 ／ D（惰性）実質 `tools/` 1 本**。B を全部動かしても **34 → 30** で
+2 位（28）を抜けず、**どれも root 固定の相方を持つ**:
+
+- `playwright.dist/server/image` を移すと、**既定探索で root 固定の `playwright.config.ts` と離れる**
+  —— いま無い分裂が生まれる
+- `compose.e2e.yaml` を移すと `compose.yaml`（A）と離れる。**自身のコメントが「compose.yaml は
+  1 行も触らない」と 2 本セット前提で書いている**
+- `docker-entrypoint.sh` を `docker/` へ移すと**ディレクトリ +1 で相殺**
+- `tools/` を `scripts/` に統合すると dir −1 だが、「**利用者が叩く移行ツール／開発者の回し方**」の
+  区別が消えて 5 箇所を直す
+
+**移して構造が良くなるものが 1 つも無い。**
+
+**構造としては破綻していない** —— 34 エントリ全部に理由の記録があり、段階2-6（#107）で一度棚卸し済み。
+**その後 19 日でファイルは +1 のみ**（`README.en.md`）。ディレクトリ +3 はどれも外部要因
+（`.claude/` = org の関門 ／ `third-party/` = licensee 検出 ／ `.vscode/` = 整形を人が持つ）。
+**乱雑化は進行していない。**
+
+#### 決めたこと 2: `CUSTOMIZATIONS.md` を `docs/` へ移さない
+
+判定は **C → D 寄り**（機械の参照が 0）で、root 22 ファイルの中で**動かせない理由が最も薄い 1 本**。
+だが移動コストは**相対リンク 53 箇所 ＋ 素名言及 60 ファイル超**（`CLAUDE.md` 22 箇所・ソースコメント
+多数）で、**B の playwright 3 本より高いのに減るのは同じ 1 エントリ**。
+
+軸も違う —— `docs/` は「**今どうなっているか**」、ここは「**いつ何を決めたか**」。
+`README.md` の「文書」の表がその区別をそのまま書いている（「構成」「形式」「走らせ方」に対して
+「fork 以降の決定と、その理由のすべて」）。
+
+**★ どちらも記録が無かった。** `7582009`（2026-08-09）が root の `CLAUDE.md` / `CUSTOMIZATIONS.md` と
+`docs/` 3 本を**同じコミットで同時に**作っており、**`HANDOVER.md` が root にあったことは一度も無い**。
+**最初からこの形で、判断の記録だけが無かった。**
+
+#### 決めたこと 3: org 正本へ上げない
+
+`repo-surface-baseline.md` §2.1 が root について決めているのは「`README.md` と `CLAUDE.md` がある」
+だけで、**総数・上限・並び・密度の規定は無い**。同 §3.3（description の要素は 2 つまで）／
+§3.4（topics の個数）／ §2.4（マージ済みブランチを溜めない）は「**GitHub の強制表示に対して効くのは
+個数と選定だけ**」という同じ論証を 3 回使っているが、**root には適用していない**。
+
+**上げない** —— §6 が「決まらなかったときも節を足さない」と決めており、
+**困っているのは 33 本中 grabado 1 本**。
+
+#### 実測で出た、数より深刻なもの（#315 で起票）
+
+**root の 6 本が他所の中身をパスで指している**（`.gitattributes` / `.gitignore` / `.dockerignore` /
+`tsconfig.json` / `vite.config.ts` ＋ CI の `paths`）。**指し先が動くと黙って外れる。その検査が
+1 本も無かった。3 件死んでいた。**
+
+| 場所 | 症状 | 原因 |
+|---|---|---|
+| `.gitattributes` の `db/**` | `git check-attr` が `frontend/db/postgresql/datatypes.xml` に `unspecified` | 段階2-6（`81df731`）で `frontend/` へ |
+| 同 `locale/**` | `frontend/locale/ko.xml` も同じ | 同上 |
+| `ci-image.yml` の `paths` の `compose.e2e.linux.yaml` | 実在しない | `7ea1ba0`（#112、同日）で削除済み |
+
+**段階2-6 は root の 5 本を直して、`.gitattributes` という 6 本目を忘れた**（触ったのは
+`.dockerignore` / `.gitignore` / `Dockerfile` / `tsconfig.json` / `vite.config.ts`）。
+**同型は 2 度目**で、1 度目（#109。`ARCHITECTURE.md` のツリーが root のまま）は
+「2-6 の検証が frontend/ の中しか見ていなかった」と**記録しただけで検査を置かなかった**。
+
+#### 検査は新しいファイルにした（計画から変えた）
+
+計画は「**新しいファイルを作らず `tests/node/toolchain.test.ts` に足す**」（#137 の前例）だったが、
+**実物を読んで変えた** —— あのファイルの冒頭が「**版の写しが揃っていること**」を宣言しており、
+軸 1（ツールチェーンの版）も軸 2（製品の版）も**版**。パス参照は主題が違う。`tests/node/` は
+**主題ごとに 1 ファイル**が実体なので、`tests/node/path-anchors.test.ts` を置いた。
+
+**見るのは「ワイルドカードの手前まで」だけ。** `db/**` なら `db`、`scripts/*.sh` なら `scripts`。
+**glob の展開には踏み込まない** —— 一致の規則を自前で持つと**検査のほうが壊れる**。
+
+- **★ 実際に踏んだ** —— 調査中に `git ls-files` へ pathspec で `server` 配下の `kts` を渡したら
+  **0 件**が返った。**pathspec と gitignore 形式は `**` の解釈が違う**（`git check-attr` は
+  `set lf` を返す）。**`ls-files` で判定すると、生きているものを死んでいると言う**
+- **★ git を呼ばない** —— `git check-attr` に聞けば厳密だが、**`npm test` の層は外部プロセスを
+  1 つも起こしていない**（同日実測）。**厳密さのために層の性格を変えない**
+- **対象外**: `.gitignore`（**無視パターンは実在しないのが正常**）／ `.dockerignore` の `!`
+  （**`ci-image` の E2E 13 本が実際にコンテナを起こすので既に機械が付いている**）／
+  `tsconfig.json` の `include` と `vite.config.ts` の `root`（別の帯）
+
+#### 帯を 1 つ広げた: `locale/ko.xml` は CRLF ではなかった
+
+`.gitattributes` が「**`locale/ko.xml` は今も CRLF**。実体に合わせて変換しないままにする」と
+書いているが、**21 本とも LF。CRLF は 0 本**（同日実測）。
+
+**消えたのは `c8952a6`（2026-08-22。段階6-10b #53）で、`-text` がまだ効いていた時期**
+（`locale/**` が死ぬのは 5 日後）。つまり**この帯とは無関係**で、**`-text` が止めるのは git の
+変換だけ。編集する側が書き換えるのは止められない**。
+
+**`-text` は維持し、注記を足した** —— 元の記述は消さない（なぜ `-text` にしたかの記録）。
+**事実と違う記述を残すと、次に読む人が「ko.xml は CRLF」と信じる。**
+
+#### 害は正確に
+
+**今は壊れていない。** `db/**` の LF 固定の根拠（XSLT 経路が DDL golden のバイト列を左右していた）は
+生成が TS に移って消えており、`locale/**` の守る対象（CRLF）は**そもそも 2026-08-22 から無かった**。
+CI の `paths` に実在しない行があってもトリガーは変わらない。**壊れたのではなく、保護が外れていた。**
+
+#### 実測
+
+| 検査 | 直す前 | 直した後 |
+|---|---|---|
+| `git check-attr text eol -- frontend/db/postgresql/datatypes.xml` | `unspecified / unspecified` | **`set / lf`** |
+| `git check-attr text eol -- frontend/locale/ko.xml` | `unspecified / unspecified` | **`unset`** |
+| 対照（`docker-entrypoint.sh` / `server/gradlew` / `scripts/setup-hooks.ps1`） | `set lf` / `set lf` / `set crlf` | **不変** |
+| `git status --short` | — | **変更した 3 本だけ**（**改行の再正規化は起きていない**。既に LF でコミット済み） |
+| 新しい検査（直す前） | **2 本とも赤。`['db/**', 'locale/**']` と `ci-image.yml: compose.e2e.linux.yaml` をちょうど拾う** | **2 passed** |
+| `npm test` | 39 ファイル / 862 | **40 / 864**（新ファイルぶん） |
+| `npm run test:browser` | — | **243 passed**（golden のバイト列は動いていない） |
+| `npx tsc --noEmit` | — | **exit 0** |
+
+#### 申し送り
+
+- **★ ラベルは 14 種になっていた**（同日実測）。`CLAUDE.md` は 13 種と書いており、
+  **`github_actions` が 5 本目の bot 産**。**数を書いた時点で bot が足した日に古くなる**のは
+  同ファイルが既に書いているとおりなので、**数のほうを直さない**（直してもまた古くなる）。
+  **選ぶ前に `gh label list` を見る**
+- **★ root の 6 本のうち 2 本は、まだ検査が無い** —— `tsconfig.json` の `include` と
+  `vite.config.ts` の `root`。**`include` が死ぬと型検査の入力が静かに空になる**
+  （`tsc --noEmit` は 0 件でも exit 0）。**起票しない** —— 広げるなら先に
+  「root がパスで指すもの」の一覧そのものを決める必要があり、**この帯では決まらない**
+- **★ `CUSTOMIZATIONS.md` は 1.4 MB / 19,820 行で root の最大**（同日実測）。移さない判断は
+  上のとおりだが、**分割の是非は配置とは別の軸**（大きさ）。**起票しない** ——
+  **読む側の困りごとが観測されていない**
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

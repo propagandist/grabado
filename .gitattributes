@@ -17,10 +17,15 @@ tests/golden/**   text eol=lf
 # ——つまり db/ の改行コードが DDL golden のバイト列を左右していた。生成が TS に移って
 # その経路が無くなり、いま db/ が持つのは属性を読むだけの XML なので、他の text ファイルと
 # 同じ LF 固定に揃える（5 本とも既に LF でコミットされているのでバイト列は動かない）。
-db/**     text eol=lf
+frontend/db/**     text eol=lf
 
 # locale/ko.xml は今も CRLF。こちらは実体に合わせて変換しないままにする。
-locale/** -text
+# ★ 訂正（2026-09-15 実測。issue #315）—— **CRLF はもう無い。21 本とも LF。**
+#   消えたのは c8952a6（2026-08-22。段階6-10b #53）で、**-text がまだ効いていた時期**
+#   ——-text が止めるのは git の変換だけで、**編集する側が書き換えるのは止められない**。
+#   **元の記述は消さない**（なぜ -text にしたかの記録）。**-text も維持する** ——
+#   変換しないことに変わりはなく、将来 CRLF が入る日には保つ。
+frontend/locale/** -text
 
 # Gradle wrapper（段階5-1b）。gradlew は sh、gradlew.bat は cmd が読むので、
 # それぞれ LF / CRLF で固定する。**ここが抜けると Windows で clone した人の

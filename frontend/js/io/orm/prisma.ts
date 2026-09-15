@@ -27,7 +27,7 @@
  * 正規型（kind）1 段だけで写し、丸めた分は先頭のコメントに書く。
  */
 
-import type { DdlKey, DdlRow, DdlTable } from "../ddl/shared.ts";
+import { isGenerated, primaryKeyOf, type DdlKey, type DdlRow, type DdlTable } from "../ddl/shared.ts";
 import type { TypeKind } from "../palette.ts";
 import { camelCase, entityName } from "./naming.ts";
 
@@ -115,14 +115,6 @@ function uniqueNames(raw: readonly string[]): string[] {
 
 function prismaString(value: string): string {
     return '"' + value.split("\\").join("\\\\").split('"').join('\\"') + '"';
-}
-
-function isGenerated(row: DdlRow): boolean {
-    return row.autoincrement || /IDENTITY|AUTO_INCREMENT/i.test(row.datatype);
-}
-
-function primaryKeyOf(table: DdlTable): DdlKey | null {
-    return table.keys.find((k) => k.type === "PRIMARY" && k.parts.length > 0) ?? null;
 }
 
 /** 1 行に畳んだコメント（Prisma の // は行末までなので改行を潰す） */

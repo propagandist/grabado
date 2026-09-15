@@ -33,7 +33,7 @@
  *   あちらは「無くてもスキーマは正しい」だったが、こちらは**無いと意味が変わる**。
  */
 
-import type { DdlKey, DdlRow, DdlTable } from "../ddl/shared.ts";
+import { isGenerated, primaryKeyOf, type DdlKey, type DdlRow, type DdlTable } from "../ddl/shared.ts";
 import type { TypeKind } from "../palette.ts";
 import { camelCase, entityName } from "./naming.ts";
 
@@ -228,6 +228,12 @@ function tsIdentifier(name: string): string {
  *
  * **prisma.ts が同じ形を持っているが括らない** —— 6-9e の「言語ごとの識別子の規則は
  * 各生成器が持つ」に沿う。**括ると、片方を直したときにもう片方の golden が動く。**
+ *
+ * **★ 射程を測り直した**（2026-09-15。#332）—— **この判断は uniqueNames にしか付いていなかった。**
+ * 同じファイルに居た isGenerated / primaryKeyOf は**引数も戻り値も ddl/shared.ts の型**で、
+ * **生成先の言語を 1 バイトも知らない**ので、そちらへ寄せた（**射程の外側にあった**）。
+ * **uniqueNames は動かしていない** —— 名前の一意化は識別子の規則の一部で、射程の内側にある。
+ * 引き直すなら**代償（`_2` の付き方が 2 言語で同時に動く）を測ってから**別に判断する。
  */
 function uniqueNames(raw: readonly string[]): string[] {
     const used = new Map<string, number>();
@@ -246,14 +252,6 @@ function tsString(value: string): string {
 /** 1 行に畳んだコメント（`//` は行末までなので改行を潰す） */
 function lineComment(text: string): string {
     return text.split("\r").join(" ").split("\n").join(" ");
-}
-
-function isGenerated(row: DdlRow): boolean {
-    return row.autoincrement || /IDENTITY|AUTO_INCREMENT/i.test(row.datatype);
-}
-
-function primaryKeyOf(table: DdlTable): DdlKey | null {
-    return table.keys.find((k) => k.type === "PRIMARY" && k.parts.length > 0) ?? null;
 }
 
 /**

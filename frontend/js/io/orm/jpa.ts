@@ -24,7 +24,7 @@
  * 単数化は英語の規則だけを持ち、倒せない語（people / children）はそのまま残す。
  */
 
-import type { DdlKey, DdlRow, DdlTable } from "../ddl/shared.ts";
+import { isGenerated, primaryKeyOf, type DdlKey, type DdlRow, type DdlTable } from "../ddl/shared.ts";
 import type { TypeKind } from "../palette.ts";
 import { camelCase, entityName } from "./naming.ts";
 
@@ -94,15 +94,6 @@ export function fieldName(column: string): string {
 function relationFieldName(column: string): string {
     const stripped = column.replace(/_id$/, "");
     return fieldName(stripped === "" ? column : stripped);
-}
-
-/** identity 列か。@autoincrement のチェックと、型そのものが持つ identity 句の両方 */
-function isGenerated(row: DdlRow): boolean {
-    return row.autoincrement || /IDENTITY|AUTO_INCREMENT/i.test(row.datatype);
-}
-
-function primaryKeyOf(table: DdlTable): DdlKey | null {
-    return table.keys.find((k) => k.type === "PRIMARY" && k.parts.length > 0) ?? null;
 }
 
 /** KDoc を 1 行に畳む。値がコメントの閉じ記号を含んでいてもコメントが切れないようにする */

@@ -19957,6 +19957,95 @@ CI の `paths` に実在しない行があってもトリガーは変わらな�
   上のとおりだが、**分割の是非は配置とは別の軸**（大きさ）。**起票しない** ——
   **読む側の困りごとが観測されていない**
 
+### 2026-09-15 ORM の同一ヘルパ 2 本を `io/ddl/shared.ts` へ寄せる —— 6-9e の射程は uniqueNames で止まっていた
+
+`frontend/js/io/orm/` の 3 本（`jpa.ts` / `prisma.ts` / `drizzle.ts`）に**1 文字も違わない関数が
+2 つ**あった（`isGenerated` / `primaryKeyOf`）。#332。
+
+#### 決めたこと 1: 2 本を `io/ddl/shared.ts` へ寄せる
+
+**「重複しているから括る」ではない。** 6-9e の「言語ごとの識別子の規則は各生成器が持つ」という
+判断が**どこまで及ぶかを測った結果、この 2 本が射程の外にあった**。
+
+| ヘルパ | 引数 / 戻り値 | 本体が触るもの | 言語の語 |
+|---|---|---|---|
+| `tsIdentifier` / `tsString`（drizzle） | string / string | TS の文字集合・エスケープ | **あり** |
+| `uniqueNames` | string[] / string[] | 重複と通し番号 | なし（**明示の判断あり**） |
+| **`isGenerated`** | **`DdlRow`** / boolean | `row.autoincrement` / `row.datatype` | **0 個** |
+| **`primaryKeyOf`** | **`DdlTable`** / **`DdlKey` か null** | `table.keys` | **0 個** |
+
+**下 2 本は、引数も戻り値も `io/ddl/shared.ts` の型である。**
+
+寄せ先を `io/orm/` の新しい共有ファイルにしなかったのは、**ORM 側に共有層を作ると 6-9e の境界が
+曖昧になる**から。`DdlRow` / `DdlTable` / `DdlKey` が定義されている場所に置けば、
+**「言語を知らないものだけがここに居る」がファイルの位置で読める**。
+
+#### 決めたこと 2: 代償を先に数字で測った（判定条件は測る前に書いた）
+
+**分岐の実績** —— 3 本とも置かれた日から今日まで**1 度も分岐していない**（#332 が
+`git log -L` で実測。変更 0）。
+
+**変異の代償**（2026-09-15 実測）—— 3 本の `isGenerated` を同時に `return false;` へ変異させ、
+`npm run golden:update` を回して動いた golden を数えた:
+
+| 測ったもの | 本数 |
+|---|---|
+| **1 本だけ触ったときに動く golden** | **6 本**（jpa / prisma / drizzle のどれでも同じ 6 本） |
+| **括った後に動く golden** | **18 本**（6 × 3） |
+| **DDL golden への波及** | **0 本** |
+
+動いた 18 本は、3 ターゲットとも同じ 6 プロファイルだった:
+
+```
+<target>/h2/types-matrix
+<target>/mariadb/types-matrix
+<target>/mysql/types-matrix
+<target>/postgresql/autoincrement
+<target>/postgresql/types-matrix
+<target>/sql-standard/types-matrix
+```
+
+**判定条件**（着手前に書いたもの）は「動く本数が **ORM golden 42 本の内側**に収まり、
+**DDL golden 56 本へ波及しない**なら寄せる」。**両方満たした。**
+
+**★ DDL への波及が 0 なのは、DDL 生成器がまだこれを呼んでいないから** ——
+`shared.ts` に置いた以上、**呼び始めた時点で射程が変わる**。そのときは測り直す（KDoc にも書いた）。
+
+#### 決めたこと 3: `uniqueNames` は動かさない
+
+**明示の判断が付いている唯一の 1 本**（`drizzle.ts` の KDoc「**括ると、片方を直したときに
+もう片方の golden が動く**」）。**元の記述を 1 文字も消さず、★で射程を測った結果を追記した。**
+引き直すなら**代償（`_2` の付き方が 2 言語で同時に動く）を測ってから**別に判断する。
+
+`tsIdentifier` / `tsString` も動かさない（**TS の文字集合とエスケープ**。射程の内側）。
+`naming.ts` は触っていない（`entityName` / `camelCase` は言語側の規則）。
+
+#### 検証
+
+| 検査 | 結果 |
+|---|---|
+| `grep -c 'function isGenerated' frontend/js/io/orm/*.ts` | **5 ファイルとも 0** |
+| `grep -c 'function primaryKeyOf' frontend/js/io/orm/*.ts` | **5 ファイルとも 0** |
+| `shared.ts` 側の定義 | **2 本**（`export function`） |
+| `npm run typecheck` | **exit 0** |
+| `npm test` | **40 ファイル / 864 passed** |
+| `npm run test:browser` | **243 passed**（`UPDATE_GOLDEN` 無しで緑） |
+| `git diff --exit-code -- tests/golden/` | **golden が 1 バイトも動いていない** |
+| `npm run known-issues` | **1 passed** |
+| 変更範囲 | **4 ファイル / +31 -28**（`naming.ts` は 0） |
+
+#### 申し送り
+
+- **★ これは 4 本目の ORM ターゲット（JPA (Java)）の前提として入れた。** 4 本目が
+  `isGenerated` の 4 つ目の写しを持つと、#332 の対象範囲も「変異の代償」の実測もやり直しになる。
+  **順序を入れ替えない**
+- **`relationFieldName` は寄せていない** —— `jpa.ts` と `prisma.ts` に同型があるが、
+  **`_id` を落とす規則が FK 命名（§6.3）と対になる慣行**で、言語側とも DDL 側とも言い切れない。
+  **#332 が測った 2 本とは性質が違う**ので、必要になったときに別に測る
+- **`lineComment` も寄せていない**（#332 の却下した案のとおり）—— ORM 側 2 本は `split/join`、
+  DDL 側は `replaceSubstring` で**実装が違う**。かつ改行の潰し方は**コメント構文の都合**なので
+  射程の内側に入りうる
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

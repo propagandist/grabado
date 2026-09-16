@@ -63,34 +63,34 @@ export class KeyManager {
         this.dom.avail = OZ.$<HTMLSelectElement>("keyavail");
         this.dom.listlabel = OZ.$<HTMLLabelElement>("keyslistlabel");
 
-        var ids = ["keyadd", "keyremove"];
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i]!;
-            var elm = OZ.$<HTMLInputElement>(id);
+        const ids = ["keyadd", "keyremove"];
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i]!;
+            const elm = OZ.$<HTMLInputElement>(id);
             /* 動的キーの代入はこの 1 行だけ。完成形は上の KeyManagerDom が宣言している */
             (this.dom as unknown as Record<string, HTMLInputElement>)[id] = elm;
             elm.value = _(id);
         }
 
         /* grabado: #321。上のループの ids と同一スコープなので改名した。中身は不変 */
-        var labelIds = [
+        const labelIds = [
             "keyedit",
             "keytypelabel",
             "keynamelabel",
             "keyfieldslabel",
             "keyavaillabel",
         ];
-        for (var i = 0; i < labelIds.length; i++) {
-            var id = labelIds[i]!;
+        for (let i = 0; i < labelIds.length; i++) {
+            const id = labelIds[i]!;
             /* grabado: 上のループの elm と型が違う（ラベル要素）ため改名した（段階3-3b） */
-            var labelElm = OZ.$(id);
+            const labelElm = OZ.$(id);
             labelElm.innerHTML = _(id);
         }
 
-        var types = ["PRIMARY", "INDEX", "UNIQUE", "FULLTEXT"];
+        const types = ["PRIMARY", "INDEX", "UNIQUE", "FULLTEXT"];
         OZ.DOM.clear(this.dom.type);
-        for (var i = 0; i < types.length; i++) {
-            var o = OZ.DOM.elm("option");
+        for (let i = 0; i < types.length; i++) {
+            const o = OZ.DOM.elm("option");
             o.innerHTML = types[i]!;
             o.value = types[i]!;
             this.dom.type.appendChild(o);
@@ -124,26 +124,26 @@ export class KeyManager {
     }
 
     add(e?: Event): void {
-        var type = this.table.keys.length ? "INDEX" : "PRIMARY";
+        const type = this.table.keys.length ? "INDEX" : "PRIMARY";
         this.table.addKey(type);
         this.sync(this.table);
         this.switchTo(this.table.keys.length - 1);
     }
 
     remove(e?: Event): void {
-        var index = this.dom.list.selectedIndex;
+        const index = this.dom.list.selectedIndex;
         if (index == -1) {
             return;
         }
-        var r = this.table.keys[index]!;
+        const r = this.table.keys[index]!;
         this.table.removeKey(r);
         this.sync(this.table);
     }
 
     purge(): void {
         /* remove empty keys */
-        for (var i = this.table.keys.length - 1; i >= 0; i--) {
-            var k = this.table.keys[i]!;
+        for (let i = this.table.keys.length - 1; i >= 0; i--) {
+            const k = this.table.keys[i]!;
             if (!k.rows.length) {
                 this.table.removeKey(k);
             }
@@ -159,11 +159,11 @@ export class KeyManager {
         );
 
         OZ.DOM.clear(this.dom.list);
-        for (var i = 0; i < table.keys.length; i++) {
-            var k = table.keys[i]!;
-            var o = OZ.DOM.elm("option");
+        for (let i = 0; i < table.keys.length; i++) {
+            const k = table.keys[i]!;
+            const o = OZ.DOM.elm("option");
             this.dom.list.appendChild(o);
-            var str = i + 1 + ": " + k.getLabel();
+            const str = i + 1 + ": " + k.getLabel();
             o.innerHTML = str;
         }
         if (table.keys.length) {
@@ -174,7 +174,7 @@ export class KeyManager {
     }
 
     redrawListItem(): void {
-        var index = this.table.keys.indexOf(this.key);
+        const index = this.table.keys.indexOf(this.key);
         this.option.innerHTML = index + 1 + ": " + this.key.getLabel();
     }
 
@@ -182,35 +182,35 @@ export class KeyManager {
         /* show Nth key */
         this.enable();
         /* index は listchange / add / sync のいずれかが渡す実在のインデックス */
-        var k = this.table.keys[index]!;
+        const k = this.table.keys[index]!;
         this.key = k;
         this.option = this.dom.list.getElementsByTagName("option")[index]!;
 
         this.dom.list.selectedIndex = index;
         this.dom.name.value = k.getName();
 
-        var opts = this.dom.type.getElementsByTagName("option");
-        for (var i = 0; i < opts.length; i++) {
+        const opts = this.dom.type.getElementsByTagName("option");
+        for (let i = 0; i < opts.length; i++) {
             if (opts[i]!.value == k.getType()) {
                 this.dom.type.selectedIndex = i;
             }
         }
 
         OZ.DOM.clear(this.dom.fields);
-        for (var i = 0; i < k.rows.length; i++) {
-            var o = OZ.DOM.elm("option");
+        for (let i = 0; i < k.rows.length; i++) {
+            const o = OZ.DOM.elm("option");
             o.innerHTML = k.rows[i]!.getTitle();
             o.value = o.innerHTML;
             this.dom.fields.appendChild(o);
         }
 
         OZ.DOM.clear(this.dom.avail);
-        for (var i = 0; i < this.table.rows.length; i++) {
-            var r = this.table.rows[i]!;
+        for (let i = 0; i < this.table.rows.length; i++) {
+            const r = this.table.rows[i]!;
             if (k.rows.indexOf(r) != -1) {
                 continue;
             }
-            var o = OZ.DOM.elm("option");
+            const o = OZ.DOM.elm("option");
             o.innerHTML = r.getTitle();
             o.value = o.innerHTML;
             this.dom.avail.appendChild(o);
@@ -243,13 +243,13 @@ export class KeyManager {
 
     left(e?: Event): void {
         /* add field to index */
-        var opts = this.dom.avail.getElementsByTagName("option");
-        for (var i = 0; i < opts.length; i++) {
-            var o = opts[i]!;
+        const opts = this.dom.avail.getElementsByTagName("option");
+        for (let i = 0; i < opts.length; i++) {
+            const o = opts[i]!;
             if (o.selected) {
                 /* findNamedRow は Row | false（段階3-2）。option の value は
                    直前に switchTo() が同じテーブルの行名から作っているので必ず見つかる */
-                var row = this.table.findNamedRow(o.value) as Row;
+                const row = this.table.findNamedRow(o.value) as Row;
                 this.key.addRow(row);
             }
         }
@@ -258,11 +258,11 @@ export class KeyManager {
 
     right(e?: Event): void {
         /* remove field from index */
-        var opts = this.dom.fields.getElementsByTagName("option");
-        for (var i = 0; i < opts.length; i++) {
-            var o = opts[i]!;
+        const opts = this.dom.fields.getElementsByTagName("option");
+        for (let i = 0; i < opts.length; i++) {
+            const o = opts[i]!;
             if (o.selected) {
-                var row = this.table.findNamedRow(o.value) as Row;
+                const row = this.table.findNamedRow(o.value) as Row;
                 this.key.removeRow(row);
             }
         }

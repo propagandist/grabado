@@ -34,7 +34,7 @@ export class Rubberband extends Visual {
 
     down(e: MouseEvent): void {
         OZ.Event.prevent(e);
-        var scroll = OZ.DOM.scroll();
+        const scroll = OZ.DOM.scroll();
         this.x = this.x0 = e.clientX + scroll[0];
         this.y = this.y0 = e.clientY + scroll[1];
         this.width = 0;
@@ -49,9 +49,9 @@ export class Rubberband extends Visual {
     }
 
     move(e: MouseEvent): void {
-        var scroll = OZ.DOM.scroll();
-        var x = e.clientX + scroll[0];
-        var y = e.clientY + scroll[1];
+        const scroll = OZ.DOM.scroll();
+        const x = e.clientX + scroll[0];
+        const y = e.clientY + scroll[1];
         this.width = Math.abs(x - this.x0);
         this.height = Math.abs(y - this.y0);
         if (x < this.x0) {

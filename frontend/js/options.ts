@@ -59,7 +59,7 @@ export class Options {
         this.dom.optionshowsize = OZ.$<HTMLInputElement>("optionshowsize");
         this.dom.optionshowtype = OZ.$<HTMLInputElement>("optionshowtype");
 
-        var ids = [
+        const ids = [
             "language",
             "db",
             "snap",
@@ -73,16 +73,16 @@ export class Options {
             "optionpatternnotice",
             "optionsnotice",
         ];
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i]!;
-            var elm = OZ.$(id);
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i]!;
+            const elm = OZ.$(id);
             elm.innerHTML = _(id);
         }
 
-        var ls = CONFIG.AVAILABLE_LOCALES;
+        const ls = CONFIG.AVAILABLE_LOCALES;
         OZ.DOM.clear(this.dom.optionlocale);
-        for (var i = 0; i < ls.length; i++) {
-            var o = OZ.DOM.elm("option");
+        for (let i = 0; i < ls.length; i++) {
+            const o = OZ.DOM.elm("option");
             o.value = ls[i]!;
             o.innerHTML = ls[i]!;
             this.dom.optionlocale.appendChild(o);
@@ -91,10 +91,10 @@ export class Options {
             }
         }
 
-        var dbs = CONFIG.AVAILABLE_DBS;
+        const dbs = CONFIG.AVAILABLE_DBS;
         OZ.DOM.clear(this.dom.optiondb);
-        for (var i = 0; i < dbs.length; i++) {
-            var o = OZ.DOM.elm("option");
+        for (let i = 0; i < dbs.length; i++) {
+            const o = OZ.DOM.elm("option");
             o.value = dbs[i]!;
             o.innerHTML = dbs[i]!;
             this.dom.optiondb.appendChild(o);
@@ -108,16 +108,16 @@ export class Options {
          * 「実在する CSS の一覧」で、特殊値を混ぜると意味が変わる。出すのはここ 1 か所
          * なので、先頭に足すのもここでよい。
          */
-        var styles = [CONFIG.STYLE_AUTO as string].concat(CONFIG.STYLES);
+        const styles = [CONFIG.STYLE_AUTO as string].concat(CONFIG.STYLES);
         /*
          * ★★ **突き合わせるのは storedStyle()。** getOption("style") は "auto" を
          *   実在のテーマへ解決して返すので、それで比べると **auto を選んでいるのに
          *   material-dark が選択済みに見え、OK を押した瞬間に本当に焼かれる**。
          */
-        var stored = this.owner.storedStyle();
+        const stored = this.owner.storedStyle();
         OZ.DOM.clear(this.dom.optionstyle);
-        for (var i = 0; i < styles.length; i++) {
-            var o = OZ.DOM.elm("option");
+        for (let i = 0; i < styles.length; i++) {
+            const o = OZ.DOM.elm("option");
             o.value = styles[i]!;
             /*
              * 他の 3 本は CSS 名をそのまま出す（名前なので訳さない）。"auto" だけは

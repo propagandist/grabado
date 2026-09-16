@@ -52,7 +52,7 @@ export class TableManager {
         this.selection = [];
         this.adding = false;
 
-        var ids = [
+        const ids = [
             "addtable",
             "removetable",
             "cleartables",
@@ -60,20 +60,20 @@ export class TableManager {
             "edittable",
             "tablekeys",
         ];
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i]!;
-            var elm = OZ.$<HTMLInputElement>(id);
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i]!;
+            const elm = OZ.$<HTMLInputElement>(id);
             /* 動的キーの代入はこの 1 行だけ。完成形は上の TableManagerDom が宣言している */
             (this.dom as unknown as Record<string, HTMLInputElement>)[id] = elm;
             elm.value = _(id);
         }
 
         /* grabado: #321。上のループの ids と同一スコープなので改名した。中身は不変 */
-        var labelIds = ["tablenamelabel", "tablecommentlabel"];
-        for (var i = 0; i < labelIds.length; i++) {
-            var id = labelIds[i]!;
+        const labelIds = ["tablenamelabel", "tablecommentlabel"];
+        for (let i = 0; i < labelIds.length; i++) {
+            const id = labelIds[i]!;
             /* grabado: 上のループの elm と型が違う（ラベル要素）ため改名した（段階3-3b） */
-            var labelElm = OZ.$(id);
+            const labelElm = OZ.$(id);
             labelElm.innerHTML = _(id);
         }
 
@@ -95,7 +95,7 @@ export class TableManager {
 
     addRow(e?: Event): void {
         /* 既定型はプロファイルが決める（段階6-4。postgresql は text、他は従来どおり添字 0） */
-        var newrow = this.selection[0]!.addRow(_("newrow"), {
+        const newrow = this.selection[0]!.addRow(_("newrow"), {
             type: newRowType(this.owner.palette),
         });
         this.owner.rowManager.select(newrow);
@@ -106,7 +106,7 @@ export class TableManager {
         /* activate table */
         if (table) {
             if (multi) {
-                var i = this.selection.indexOf(table);
+                const i = this.selection.indexOf(table);
                 if (i < 0) {
                     this.selection.push(table);
                 } else {
@@ -125,8 +125,8 @@ export class TableManager {
     }
 
     processSelection(): void {
-        var tables = this.owner.tables;
-        for (var i = 0; i < tables.length; i++) {
+        const tables = this.owner.tables;
+        for (let i = 0; i < tables.length; i++) {
             tables[i]!.deselect();
         }
         if (this.selection.length == 1) {
@@ -148,8 +148,8 @@ export class TableManager {
             this.dom.removetable.disabled = true;
             this.dom.removetable.value = _("removetable");
         }
-        for (var i = 0; i < this.selection.length; i++) {
-            var t = this.selection[i]!;
+        for (let i = 0; i < this.selection.length; i++) {
+            const t = this.selection[i]!;
             t.owner.raise(t);
             t.select();
         }
@@ -158,15 +158,15 @@ export class TableManager {
     selectRect(x: number, y: number, width: number, height: number): void {
         /* select all tables intersecting a rectangle */
         this.selection = [];
-        var tables = this.owner.tables;
-        var x1 = x + width;
-        var y1 = y + height;
-        for (var i = 0; i < tables.length; i++) {
-            var t = tables[i]!;
-            var tx = t.x;
-            var tx1 = t.x + t.width;
-            var ty = t.y;
-            var ty1 = t.y + t.height;
+        const tables = this.owner.tables;
+        const x1 = x + width;
+        const y1 = y + height;
+        for (let i = 0; i < tables.length; i++) {
+            const t = tables[i]!;
+            const tx = t.x;
+            const tx1 = t.x + t.width;
+            const ty = t.y;
+            const ty1 = t.y + t.height;
             if (
                 ((tx >= x && tx < x1) ||
                     (tx1 >= x && tx1 < x1) ||
@@ -183,14 +183,14 @@ export class TableManager {
 
     click(e: MouseEvent): void {
         /* finish adding new table */
-        var newtable: Table | false = false;
+        let newtable: Table | false = false;
         if (this.adding) {
             this.adding = false;
             OZ.DOM.removeClass("area", "adding");
             this.dom.addtable.value = this.oldvalue;
-            var scroll = OZ.DOM.scroll();
-            var x = e.clientX + scroll[0];
-            var y = e.clientY + scroll[1];
+            const scroll = OZ.DOM.scroll();
+            const x = e.clientX + scroll[0];
+            const y = e.clientY + scroll[1];
             newtable = this.owner.addTable(_("newtable"), x, y);
             /*
              * grabado: §6.2 初期テーブルテンプレート（段階6-4）。**8 プロファイルすべてが
@@ -199,12 +199,12 @@ export class TableManager {
              * その場合に 0 列のテーブルができる。
              */
             if (!applyTemplate(newtable, this.owner.palette)) {
-                var r = newtable.addRow("id", { ai: true });
+                const r = newtable.addRow("id", { ai: true });
                 /*
                  * grabado: 第 2 引数 "" を落とした（HANDOVER §3 段階3-3b）。Table.addKey は
                  * 1 引数しか読まず、現行でも捨てられている（js/table.ts:240 の予告どおり）。
                  */
-                var k = newtable.addKey("PRIMARY");
+                const k = newtable.addKey("PRIMARY");
                 k.addRow(r);
             }
         }
@@ -234,7 +234,7 @@ export class TableManager {
         if (!this.owner.tables.length) {
             return;
         }
-        var result = await dialogs().confirm(_("confirmall") + " ?");
+        const result = await dialogs().confirm(_("confirmall") + " ?");
         if (!result) {
             return;
         }
@@ -248,16 +248,16 @@ export class TableManager {
          * grabado: 現行は Table[] のコピーを文字列で上書きしていく。型では両方を持たせ、
          * 読み出し側に as Table を 1 個置くだけにした（実行コードは無変更・段階3-3b）。
          */
-        var titles: Array<Table | string> = this.selection.slice(0);
-        for (var i = 0; i < titles.length; i++) {
+        const titles: Array<Table | string> = this.selection.slice(0);
+        for (let i = 0; i < titles.length; i++) {
             titles[i] = "'" + (titles[i] as Table).getTitle() + "'";
         }
-        var result = await dialogs().confirm(_("confirmtable") + " " + titles.join(", ") + "?");
+        const result = await dialogs().confirm(_("confirmtable") + " " + titles.join(", ") + "?");
         if (!result) {
             return;
         }
-        var sel = this.selection.slice(0);
-        for (var i = 0; i < sel.length; i++) {
+        const sel = this.selection.slice(0);
+        for (let i = 0; i < sel.length; i++) {
             this.owner.removeTable(sel[i]!);
         }
         /* grabado: #288。confirm が false なら上で return しているので、ここは削除が起きた後 */
@@ -267,7 +267,7 @@ export class TableManager {
     edit(e?: Event): void {
         this.owner.window.open(_("edittable"), this.dom.container, this.save);
 
-        var title = this.selection[0]!.getTitle();
+        const title = this.selection[0]!.getTitle();
         this.dom.name.value = title;
         try {
             /* throws in ie6 */
@@ -296,7 +296,7 @@ export class TableManager {
     }
 
     press(e: KeyboardEvent): void {
-        var target = OZ.Event.target(e).nodeName.toLowerCase();
+        const target = OZ.Event.target(e).nodeName.toLowerCase();
         if (target == "textarea" || target == "input") {
             return;
         } /* not when in form field */

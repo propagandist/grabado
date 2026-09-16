@@ -85,7 +85,7 @@ export class Window {
             this.dom.title.removeChild(this.dom.title.childNodes[1]!);
         }
 
-        var txt = OZ.DOM.text(title);
+        const txt = OZ.DOM.text(title);
         this.dom.title.appendChild(txt);
         OZ.DOM.clear(this.dom.content);
         this.dom.content.appendChild(content);
@@ -98,9 +98,9 @@ export class Window {
          */
         this.dom.container.showModal();
 
-        var formElements = ["input", "select", "textarea"];
-        var all = this.dom.container.getElementsByTagName("*");
-        for (var i = 0; i < all.length; i++) {
+        const formElements = ["input", "select", "textarea"];
+        const all = this.dom.container.getElementsByTagName("*");
+        for (let i = 0; i < all.length; i++) {
             if (formElements.indexOf(all[i]!.tagName.toLowerCase()) != -1) {
                 (all[i] as HTMLElement).focus();
                 break;

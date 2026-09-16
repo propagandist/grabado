@@ -65,18 +65,18 @@ import { parseDesignJson } from "./io/json-parser.ts";
  * —— JSON 化でその弱さも同時に消える。
  */
 function parseCookieValue(raw: string): Record<string, string> {
-    var text = raw;
+    let text = raw;
     try {
         text = decodeURIComponent(raw);
     } catch {
         /* 旧書式は生で書いていたので、値に裸の % があると decode が投げる。生のまま読む */
     }
     try {
-        var parsed: unknown = JSON.parse(text);
+        const parsed: unknown = JSON.parse(text);
         if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
-            var source = parsed as Record<string, unknown>;
-            var obj: Record<string, string> = {};
-            for (var key in source) {
+            const source = parsed as Record<string, unknown>;
+            const obj: Record<string, string> = {};
+            for (let key in source) {
                 obj[key] = String(source[key]);
             }
             return obj;
@@ -92,13 +92,13 @@ function parseCookieValue(raw: string): Record<string, string> {
  * ——既存の cookie を持つブラウザで設定が失われないための互換で、次の保存で JSON になる。
  */
 function parseLegacyCookieValue(text: string): Record<string, string> {
-    var obj: Record<string, string> = {};
-    var body = text.match(/^{(.*)}$/);
+    const obj: Record<string, string> = {};
+    const body = text.match(/^{(.*)}$/);
     if (!body) {
         return obj;
     }
-    var pair = /([^{},:]+):'([^']*)'/g;
-    var r: RegExpExecArray | null;
+    const pair = /([^{},:]+):'([^']*)'/g;
+    let r: RegExpExecArray | null;
     while ((r = pair.exec(body[1]!)) !== null) {
         obj[r[1]!] = r[2]!;
     }
@@ -252,7 +252,7 @@ export class Designer extends Visual<DesignerDom> {
      */
     resumeRedraw(): void {
         this.redrawSuspended = false;
-        for (var i = 0; i < this.tables.length; i++) {
+        for (let i = 0; i < this.tables.length; i++) {
             this.tables[i]!.redraw();
         }
         this.rowManager.redraw();
@@ -260,10 +260,10 @@ export class Designer extends Visual<DesignerDom> {
 
     /* update area size */
     sync(): void {
-        var w = this.minSize[0];
-        var h = this.minSize[1];
-        for (var i = 0; i < this.tables.length; i++) {
-            var t = this.tables[i]!;
+        let w = this.minSize[0];
+        let h = this.minSize[1];
+        for (let i = 0; i < this.tables.length; i++) {
+            const t = this.tables[i]!;
             w = Math.max(w, t.x + t.width);
             h = Math.max(h, t.y + t.height);
         }
@@ -287,9 +287,9 @@ export class Designer extends Visual<DesignerDom> {
 
     requestLanguage(): void {
         /* get locale file */
-        var lang = this.getOption("locale");
-        var bp = this.getOption("staticpath");
-        var url = bp + "locale/" + lang + ".xml";
+        const lang = this.getOption("locale");
+        const bp = this.getOption("staticpath");
+        const url = bp + "locale/" + lang + ".xml";
         OZ.Request(url, this.languageResponse.bind(this), {
             method: "get",
             xml: true,
@@ -306,10 +306,10 @@ export class Designer extends Visual<DesignerDom> {
         document.documentElement.lang = String(this.getOption("locale")).replace("_", "-");
 
         if (xmlDoc) {
-            var strings = (xmlDoc as Document).getElementsByTagName("string");
-            for (var i = 0; i < strings.length; i++) {
-                var n = strings[i]!.getAttribute("name")!;
-                var v = strings[i]!.firstChild!.nodeValue!;
+            const strings = (xmlDoc as Document).getElementsByTagName("string");
+            for (let i = 0; i < strings.length; i++) {
+                const n = strings[i]!.getAttribute("name")!;
+                const v = strings[i]!.firstChild!.nodeValue!;
                 LOCALE[n] = v;
             }
         }
@@ -321,7 +321,7 @@ export class Designer extends Visual<DesignerDom> {
 
     requestDB(): void {
         /* get datatypes file */
-        var url = this.paletteUrl(String(this.getOption("db")));
+        const url = this.paletteUrl(String(this.getOption("db")));
         OZ.Request(url, this.dbResponse.bind(this), {
             method: "get",
             xml: true,
@@ -370,7 +370,7 @@ export class Designer extends Visual<DesignerDom> {
                     callback(false);
                     return;
                 }
-                var loaded = new TypePalette();
+                const loaded = new TypePalette();
                 loaded.setRoot((xmlDoc as Document).documentElement);
                 this.outputPalettes[db] = loaded;
                 callback(true);
@@ -391,12 +391,12 @@ export class Designer extends Visual<DesignerDom> {
 
     applyStyle(): void {
         /* apply style */
-        var style = this.getOption("style");
+        const style = this.getOption("style");
         /* grabado: #169。構造の重複をテーマ側へ書き足さずに済ませるための取り付け口
            （styles/base.css から [data-theme^="material-"] で引ける）。
            init2() が visibility を visible にするより前に呼ばれるので、切り替えは見えない */
         document.documentElement.dataset["theme"] = style;
-        var i,
+        let i,
             link_elms = document.querySelectorAll("link");
         for (i = 0; i < link_elms.length; i++) {
             if (
@@ -441,10 +441,10 @@ export class Designer extends Visual<DesignerDom> {
 
         OZ.$<HTMLInputElement>("docs").value = _("docs");
 
-        var url = window.location.href;
-        var r = url.match(/keyword=([^&]+)/);
+        const url = window.location.href;
+        const r = url.match(/keyword=([^&]+)/);
         if (r) {
-            var keyword = r[1]!;
+            const keyword = r[1]!;
             this.io.serverload(false, keyword);
         }
         document.body.style.visibility = "visible";
@@ -452,9 +452,9 @@ export class Designer extends Visual<DesignerDom> {
 
     getMaxZ(): number {
         /* find max zIndex */
-        var max = 0;
-        for (var i = 0; i < this.tables.length; i++) {
-            var z = this.tables[i]!.getZ();
+        let max = 0;
+        for (let i = 0; i < this.tables.length; i++) {
+            const z = this.tables[i]!.getZ();
             if (z > max) {
                 max = z;
             }
@@ -466,8 +466,8 @@ export class Designer extends Visual<DesignerDom> {
     }
 
     addTable(name: string, x: number, y: number): Table {
-        var max = this.getMaxZ();
-        var t = new Table(this, name, x, y, max + 1);
+        const max = this.getMaxZ();
+        const t = new Table(this, name, x, y, max + 1);
         this.tables.push(t);
         this.dom.container.appendChild(t.dom.container);
         return t;
@@ -476,7 +476,7 @@ export class Designer extends Visual<DesignerDom> {
     removeTable(t: Table): void {
         this.tableManager.select(false);
         this.rowManager.select(false);
-        var idx = this.tables.indexOf(t);
+        const idx = this.tables.indexOf(t);
         if (idx == -1) {
             return;
         }
@@ -485,13 +485,13 @@ export class Designer extends Visual<DesignerDom> {
     }
 
     addRelation(row1: Row, row2: Row): Relation {
-        var r = new Relation(this, row1, row2);
+        const r = new Relation(this, row1, row2);
         this.relations.push(r);
         return r;
     }
 
     removeRelation(r: Relation): void {
-        var idx = this.relations.indexOf(r);
+        const idx = this.relations.indexOf(r);
         if (idx == -1) {
             return;
         }
@@ -512,16 +512,16 @@ export class Designer extends Visual<DesignerDom> {
      *   parseCookieValue は純関数なので、同じ生値からは必ず同じ表が出る。
      */
     parsedCookie(): Record<string, string> {
-        var raw = document.cookie;
-        var memo = this._cookieMemo;
+        const raw = document.cookie;
+        const memo = this._cookieMemo;
         if (memo && memo.raw === raw) {
             return memo.parsed;
         }
-        var obj: Record<string, string> = {};
-        var parts = raw.split(";");
-        for (var i = 0; i < parts.length; i++) {
-            var part = parts[i]!;
-            var r = part.match(/wwwsqldesigner=([^;]*)/);
+        let obj: Record<string, string> = {};
+        const parts = raw.split(";");
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i]!;
+            const r = part.match(/wwwsqldesigner=([^;]*)/);
             if (r) {
                 obj = parseCookieValue(r[1]!);
             }
@@ -536,9 +536,9 @@ export class Designer extends Visual<DesignerDom> {
      * 読むだけの getOption() は parsedCookie() を直接見る。
      */
     getCookie(): Record<string, string> {
-        var parsed = this.parsedCookie();
-        var copy: Record<string, string> = {};
-        for (var key in parsed) {
+        const parsed = this.parsedCookie();
+        const copy: Record<string, string> = {};
+        for (let key in parsed) {
             copy[key] = parsed[key]!;
         }
         return copy;
@@ -546,7 +546,7 @@ export class Designer extends Visual<DesignerDom> {
 
     setCookie(obj: Record<string, string>): void {
         /* SameSite=Lax: 認証には使っていないが、勝手に横断で送られる理由も無い */
-        var value = encodeURIComponent(JSON.stringify(obj));
+        const value = encodeURIComponent(JSON.stringify(obj));
         document.cookie = "wwwsqldesigner=" + value + "; path=/; SameSite=Lax";
     }
 
@@ -559,7 +559,7 @@ export class Designer extends Visual<DesignerDom> {
     getOption(name: string): string | number | boolean;
     getOption(name: string): string | number | boolean {
         /* 読むだけなので memo をそのまま見る（コピーを作らない。#207） */
-        var c = this.parsedCookie();
+        const c = this.parsedCookie();
         if (name in c) {
             /*
              * grabado: #235。**"auto" は保存される値であって、返す値ではない。**
@@ -640,7 +640,7 @@ export class Designer extends Visual<DesignerDom> {
      *   片道で焼かれる」を止めている実体。
      */
     storedStyle(): string {
-        var c = this.parsedCookie();
+        const c = this.parsedCookie();
         return "style" in c ? c["style"]! : CONFIG.STYLE_AUTO;
     }
 
@@ -659,7 +659,7 @@ export class Designer extends Visual<DesignerDom> {
     }
 
     setOption(name: string, value: string): void {
-        var obj = this.getCookie();
+        const obj = this.getCookie();
         obj[name] = value;
         this.setCookie(obj);
     }
@@ -675,11 +675,11 @@ export class Designer extends Visual<DesignerDom> {
 
     raise(table: Table): void {
         /* raise a table */
-        var old = table.getZ();
-        var max = this.getMaxZ();
+        const old = table.getZ();
+        const max = this.getMaxZ();
         table.setZ(max);
-        for (var i = 0; i < this.tables.length; i++) {
-            var t = this.tables[i]!;
+        for (let i = 0; i < this.tables.length; i++) {
+            const t = this.tables[i]!;
             if (t == table) {
                 continue;
             }
@@ -687,7 +687,7 @@ export class Designer extends Visual<DesignerDom> {
                 t.setZ(t.getZ() - 1);
             }
         }
-        var m = table.dom.mini;
+        const m = table.dom.mini;
         m.parentNode!.appendChild(m);
     }
 
@@ -729,7 +729,7 @@ export class Designer extends Visual<DesignerDom> {
     /** 見つからなければ undefined を返す（js/io/apply.ts が if (!t1) continue で消費する） */
     findNamedTable(name: string | null): Table | undefined {
         /* find row specified as table(row) */
-        for (var i = 0; i < this.tables.length; i++) {
+        for (let i = 0; i < this.tables.length; i++) {
             if (this.tables[i]!.getTitle() == name) {
                 return this.tables[i];
             }
@@ -757,7 +757,7 @@ export class Designer extends Visual<DesignerDom> {
      * ここを非同期にしない理由はフィールド宣言（outputPalettes）に書いた。
      */
     toDdl(targetDb?: string): string {
-        var target = targetDb ? this.paletteFor(targetDb) : null;
+        const target = targetDb ? this.paletteFor(targetDb) : null;
         if (targetDb && !target) {
             throw new Error(
                 `出力先の型パレットが読み込まれていない: ${targetDb}` +
@@ -774,7 +774,7 @@ export class Designer extends Visual<DesignerDom> {
      * 型は正規型（6-9c の kind）を介して写す。同じ設計から DDL と ORM の両方を出せる。
      */
     toOrm(target: string, targetDb?: string): string {
-        var output = targetDb ? this.paletteFor(targetDb) : null;
+        const output = targetDb ? this.paletteFor(targetDb) : null;
         if (targetDb && !output) {
             throw new Error(
                 `出力先の型パレットが読み込まれていない: ${targetDb}` +
@@ -813,9 +813,9 @@ export class Designer extends Visual<DesignerDom> {
      * override が外れたのはそのため。
      */
     fromXML(node: Element): void {
-        var types = parseDatatypes(node);
+        const types = parseDatatypes(node);
         if (!types) {
-            var model = parseDesignXml(node, this.palette);
+            const model = parseDesignXml(node, this.palette);
             /* grabado: #232 / #233。この経路は parse が clear より前なので守れる */
             assertLoadableDesign(model);
             this.clearTables();
@@ -824,7 +824,7 @@ export class Designer extends Visual<DesignerDom> {
         }
         this.clearTables();
         this.palette.setRoot(types);
-        var embedded = parseDesignXml(node, this.palette);
+        const embedded = parseDesignXml(node, this.palette);
         /*
          * grabado: #232 / #233。**ここは clear が先なので「今の設計を消さない」は守れない**
          * （上の KDoc の順序制約）。それでも検査は掛ける —— 通してしまうと、
@@ -858,7 +858,7 @@ export class Designer extends Visual<DesignerDom> {
      * clear が先のまま）。
      */
     fromJson(text: string): void {
-        var model = parseDesignJson(text, this.palette);
+        const model = parseDesignJson(text, this.palette);
         /* grabado: #232 / #233。**clearTables() より前**（parse を前に置いてある理由と同じ） */
         assertLoadableDesign(model);
         this.clearTables();
@@ -877,7 +877,7 @@ export class Designer extends Visual<DesignerDom> {
          * 両方で window.getSelection は true、document.selection は false と実測済み。
          * empty() は非標準なので存在判定を残す（現行どおり）。
          */
-        var sel = window.getSelection();
+        const sel = window.getSelection();
         if (!sel) {
             return;
         }

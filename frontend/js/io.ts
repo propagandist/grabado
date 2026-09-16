@@ -189,7 +189,7 @@ export class IO {
             container: OZ.$("io"),
         } as unknown as IoDom;
 
-        var ids = [
+        const ids = [
             "saveload",
             "clientlocalsave",
             "clientsave",
@@ -210,9 +210,9 @@ export class IO {
             "aireview",
             "aiapply",
         ];
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i]!;
-            var elm = OZ.$<HTMLInputElement>(id);
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i]!;
+            const elm = OZ.$<HTMLInputElement>(id);
             /* 動的キーの代入はこの 1 行だけ。完成形は上の IoDom が宣言している */
             (this.dom as unknown as Record<string, HTMLInputElement>)[id] = elm;
             elm.value = _(id);
@@ -223,12 +223,12 @@ export class IO {
         /* backendlabel は段階5-5 で撤去（select ごと消えた） */
         /* grabado: #321。上のループの ids と同一スコープなので改名した（var では黙って
            通っていたが、let / const なら即エラーになる形）。中身は 1 つも変えていない */
-        var labelIds = ["client", "server", "output", "outputdblabel"];
-        for (var i = 0; i < labelIds.length; i++) {
-            var id = labelIds[i]!;
+        const labelIds = ["client", "server", "output", "outputdblabel"];
+        for (let i = 0; i < labelIds.length; i++) {
+            const id = labelIds[i]!;
             /* grabado: 上のループの elm と型が違う（こちらはラベル要素）ため改名した。
                型のためのコード変更で、読み出しは直後の 1 行だけ（段階3-3b） */
-            var labelElm = OZ.$(id);
+            const labelElm = OZ.$(id);
             labelElm.innerHTML = _(id);
         }
 
@@ -287,9 +287,9 @@ export class IO {
          * JPA / Prisma は製品名なので翻訳しない（db プロファイル名を訳さないのと同じ）。
          */
         OZ.DOM.clear(this.dom.ormtarget);
-        for (var t = 0; t < ORM_TARGETS.length; t++) {
-            var target = ORM_TARGETS[t]!;
-            var opt = OZ.DOM.elm("option");
+        for (let t = 0; t < ORM_TARGETS.length; t++) {
+            const target = ORM_TARGETS[t]!;
+            const opt = OZ.DOM.elm("option");
             opt.value = target;
             opt.innerHTML = ORM_LABELS[target];
             this.dom.ormtarget.appendChild(opt);
@@ -303,16 +303,16 @@ export class IO {
          * 「設計と同じ」だけは文なので通す。
          */
         OZ.DOM.clear(this.dom.outputdb);
-        var same = OZ.DOM.elm("option");
+        const same = OZ.DOM.elm("option");
         same.value = "";
         same.innerHTML = _("outputdbsame") + " (" + this.owner.palette.db() + ")";
         this.dom.outputdb.appendChild(same);
-        for (var d = 0; d < CONFIG.AVAILABLE_DBS.length; d++) {
-            var dbName = CONFIG.AVAILABLE_DBS[d]!;
+        for (let d = 0; d < CONFIG.AVAILABLE_DBS.length; d++) {
+            const dbName = CONFIG.AVAILABLE_DBS[d]!;
             if (dbName === this.owner.palette.db()) {
                 continue;
             }
-            var dbOpt = OZ.DOM.elm("option");
+            const dbOpt = OZ.DOM.elm("option");
             dbOpt.value = dbName;
             dbOpt.innerHTML = dbName;
             this.dom.outputdb.appendChild(dbOpt);
@@ -335,14 +335,14 @@ export class IO {
      *   「機能が無い」ではなく「サーバがいない」。
      */
     requestCapabilities(): void {
-        var self = this;
+        const self = this;
         OZ.Request(
             this.owner.getOption("xhrpath") + BACKEND_PATH + "?action=capabilities",
             function (data: unknown, code: number) {
                 if (code !== 200 || typeof data !== "string") {
                     return;
                 }
-                var caps: unknown;
+                let caps: unknown;
                 try {
                     caps = JSON.parse(data);
                 } catch {
@@ -370,7 +370,7 @@ export class IO {
          * —— できることの説明として、そのほうが正確。
          * load / list は生きているので触らない（READONLY でも読み取りビューアとして成立する）。
          */
-        var readonly = caps.readonly === true;
+        const readonly = caps.readonly === true;
         this.dom.serversave.disabled = readonly;
         this.dom.quicksave.disabled = readonly;
         /*
@@ -407,8 +407,8 @@ export class IO {
      * なるので、選んでいるときだけ `SQL (postgresql -> mysql)` の形にする。
      */
     syncOutputLabel(): void {
-        var target = this.dom.outputdb.value;
-        var design = String(this.owner.palette.db());
+        const target = this.dom.outputdb.value;
+        const design = String(this.owner.palette.db());
         this.dom.clientsql.value =
             _("clientsql") + " (" + (target ? design + " -> " + target : design) + ")";
     }
@@ -422,21 +422,24 @@ export class IO {
      */
     outputdbchange(): void {
         this.syncOutputLabel();
-        var target = this.dom.outputdb.value;
+        const target = this.dom.outputdb.value;
         if (target) {
             this.owner.loadPalette(target, function () {});
         }
     }
 
     fromXMLText(xml: string): void {
+        /* grabado: #321。var は関数スコープなので try の外でも読めた。宣言だけ上へ出す
+           （catch は return するので、下の 1 行に届くのは代入が済んだ経路だけ） */
+        let xmlDoc: Document;
         try {
             /*
              * grabado: ActiveXObject 分岐と、その相方だった「DOMParser があるか」の判定を
              * 撤去した（HANDOVER §3 段階3-3b）。Chromium 151 / jsdom 29 の両方で
              * "ActiveXObject" in window は false、window.DOMParser は true と実測済み。
              */
-            var parser = new DOMParser();
-            var xmlDoc = parser.parseFromString(xml, "text/xml");
+            const parser = new DOMParser();
+            xmlDoc = parser.parseFromString(xml, "text/xml");
         } catch (e) {
             void dialogs().alert(_("xmlerror") + ": " + (e as Error).message);
             return;
@@ -532,7 +535,7 @@ export class IO {
     }
 
     clientsave(): void {
-        var json = this.toJsonOrAlert();
+        const json = this.toJsonOrAlert();
         if (json === null) {
             return;
         }
@@ -545,7 +548,7 @@ export class IO {
     }
 
     clientcopy(): void {
-        var json = this.toJsonOrAlert();
+        const json = this.toJsonOrAlert();
         if (json === null) {
             return;
         }
@@ -557,7 +560,7 @@ export class IO {
     }
 
     clientpaste(): void {
-        var self = this;
+        const self = this;
         navigator.clipboard.readText().then(function(text) {
             self.loadDesignText(text);
         }).catch(function(err) {
@@ -571,16 +574,16 @@ export class IO {
      * 落ちるファイルと名前が食い違う。
      */
     clientdownload(): void {
-        var json = this.toJsonOrAlert();
+        const json = this.toJsonOrAlert();
         if (json === null) {
             return;
         }
         this.downloadFile(json, "new-database.json", "application/json");
     }
     downloadFile(content: string, filename: string, mimeType: string): void {
-        var blob = new Blob([content], { type: mimeType });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement("a");
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
         a.href = url;
         a.download = filename;
         document.body.appendChild(a);
@@ -594,9 +597,9 @@ export class IO {
      * suffix の長さが 4 でなければ壊れる。撤去する側に呼び手ごとあるので直さず消した。
      */
     async promptName(title: string): Promise<string | null> {
-        var lastUsedName = (this.owner.getOption("lastUsedName") ||
+        const lastUsedName = (this.owner.getOption("lastUsedName") ||
             this.lastUsedName) as string;
-        var name = await dialogs().prompt(_(title), lastUsedName);
+        const name = await dialogs().prompt(_(title), lastUsedName);
         if (!name) {
             return null;
         }
@@ -606,26 +609,26 @@ export class IO {
     }
 
     clientloadfromfile(): void {
-        var self = this;
-        var input = document.createElement("input");
+        const self = this;
+        const input = document.createElement("input");
         input.type = "file";
         /* grabado: 段階4-3b で .json を先頭に足した（保存が JSON になったため）。
            .xml / .txt は読込互換で残す —— 拡張子で行き先は決めず、中身で判別する */
         input.accept = ".json,.xml,.txt";
         input.onchange = function(e) {
-            var file = (e.target as HTMLInputElement).files![0];
+            const file = (e.target as HTMLInputElement).files![0];
             if (!file) {
                 return;
             }
 
             // Check file extension
-            var fileName = file.name.toLowerCase();
+            const fileName = file.name.toLowerCase();
             if (!fileName.endsWith(".json") && !fileName.endsWith(".xml") && !fileName.endsWith(".txt")) {
                 void dialogs().alert(_("clientloadfromfile") + ": Please select a JSON, XML or TXT file.");
                 return;
             }
 
-            var reader = new FileReader();
+            const reader = new FileReader();
             reader.onload = function(e) {
                 self.loadDesignText((e.target as FileReader).result as string);
             };
@@ -643,7 +646,7 @@ export class IO {
             return;
         }
 
-        var json = this.toJsonOrAlert();
+        const json = this.toJsonOrAlert();
         if (json === null) {
             return;
         }
@@ -655,7 +658,7 @@ export class IO {
             return;
         }
 
-        var key = await this.promptName("serversaveprompt");
+        let key = await this.promptName("serversaveprompt");
         if (!key) {
             return;
         }
@@ -684,15 +687,17 @@ export class IO {
             return;
         }
 
-        var key = await this.promptName("serverloadprompt");
+        let key = await this.promptName("serverloadprompt");
         if (!key) {
             return;
         }
 
         key = "wwwsqldesigner_databases_" + (key || "default");
 
+        /* grabado: #321。try の外で読むので宣言だけ上へ出す（下の★と同じ形） */
+        let text: string | null;
         try {
-            var text = localStorage.getItem(key);
+            text = localStorage.getItem(key);
             if (!text) {
                 throw new Error("No data available");
             }
@@ -716,18 +721,18 @@ export class IO {
         }
 
         /* --- Define some useful vars --- */
-        var baseKeysName = "wwwsqldesigner_databases_";
-        var localLen = localStorage.length;
-        var data = "";
-        var schemasFound = false;
-        var code = 200;
+        const baseKeysName = "wwwsqldesigner_databases_";
+        const localLen = localStorage.length;
+        let data = "";
+        let schemasFound = false;
+        const code = 200;
 
         /* --- work --- */
         try {
-            for (var i = 0; i < localLen; ++i) {
-                var key = localStorage.key(i)!;
+            for (let i = 0; i < localLen; ++i) {
+                const key = localStorage.key(i)!;
                 if (new RegExp(baseKeysName).test(key)) {
-                    var result = key.substring(baseKeysName.length);
+                    const result = key.substring(baseKeysName.length);
                     schemasFound = true;
                     data += result + "\n";
                 }
@@ -760,7 +765,7 @@ export class IO {
      */
     clientsql(): void {
         this.withOutputPalette((target) => {
-            var sql = "";
+            let sql = "";
             try {
                 sql = this.owner.toDdl(target);
             } catch (e) {
@@ -779,7 +784,7 @@ export class IO {
      * 同期で callback を呼ぶ**ので、2 回目以降の押下も待たない。
      */
     withOutputPalette(body: (target?: string) => void): void {
-        var target = this.dom.outputdb.value;
+        const target = this.dom.outputdb.value;
         if (!target) {
             body(undefined);
             return;
@@ -802,7 +807,7 @@ export class IO {
      */
     clientorm(): void {
         this.withOutputPalette((target) => {
-            var out = "";
+            let out = "";
             try {
                 out = this.owner.toOrm(this.dom.ormtarget.value, target);
             } catch (e) {
@@ -822,7 +827,7 @@ export class IO {
      * 保存できたように見える。
      */
     async serversave(e?: Event, keyword?: string): Promise<void> {
-        var name = keyword || (await dialogs().prompt(_("serversaveprompt"), this._name));
+        const name = keyword || (await dialogs().prompt(_("serversaveprompt"), this._name));
         if (!name) {
             return;
         }
@@ -846,8 +851,8 @@ export class IO {
      *   `{ ifMatch: "*" }`（存在すれば無条件で上書き）を渡す。
      */
     sendSave(name: string, json: string, precondition: Precondition): void {
-        var bp = this.owner.getOption("xhrpath");
-        var url =
+        const bp = this.owner.getOption("xhrpath");
+        const url =
             bp +
             BACKEND_PATH +
             "?action=save&keyword=" +
@@ -858,9 +863,9 @@ export class IO {
          *   直に書くと**前回の保存で載せたヘッダが次の保存にも残る**。1 回ぶんのコピーを作る。
          *   段階5-4b 以前は Content-type しか足しておらず、毎回同じ値だったので露見しなかった。
          */
-        var h: Record<string, string> = {};
-        var shared = this.owner.getXhrHeaders();
-        for (var key in shared) {
+        const h: Record<string, string> = {};
+        const shared = this.owner.getXhrHeaders();
+        for (let key in shared) {
             h[key] = shared[key]!;
         }
         h["Content-type"] = "application/json";
@@ -897,18 +902,18 @@ export class IO {
     }
 
     async serverload(e?: Event | false, keyword?: string): Promise<void> {
-        var name = keyword || (await dialogs().prompt(_("serverloadprompt"), this._name));
+        const name = keyword || (await dialogs().prompt(_("serverloadprompt"), this._name));
         if (!name) {
             return;
         }
         this._name = name;
-        var bp = this.owner.getOption("xhrpath");
-        var url =
+        const bp = this.owner.getOption("xhrpath");
+        const url =
             bp +
             BACKEND_PATH +
             "?action=load&keyword=" +
             encodeURIComponent(jsonKeyword(name));
-        var h = this.owner.getXhrHeaders();
+        const h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
         this.name = name;
         /*
@@ -920,9 +925,9 @@ export class IO {
     }
 
     serverlist(e?: Event): void {
-        var bp = this.owner.getOption("xhrpath");
-        var url = bp + BACKEND_PATH + "?action=list";
-        var h = this.owner.getXhrHeaders();
+        const bp = this.owner.getOption("xhrpath");
+        const url = bp + BACKEND_PATH + "?action=list";
+        const h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
         OZ.Request(url, this.listresponse, { headers: h });
     }
@@ -937,17 +942,17 @@ export class IO {
      * `database` は **env に列挙された接続の名前**（段階5-7a）。ホスト名はここから渡らない。
      */
     async serverimport(e?: Event): Promise<void> {
-        var name = await dialogs().prompt(_("serverimportprompt"), "");
+        const name = await dialogs().prompt(_("serverimportprompt"), "");
         if (!name) {
             return;
         }
-        var bp = this.owner.getOption("xhrpath");
-        var url =
+        const bp = this.owner.getOption("xhrpath");
+        const url =
             bp +
             BACKEND_PATH +
             "?action=import&database=" +
             encodeURIComponent(name);
-        var h = this.owner.getXhrHeaders();
+        const h = this.owner.getXhrHeaders();
         this.owner.window.showThrobber();
         /* 応答はテキストで受けて JSON.parse する（段階5-7b で xml: true を外した） */
         OZ.Request(url, this.importresponse, { headers: h });
@@ -985,16 +990,16 @@ export class IO {
      * **新しい UI 語彙を増やさない**。
      */
     async aireview(e?: Event): Promise<void> {
-        var json = serializeAiRequest(buildAiRequest(extractModel(this.owner), this.owner.palette));
+        const json = serializeAiRequest(buildAiRequest(extractModel(this.owner), this.owner.palette));
         /* 見せてから訊く。断られたら 1 バイトも送らない */
         this.dom.ta.value = json;
         if (!(await dialogs().confirm(_("aireviewconfirm")))) {
             return;
         }
 
-        var h: Record<string, string> = {};
-        var shared = this.owner.getXhrHeaders();
-        for (var key in shared) {
+        const h: Record<string, string> = {};
+        const shared = this.owner.getXhrHeaders();
+        for (let key in shared) {
             h[key] = shared[key]!;
         }
         h["Content-type"] = "application/json";
@@ -1023,7 +1028,7 @@ export class IO {
             return;
         }
 
-        var suggestions: unknown;
+        let suggestions: unknown;
         try {
             suggestions = JSON.parse(data);
         } catch {
@@ -1058,24 +1063,24 @@ export class IO {
      *   （introspection の適用とはそこが違う）。
      */
     async aiapply(e?: Event): Promise<void> {
-        var suggestions = this.aiSuggestions;
+        const suggestions = this.aiSuggestions;
         if (suggestions === null || suggestions.length === 0) {
             void dialogs().alert(_("aiapplynone"));
             return;
         }
 
-        var ordered = orderedSuggestions(suggestions);
-        var answer = await dialogs().prompt(_("aiapplyprompt"), "all");
+        const ordered = orderedSuggestions(suggestions);
+        const answer = await dialogs().prompt(_("aiapplyprompt"), "all");
         if (answer === null) {
             return;
         }
-        var chosen = parseSelection(answer, ordered.length).map((index) => ordered[index]!);
+        const chosen = parseSelection(answer, ordered.length).map((index) => ordered[index]!);
         if (chosen.length === 0) {
             void dialogs().alert(_("aiapplynone"));
             return;
         }
 
-        var result = applyPatches(extractModel(this.owner), chosen, this.owner.palette);
+        const result = applyPatches(extractModel(this.owner), chosen, this.owner.palette);
         this.owner.clearTables();
         applyDesignModel(this.owner, result.model);
         /* 落ちた理由は locale の語（js/io/ は locale を通せないので、訳すのはこちら） */
@@ -1106,7 +1111,7 @@ export class IO {
             case 500:
             case 501:
             case 503:
-                var lang = "http" + code;
+                const lang = "http" + code;
                 this.dom.ta.value = _("httpresponse") + ": " + _(lang);
                 return false;
                 break;
@@ -1117,7 +1122,7 @@ export class IO {
 
     async saveresponse(data: unknown, code: number, headers?: Record<string, string>): Promise<void> {
         this.owner.window.hideThrobber();
-        var pending = this.pendingSave;
+        const pending = this.pendingSave;
         this.pendingSave = null;
 
         /*
@@ -1129,8 +1134,8 @@ export class IO {
             if (!pending) {
                 return;
             }
-            var verdict = verdictAfterConflict(this.baseline, pending.file);
-            var message = verdict === "conflict" ? "saveconflict" : "saveexists";
+            const verdict = verdictAfterConflict(this.baseline, pending.file);
+            const message = verdict === "conflict" ? "saveconflict" : "saveexists";
             if (!(await dialogs().confirm(pending.file + "\n\n" + _(message)))) {
                 return;
             }
@@ -1149,7 +1154,7 @@ export class IO {
          * 書いた直後に load し直す必要が無い。
          */
         if (pending && (code === 200 || code === 201)) {
-            var etag = etagFromHeaders(headers);
+            const etag = etagFromHeaders(headers);
             this.baseline = etag ? { name: pending.file, etag: etag } : null;
         }
     }
@@ -1164,7 +1169,7 @@ export class IO {
          * —— 壊れた JSON でも「サーバ上の版はこれ」は事実で、次の保存でそれを黙って
          * 上書きしないための記録。loadDesignText() の戻り値契約（void）は触らない。
          */
-        var etag = etagFromHeaders(headers);
+        const etag = etagFromHeaders(headers);
         this.baseline = etag ? { name: jsonKeyword(this.name), etag: etag } : null;
         /* 読めなくても setTitle するのは現行どおり（fromXML の false も無視していた） */
         this.loadDesignText(data as string);
@@ -1199,7 +1204,7 @@ export class IO {
             return;
         }
 
-        var result: IntrospectionResult;
+        let result: IntrospectionResult;
         try {
             result = JSON.parse(data) as IntrospectionResult;
         } catch (e) {
@@ -1207,7 +1212,7 @@ export class IO {
             return;
         }
 
-        var converted;
+        let converted;
         try {
             converted = introspectionToModel(result, this.owner.palette);
         } catch (e) {

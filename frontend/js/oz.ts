@@ -72,14 +72,14 @@ export const OZ = {
             event: string,
             cb: (e: E) => void,
         ): number {
-            var id = OZ.Event._id++;
-            var element = OZ.$(elm);
+            const id = OZ.Event._id++;
+            const element = OZ.$(elm);
             /* grabado: 元は attachEvent がある環境だけ cb を this 束縛でラップしていた */
-            var fnc = cb as EventListener;
-            var rec: OzEventRecord = [element, event, fnc];
-            var parts = event.split(" ");
+            const fnc = cb as EventListener;
+            const rec: OzEventRecord = [element, event, fnc];
+            const parts = event.split(" ");
             while (parts.length) {
-                var e = parts.pop()!;
+                const e = parts.pop()!;
                 if (element) {
                     element.addEventListener(e, fnc, false);
                 }
@@ -92,14 +92,14 @@ export const OZ = {
             return id;
         },
         remove: function (id: number): void {
-            var rec = OZ.Event._byID[id];
+            const rec = OZ.Event._byID[id];
             if (!rec) {
                 return;
             }
-            var elm = rec[0];
-            var parts = rec[1].split(" ");
+            const elm = rec[0];
+            const parts = rec[1].split(" ");
             while (parts.length) {
-                var e = parts.pop()!;
+                const e = parts.pop()!;
                 if (elm) {
                     elm.removeEventListener(e, rec[2], false);
                 }
@@ -135,9 +135,9 @@ export const OZ = {
             name: K,
             opts?: OzElmOptions,
         ): HTMLElementTagNameMap[K] {
-            var elm = document.createElement(name);
-            for (var p in opts) {
-                var val = opts[p];
+            const elm = document.createElement(name);
+            for (let p in opts) {
+                const val = opts[p];
                 if (p == "class") {
                     p = "className";
                 }
@@ -158,14 +158,14 @@ export const OZ = {
         },
         pos: function (elm: string | HTMLElement): [number, number] {
             /* relative to _viewport_ */
-            var cur = OZ.$(elm) as HTMLElement;
-            var html = cur.ownerDocument.documentElement;
-            var parent = cur.parentNode as HTMLElement;
+            let cur = OZ.$(elm) as HTMLElement;
+            const html = cur.ownerDocument.documentElement;
+            let parent = cur.parentNode as HTMLElement;
             /* grabado: 元は var x = (y = 0); で y が暗黙グローバルだった
                （HANDOVER §3 段階2）。ESM は常に strict なので Vite ビルドでは
                ここで ReferenceError になり、ミニマップをドラッグできなかった。 */
-            var x = 0;
-            var y = 0;
+            let x = 0;
+            let y = 0;
             if (cur == html) {
                 return [x, y];
             }
@@ -195,11 +195,11 @@ export const OZ = {
             }
         },
         scroll: function (): [number, number] {
-            var x =
+            const x =
                 document.documentElement.scrollLeft ||
                 document.body.scrollLeft ||
                 0;
-            var y =
+            const y =
                 document.documentElement.scrollTop ||
                 document.body.scrollTop ||
                 0;
@@ -214,16 +214,16 @@ export const OZ = {
                   ];
         },
         hasClass: function (node: string | Element, className: string): boolean {
-            var cn = OZ.$<Element>(node).className;
-            var arr = cn ? cn.split(" ") : [];
+            const cn = OZ.$<Element>(node).className;
+            const arr = cn ? cn.split(" ") : [];
             return arr.indexOf(className) != -1;
         },
         addClass: function (node: string | Element, className: string): void {
             if (OZ.DOM.hasClass(node, className)) {
                 return;
             }
-            var cn = OZ.$<Element>(node).className;
-            var arr = cn ? cn.split(" ") : [];
+            const cn = OZ.$<Element>(node).className;
+            const arr = cn ? cn.split(" ") : [];
             arr.push(className);
             OZ.$<Element>(node).className = arr.join(" ");
         },
@@ -231,8 +231,8 @@ export const OZ = {
             if (!OZ.DOM.hasClass(node, className)) {
                 return;
             }
-            var cn = OZ.$<Element>(node).className;
-            var arr = cn ? cn.split(" ") : [];
+            const cn = OZ.$<Element>(node).className;
+            let arr = cn ? cn.split(" ") : [];
             /* grabado: #321。2 行目の var を落として再代入にした（同一スコープの再宣言で、
                let / const なら即エラーになる形）。読む値も書く値も変わっていない */
             arr = arr.filter(function ($) {
@@ -246,13 +246,13 @@ export const OZ = {
          */
         append: function (..._groups: Array<Array<string | Node>>): void {
             if (arguments.length == 1) {
-                var arr = arguments[0] as Array<string | Node>;
-                var root = OZ.$(arr[0]!);
-                for (var i = 1; i < arr.length; i++) {
+                const arr = arguments[0] as Array<string | Node>;
+                const root = OZ.$(arr[0]!);
+                for (let i = 1; i < arr.length; i++) {
                     root.appendChild(OZ.$(arr[i]!));
                 }
             } else
-                for (var i = 0; i < arguments.length; i++) {
+                for (let i = 0; i < arguments.length; i++) {
                     OZ.DOM.append(arguments[i]);
                 }
         },
@@ -265,8 +265,10 @@ export const OZ = {
          * false を返して受け止めている。
          */
         get: function (elm: Element, prop: string): string | false {
+            /* grabado: #321。var は関数スコープなので try の外でも読めた。宣言だけ上へ出す */
+            let cs: CSSStyleDeclaration;
             try {
-                var cs = elm.ownerDocument.defaultView!.getComputedStyle(elm, "");
+                cs = elm.ownerDocument.defaultView!.getComputedStyle(elm, "");
             } catch (e) {
                 return false;
             }
@@ -276,8 +278,8 @@ export const OZ = {
             return (cs as unknown as Record<string, string>)[prop] as string;
         },
         set: function (elm: HTMLElement, obj?: OzElmOptions): void {
-            for (var p in obj) {
-                var val = obj[p];
+            for (let p in obj) {
+                const val = obj[p];
                 /* grabado: opacity -> filter（IE 専用）を撤去。float は cssFloat 固定 */
                 if (p == "float") {
                     p = "cssFloat";
@@ -300,20 +302,20 @@ export const OZ = {
         callback?: OzRequestCallback,
         options?: OzRequestOptions,
     ): XMLHttpRequest | false {
-        var o: Required<OzRequestOptions> = {
+        const o: Required<OzRequestOptions> = {
             data: false,
             method: "get",
             headers: {},
             xml: false,
         };
-        for (var p in options) {
+        for (const p in options) {
             (o as unknown as Record<string, unknown>)[p] = (
                 options as unknown as Record<string, unknown>
             )[p];
         }
         o.method = o.method.toUpperCase();
 
-        var xhr = new XMLHttpRequest();
+        const xhr = new XMLHttpRequest();
         xhr.open(o.method, url, true);
         xhr.onreadystatechange = function () {
             if (xhr.readyState != 4) {
@@ -322,14 +324,14 @@ export const OZ = {
             if (!callback) {
                 return;
             }
-            var data = o.xml ? xhr.responseXML : xhr.responseText;
-            var headers: Record<string, string> = {};
-            var h: string | string[] = xhr.getAllResponseHeaders();
+            const data = o.xml ? xhr.responseXML : xhr.responseText;
+            const headers: Record<string, string> = {};
+            let h: string | string[] = xhr.getAllResponseHeaders();
             if (h) {
                 h = h.split(/[\r\n]/);
-                for (var i = 0; i < h.length; i++)
+                for (let i = 0; i < h.length; i++)
                     if (h[i]) {
-                        var v = h[i]!.match(/^([^:]+): *(.*)$/);
+                        const v = h[i]!.match(/^([^:]+): *(.*)$/);
                         headers[v![1]!] = v![2]!;
                     }
             }
@@ -341,7 +343,7 @@ export const OZ = {
                 "application/x-www-form-urlencoded"
             );
         }
-        for (var p in o.headers) {
+        for (const p in o.headers) {
             xhr.setRequestHeader(p, o.headers[p]!);
         }
         xhr.send(o.data || null);

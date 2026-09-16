@@ -43,7 +43,7 @@ export class Key extends Visual {
             return;
         }
         this.type = t;
-        for (var i = 0; i < this.rows.length; i++) {
+        for (let i = 0; i < this.rows.length; i++) {
             this.rows[i]!.redraw();
         }
     }
@@ -61,7 +61,7 @@ export class Key extends Visual {
     }
 
     removeRow(r: Row): void {
-        var idx = this.rows.indexOf(r);
+        const idx = this.rows.indexOf(r);
         if (idx == -1) {
             return;
         }
@@ -71,7 +71,7 @@ export class Key extends Visual {
 
     /* 基底の destroy() は呼ばない（現行どおり）。Key は dom.container を持たないため */
     destroy(): void {
-        for (var i = 0; i < this.rows.length; i++) {
+        for (let i = 0; i < this.rows.length; i++) {
             this.rows[i]!.removeKey(this);
         }
     }

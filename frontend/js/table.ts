@@ -111,8 +111,8 @@ export class Table extends Visual<TableDom> {
          * ★ golden は tag.class しか採らないので、この属性では 1 バイトも動かない。
          */
         this.dom.content.setAttribute("role", "presentation");
-        var thead = OZ.DOM.elm("thead");
-        var tr = OZ.DOM.elm("tr");
+        const thead = OZ.DOM.elm("thead");
+        const tr = OZ.DOM.elm("tr");
         this.dom.title = OZ.DOM.elm("td", { className: "title", colSpan: 2 });
 
         OZ.DOM.append(
@@ -147,9 +147,9 @@ export class Table extends Visual<TableDom> {
     }
 
     setTitle(t: string): void {
-        var old = this.getTitle();
-        for (var i = 0; i < this.rows.length; i++) {
-            var row = this.rows[i]!;
+        const old = this.getTitle();
+        for (let i = 0; i < this.rows.length; i++) {
+            const row = this.rows[i]!;
             /*
              * grabado: #234。**内側ループを畳んだ。** 元は row.relations を回して
              * 1 本ごとに置換していたが、**置換の対象は row 自身**で、ループ変数は
@@ -163,8 +163,8 @@ export class Table extends Visual<TableDom> {
              * **判定の意味は変えていない** —— 「**参照される側であるときだけ**
              * 子行名を追随させる」。1 本でもあれば足りるので break で抜ける。
              */
-            var referenced = false;
-            for (var j = 0; j < row.relations.length; j++) {
+            let referenced = false;
+            for (let j = 0; j < row.relations.length; j++) {
                 if (row.relations[j]!.row1 == row) {
                     referenced = true;
                     break;
@@ -173,7 +173,7 @@ export class Table extends Visual<TableDom> {
             if (!referenced) {
                 continue;
             }
-            var tt = renameOccurrences(row.getTitle(), old, t);
+            const tt = renameOccurrences(row.getTitle(), old, t);
             if (tt != row.getTitle()) {
                 row.setTitle(tt);
             }
@@ -190,11 +190,11 @@ export class Table extends Visual<TableDom> {
      * つなぐ —— どちらかを落とすと「もう片方が消えた」ように見える。
      */
     syncTitleTooltip(): void {
-        var hint = identifierHint(this.getTitle(), this.owner.palette);
-        var parts = [this.data.comment, hint].filter(function (one) {
+        const hint = identifierHint(this.getTitle(), this.owner.palette);
+        const parts = [this.data.comment, hint].filter(function (one) {
             return one !== "";
         });
-        var text = parts.join("\n");
+        const text = parts.join("\n");
         if (text === "") {
             /* **属性ごと外す。** title="" を置くと DOM が変わり、状態 golden が動く */
             this.dom.title.removeAttribute("title");
@@ -209,7 +209,7 @@ export class Table extends Visual<TableDom> {
     }
 
     getRelations(): Relation[] {
-        var arr: Relation[] = [];
+        const arr: Relation[] = [];
         /*
          * grabado: #207。**初出順の push はそのまま。** 変えるのは「もう入っているか」の
          * 引き方だけで、arr.indexOf(r) の累積線形走査（O(K^2)）が O(K) になる。
@@ -219,11 +219,11 @@ export class Table extends Visual<TableDom> {
          * 「relation が描き直されない」という形で出る。state golden はレイアウト由来の
          * 値を採らないので気づけない（安全網の境界。docs/TESTING.md の「幾何の棚」）。
          */
-        var seen = new Set<Relation>();
-        for (var i = 0; i < this.rows.length; i++) {
-            var row = this.rows[i]!;
-            for (var j = 0; j < row.relations.length; j++) {
-                var r = row.relations[j]!;
+        const seen = new Set<Relation>();
+        for (let i = 0; i < this.rows.length; i++) {
+            const row = this.rows[i]!;
+            for (let j = 0; j < row.relations.length; j++) {
+                const r = row.relations[j]!;
                 if (!seen.has(r)) {
                     seen.add(r);
                     arr.push(r);
@@ -234,22 +234,22 @@ export class Table extends Visual<TableDom> {
     }
 
     showRelations(): void {
-        var rs = this.getRelations();
-        for (var i = 0; i < rs.length; i++) {
+        const rs = this.getRelations();
+        for (let i = 0; i < rs.length; i++) {
             rs[i]!.show();
         }
     }
 
     hideRelations(): void {
-        var rs = this.getRelations();
-        for (var i = 0; i < rs.length; i++) {
+        const rs = this.getRelations();
+        for (let i = 0; i < rs.length; i++) {
             rs[i]!.hide();
         }
     }
 
     click(e: MouseEvent): void {
         OZ.Event.stop(e);
-        var t = OZ.Event.target(e);
+        const t = OZ.Event.target(e);
         this.owner.tableManager.select(this);
 
         if (t != this.dom.title) {
@@ -261,7 +261,7 @@ export class Table extends Visual<TableDom> {
     }
 
     dblclick(e: MouseEvent): void {
-        var t = OZ.Event.target(e);
+        const t = OZ.Event.target(e);
         if (t == this.dom.title) {
             this.owner.tableManager.edit();
         }
@@ -288,7 +288,7 @@ export class Table extends Visual<TableDom> {
     }
 
     addRow(title: string, data?: Partial<RowData>): Row {
-        var r = new Row(this, title, data);
+        const r = new Row(this, title, data);
         this.rows.push(r);
         this.dom.content.appendChild(r.dom.container);
         this.redraw();
@@ -296,7 +296,7 @@ export class Table extends Visual<TableDom> {
     }
 
     removeRow(r: Row): void {
-        var idx = this.rows.indexOf(r);
+        const idx = this.rows.indexOf(r);
         if (idx == -1) {
             return;
         }
@@ -314,13 +314,13 @@ export class Table extends Visual<TableDom> {
      * なるので結果は同一。是正は同ファイルを .ts 化する段階3-3 で行う。
      */
     addKey(type?: string): Key {
-        var k = new Key(this, type);
+        const k = new Key(this, type);
         this.keys.push(k);
         return k;
     }
 
     removeKey(k: Key): void {
-        var idx = this.keys.indexOf(k);
+        const idx = this.keys.indexOf(k);
         if (idx == -1) {
             return;
         }
@@ -333,8 +333,8 @@ export class Table extends Visual<TableDom> {
         if (this.owner.redrawSuspended) {
             return;
         }
-        var x = this.x;
-        var y = this.y;
+        let x = this.x;
+        let y = this.y;
         if (this.selected) {
             x--;
             y--;
@@ -356,18 +356,18 @@ export class Table extends Visual<TableDom> {
          *   .table は幅を持たない絶対配置なので、left によって shrink-to-fit の上限
          *   （#area の右端まで）が変わりうる。関数の先頭へ動かすと、そこだけ同値でなくなる。
          */
-        var cw = this.dom.container.offsetWidth;
-        var ch = this.dom.container.offsetHeight;
+        const cw = this.dom.container.offsetWidth;
+        const ch = this.dom.container.offsetHeight;
 
-        var ratioX = this.owner.map.width / this.owner.width;
-        var ratioY = this.owner.map.height / this.owner.height;
+        const ratioX = this.owner.map.width / this.owner.width;
+        const ratioY = this.owner.map.height / this.owner.height;
 
-        var w = cw * ratioX;
-        var h = ch * ratioY;
+        const w = cw * ratioX;
+        const h = ch * ratioY;
         /* grabado: #321。この関数の頭にある x / y（盤面の座標）と同一スコープなので改名した。
            こちらはミニマップ側の座標で、計算も代入先も 1 つも変えていない */
-        var miniX = this.x * ratioX;
-        var miniY = this.y * ratioY;
+        const miniX = this.x * ratioX;
+        const miniY = this.y * ratioY;
 
         this.dom.mini.style.width = Math.round(w) + "px";
         this.dom.mini.style.height = Math.round(h) + "px";
@@ -383,13 +383,13 @@ export class Table extends Visual<TableDom> {
          * 走っていた。前提は「relation の書き先がテーブルの実測に影響しない」ことで、
          * **その前提そのもの**を tests/browser/canvas.spec.ts がテストにしている。
          */
-        var rs = this.getRelations();
-        var plans: (RelationPlan | null)[] = [];
-        for (var i = 0; i < rs.length; i++) {
+        const rs = this.getRelations();
+        const plans: (RelationPlan | null)[] = [];
+        for (let i = 0; i < rs.length; i++) {
             plans.push(rs[i]!.measure());
         }
-        for (var i = 0; i < rs.length; i++) {
-            var plan = plans[i]!;
+        for (let i = 0; i < rs.length; i++) {
+            const plan = plans[i]!;
             if (plan) {
                 rs[i]!.paint(plan);
             }
@@ -416,7 +416,7 @@ export class Table extends Visual<TableDom> {
         /* getOption("snap") の既定は数値 0、cookie 経由なら文字列。
            parseInt(0) は現行も "0" に変換されて 0 になる（挙動不変） */
         /* grabado: 旧 SQL.designer（段階4-0a） */
-        var snap = parseInt(this.owner.getOption("snap") as string);
+        const snap = parseInt(this.owner.getOption("snap") as string);
         if (snap) {
             this.x = Math.round(this.x / snap) * snap;
             this.y = Math.round(this.y / snap) * snap;
@@ -426,25 +426,32 @@ export class Table extends Visual<TableDom> {
     down(e: MouseEvent | TouchEvent): void {
         /* mousedown - start drag */
         OZ.Event.stop(e);
-        /* grabado: 元は var t（HANDOVER §3 段階3-2）。下の var t = Table と同名で
+        /* grabado: 元は var t（HANDOVER §3 段階3-2）。下の t = Table と同名で
            TS2403（HTMLElement と typeof Table）になる。読み出しは次の 1 行だけで、
            以降このスコープでは読まれない＝挙動同値 */
-        var el = OZ.Event.target(e);
+        const el = OZ.Event.target(e);
         if (el != this.dom.title) {
             return;
         } /* on a row */
 
         /* touch? */
         /* grabado: 元は両分岐とも var event。TS2403 は宣言型の一致を見るので、
-           同じ注釈を両方に書けば消える（読むのは clientX / clientY だけ） */
+           同じ注釈を両方に書けば消える（読むのは clientX / clientY だけ）
+           ★ 追記（2026-09-16。#321）—— **宣言を両腕の上へ出した。** var は関数スコープ
+           なので下まで届いていたが、let はブロックで閉じる。**注釈は 1 か所になり、
+           「同じ注釈を両方に書く」は要らなくなった**（元の記述は判断の履歴として残す）。
+           **入る値も順序も変えていない。** */
+        let event: MouseEvent | Touch;
+        let moveEvent: string;
+        let upEvent: string;
         if (e.type == "touchstart") {
-            var event: MouseEvent | Touch = (e as TouchEvent).touches[0]!;
-            var moveEvent = "touchmove";
-            var upEvent = "touchend";
+            event = (e as TouchEvent).touches[0]!;
+            moveEvent = "touchmove";
+            upEvent = "touchend";
         } else {
-            var event: MouseEvent | Touch = e as MouseEvent;
-            var moveEvent = "mousemove";
-            var upEvent = "mouseup";
+            event = e as MouseEvent;
+            moveEvent = "mousemove";
+            upEvent = "mouseup";
         }
 
         /* a non-shift click within a selection preserves the selection */
@@ -452,19 +459,19 @@ export class Table extends Visual<TableDom> {
             this.owner.tableManager.select(this, e.shiftKey);
         }
 
-        var t = Table;
+        const t = Table;
         t.active = this.owner.tableManager.selection;
-        var n = t.active.length;
+        const n = t.active.length;
         t.x = new Array(n);
         t.y = new Array(n);
-        for (var i = 0; i < n; i++) {
+        for (let i = 0; i < n; i++) {
             /* position relative to mouse cursor */
             t.x[i] = t.active[i]!.x - event.clientX;
             t.y[i] = t.active[i]!.y - event.clientY;
         }
 
         if (this.owner.getOption("hide")) {
-            for (var i = 0; i < n; i++) {
+            for (let i = 0; i < n; i++) {
                 t.active[i]!.hideRelations();
             }
         }
@@ -501,7 +508,7 @@ export class Table extends Visual<TableDom> {
     /* n が null になりうるのは relation の table / row 属性経由（属性が無いとき） */
     findNamedRow(n: string | null): Row | false {
         /* return row with a given name */
-        for (var i = 0; i < this.rows.length; i++) {
+        for (let i = 0; i < this.rows.length; i++) {
             if (this.rows[i]!.getTitle() == n) {
                 return this.rows[i]!;
             }
@@ -521,22 +528,24 @@ export class Table extends Visual<TableDom> {
 
     move(e: MouseEvent | TouchEvent): void {
         /* mousemove */
-        var t = Table;
+        const t = Table;
         /* grabado: 旧 SQL.designer（段階4-0a）。move / up は down() で
            this.move.bind(this) として document に張られるので this は自テーブル */
         this.owner.removeSelection();
+        /* grabado: #321。同上（両腕の var が下まで届いていた）。注釈は元の 2 か所と同じ */
+        let event: MouseEvent | Touch;
         if (e.type == "touchmove") {
             if ((e as TouchEvent).touches.length > 1) {
                 return;
             }
-            var event: MouseEvent | Touch = (e as TouchEvent).touches[0]!;
+            event = (e as TouchEvent).touches[0]!;
         } else {
-            var event: MouseEvent | Touch = e as MouseEvent;
+            event = e as MouseEvent;
         }
 
-        for (var i = 0; i < t.active.length; i++) {
-            var x = t.x[i]! + event.clientX;
-            var y = t.y[i]! + event.clientY;
+        for (let i = 0; i < t.active.length; i++) {
+            let x = t.x[i]! + event.clientX;
+            let y = t.y[i]! + event.clientY;
             x = Math.max(x, 0);
             y = Math.max(y, 0);
             t.active[i]!.moveTo(x, y);
@@ -544,12 +553,12 @@ export class Table extends Visual<TableDom> {
     }
 
     up(e: MouseEvent | TouchEvent): void {
-        var t = Table;
+        const t = Table;
         /* grabado: 旧 SQL.designer（段階4-0a）。同じメソッドの末尾が
            this.owner.sync() を呼んでいるので、this.owner が有効なのは既存の前提 */
-        var d = this.owner;
+        const d = this.owner;
         if (d.getOption("hide")) {
-            for (var i = 0; i < t.active.length; i++) {
+            for (let i = 0; i < t.active.length; i++) {
                 t.active[i]!.showRelations();
                 t.active[i]!.redraw();
             }

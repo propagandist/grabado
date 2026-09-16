@@ -52,14 +52,14 @@ export function applyDesignModel(designer: Designer, model: DesignModel): void {
      */
     designer.suspendRedraw();
     try {
-        for (var i = 0; i < model.tables.length; i++) {
+        for (let i = 0; i < model.tables.length; i++) {
             applyTable(designer, model.tables[i]!);
         }
     } finally {
         designer.resumeRedraw();
     }
 
-    for (var i = 0; i < designer.tables.length; i++) {
+    for (let i = 0; i < designer.tables.length; i++) {
         /* ff one-pixel shift hack */
         designer.tables[i]!.select();
         designer.tables[i]!.deselect();
@@ -72,14 +72,14 @@ export function applyDesignModel(designer: Designer, model: DesignModel): void {
 
 function applyTable(designer: Designer, model: TableModel): void {
     /* 生成は現行どおり空名・原点から。title と座標は直後に入れる */
-    var t = designer.addTable("", 0, 0);
+    const t = designer.addTable("", 0, 0);
     t.setTitle(model.title);
     t.moveTo(model.x, model.y);
 
-    for (var i = 0; i < model.rows.length; i++) {
+    for (let i = 0; i < model.rows.length; i++) {
         applyRow(t, model.rows[i]!);
     }
-    for (var i = 0; i < model.keys.length; i++) {
+    for (let i = 0; i < model.keys.length; i++) {
         applyKey(t, model.keys[i]!);
     }
 
@@ -94,14 +94,14 @@ function applyTable(designer: Designer, model: TableModel): void {
 }
 
 function applyRow(table: Table, model: RowModel): void {
-    var r = table.addRow("");
+    const r = table.addRow("");
 
     /*
      * 新しいオブジェクトに詰め替えるのは、update() が受け取った data を書き換えるため
      * （data.def = ""）。モデルを直接渡すとスナップショットであるはずのモデルが変わる。
      * "NULL" -> "" の正規化はその update() の中で起きる（js/io/xml-parser.ts の def を参照）。
      */
-    var obj: Partial<RowData> = {
+    const obj: Partial<RowData> = {
         type: model.type,
         size: model.size,
         def: model.def,
@@ -115,11 +115,11 @@ function applyRow(table: Table, model: RowModel): void {
 }
 
 function applyKey(table: Table, model: KeyModel): void {
-    var k = table.addKey();
+    const k = table.addKey();
     /* setType は falsy を握りつぶす（type 属性が無いと既定 "INDEX" のまま） */
     k.setType(model.type);
     k.setName(model.name);
-    for (var i = 0; i < model.parts.length; i++) {
+    for (let i = 0; i < model.parts.length; i++) {
         /*
          * <part> には自テーブルの row 名しか書かれない前提（IO の不変条件）。
          *
@@ -129,7 +129,7 @@ function applyKey(table: Table, model: KeyModel): void {
          *   **<part> が黙って捨てられる**。#232 / #233 の関門が読み込みの側で拒むので
          *   実害は残っていないが、**根拠が違う**ので消さずに直す。
          */
-        var row = table.findNamedRow(model.parts[i]!) as Row;
+        const row = table.findNamedRow(model.parts[i]!) as Row;
         k.addRow(row);
     }
 }
@@ -160,26 +160,26 @@ function applyRelations(designer: Designer, model: DesignModel): void {
      * テーブルの索引は 1 回だけ組む。**この関数の実行中に designer.tables は動かない**
      * —— addRelation() が作るのは Relation で、テーブルも行も増減しない。
      */
-    var tableIndex = new Map<string, Table>();
-    for (var t = 0; t < designer.tables.length; t++) {
-        var live = designer.tables[t]!;
-        var liveName = live.getTitle();
+    const tableIndex = new Map<string, Table>();
+    for (let t = 0; t < designer.tables.length; t++) {
+        const live = designer.tables[t]!;
+        const liveName = live.getTitle();
         if (!tableIndex.has(liveName)) {
             tableIndex.set(liveName, live);
         }
     }
 
     /* 行の索引は**実際に引かれたテーブルの分だけ**組む（触らないテーブルの費用を払わない） */
-    var rowIndexes = new Map<Table, Map<string, Row>>();
+    const rowIndexes = new Map<Table, Map<string, Row>>();
     function rowsOf(owner: Table): Map<string, Row> {
-        var found = rowIndexes.get(owner);
+        const found = rowIndexes.get(owner);
         if (found) {
             return found;
         }
-        var index = new Map<string, Row>();
-        for (var i = 0; i < owner.rows.length; i++) {
-            var r = owner.rows[i]!;
-            var name = r.getTitle();
+        const index = new Map<string, Row>();
+        for (let i = 0; i < owner.rows.length; i++) {
+            const r = owner.rows[i]!;
+            const name = r.getTitle();
             if (!index.has(name)) {
                 index.set(name, r);
             }
@@ -188,27 +188,27 @@ function applyRelations(designer: Designer, model: DesignModel): void {
         return index;
     }
 
-    for (var i = 0; i < model.tables.length; i++) {
-        var table = model.tables[i]!;
-        for (var j = 0; j < table.rows.length; j++) {
-            var row = table.rows[j]!;
-            for (var k = 0; k < row.relations.length; k++) {
-                var ref = row.relations[k]!;
+    for (let i = 0; i < model.tables.length; i++) {
+        const table = model.tables[i]!;
+        for (let j = 0; j < table.rows.length; j++) {
+            const row = table.rows[j]!;
+            for (let k = 0; k < row.relations.length; k++) {
+                const ref = row.relations[k]!;
 
-                var t1 = tableIndex.get(ref.table);
+                const t1 = tableIndex.get(ref.table);
                 if (!t1) {
                     continue;
                 }
-                var r1 = rowsOf(t1).get(ref.row);
+                const r1 = rowsOf(t1).get(ref.row);
                 if (!r1) {
                     continue;
                 }
 
-                var t2 = tableIndex.get(table.title);
+                const t2 = tableIndex.get(table.title);
                 if (!t2) {
                     continue;
                 }
-                var r2 = rowsOf(t2).get(row.title);
+                const r2 = rowsOf(t2).get(row.title);
                 if (!r2) {
                     continue;
                 }

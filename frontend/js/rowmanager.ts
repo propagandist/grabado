@@ -48,7 +48,7 @@ export class RowManager {
         this.creating = false;
         this.connecting = false;
 
-        var ids = [
+        const ids = [
             "editrow",
             "removerow",
             "uprow",
@@ -57,9 +57,9 @@ export class RowManager {
             "foreignconnect",
             "foreigndisconnect",
         ];
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i]!;
-            var elm = OZ.$<HTMLInputElement>(id);
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i]!;
+            const elm = OZ.$<HTMLInputElement>(id);
             /* 動的キーの代入はこの 1 行だけ。完成形は上の RowManagerDom が宣言している */
             (this.dom as unknown as Record<string, HTMLInputElement>)[id] = elm;
             elm.value = _(id);
@@ -114,16 +114,16 @@ export class RowManager {
             return;
         }
 
-        var r1 = this.selected as Row;
-        var t2 = e.target as Table;
+        const r1 = this.selected as Row;
+        const t2 = e.target as Table;
 
         /* getOption の戻りは string | number（既定値に 0 がある）。pattern は文字列 */
-        var p = this.owner.getOption("pattern") as string;
+        let p = this.owner.getOption("pattern") as string;
         p = p.replace(/%T/g, r1.owner.getTitle());
         p = p.replace(/%t/g, t2.getTitle());
         p = p.replace(/%R/g, r1.getTitle());
 
-        var r2 = t2.addRow(p, r1.data);
+        const r2 = t2.addRow(p, r1.data);
         /* grabado: 旧 SQL.designer（段階4-0a）。すぐ上の :118 が同じ this.owner を読んでいる。
            解決そのものは段階6-2 で this.owner.getFKTypeFor() から palette へ移した */
         r2.update({ type: this.owner.palette.fkIndexFor(r1.data.type) });
@@ -143,8 +143,8 @@ export class RowManager {
             return;
         }
 
-        var r1 = this.selected as Row;
-        var r2 = e.target as Row;
+        const r1 = this.selected as Row;
+        const r2 = e.target as Row;
 
         if (r1 == r2) {
             return;
@@ -180,9 +180,9 @@ export class RowManager {
 
     foreigndisconnect(e?: Event): void {
         /* remove connector */
-        var rels = (this.selected as Row).relations;
-        for (var i = rels.length - 1; i >= 0; i--) {
-            var r = rels[i]!;
+        const rels = (this.selected as Row).relations;
+        for (let i = rels.length - 1; i >= 0; i--) {
+            const r = rels[i]!;
             if (r.row2 == this.selected) {
                 this.owner.removeRelation(r);
             }
@@ -221,16 +221,16 @@ export class RowManager {
     }
 
     async remove(e?: Event): Promise<void> {
-        var result = await dialogs().confirm(
+        const result = await dialogs().confirm(
             _("confirmrow") + " '" + (this.selected as Row).getTitle() + "' ?"
         );
         if (!result) {
             return;
         }
-        var t = (this.selected as Row).owner;
+        const t = (this.selected as Row).owner;
         (this.selected as Row).owner.removeRow(this.selected as Row);
 
-        var next: Row | false = false;
+        let next: Row | false = false;
         if (t.rows) {
             next = t.rows[t.rows.length - 1]!;
         }
@@ -247,8 +247,8 @@ export class RowManager {
         this.endCreate();
         this.endConnect();
         if (this.selected) {
-            var table = this.selected.owner;
-            var rows = table.rows;
+            const table = this.selected.owner;
+            const rows = table.rows;
             this.dom.uprow.disabled = rows[0] == this.selected;
             this.dom.downrow.disabled = rows[rows.length - 1] == this.selected;
             this.dom.removerow.disabled = false;
@@ -257,9 +257,9 @@ export class RowManager {
             this.dom.foreignconnect.disabled = !this.selected.isUnique();
 
             this.dom.foreigndisconnect.disabled = true;
-            var rels = this.selected.relations;
-            for (var i = 0; i < rels.length; i++) {
-                var r = rels[i]!;
+            const rels = this.selected.relations;
+            for (let i = 0; i < rels.length; i++) {
+                const r = rels[i]!;
                 if (r.row2 == this.selected) {
                     this.dom.foreigndisconnect.disabled = false;
                 }
@@ -280,7 +280,7 @@ export class RowManager {
             return;
         }
 
-        var target = OZ.Event.target(e).nodeName.toLowerCase();
+        const target = OZ.Event.target(e).nodeName.toLowerCase();
         if (target == "textarea" || target == "input") {
             return;
         } /* not when in form field */

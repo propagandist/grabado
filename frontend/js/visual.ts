@@ -61,7 +61,7 @@ export class Visual<D = VisualDom> {
     destroy(): void {
         /* "destructor" */
         /* dom が配列なのは Relation だけで、その Relation は destroy を上書きする */
-        var p = (this.dom as VisualDom).container.parentNode;
+        const p = (this.dom as VisualDom).container.parentNode;
         if (p && p.nodeType == 1) {
             p.removeChild((this.dom as VisualDom).container);
         }

@@ -221,8 +221,8 @@ export class HistoryManager {
          *   テーブル名 / コメント欄・キー名欄が守られる（展開中の行はフォーカスが
          *   input にあるので、ここで一緒に拾われる）。
          */
-        var el = OZ.Event.target(e) as HTMLInputElement;
-        var name = el.nodeName.toLowerCase();
+        const el = OZ.Event.target(e) as HTMLInputElement;
+        const name = el.nodeName.toLowerCase();
         /*
          * ★★ **input[type=button] は「フォーム欄」ではない。** ダイアログの OK を
          *   押した直後はフォーカスがボタンに残るので、ここを除外しないと
@@ -257,7 +257,7 @@ export class HistoryManager {
          * ★ 戻れるものが無くても alert も音も出さない（守れているのに出る警告は、
          *   無視する習慣を作る）。undo() / redo() が静かに何もしない。
          */
-        var k = e.key.toLowerCase();
+        const k = e.key.toLowerCase();
         if (k == "z" && !e.shiftKey) {
             this.undo();
         } else if ((k == "z" && e.shiftKey) || k == "y") {

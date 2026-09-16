@@ -117,8 +117,8 @@ export class Row extends Visual<RowDom> {
             innerHTML: "&raquo;&nbsp;",
         });
         this.dom.title = OZ.DOM.elm("div", { className: "title" });
-        var td1 = OZ.DOM.elm("td");
-        var td2 = OZ.DOM.elm("td", { className: "typehint" });
+        const td1 = OZ.DOM.elm("td");
+        const td2 = OZ.DOM.elm("td", { className: "typehint" });
         this.dom.typehint = td2;
 
         OZ.DOM.append(
@@ -148,7 +148,7 @@ export class Row extends Visual<RowDom> {
             return;
         }
         this.selected = true;
-        for (var i = 0; i < this.relations.length; i++) {
+        for (let i = 0; i < this.relations.length; i++) {
             this.relations[i]!.highlight();
         }
         this.redraw();
@@ -159,7 +159,7 @@ export class Row extends Visual<RowDom> {
             return;
         }
         this.selected = false;
-        for (var i = 0; i < this.relations.length; i++) {
+        for (let i = 0; i < this.relations.length; i++) {
             this.relations[i]!.dehighlight();
         }
         this.redraw();
@@ -167,7 +167,7 @@ export class Row extends Visual<RowDom> {
     }
 
     setTitle(t: string, path?: Set<Row>): void {
-        var old = this.getTitle();
+        const old = this.getTitle();
         /*
          * grabado: #231。**サイクルで止める。** 相互 FK（A -> B かつ B -> A）で
          * 無限再帰していた —— foreignconnect は isUnique() の行しか繋げないので
@@ -177,14 +177,14 @@ export class Row extends Visual<RowDom> {
          * 自分の title が古いまま残るので、戻ってきた辺で「まだ変わる」と判定される。
          * 経路の意味は update() と同じ（下の KDoc）。
          */
-        var seen = path ?? new Set<Row>();
+        const seen = path ?? new Set<Row>();
         seen.add(this);
-        for (var i = 0; i < this.relations.length; i++) {
-            var r = this.relations[i]!;
+        for (let i = 0; i < this.relations.length; i++) {
+            const r = this.relations[i]!;
             if (r.row1 != this || seen.has(r.row2)) {
                 continue;
             }
-            var tt = renameOccurrences(r.row2.getTitle(), old, t);
+            const tt = renameOccurrences(r.row2.getTitle(), old, t);
             if (tt != r.row2.getTitle()) {
                 r.row2.setTitle(tt, seen);
             }
@@ -205,7 +205,7 @@ export class Row extends Visual<RowDom> {
      * （redraw が入れる）、置き場所が分かれているので取り合いにならない。
      */
     syncIdentifierWarning(): void {
-        var hint = identifierHint(this.getTitle(), this.owner.owner.palette);
+        const hint = identifierHint(this.getTitle(), this.owner.owner.palette);
         if (hint) {
             this.dom.title.title = hint;
             OZ.DOM.addClass(this.dom.title, "invalid");
@@ -246,7 +246,7 @@ export class Row extends Visual<RowDom> {
         /* update subset of row data */
         /* grabado: 旧 SQL.designer（段階4-0a）。コンストラクタは this.owner の代入後に
            update() を呼ぶので、ここで owner 鎖は必ず張れている */
-        var des = this.owner.owner;
+        const des = this.owner.owner;
         /*
          * grabado: 段階4-5（known-issue #2）。潰し先を null から "" に替えた。
          * nullable 列の DEFAULT NULL は SQL 上も暗黙の既定と同義なので情報は失われず、
@@ -261,7 +261,7 @@ export class Row extends Visual<RowDom> {
             data.def = "";
         }
 
-        for (var p in data) {
+        for (let p in data) {
             (this.data as unknown as Record<string, unknown>)[p] = (
                 data as unknown as Record<string, unknown>
             )[p];
@@ -278,16 +278,16 @@ export class Row extends Visual<RowDom> {
             this.data.size = "";
         }
 
-        var elm = this.getDataType();
+        const elm = this.getDataType();
         /*
          * grabado: #212。**サイクルで止める。** 相互 FK で無限再帰していた
          * （UI から到達でき、undo が無いので保存していない編集が失われる）。
          * 止まったときは**編集した行の型が残る** —— 伝播で選んだ値を上書きし返さない。
          */
-        var seen = path ?? new Set<Row>();
+        const seen = path ?? new Set<Row>();
         seen.add(this);
-        for (var i = 0; i < this.relations.length; i++) {
-            var r = this.relations[i]!;
+        for (let i = 0; i < this.relations.length; i++) {
+            const r = this.relations[i]!;
             if (r.row1 == this && !seen.has(r.row2)) {
                 r.row2.update(
                     {
@@ -305,8 +305,8 @@ export class Row extends Visual<RowDom> {
 
     up(): void {
         /* shift up */
-        var r = this.owner.rows;
-        var idx = r.indexOf(this);
+        const r = this.owner.rows;
+        const idx = r.indexOf(this);
         if (!idx) {
             return;
         }
@@ -321,8 +321,8 @@ export class Row extends Visual<RowDom> {
 
     down(): void {
         /* shift down */
-        var r = this.owner.rows;
-        var idx = r.indexOf(this);
+        const r = this.owner.rows;
+        const idx = r.indexOf(this);
         if (idx + 1 == this.owner.rows.length) {
             return;
         }
@@ -339,7 +339,7 @@ export class Row extends Visual<RowDom> {
     buildEdit(): void {
         OZ.DOM.clear(this.dom.container);
 
-        var elms: Array<[string, HTMLElement]> = [];
+        const elms: Array<[string, HTMLElement]> = [];
         this.dom.name = OZ.DOM.elm("input");
         this.dom.name.type = "text";
         elms.push(["name", this.dom.name]);
@@ -395,12 +395,12 @@ export class Row extends Visual<RowDom> {
          * 中と外で役割が違うのではなく、**同じ 3 点セットを 2 回作っている**ので、
          * 名前を変えると「別のもの」に読めてしまう。作る順も appendChild の順も不変。
          */
-        for (var i = 0; i < elms.length; i++) {
-            var row = elms[i]!;
+        for (let i = 0; i < elms.length; i++) {
+            const row = elms[i]!;
             const tr = OZ.DOM.elm("tr");
             const td1 = OZ.DOM.elm("td");
             const td2 = OZ.DOM.elm("td");
-            var l = OZ.DOM.text(_(row[0]) + ": ");
+            const l = OZ.DOM.text(_(row[0]) + ": ");
             OZ.DOM.append([tr, td1, td2], [td1, l], [td2, row[1]]);
             this.dom.container.appendChild(tr);
         }
@@ -417,7 +417,7 @@ export class Row extends Visual<RowDom> {
     }
 
     async changeComment(e: MouseEvent): Promise<void> {
-        var c = await dialogs().prompt(_("commenttext"), this.data.comment);
+        const c = await dialogs().prompt(_("commenttext"), this.data.comment);
         if (c === null) {
             return;
         }
@@ -448,7 +448,7 @@ export class Row extends Visual<RowDom> {
         this.expanded = false;
         this.dom.container.classList.remove("expanded");
 
-        var data = {
+        const data = {
             type: this.dom.type.selectedIndex,
             def: this.dom.def.value,
             size: this.dom.size.value,
@@ -506,7 +506,7 @@ export class Row extends Visual<RowDom> {
      * 属性を持たない旧パレットでは hasSize が true を返すので、従来どおり自由に打てる。
      */
     syncSizeField(): void {
-        var takesSize = this.owner.owner.palette.hasSize(this.dom.type.selectedIndex);
+        const takesSize = this.owner.owner.palette.hasSize(this.dom.type.selectedIndex);
         this.dom.size.disabled = !takesSize;
         if (!takesSize) {
             this.dom.size.value = "";
@@ -514,7 +514,7 @@ export class Row extends Visual<RowDom> {
     }
 
     redraw(): void {
-        var color = this.getColor();
+        const color = this.getColor();
         this.dom.container.style.backgroundColor = color;
         this.dom.container.style.borderColor = color;
         OZ.DOM.removeClass(this.dom.title, "primary");
@@ -528,9 +528,9 @@ export class Row extends Visual<RowDom> {
         this.dom.selected.style.display = this.selected ? "" : "none";
         this.dom.container.title = this.data.comment;
 
-        var typehint: string[] = [];
+        const typehint: string[] = [];
         if (this.owner.owner.getOption("showtype")) {
-            var elm = this.getDataType();
+            const elm = this.getDataType();
             typehint.push(elm.getAttribute("sql")!);
         }
 
@@ -548,7 +548,7 @@ export class Row extends Visual<RowDom> {
     }
 
     removeRelation(r: Relation): void {
-        var idx = this.relations.indexOf(r);
+        const idx = this.relations.indexOf(r);
         if (idx == -1) {
             return;
         }
@@ -561,7 +561,7 @@ export class Row extends Visual<RowDom> {
     }
 
     removeKey(k: Key): void {
-        var idx = this.keys.indexOf(k);
+        const idx = this.keys.indexOf(k);
         if (idx == -1) {
             return;
         }
@@ -581,31 +581,31 @@ export class Row extends Visual<RowDom> {
      * ここに到達する時点では必ず読込済み（init2 は locale と datatypes が揃ってから走る）。
      */
     getDataType(): Element {
-        var type = this.data.type;
-        var elm = this.owner.owner.palette.typeAt(type);
+        const type = this.data.type;
+        const elm = this.owner.owner.palette.typeAt(type);
         return elm;
     }
 
     getColor(): string {
-        var elm = this.getDataType();
-        var g = this.getDataType().parentNode as Element;
+        const elm = this.getDataType();
+        const g = this.getDataType().parentNode as Element;
         return elm.getAttribute("color") || g.getAttribute("color") || "#fff";
     }
 
     buildTypeSelect(id: number): HTMLSelectElement {
         /* build selectbox with avail datatypes */
-        var s = OZ.DOM.elm("select");
-        var gs = this.owner.owner.palette.groups();
-        for (var i = 0; i < gs.length; i++) {
-            var g = gs[i]!;
-            var og = OZ.DOM.elm("optgroup");
+        const s = OZ.DOM.elm("select");
+        const gs = this.owner.owner.palette.groups();
+        for (let i = 0; i < gs.length; i++) {
+            const g = gs[i]!;
+            const og = OZ.DOM.elm("optgroup");
             og.style.backgroundColor = g.getAttribute("color") || "#fff";
             og.label = g.getAttribute("label")!;
             s.appendChild(og);
-            var ts = g.getElementsByTagName("type");
-            for (var j = 0; j < ts.length; j++) {
-                var t = ts[j]!;
-                var o = OZ.DOM.elm("option");
+            const ts = g.getElementsByTagName("type");
+            for (let j = 0; j < ts.length; j++) {
+                const t = ts[j]!;
+                const o = OZ.DOM.elm("option");
                 if (t.getAttribute("color")) {
                     o.style.backgroundColor = t.getAttribute("color")!;
                 }
@@ -653,8 +653,8 @@ export class Row extends Visual<RowDom> {
      */
 
     isPrimary(): boolean {
-        for (var i = 0; i < this.keys.length; i++) {
-            var k = this.keys[i]!;
+        for (let i = 0; i < this.keys.length; i++) {
+            const k = this.keys[i]!;
             if (k.getType() == "PRIMARY") {
                 return true;
             }
@@ -663,9 +663,9 @@ export class Row extends Visual<RowDom> {
     }
 
     isUnique(): boolean {
-        for (var i = 0; i < this.keys.length; i++) {
-            var k = this.keys[i]!;
-            var t = k.getType();
+        for (let i = 0; i < this.keys.length; i++) {
+            const k = this.keys[i]!;
+            const t = k.getType();
             if (t == "PRIMARY" || t == "UNIQUE") {
                 return true;
             }

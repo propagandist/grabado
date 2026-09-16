@@ -16,7 +16,7 @@ export class Toggle {
         this._elm = elm;
         OZ.Event.add(elm, "click", this._click.bind(this));
 
-        var defaultState = true;
+        let defaultState = true;
         if (document.location.href.match(/toolbar=hidden/)) {
             defaultState = false;
         }

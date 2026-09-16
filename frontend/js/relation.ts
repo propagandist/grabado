@@ -78,14 +78,14 @@ export class Relation extends Visual<RelationDom> {
         }
 
         /* if one of the rows already has relations, inherit color */
-        var all = row1.relations.concat(row2.relations);
+        const all = row1.relations.concat(row2.relations);
         if (all.length) {
             /* inherit */
             this.color = all[0]!.getColor();
         } else if (this.relationColors) {
             /* pick next */
             Relation._counter++;
-            var colorIndex =
+            const colorIndex =
                 (Relation._counter - 1) % this.relationColors.length;
             this.color = this.relationColors[colorIndex]!;
         }
@@ -100,7 +100,7 @@ export class Relation extends Visual<RelationDom> {
 
         if (this.owner.vector) {
             /* svgNS は string なので createElementNS の戻りは Element 止まり */
-            var path = document.createElementNS(
+            const path = document.createElementNS(
                 this.owner.svgNS,
                 "path"
             ) as SVGPathElement;
@@ -114,8 +114,8 @@ export class Relation extends Visual<RelationDom> {
             this.owner.dom.svg.appendChild(path);
             this.dom.push(path);
         } else {
-            for (var i = 0; i < 3; i++) {
-                var div = OZ.DOM.elm("div", {
+            for (let i = 0; i < 3; i++) {
+                const div = OZ.DOM.elm("div", {
                     position: "absolute",
                     className: "relation",
                     backgroundColor: this.color,
@@ -171,14 +171,14 @@ export class Relation extends Visual<RelationDom> {
 
     show(): void {
         this.hidden = false;
-        for (var i = 0; i < this.dom.length; i++) {
+        for (let i = 0; i < this.dom.length; i++) {
             this.dom[i]!.style.visibility = "";
         }
     }
 
     hide(): void {
         this.hidden = true;
-        for (var i = 0; i < this.dom.length; i++) {
+        for (let i = 0; i < this.dom.length; i++) {
             this.dom[i]!.style.visibility = "hidden";
         }
     }
@@ -189,7 +189,7 @@ export class Relation extends Visual<RelationDom> {
         half: number
     ): void {
         if (this.owner.vector) {
-            var str =
+            let str =
                 "M " +
                 p1[0] +
                 " " +
@@ -219,7 +219,7 @@ export class Relation extends Visual<RelationDom> {
 
     redrawSide(p1: [number, number], p2: [number, number], x: number): void {
         if (this.owner.vector) {
-            var str =
+            let str =
                 "M " + p1[0] + " " + p1[1] + " C " + x + " " + p1[1] + " ";
             str += x + " " + p2[1] + " " + p2[0] + " " + p2[1];
             this.dom[0].setAttribute("d", str);
@@ -258,18 +258,18 @@ export class Relation extends Visual<RelationDom> {
          * 要素側を改名すると下の宣言が再宣言でなくなり、:201 以降の t1 / t2 の
          * 読み出し 10 箇所は 1 文字も触らずに済む（旧束縛はここから先で読まれない）。
          */
-        var e1 = this.row1.owner.dom.container;
-        var e2 = this.row2.owner.dom.container;
+        const e1 = this.row1.owner.dom.container;
+        const e2 = this.row2.owner.dom.container;
 
-        var l1 = e1.offsetLeft;
-        var l2 = e2.offsetLeft;
-        var r1 = l1 + e1.offsetWidth;
-        var r2 = l2 + e2.offsetWidth;
-        var t1 =
+        let l1 = e1.offsetLeft;
+        let l2 = e2.offsetLeft;
+        let r1 = l1 + e1.offsetWidth;
+        let r2 = l2 + e2.offsetWidth;
+        let t1 =
             e1.offsetTop +
             this.row1.dom.container.offsetTop +
             Math.round(this.row1.dom.container.offsetHeight / 2);
-        var t2 =
+        let t2 =
             e2.offsetTop +
             this.row2.dom.container.offsetTop +
             Math.round(this.row2.dom.container.offsetHeight / 2);
@@ -286,8 +286,8 @@ export class Relation extends Visual<RelationDom> {
         }
 
         /* タプルで注釈しておくと redrawNormal / redrawSide 側の添字に ! が要らない */
-        var p1: [number, number] = [0, 0];
-        var p2: [number, number] = [0, 0];
+        let p1: [number, number] = [0, 0];
+        let p2: [number, number] = [0, 0];
 
         if (r1 < l2 || r2 < l1) {
             /* between tables */
@@ -298,11 +298,11 @@ export class Relation extends Visual<RelationDom> {
                 p1 = [r2, t2];
                 p2 = [l1, t1];
             }
-            var half = Math.floor((p2[0] - p1[0]) / 2);
+            const half = Math.floor((p2[0] - p1[0]) / 2);
             return { kind: "normal", p1: p1, p2: p2, half: half };
         } else {
             /* next to tables */
-            var x = 0;
+            let x = 0;
             if (Math.abs(l1 - l2) < Math.abs(r1 - r2)) {
                 /* left of tables */
                 p1 = [l1, t1];
@@ -328,7 +328,7 @@ export class Relation extends Visual<RelationDom> {
     }
 
     redraw(): void {
-        var plan = this.measure();
+        const plan = this.measure();
         if (plan) {
             this.paint(plan);
         }
@@ -341,7 +341,7 @@ export class Relation extends Visual<RelationDom> {
     destroy(): void {
         this.row1.removeRelation(this);
         this.row2.removeRelation(this);
-        for (var i = 0; i < this.dom.length; i++) {
+        for (let i = 0; i < this.dom.length; i++) {
             this.dom[i]!.parentNode!.removeChild(this.dom[i]!);
         }
     }

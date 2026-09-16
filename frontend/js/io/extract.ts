@@ -28,20 +28,20 @@ import type {
 } from "./model.ts";
 
 export function extractModel(designer: Designer): DesignModel {
-    var tables: TableModel[] = [];
-    for (var i = 0; i < designer.tables.length; i++) {
+    const tables: TableModel[] = [];
+    for (let i = 0; i < designer.tables.length; i++) {
         tables.push(extractTable(designer.tables[i]!));
     }
     return { tables: tables };
 }
 
 function extractTable(table: Table): TableModel {
-    var rows: RowModel[] = [];
-    for (var i = 0; i < table.rows.length; i++) {
+    const rows: RowModel[] = [];
+    for (let i = 0; i < table.rows.length; i++) {
         rows.push(extractRow(table.rows[i]!));
     }
-    var keys: KeyModel[] = [];
-    for (var i = 0; i < table.keys.length; i++) {
+    const keys: KeyModel[] = [];
+    for (let i = 0; i < table.keys.length; i++) {
         keys.push(extractKey(table.keys[i]!));
     }
     return {
@@ -63,9 +63,9 @@ function extractRow(row: Row): RowModel {
      * row.relations は designer.relations の順序を保つ部分列）が、逐語なら順序の証明が
      * そもそも要らない。
      */
-    var relations: RelationRef[] = [];
-    for (var i = 0; i < row.relations.length; i++) {
-        var r = row.relations[i]!;
+    const relations: RelationRef[] = [];
+    for (let i = 0; i < row.relations.length; i++) {
+        const r = row.relations[i]!;
         if (r.row2 != row) {
             continue;
         }
@@ -88,8 +88,8 @@ function extractRow(row: Row): RowModel {
 }
 
 function extractKey(key: Key): KeyModel {
-    var parts: string[] = [];
-    for (var i = 0; i < key.rows.length; i++) {
+    const parts: string[] = [];
+    for (let i = 0; i < key.rows.length; i++) {
         parts.push(key.rows[i]!.getTitle());
     }
     return {

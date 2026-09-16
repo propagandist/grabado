@@ -67,18 +67,22 @@ export class Minimap extends Visual<MinimapDom> {
         /* mousedown - move view and start drag */
         this.flag = true;
         this.dom.container.style.cursor = "move";
-        var pos = OZ.DOM.pos(this.dom.container);
+        const pos = OZ.DOM.pos(this.dom.container);
 
         this.x = Math.round(pos[0] + this.l + this.w / 2);
         this.y = Math.round(pos[1] + this.t + this.h / 2);
         this.move(e);
 
+        /* grabado: #321。var は関数スコープなので両腕の宣言が下まで届いていた。
+           宣言だけ上へ出し、両腕は代入にする（入る値も順序も変えていない） */
+        let eventMove: string;
+        let eventUp: string;
         if (e.type == "touchstart") {
-            var eventMove = "touchmove";
-            var eventUp = "touchend";
+            eventMove = "touchmove";
+            eventUp = "touchend";
         } else {
-            var eventMove = "mousemove";
-            var eventUp = "mouseup";
+            eventMove = "mousemove";
+            eventUp = "mouseup";
         }
 
         this.documentMove = OZ.Event.add(
@@ -100,18 +104,24 @@ export class Minimap extends Visual<MinimapDom> {
          * grabado: 元は両分岐とも var event（HANDOVER §3 段階3-2）。TS2403 は宣言型の
          * 一致を見るので、同じ注釈を両方に書けば消える（実行コードは変えていない）。
          * 読むのは clientX / clientY だけで、Touch にも MouseEvent にもある。
+         *
+         * ★ 追記（2026-09-16。#321）—— **宣言を両腕の上へ出した。** var は関数スコープ
+         *   なので下まで届いていたが、let はブロックで閉じる。**注釈は 1 か所になり、
+         *   「同じ注釈を両方に書く」は要らなくなった**（元の記述は判断の履歴として残す）。
+         *   **入る値も順序も変えていない。**
          */
+        let event: MouseEvent | Touch;
         if (e.type.match(/touch/)) {
             if ((e as TouchEvent).touches.length > 1) {
                 return;
             }
-            var event: MouseEvent | Touch = (e as TouchEvent).touches[0]!;
+            event = (e as TouchEvent).touches[0]!;
         } else {
-            var event: MouseEvent | Touch = e as MouseEvent;
+            event = e as MouseEvent;
         }
 
-        var dx = event.clientX - this.x;
-        var dy = event.clientY - this.y;
+        let dx = event.clientX - this.x;
+        let dy = event.clientY - this.y;
         if (this.l + dx < 0) {
             dx = -this.l;
         }
@@ -131,10 +141,10 @@ export class Minimap extends Visual<MinimapDom> {
         this.l += dx;
         this.t += dy;
 
-        var coefX = this.width / this.owner.width;
-        var coefY = this.height / this.owner.height;
-        var left = this.l / coefX;
-        var top = this.t / coefY;
+        const coefX = this.width / this.owner.width;
+        const coefY = this.height / this.owner.height;
+        const left = this.l / coefX;
+        const top = this.t / coefY;
 
         document.documentElement.scrollLeft = Math.round(left);
         document.documentElement.scrollTop = Math.round(top);
@@ -152,15 +162,15 @@ export class Minimap extends Visual<MinimapDom> {
 
     sync(): void {
         /* when window changes, adjust map */
-        var dims = OZ.DOM.win();
-        var scroll = OZ.DOM.scroll();
-        var scaleX = this.width / this.owner.width;
-        var scaleY = this.height / this.owner.height;
+        const dims = OZ.DOM.win();
+        const scroll = OZ.DOM.scroll();
+        const scaleX = this.width / this.owner.width;
+        const scaleY = this.height / this.owner.height;
 
-        var w = dims[0] * scaleX - 4 - 0;
-        var h = dims[1] * scaleY - 4 - 0;
-        var x = scroll[0] * scaleX;
-        var y = scroll[1] * scaleY;
+        const w = dims[0] * scaleX - 4 - 0;
+        const h = dims[1] * scaleY - 4 - 0;
+        const x = scroll[0] * scaleX;
+        const y = scroll[1] * scaleY;
 
         this.w = Math.round(w);
         this.h = Math.round(h);

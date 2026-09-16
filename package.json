@@ -23,7 +23,7 @@
     "test:scale": "playwright test --project=scale",
     "shots": "playwright test --project=characterization --grep \"PR 用のスクリーンショット\"",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint --max-warnings=650",
+    "lint": "oxlint --max-warnings=633",
     "migrate:design": "node tools/migrate-design.mjs"
   },
   "devDependencies": {

@@ -221,9 +221,11 @@ export class IO {
         this.dom.quicksave.value += " (F2)";
 
         /* backendlabel は段階5-5 で撤去（select ごと消えた） */
-        var ids = ["client", "server", "output", "outputdblabel"];
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i]!;
+        /* grabado: #321。上のループの ids と同一スコープなので改名した（var では黙って
+           通っていたが、let / const なら即エラーになる形）。中身は 1 つも変えていない */
+        var labelIds = ["client", "server", "output", "outputdblabel"];
+        for (var i = 0; i < labelIds.length; i++) {
+            var id = labelIds[i]!;
             /* grabado: 上のループの elm と型が違う（こちらはラベル要素）ため改名した。
                型のためのコード変更で、読み出しは直後の 1 行だけ（段階3-3b） */
             var labelElm = OZ.$(id);

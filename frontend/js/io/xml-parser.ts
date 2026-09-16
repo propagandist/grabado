@@ -194,9 +194,10 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
     }
 
     var elm = palette.typeAt(obj.type);
-    var d = node.getElementsByTagName("default");
-    if (d.length && d[0]!.firstChild) {
-        var def = d[0]!.firstChild!.nodeValue!;
+    /* grabado: #321。上の datatype の d と同一スコープなので改名した（読む要素が違う） */
+    var defaultNodes = node.getElementsByTagName("default");
+    if (defaultNodes.length && defaultNodes[0]!.firstChild) {
+        var def = defaultNodes[0]!.firstChild!.nodeValue!;
         obj.def = def;
         var q = elm.getAttribute("quote");
         if (q) {

@@ -233,7 +233,9 @@ export const OZ = {
             }
             var cn = OZ.$<Element>(node).className;
             var arr = cn ? cn.split(" ") : [];
-            var arr = arr.filter(function ($) {
+            /* grabado: #321。2 行目の var を落として再代入にした（同一スコープの再宣言で、
+               let / const なら即エラーになる形）。読む値も書く値も変わっていない */
+            arr = arr.filter(function ($) {
                 return $ != className;
             });
             OZ.$<Element>(node).className = arr.join(" ");

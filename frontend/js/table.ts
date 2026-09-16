@@ -364,13 +364,15 @@ export class Table extends Visual<TableDom> {
 
         var w = cw * ratioX;
         var h = ch * ratioY;
-        var x = this.x * ratioX;
-        var y = this.y * ratioY;
+        /* grabado: #321。この関数の頭にある x / y（盤面の座標）と同一スコープなので改名した。
+           こちらはミニマップ側の座標で、計算も代入先も 1 つも変えていない */
+        var miniX = this.x * ratioX;
+        var miniY = this.y * ratioY;
 
         this.dom.mini.style.width = Math.round(w) + "px";
         this.dom.mini.style.height = Math.round(h) + "px";
-        this.dom.mini.style.left = Math.round(x) + "px";
-        this.dom.mini.style.top = Math.round(y) + "px";
+        this.dom.mini.style.left = Math.round(miniX) + "px";
+        this.dom.mini.style.top = Math.round(miniY) + "px";
 
         this.width = cw;
         this.height = ch;

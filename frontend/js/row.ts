@@ -389,19 +389,25 @@ export class Row extends Visual<RowDom> {
             OZ.Event.add(this.dom.commentbtn, "click", this.changeComment)
         );
 
+        /*
+         * grabado: #321。ループの中と外で tr / td1 / td2 が同名だった（var は関数スコープ
+         * なので黙って通る）。**改名せず、両方を const にしてブロックで分けた** ——
+         * 中と外で役割が違うのではなく、**同じ 3 点セットを 2 回作っている**ので、
+         * 名前を変えると「別のもの」に読めてしまう。作る順も appendChild の順も不変。
+         */
         for (var i = 0; i < elms.length; i++) {
             var row = elms[i]!;
-            var tr = OZ.DOM.elm("tr");
-            var td1 = OZ.DOM.elm("td");
-            var td2 = OZ.DOM.elm("td");
+            const tr = OZ.DOM.elm("tr");
+            const td1 = OZ.DOM.elm("td");
+            const td2 = OZ.DOM.elm("td");
             var l = OZ.DOM.text(_(row[0]) + ": ");
             OZ.DOM.append([tr, td1, td2], [td1, l], [td2, row[1]]);
             this.dom.container.appendChild(tr);
         }
 
-        var tr = OZ.DOM.elm("tr");
-        var td1 = OZ.DOM.elm("td");
-        var td2 = OZ.DOM.elm("td");
+        const tr = OZ.DOM.elm("tr");
+        const td1 = OZ.DOM.elm("td");
+        const td2 = OZ.DOM.elm("td");
         OZ.DOM.append(
             [tr, td1, td2],
             [td1, this.dom.comment],

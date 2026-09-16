@@ -72,15 +72,16 @@ export class KeyManager {
             elm.value = _(id);
         }
 
-        var ids = [
+        /* grabado: #321。上のループの ids と同一スコープなので改名した。中身は不変 */
+        var labelIds = [
             "keyedit",
             "keytypelabel",
             "keynamelabel",
             "keyfieldslabel",
             "keyavaillabel",
         ];
-        for (var i = 0; i < ids.length; i++) {
-            var id = ids[i]!;
+        for (var i = 0; i < labelIds.length; i++) {
+            var id = labelIds[i]!;
             /* grabado: 上のループの elm と型が違う（ラベル要素）ため改名した（段階3-3b） */
             var labelElm = OZ.$(id);
             labelElm.innerHTML = _(id);

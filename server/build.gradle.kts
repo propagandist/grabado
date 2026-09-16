@@ -59,21 +59,21 @@ repositories {
  * ★ **ベースラインを置かない。** 初回の違反は数えて直す —— ベースラインは
  *   「見たことにする」装置になりやすい（#317 の判断）。置くなら件数を記録に残す。
  */
-/*
- * ★★ **detekt 1.23.8 は jvmTarget 25 を受け付けない**（受けるのは 22 まで。2026-09-16 実測。
- *   Kotlin 1.9 系のコンパイラを内蔵しているため）。**解析だけ 21 として回す** ——
- *   このリポジトリの規則は**型解決を要らない**もの（未使用 import / 書式 / 複雑度）なので、
- *   jvmTarget は結果を変えない。**製品の toolchain（25）は 1 ミリも動かない。**
- */
-tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
-    jvmTarget = "21"
-}
-
 detekt {
     config.setFrom(files("detekt.yml"))
     buildUponDefaultConfig = true
-    /* テストも見る（api/ReadOnlyContractTest.kt の完全修飾が #317 の発端の 1 つ） */
-    source.setFrom(files("src/main/kotlin", "src/test/kotlin"))
+}
+
+/*
+ * ★★ **型解決の付いたタスクを check に付ける**（#317）。plugin が既定で check に付けるのは
+ *   型解決**無し**の  タスクで、あれは  のような
+ *   **型を要る規則を 1 本も動かさない**（2026-09-16 実測。無しで 0 件、付きで 4 件）。
+ *
+ * ★ **ワークフローは触らない** —— ci-server.yml の  から
+ *   build → check → detektMain / detektTest の経路で走る。
+ */
+tasks.named("check") {
+    dependsOn(tasks.named("detektMain"), tasks.named("detektTest"))
 }
 
 /*

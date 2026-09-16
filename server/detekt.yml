@@ -23,7 +23,11 @@
 
 style:
   # ★ #317 の発端そのもの。**既定は active: false** なので、明示的に立てる
-  UnusedImports:
+  UnusedImport:
+    active: true
+
+  # ★ #317 の発端の 4 番目（api/ReadOnlyContractTest.kt の完全修飾のインライン記述）
+  UnnecessaryFullyQualifiedName:
     active: true
 
   # --- ここから下は「切る」判断 ---
@@ -64,6 +68,18 @@ style:
   LoopWithTooManyJumpStatements:
     active: false
 
+  # ★★ **alpha の限界に当たる**（2026-09-16 実測）—— `SuggestionCache.maxEntries` は
+  #   `removeEldestEntry` の中（匿名オブジェクト）で使われているのに「未使用」と出る。
+  #   **参照を追えていない誤検出**なので切る。**@Suppress を出荷コードへ書かない**
+  #   （検査の都合を製品に持ち込まない）。**detekt が安定版になったら立て直す**
+  UnusedPrivateProperty:
+    active: false
+
+  # ★ `@LocalServerPort` は Spring がフィールド注入するので **var でなければならない**
+  #   （テスト 3 本の `port`）。規則の言うとおりにすると動かなくなる
+  VarCouldBeVal:
+    active: false
+
 exceptions:
   # ★ 上流の SDK（Anthropic）／ファイル I/O ／JDBC は、**投げる型が広い**。
   #   `catch (e: Exception)` を具体化すると**取りこぼす側に倒れる**
@@ -96,4 +112,15 @@ naming:
   FunctionNaming:
     excludes: ['**/test/**']
   TopLevelPropertyNaming:
+    excludes: ['**/test/**']
+
+potential-bugs:
+  # ★★ **テストだけ除外する。本番コードでは有効のまま。**
+  #   テストの `map["x"]!!` は「**無ければ落ちてほしい**」という意図の表明で、
+  #   `?: fail()` に書き換えても読みやすくならない（落ちる位置が 1 行ずれるだけ）。
+  #   **本番の Kotlin は `!!` が 0 件**（2026-09-15 実測）なので、そちらは縛ったまま
+  MapGetWithNotNullAssertionOperator:
+    excludes: ['**/test/**']
+  # ★ テストのヘルパが Java の API をそのまま返す面。**本番では有効のまま**
+  HasPlatformType:
     excludes: ['**/test/**']

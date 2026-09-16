@@ -19,6 +19,12 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
     alias(libs.plugins.spring.boot)
+    /*
+     * 静的解析（#317）。**ワークフローは 1 行も足さない** —— detekt plugin は自分を
+     * `check` に付けるので、ci-server.yml の `./gradlew build` から
+     * build → check → detekt の経路で走る。
+     */
+    alias(libs.plugins.detekt)
 }
 
 group = "io.propagandist.grabado"
@@ -42,6 +48,32 @@ kotlin {
 
 repositories {
     mavenCentral()
+}
+
+/*
+ * 静的解析（#317）。**検査だけ**。
+ *
+ * ★★ **自動修正のフラグを書かない。** #296（整形は人が持つ）と同じ理由で、
+ *   配管に自動修正を置かない。整形系の規則は detekt.yml で名指しして切ってある。
+ *
+ * ★ **ベースラインを置かない。** 初回の違反は数えて直す —— ベースラインは
+ *   「見たことにする」装置になりやすい（#317 の判断）。置くなら件数を記録に残す。
+ */
+/*
+ * ★★ **detekt 1.23.8 は jvmTarget 25 を受け付けない**（受けるのは 22 まで。2026-09-16 実測。
+ *   Kotlin 1.9 系のコンパイラを内蔵しているため）。**解析だけ 21 として回す** ——
+ *   このリポジトリの規則は**型解決を要らない**もの（未使用 import / 書式 / 複雑度）なので、
+ *   jvmTarget は結果を変えない。**製品の toolchain（25）は 1 ミリも動かない。**
+ */
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "21"
+}
+
+detekt {
+    config.setFrom(files("detekt.yml"))
+    buildUponDefaultConfig = true
+    /* テストも見る（api/ReadOnlyContractTest.kt の完全修飾が #317 の発端の 1 つ） */
+    source.setFrom(files("src/main/kotlin", "src/test/kotlin"))
 }
 
 /*

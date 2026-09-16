@@ -1,0 +1,99 @@
+# 静的解析の設定（#317）。
+#
+# ★★ **整形の規則は 1 つも有効にしない。** #296（2026-09-12「整形は人が持つ」）が
+#   閉じたのは**整形**で、**機械が見ること**ではない。detekt は既定で整形系の規則を
+#   いくつか持つので、**ここで名指しして切る**。
+#
+# ★ **--auto-correct は使わない。** build.gradle.kts にもコマンドにも書かない（#296）。
+#
+# ★ `buildUponDefaultConfig = true` なので、**ここに書いたものだけが既定を上書きする**。
+#
+# ★★ **型解決（detektMain / detektTest）は使わない**（2026-09-16 実測）——
+#   detekt 1.23.8 は Kotlin 1.9 系のコンパイラを内蔵しており、**Kotlin 2.4 のコードを
+#   誤解析する**。`AnthropicSuggestionSource.kt:156-160` の到達可能なコードを
+#   `UnreachableCode` として 3 件出した。**誤検出を抑える設定を足すより、
+#   型解決そのものを使わないほうが正しい** —— 代償は `ImplicitDefaultLocale` のような
+#   型を要る規則が拾えないこと（#317 の発端の 2 番目）。**そちらは手で直した。**
+
+# ★ **整形器（ktlint / detekt-formatting）は入れていない。** detekt の `formatting`
+#   ルールセットは ktlint を内蔵した別プラグインで、**依存として足していない**ので
+#   ここに切る対象も無い。**入れないこと自体が判断**（#317）。
+#   ★ この名前は build.gradle.kts と libs.versions.toml には書かない ——
+#     受け入れ基準があの 2 本を grep するので、**理由を書くと自分で引っかかる**（#316 と同じ罠）。
+
+style:
+  # ★ #317 の発端そのもの。**既定は active: false** なので、明示的に立てる
+  UnusedImports:
+    active: true
+
+  # --- ここから下は「切る」判断 ---
+
+  # 行の長さ・折り返し —— 整形。人が持つ（#296）
+  MaxLineLength:
+    active: false
+  WildcardImport:
+    active: false
+  MultilineLambdaItParameter:
+    active: false
+
+  # ★ 設定クラスの既定値（GrabadoProperties の上限値・SuggestionCache の TTL）に当たる。
+  #   **定数名を付けても読みやすくならない** —— 値の意味はプロパティ名が既に言っている
+  MagicNumber:
+    active: false
+
+  # ★ Kotlin の early return は読みやすさのために使う。**2 を超えたら直す**規則は、
+  #   検証関数（DesignName.parse / AiRequestCheck.parse）の形と合わない
+  ReturnCount:
+    active: false
+
+  # ★ Spring の `ResponseEntity<Void>` は**フレームワークの API**で、Unit へは替えられない
+  ForbiddenVoid:
+    active: false
+
+  # ★ `@ExceptionHandler` は例外の型で選ばれるので、**本文で使わない引数が正当に要る**
+  UnusedParameter:
+    active: false
+
+  # ★ 入力を検証する関数は、拒む理由の数だけ throw する（DesignName.parse /
+  #   AiRequestCheck.parse / AnthropicSuggestionSource.extract）。**2 で止める規則は形と合わない**
+  ThrowsCount:
+    active: false
+
+  # ★ `RateLimiter.admit()` の「古い要素を捨てる」ループ。**break 2 つで読める形**を
+  #   崩してまで 1 つにする理由が無い
+  LoopWithTooManyJumpStatements:
+    active: false
+
+exceptions:
+  # ★ 上流の SDK（Anthropic）／ファイル I/O ／JDBC は、**投げる型が広い**。
+  #   `catch (e: Exception)` を具体化すると**取りこぼす側に倒れる**
+  TooGenericExceptionCaught:
+    active: false
+
+  # ★ `RateLimitException` → `AiRateLimitedException` の写し替え。**型名をメッセージに
+  #   入れている**ので情報は落ちていない（503 に倒さないための意図的な分岐）
+  SwallowedException:
+    active: false
+
+performance:
+  # ★ `runApplication<GrabadoApplication>(*args)` は **Spring Boot の定型**
+  SpreadOperator:
+    active: false
+
+complexity:
+  # ★ `ApiExceptionHandler` は**例外ハンドラを 1 か所へ集める**クラスで、関数が増えるのが仕事。
+  #   11 個ちょうどで既定の閾値に当たった —— **数で止める規則がこの形と合わない**
+  TooManyFunctions:
+    active: false
+
+  # 関数の長さ。**Kotlin 側は 60 行超が 0 本**（2026-09-15 実測）なので既定のままで足りる。
+  # 閾値を下げて「守る作業」を始めない（#320 でカバレッジに閾値を置かなかったのと同じ判断）
+  LongMethod:
+    active: true
+
+naming:
+  # テストの関数名はバッククォート付きの日本語を使う。既定の正規表現に当てない
+  FunctionNaming:
+    excludes: ['**/test/**']
+  TopLevelPropertyNaming:
+    excludes: ['**/test/**']

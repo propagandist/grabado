@@ -5,6 +5,7 @@ import java.security.MessageDigest
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.Locale
 
 /**
  * 送ったバイト列 → 提案の結果キャッシュ（段階11-2a。`docs/ARCHITECTURE.md` §8.5）。
@@ -65,6 +66,7 @@ class SuggestionCache(
         /** 送るバイト列の SHA-256（16 進小文字）。 */
         fun keyOf(body: ByteArray): String =
             MessageDigest.getInstance("SHA-256").digest(body)
-                .joinToString("") { byte -> "%02x".format(byte) }
+                /* grabado: #317。ETags.kt と同じ理由で Locale を明示する */
+                .joinToString("") { byte -> "%02x".format(Locale.ROOT, byte) }
     }
 }

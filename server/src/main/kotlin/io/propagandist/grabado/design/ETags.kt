@@ -1,6 +1,7 @@
 package io.propagandist.grabado.design
 
 import java.security.MessageDigest
+import java.util.Locale
 
 /**
  * 内容から ETag を作り、条件ヘッダと突き合わせる（段階5-4）。**純粋。**
@@ -24,7 +25,9 @@ object ETags {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
         val hex = buildString(BYTES * 2) {
             for (i in 0 until BYTES) {
-                append("%02x".format(digest[i]))
+                /* grabado: #317。**Locale を明示する** —— 既定ロケールに依る書式化は、トルコ語などで
+                   結果が変わりうる（ここは 16 進数なので実害は無いが、規則を 1 か所だけ緩めない） */
+                append("%02x".format(Locale.ROOT, digest[i]))
             }
         }
         return "\"$hex\""

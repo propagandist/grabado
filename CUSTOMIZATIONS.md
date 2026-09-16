@@ -21259,6 +21259,120 @@ jsdom に流し込む。** v8 の計測はその realm を追えないので、*
   **#312 がボタンの配置を変えても直らなかった** —— #354 が「#312 の後に引き直す」と
   書いた予想は**外れ**で、**原因は `#window .tb.i-windowok` の `float: right` の側にある**
 
+### 2026-09-16 detekt を検査のみで入れた —— 発端の 4 種類のうち、機械が拾えたのは 1 つだった
+
+**#317。v0.11.0 の 9 本目。** **ワークフローは 1 行も変えていない。**
+
+#### 入れた形
+
+- `detekt 1.23.8`（`libs.versions.toml` の `[plugins]`）
+- `server/detekt.yml`（新規）—— **`buildUponDefaultConfig = true`** の上に、**切る判断だけ**を書く
+- `build.gradle.kts` の `detekt { }` —— **ベースラインを置かない**、**自動修正のフラグを書かない**
+
+**ワークフローに触らずに CI へ乗る** —— detekt plugin は自分を `check` に付けるので、
+`ci-server.yml` の `./gradlew build` から **build → check → detekt** の経路で走る。
+**`.github/workflows/` の差分は 0 バイト。**
+
+#### ★★ 実測 1 —— detekt 1.23.8 は jvmTarget 25 を受け付けない
+
+```
+Invalid value (25) passed to --jvm-target, must be one of [1.6, 1.8, 9, …, 22]
+```
+
+**detekt 1.23.8 は Kotlin 1.9 系のコンパイラを内蔵している**（2026-09-16 実測。
+**Maven Central の最新はこれ** —— 2.x はまだ出ていない）。
+**解析だけ `jvmTarget = "21"` に落とした** —— **製品の toolchain（25）は 1 ミリも動かない。**
+
+#### ★★ 実測 2 —— 型解決は使えない。誤検出が出る
+
+`detektMain`（型解決あり）で回すと **36 件**。うち:
+
+| 規則 | 件数 | 実体 |
+|---|---|---|
+| `UnreachableCode` | **3** | **誤検出** —— `AnthropicSuggestionSource.kt:156-160` は到達可能 |
+| `ForbiddenVoid` | 13 | 誤検出ではないが、**Spring の `ResponseEntity<Void>`** で替えられない |
+
+**Kotlin 2.4 のコードを 1.9 のコンパイラで解析しているため。**
+**誤検出を抑える設定を足すより、型解決そのものを使わないほうが正しい。**
+
+**代償**: **型を要る規則が拾えない** —— `ImplicitDefaultLocale`（#317 の発端の 2 番目）が
+そのひとつ。**そちらは手で直した**（下記）。
+
+#### ★★ 実測 3 —— 発端の 4 種類のうち、detekt が拾えたのは 1 つ
+
+| # | #317 が挙げた形 | detekt は | 始末 |
+|---|---|---|---|
+| 1 | 未使用 import（`PostgresCatalogReader.kt:5`） | **拾う**（`UnusedImports`） | **規則を立てて、import を消した** |
+| 2 | `Locale` 無しの `"%02x".format(…)` 2 件 | **拾えない**（型解決が要る） | **手で `Locale.ROOT` を足した** |
+| 3 | 二重空行・末尾空行 | 拾えるが**整形** | **切る**（#296「整形は人が持つ」） |
+| 4 | 完全修飾のインライン記述 | **該当規則が無い** | 触っていない |
+
+**★ `UnusedImports` は既定で `active: false`** だった（2026-09-16 実測。detekt の
+`default-detekt-config.yml` を jar から取り出して確認）。**明示的に立てないと、
+#317 の発端そのものが出ない。**
+
+#### ★★ detekt は設定の綴り間違いを検出する
+
+```
+Run failed with 1 invalid config property.
+  - Property 'exceptions>ThrowsCount' is misspelled or does not exist.
+```
+
+**`ThrowsCount` を `exceptions` に置いたら落ちた**（正しくは `style`）。
+
+**#316 の oxlint とは逆** —— あちらは**存在しない規則を `-D` で指定しても、エラーも警告も
+出さなかった**（同日実測）。**規則名を 1 文字間違えると黙って無効になる**のが oxlint、
+**落ちて教える**のが detekt。**同じ「検査のみで入れる」でも、空振りの見え方が違う。**
+
+#### 決めたこと: 切った 13 規則は、どれも「形と合わない」もの
+
+| 規則 | 切った理由 |
+|---|---|
+| `MaxLineLength` / `WildcardImport` / `MultilineLambdaItParameter` | **整形**。人が持つ（#296） |
+| `MagicNumber` | 設定クラスの既定値。**定数名を付けても読みやすくならない**（意味はプロパティ名が言っている） |
+| `ReturnCount` / `ThrowsCount` | **検証関数の形と合わない** —— 拒む理由の数だけ return / throw する |
+| `ForbiddenVoid` | **Spring の API**（`ResponseEntity<Void>`）。Unit へは替えられない |
+| `UnusedParameter` | `@ExceptionHandler` は**例外の型で選ばれる**ので、本文で使わない引数が正当に要る |
+| `LoopWithTooManyJumpStatements` | `RateLimiter.admit()` の「古い要素を捨てる」ループ。**break 2 つで読める** |
+| `TooGenericExceptionCaught` / `SwallowedException` | 上流 SDK / ファイル I/O は**投げる型が広い**。具体化すると**取りこぼす側に倒れる** |
+| `SpreadOperator` | `runApplication<GrabadoApplication>(*args)` は **Spring Boot の定型** |
+| `TooManyFunctions` | `ApiExceptionHandler` は**例外ハンドラを集める**クラス。11 個ちょうどで閾値に当たった |
+
+**ベースラインは置かなかった** —— **切る判断を 1 つずつ書いたほうが、後から読める**。
+**「見たことにする」装置を作らない**（#317 の判断）。
+
+#### ★ 受け入れ基準の grep に、自分の説明が引っかかった（2 度目）
+
+「`grep -rn 'auto-correct\|ktlint' build.gradle.kts libs.versions.toml` が **0 件**」という
+基準に、**それを説明した文が 3 件当たった**。
+
+**#316 で 1 度踏んでいる**（`--fix` を配管に置かない、と書いた文が `--fix` の grep に当たった）。
+**2 度目。** 語を落とし、**入れなかった道具の名前は `detekt.yml` に置いた**
+（あちらは grep の対象外）。
+
+**★ 3 度目が出たら、基準の書き方そのものを変える** —— 「配管に無いこと」を
+**grep で書くと、理由を書いた文が必ず当たる**。#171 の `!important` がテスト側で
+コメントを剥がして解いたのと同じ形。
+
+#### 検証（2026-09-16 実測）
+
+| 検査 | 結果 |
+|---|---|
+| `./gradlew detekt` | **0 件で緑** |
+| `./gradlew build` | **BUILD SUCCESSFUL**。`Task :detekt` が経路に出る |
+| `.github/workflows/` の差分 | **0 バイト** |
+| `grep 'auto-correct\|ktlint'`（build.gradle.kts / toml） | **0 件** |
+| `gradle.lockfile` / `settings-gradle.lockfile` | **どちらも動いていない**（plugin の classpath は lock の対象外） |
+| server のテスト | `build` の中で緑 |
+
+#### 申し送り
+
+- **detekt 2.x が出たら、型解決を引き直す。** いま切っている代償は
+  **`ImplicitDefaultLocale` のような型を要る規則が 1 本も動かないこと**で、
+  **手で見つけるしかない範囲がそのぶん残っている**
+- **`jvmTarget = "21"` は detekt のためだけの値。** 製品は 25。
+  **detekt が 25 を受けるようになったら落とす**
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

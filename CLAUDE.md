@@ -42,6 +42,25 @@
     1 つも無く、`devDependencies` にも入っていなかった**ので、**準拠の対象が存在しなかった**
     （2026-09-12 実測）。**機械へ渡すと、最良の設定（`tabWidth 4` / `printWidth 100`）でも
     99 本 / 3637 行が動く** —— 幅を広げても減らない（120 で 116 本、140 で 118 本と**増える**）
+- **★ 静的解析は機械が持つ。oxlint を検査のみで入れた**（**2026-09-16**。#316）——
+  **設定ファイルは `.oxlintrc.json` 1 本を置く**。**上の「設定ファイルを置かない」と衝突しない**
+  —— #296 が置かないと決めたのは**整形の設定**で、#296 自身が「**入れるなら別 issue**」と
+  書いていた。**規則は 4 つ**（`no-var` / `no-redeclare` / `no-unused-vars` /
+  `no-implicit-globals`）、**重大度は warn**、**上限は `package.json` の
+  `--max-warnings=650`**（**2026-09-16 実測**。`no-var` 563 / `no-redeclare` 44 /
+  `no-unused-vars` 43 / `no-implicit-globals` 0）。**増えたら赤くなる。**
+  **`--fix` はどのスクリプトにも書かない**（整形と静的解析は別だが、配管に置けば誘因ができる）
+  - **★ ESLint は入らない**（同日実測）—— `@typescript-eslint/parser` の peer は
+    `typescript >=4.8.4 <6.1.0` で、**このリポジトリは `typescript ^7.0.2`**。
+    `--legacy-peer-deps` で入れても**走らせた瞬間に落ちる**（parser が自分で
+    `does not support TS 7.0` を投げる）。**peer の範囲の話ではない** —— **TS 7 は
+    native port で、`typescript` の main export が `lib/version.cjs` だけ**になり、
+    従来の JS API は `./unstable/*` へ移った。**公式が案内する `typescript-6` パッケージは
+    npm に存在しない**（404）。追跡は typescript-eslint#10940（**TS >=7.1 対応**）
+  - **★ 却下の理由が道具ごとに違う** —— #316 が oxlint を却下したのは「**整形器を兼ねており
+    `--write` が既定の運用に乗りやすい**」だったが、**それは Biome に当たり、oxlint には
+    当たらなかった**（同日実測。`bin` は `oxlint` 1 本、整形器は **oxfmt という別パッケージ**、
+    `scripts` が空で **postinstall を持たない**）。**判断の経緯は `CUSTOMIZATIONS.md` の同日**
 
 ## スキーマ既定（`HANDOVER.md` §6 準拠）
 - PK: 既定 `id uuid DEFAULT uuidv7()`（外部露出=v4 / 完全内部=bigint identity）。

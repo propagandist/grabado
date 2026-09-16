@@ -77,8 +77,14 @@
     <!-- io -->
     <string name="saveload">Save / Load</string>
     <string name="empty">Please paste JSON data into the text area below and try again.</string>
-    <string name="client">Client</string>
+    <!-- #312: section headings. Untranslated locales fall back to the key itself -->
+    <string name="file">File</string>
+    <string name="browser">Browser</string>
     <string name="server">Server</string>
+    <string name="clipboard">Clipboard</string>
+    <string name="database">Import from DB</string>
+    <string name="assistant">AI</string>
+    <string name="generate">Generate</string>
     <string name="output">Input / Output</string>
     <string name="clientsave">Save JSON</string>
     <string name="clientload">Load JSON</string>

@@ -111,8 +111,12 @@ const AI_REVIEW_PATH = "api/ai/review";
 /**
  * 保存/読込ダイアログの DOM。
  *
- * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン 16 個は
+ * 不変条件は「コンストラクタを抜けた時点で全キーが埋まっている」。ボタン **19 個**は
  * id 配列のループが埋め、直後に elm.value を書くのでいずれも input 要素。
+ *
+ * ★ 訂正（2026-09-16。#312）—— **元は「16 個」だった。** `clientorm` / `aireview` /
+ *   `aiapply` を足した日に直していない。**19 のうち `saveload` はツールバー側**で、
+ *   `#io` の中に並ぶのは **18 個**。
  */
 export interface IoDom {
     container: HTMLElement;
@@ -223,7 +227,23 @@ export class IO {
         /* backendlabel は段階5-5 で撤去（select ごと消えた） */
         /* grabado: #321。上のループの ids と同一スコープなので改名した（var では黙って
            通っていたが、let / const なら即エラーになる形）。中身は 1 つも変えていない */
-        const labelIds = ["client", "server", "output", "outputdblabel"];
+        /*
+         * grabado: #312。**legend は行き先ごとに 8 枚。** 2 列（クライアント / サーバ）を
+         * やめたので `client` は消えた（21 locale からも落とした）。
+         * **未訳の言語ではキー名がそのまま出る**ので、読める英単語だけを使う
+         * （`ai` は「自動採番」で埋まっているため `assistant`）。
+         */
+        const labelIds = [
+            "file",
+            "browser",
+            "server",
+            "clipboard",
+            "database",
+            "assistant",
+            "generate",
+            "output",
+            "outputdblabel",
+        ];
         for (let i = 0; i < labelIds.length; i++) {
             const id = labelIds[i]!;
             /* grabado: 上のループの elm と型が違う（こちらはラベル要素）ため改名した。

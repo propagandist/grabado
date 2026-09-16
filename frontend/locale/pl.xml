@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Zapisz / Otwórz</string>
     <string name="empty">Proszę wklej kod JSON w poniższe pole tekstowe i spróbuj ponownie.</string>
-    <string name="client">Klient</string>
     <string name="server">Serwer</string>
     <string name="output">Wejście / Wyjście</string>
     <string name="clientsave">Zapisz JSON</string>

@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Зберегти / Завантажити</string>
     <string name="empty">Прошу вставити дані JSON у текстову область нижче і спробувати повторно.</string>
-    <string name="client">Клієнт</string>
     <string name="server">Сервер</string>
     <string name="output">Ввід / Вивід</string>
     <string name="clientsave">Зберегти JSON</string>

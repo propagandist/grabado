@@ -195,14 +195,80 @@ body:has(#window[open]) {
     padding: 1em;
 }
 
-/* grabado: 段階2-2 で index.html の style 属性 2 か所を CSS へ移した（issue #89）。
-   段階2-2 は「両テーマに書く」と注記していたが、#169 で 1 本に寄せた */
-#io .io-client {
-    width: 60%;
+/*
+ * grabado: #312。**行き先ごとの fieldset を縦に積む。**
+ *
+ * ★ **元は `.io-client { width: 60% }` / `.io-server { width: 40% }` の 2 列だった**
+ *   （段階2-2 で index.html の style 属性から移し、#169 で 1 本に寄せたもの）。
+ *   **2 列そのものを撤去した**ので、幅の指定も消えた。
+ *
+ * ★ **狭い画面では 1 列に落ちる。** `#io` は `min-width: min(860px, 92vw)` を持つので、
+ *   幅が足りるあいだは 2 列に流れ、足りなくなれば `auto-fit` が畳む。
+ */
+#io {
+    display: grid;
+    /* 2 列。**8 枚を縦 1 列に積むと 645px を超える**（#312 の概算）ので、
+       幅が足りるあいだは 2 列へ流す。足りなくなれば auto-fit が 1 列に畳む */
+    grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+    gap: var(--space-3) var(--space-5);
+    align-items: start;
 }
 
-#io .io-server {
-    width: 40%;
+/*
+ * ★ fieldset の既定の余白を詰める（#312）。**8 枚を積むと、既定のままでは
+ *   `#window` の高さ（`calc(100vh - 4rem)`）に収まらない** —— 1 枚あたり十数 px の差が
+ *   8 枚ぶん効く。**枠は残す**（original は枠で群を描いているので、消すと群が読めなくなる）。
+ */
+#io > fieldset {
+    margin-block: 0;
+    padding-block: var(--space-2) var(--space-3);
+}
+
+/* 入出力欄（textarea を持つ最後の 1 枚）は常に全幅 */
+#io > fieldset:last-child {
+    grid-column: 1 / -1;
+}
+
+/*
+ * セクションの中のボタンは**等幅で端を揃える**（#312）。
+ *
+ * ★ `.tb` の既定は `display: block` なので、包んだだけでは縦に割れる。
+ * ★★ **`auto-fill` にする。`auto-fit` ではない** —— auto-fit は余った列を潰すので、
+ *   **ボタンが 2 個の行だけ極端に広がり、行ごとに幅が変わる**。auto-fill なら
+ *   空の列が残り、**どの行のボタンも同じ幅**になる（それが「端を揃える」の中身）。
+ */
+.io-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+/* ★ ラッパーを等幅にしても、中の input が内容幅なら端は揃わない */
+.io-row .tb input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/*
+ * 出力先の select と、出すボタンを 1 行に（#312）。
+ * ボタンの行（`.io-row`）とは別の流儀で並ぶので、クラスを分けてある。
+ */
+.io-pick {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+}
+
+.io-pick select {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ボタンは内容幅のまま。select 側が伸びる */
+.io-pick .tb {
+    flex: 0 0 auto;
 }
 
 #opts {
@@ -708,10 +774,6 @@ label, input, select {
     min-width: min(var(--io-min-w), 92vw);
 }
 
-[data-theme^="material-"] #io hr {
-    visibility: hidden;
-}
-
 [data-theme^="material-"] #io table {
     width: 100%;
 }
@@ -738,7 +800,9 @@ label, input, select {
 
 [data-theme^="material-"] #textarea {
     width: 100%;
-    height: 200px;
+    /* #312: 8 セクションを積んだので 200px では #window の高さに収まらない（実測 878px）。
+       等幅 10 行ぶんは残す —— DDL / JSON が出る唯一の面 */
+    height: 140px;
     font-size: small;
     font-family: var(--font-mono);
 }

@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Guardar / Cargar</string>
     <string name="empty">Por favor, pega los datos JSON dentro del área de texto de abajo y vuelve a intentar.</string>
-    <string name="client">Cliente</string>
     <string name="server">Servidor</string>
     <string name="output">Entrada / Salida</string>
     <string name="clientsave">Guardar JSON</string>

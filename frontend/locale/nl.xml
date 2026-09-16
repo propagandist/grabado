@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Opslaan / laden</string>
     <string name="empty">Please paste JSON data into the text area below and try again.</string>
-    <string name="client">Lokaal</string>
     <string name="server">Server</string>
     <string name="output">Input / Output</string>
     <string name="clientsave">JSON Opslaan</string>

@@ -162,67 +162,94 @@
         * <span class="small" id="optionsnotice"></span>
     </div>
 
+    <!--
+      grabado: #312。**行き先ごとの fieldset を縦に積む。**
+
+      ★★ **2 列（クライアント / サーバ）は「どちら側で処理するか」で、利用者が最初に
+        決めることではない。** 実際、サーバ欄には保存でも読み込みでもない DB 取り込みと
+        AI 2 個が同居していた（置き場所を実装の所在で決めた結果）。18 個は設計されたのでは
+        なく、2008 年の 7 個へ 18 年ぶん積み上がったもの。
+
+      ★★ **ボタンの id・種類・数は 1 つも変えていない。** id は js/io.ts の ids 配列が
+        OZ.$(id) で引き、elm.value = _(id) を当てる鍵で、**変えると Designer の初期化が
+        落ちる**。動いたのは**並び順と、それを束ねる legend だけ**。
+
+      ★ **legend の id は未訳時にそのまま出る**（globals.ts の _() は無いキーを返す）。
+        訳すのは ja / en の 2 本だけなので（#235 の前例）、**キー名が読める英単語であること**が
+        要件。`ai` は既に「自動採番」で埋まっているので `assistant` にした。
+    -->
     <div id="io">
-        <table role="presentation">
-            <tbody>
-                <tr>
-                    <td class="io-client">
-                        <fieldset>
-                            <legend id="client"></legend>
-                            <div class="io-row">
-                                <span class="tb i-clientsave"><input type="button" id="clientsave" /></span>
-                                <span class="tb i-clientload"><input type="button" id="clientload" /></span>
-                            </div>
-                            <div class="io-row">
-                                <span class="tb i-clientdownload"><input type="button" id="clientdownload"      /></span>
-                                <span class="tb i-clientloadfromfile"><input type="button" id="clientloadfromfile"  /></span>
-                            </div>
-                            <div class="io-row">
-                                <span class="tb i-clientlocalsave"><input type="button" id="clientlocalsave" /></span>
-                                <span class="tb i-clientlocalload"><input type="button" id="clientlocalload" /></span>
-                                <span class="tb i-clientlocallist"><input type="button" id="clientlocallist" /></span>
-                            </div>
-                            <div class="io-row">
-                              <span class="tb i-clientcopy"><input type="button" id="clientcopy" /></span>
-                              <span class="tb i-clientpaste"><input type="button" id ="clientpaste" /></span>
-                            </div>
-                            <hr />
-                            <div class="io-row">
-                              <label for="outputdb" id="outputdblabel"></label>
-                              <select id="outputdb"></select>
-                            </div>
-                            <span class="tb i-clientsql"><input type="button" id="clientsql" /></span>
-                            <div class="io-row">
-                              <select id="ormtarget"></select>
-                              <span class="tb i-clientorm"><input type="button" id="clientorm" /></span>
-                            </div>
-                        </fieldset>
-                    </td>
-                    <td class="io-server">
-                        <fieldset>
-                            <legend id="server"></legend>
-                            <hr />
-                            <span class="tb i-serversave"><input type="button" id="serversave" /></span>
-                            <span class="tb i-quicksave"><input type="button" id="quicksave" /></span>
-                            <span class="tb i-serverload"><input type="button" id="serverload" /></span>
-                            <span class="tb i-serverlist"><input type="button" id="serverlist" /></span>
-                            <span class="tb i-serverimport"><input type="button" id="serverimport" /></span>
-                            <span class="tb i-aireview"><input type="button" id="aireview" /></span>
-                            <span class="tb i-aiapply"><input type="button" id="aiapply" /></span>
-                        </fieldset>
-                    </td>
-                </tr>
-                <tr>
-                    <td colspan="2">
-                        <fieldset>
-                            <legend id="output"></legend>
-                            <textarea id="textarea" rows="1" cols="1"></textarea>
-                            <!--modified by javascript later-->
-                        </fieldset>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <fieldset>
+            <legend id="file"></legend>
+            <div class="io-row">
+                <span class="tb i-clientdownload"><input type="button" id="clientdownload" /></span>
+                <span class="tb i-clientloadfromfile"><input type="button" id="clientloadfromfile" /></span>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend id="browser"></legend>
+            <div class="io-row">
+                <span class="tb i-clientlocalsave"><input type="button" id="clientlocalsave" /></span>
+                <span class="tb i-clientlocalload"><input type="button" id="clientlocalload" /></span>
+                <span class="tb i-clientlocallist"><input type="button" id="clientlocallist" /></span>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend id="server"></legend>
+            <div class="io-row">
+                <span class="tb i-serversave"><input type="button" id="serversave" /></span>
+                <span class="tb i-quicksave"><input type="button" id="quicksave" /></span>
+                <span class="tb i-serverload"><input type="button" id="serverload" /></span>
+                <span class="tb i-serverlist"><input type="button" id="serverlist" /></span>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend id="clipboard"></legend>
+            <div class="io-row">
+                <span class="tb i-clientcopy"><input type="button" id="clientcopy" /></span>
+                <span class="tb i-clientpaste"><input type="button" id="clientpaste" /></span>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend id="database"></legend>
+            <div class="io-row">
+                <span class="tb i-serverimport"><input type="button" id="serverimport" /></span>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend id="assistant"></legend>
+            <div class="io-row">
+                <span class="tb i-aireview"><input type="button" id="aireview" /></span>
+                <span class="tb i-aiapply"><input type="button" id="aiapply" /></span>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend id="generate"></legend>
+            <!-- 出す先を選ぶ select と、出すボタンを 1 行にする（2 行ぶんの縦を使わない） -->
+            <div class="io-pick">
+                <label for="outputdb" id="outputdblabel"></label>
+                <select id="outputdb"></select>
+                <span class="tb i-clientsql"><input type="button" id="clientsql" /></span>
+            </div>
+            <div class="io-pick">
+                <select id="ormtarget"></select>
+                <span class="tb i-clientorm"><input type="button" id="clientorm" /></span>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend id="output"></legend>
+            <!--
+              grabado: #312。**欄を読み書きする 2 個は欄の隣に置く。**
+              辞書 `empty` の「下の入出力欄に JSON データを貼りつけてから実行してください」は、
+              **この 2 個に限っては正しい説明になる。**
+            -->
+            <div class="io-row">
+                <span class="tb i-clientsave"><input type="button" id="clientsave" /></span>
+                <span class="tb i-clientload"><input type="button" id="clientload" /></span>
+            </div>
+            <textarea id="textarea" rows="1" cols="1"></textarea>
+            <!--modified by javascript later-->
+        </fieldset>
     </div>
 
     <div id="keys">

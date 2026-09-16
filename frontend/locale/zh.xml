@@ -75,7 +75,6 @@
     <string name="logout">注销</string>
     <string name="saveload">保存 / 载入</string>
     <string name="empty">请先粘帖一个JSON文件内容到文本框中，然后再导入。</string>
-    <string name="client">客户端</string>
     <string name="server">服务端</string>
     <string name="output">输入 / 输出</string>
     <string name="clientsave">保存为JSON</string>

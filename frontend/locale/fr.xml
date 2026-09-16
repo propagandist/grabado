@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Enregistrer / Charger</string>
     <string name="empty">Merci de coller les données JSON dans le champs prévu avant de ré-essayer.</string>
-    <string name="client">Client</string>
     <string name="server">Serveur</string>
     <string name="output">Entrée / Sortie</string>
     <string name="clientsave">Enregistrer JSON</string>

@@ -325,10 +325,15 @@
     width: 100%;
 }
 
-/* ダイアログ（Save / Load ／ Keys ／ Edit table）*/
-.io-row .tb {
-    display: inline-block;
-}
+/*
+ * ダイアログ（Save / Load ／ Keys ／ Edit table）
+ *
+ * ★ 訂正（2026-09-16。#312）—— **`display: inline-block` は要らなくなった。**
+ *   `.io-row` が grid になり（base.css）、**グリッドのアイテムはブロック化される**ので、
+ *   `.tb` の既定（`display: block`）のままで横に並び、**端も揃う**。
+ *   **元の規則は #220 が「アイコンの横並び」のために足したもの**で、
+ *   そのとき `.io-row` を持たない server 列との非対称が見た目の差になった（#312 の発端）。
+ */
 
 #window .tb input {
     padding-left: var(--icon-gutter);

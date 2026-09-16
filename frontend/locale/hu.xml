@@ -73,7 +73,6 @@
     <!-- io -->
     <string name="saveload">Mentés / Beolvasás</string>
     <string name="empty">Kérem illessze be az JSON-tartalmat az alábbi szöveges mezőbe, és próbálja újra.</string>
-    <string name="client">Kliens</string>
     <string name="server">Szerver</string>
     <string name="output">Bemenet / Kimenet</string>
     <string name="clientsave">JSON mentése</string>

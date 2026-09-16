@@ -73,7 +73,6 @@
     <!-- io -->
     <string name="saveload">Salveaza / Incarca</string>
     <string name="empty">Introduceti codul JSON si re-incercati.</string>
-    <string name="client">Client</string>
     <string name="server">Server</string>
     <string name="output">Input / Output</string>
     <string name="clientsave">Genereaza JSON</string>

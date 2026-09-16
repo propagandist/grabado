@@ -1430,7 +1430,7 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | ワークフロー | いつ | 何を見る | 所要 |
 |---|---|---|---:|
 | [`ci-frontend.yml`](../.github/workflows/ci-frontend.yml) | PR（paths） | typecheck / vitest / 実ブラウザ golden / known-issues / dist | **69〜85 秒** |
-| [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar）＋ ロックの整合 | **92〜107 秒** |
+| [`ci-server.yml`](../.github/workflows/ci-server.yml) | PR（paths） | `./gradlew build`（compile ＋ test ＋ bootJar ＋ **detekt**）＋ ロックの整合 ＋ **実 HTTP の E2E** | **69 秒**（2026-09-16。**E2E を足す前**）／ 92〜107 秒（2026-08-26） |
 | [`ci-image.yml`](../.github/workflows/ci-image.yml) | PR（paths） | **配布イメージの E2E 19 本**（通常 8 ＋ READONLY 5 ＋ **公開デモの形 6**） | **154 秒**（2026-09-12。19 本）／ 131〜147 秒（13 本のとき） |
 | [`release-image.yml`](../.github/workflows/release-image.yml) | **タグの push（`v*`）** | **検査ではない** —— 配布イメージを GHCR へ配る（座標 → build 2 本 → manifest） | **約 2.5 分** |
 | [`deps-submit.yml`](../.github/workflows/deps-submit.yml) | `develop` への push（paths） | **検査ではない** —— `server/` の解決済み依存グラフを渡す | — |
@@ -1447,6 +1447,20 @@ npm run test:image   # compose で build → 通常モードで一巡 → READON
 | `ci-server` の `./gradlew build` | 93 |
 
 **3 本は並列に走る**ので、**PR の待ち時間は最長の 131〜147 秒**（合計ではない）。
+
+**★ `ci-server` が見る層が 2 つ増えた**（**2026-09-16**）—— **detekt**（#317。
+`build` → `check` → `detektMain` / `detektTest` の経路で、**ワークフローには 1 行も足していない**）と、
+**実 HTTP の E2E**（#319。`npm run test:server`）。
+
+**★ E2E のほうはステップが 5 つ増える** —— Node のセットアップ ／ `npm ci` ／ Playwright の版 ／
+Chromium のキャッシュ ／ Chromium の取得。**Chromium が要る**（2026-09-16 実測）——
+#319 は「HTTP を投げるだけなのでブラウザは起動しない」と見ていたが、**`tests/server/` の 7 本すべてが
+`page` fixture を使っている**（**実ブラウザの XHR → vite dev proxy → jar** を通しで見る層なので、
+起動しないほうがおかしかった）。**キャッシュのキーは 3 本のワークフローで同じ。**
+
+**★ この層は「3 日間赤いままだった」実績を持つ**（`CUSTOMIZATIONS.md` の 2026-09-09）。
+**jar に直接 HTTP を投げる層は、ここにしか無い** —— `ci-image` は Docker のイメージ、
+`ci-frontend` は仮想 backend を見ている。
 
 ★ **再測（2026-09-12。issue #286 で 6 本足したあとの PR #287。3 本とも緑）** ——
 **`ci-image` は 154 秒**（`ci-frontend` 73 ／ `ci-server` 84）。**E2E のステップは 96〜97 → 104 秒**で、

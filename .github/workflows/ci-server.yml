@@ -41,6 +41,12 @@ on:
       #   **フロントだけを触った PR では気づけない**状態になっていた。
       #   ci-frontend.yml が SecurityHeadersFilter.kt を列挙しているのと同じ形。
       - 'frontend/js/io/ai/suggestion.ts'
+      # ★ 実 HTTP の E2E（#319）の入力。**package.json は入れない** ——
+      #   npm の依存は ci-frontend が既に見ており、壊れていればそちらで先に落ちる。
+      #   ここへ足すと、**フロントだけを触った PR で server のジョブまで回る**。
+      - 'tests/server/**'
+      - 'playwright.server.config.ts'
+      - 'scripts/build-server.mjs'
       - '.github/workflows/ci-server.yml'
 
 permissions:
@@ -71,6 +77,18 @@ jobs:
           # gradle-wrapper.jar が Gradle の既知リリースと一致することを毎回確かめる。
           validate-wrappers: true
 
+      # ★ ここから下は実 HTTP の E2E（#319）のため。**jar に直接 HTTP を投げる層は
+      #   ここにしか無い** —— ci-server は Kotlin のテストまで、ci-image は Docker、
+      #   ci-frontend は仮想 backend を見ている。**3 日間赤いままだった実績がある**
+      #   （CUSTOMIZATIONS.md の 2026-09-09）。
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 依存の取得
+        run: npm ci
+
       # `build` は compile ＋ test ＋ bootJar まで通す。依存ロック（gradle.lockfile）が
       # 効いているので、ロックに無い依存が紛れ込めばここで落ちる。
       - name: ビルドとテスト
@@ -79,5 +97,35 @@ jobs:
 
       # ロックファイルが実際の依存グラフと一致していること。--write-locks を
       # 忘れたまま依存を足した PR をここで捕まえる。
+      # ★★ **Chromium が要る**（2026-09-16 実測）—— #319 は「HTTP を投げるだけなので
+      #   ブラウザは起動しない」と見ていたが、**tests/server/ の 7 本すべてが page fixture を
+      #   使っている**（実ブラウザの XHR → vite dev proxy → jar、を通しで見る層なので当然だった）。
+      # ★ **キーは ci-frontend.yml / ci-image.yml と同じ**。片方が温めたものをもう片方が使う。
+      #   **restore-keys は置かない**（前方一致で古いブラウザを復元するのを避ける。#121）。
+      # ★ **空振りを緑にしない** —— 版が読めなければ落とす。
+      - name: Playwright の版を読む（キャッシュのキー）
+        id: playwright
+        run: |
+          version="$(npx playwright --version | awk '{print $2}')"
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "playwright --version が読めない: '$version'" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Chromium のキャッシュ
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ steps.playwright.outputs.version }}-chromium
+
+      - name: Chromium の取得
+        run: npx playwright install --with-deps chromium
+
+      # jar は上の build が作っている（bootJar）。npm run test:server は build:server を
+      # 前段に持つので、**同じ jar を作り直すぶんだけ重複する** —— それでもここで呼ぶのは、
+      # **script の中身（起こし方・待ち方・片付け）を CI 側に写さない**ため。
+      - name: 実 HTTP の E2E（jar に直接投げる）
+        run: npm run test:server
       - name: 追跡ファイルが動いていないこと
         run: git diff --exit-code

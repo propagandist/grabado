@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Speichern / Laden</string>
     <string name="empty">Bitte fügen Sie die JSON-Daten in das untere Textfeld ein und versuchen Sie es erneut.</string>
-    <string name="client">Klient</string>
     <string name="server">Server</string>
     <string name="output">Eingabe / Ausgabe</string>
     <string name="clientsave">JSON speichern</string>

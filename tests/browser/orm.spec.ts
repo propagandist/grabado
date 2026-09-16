@@ -70,6 +70,21 @@ test.describe("ORM golden", () => {
         expect(second).toBe(first);
     });
 
+    /*
+     * ★ **jpa-java は別に見る。** 4 本目だけが**クラス名を Map で引き、名前を一意化してから**
+     *   出す（Java にバッククォートの逃げ道が無いため）。Map の反復順も一意化の番号も
+     *   設計の順にしか依らないはずだが、**依っていないときに黙って揺れるのはここ**。
+     *   複合 PK と自己参照 FK を両方持つ relations で見る。
+     */
+    test("決定論: jpa-java も 2 回で一致する（名前の一意化と Map を通る）", async () => {
+        await useDatatypes(page, "postgresql");
+        await loadFixture(page, readFixture("postgresql", "relations"));
+
+        const first = await generateOrm(page, "postgresql", "jpa-java");
+        const second = await generateOrm(page, "postgresql", "jpa-java");
+        expect(second).toBe(first);
+    });
+
     test("知らないターゲットは例外（黙って空を返さない）", async () => {
         const message = await page.evaluate(() => {
             try {

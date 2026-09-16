@@ -24,7 +24,7 @@
  * 単数化は英語の規則だけを持ち、倒せない語（people / children）はそのまま残す。
  */
 
-import type { DdlKey, DdlRow, DdlTable } from "../ddl/shared.ts";
+import { isGenerated, primaryKeyOf, type DdlKey, type DdlRow, type DdlTable } from "../ddl/shared.ts";
 import type { TypeKind } from "../palette.ts";
 import { camelCase, entityName } from "./naming.ts";
 
@@ -96,15 +96,6 @@ function relationFieldName(column: string): string {
     return fieldName(stripped === "" ? column : stripped);
 }
 
-/** identity 列か。@autoincrement のチェックと、型そのものが持つ identity 句の両方 */
-function isGenerated(row: DdlRow): boolean {
-    return row.autoincrement || /IDENTITY|AUTO_INCREMENT/i.test(row.datatype);
-}
-
-function primaryKeyOf(table: DdlTable): DdlKey | null {
-    return table.keys.find((k) => k.type === "PRIMARY" && k.parts.length > 0) ?? null;
-}
-
 /** KDoc を 1 行に畳む。値がコメントの閉じ記号を含んでいてもコメントが切れないようにする */
 function kdoc(text: string, indent: string): string[] {
     const oneLine = text.split("\r").join(" ").split("\n").join(" ").split("*/").join("* /");
@@ -124,16 +115,53 @@ function kdoc(text: string, indent: string): string[] {
  *   3. 囲んでも書けない文字を含む（. ; [ ] / < > : \ 改行 と ` 自身）-> _ に置換
  *
  * 3 に落ちるのは JVM が名前に使えない文字を含むときだけで、そのとき初めて名前が変わる。
+ *
+ * ★ **文字集合は実測で決めた**（2026-09-16。#340）—— kotlinc 2.4.10 に通した結果:
+ *
+ *   裸で書く      a½（No） FAIL      aⅧ（Nl） FAIL      a$b  FAIL
+ *   囲んで書く    `a½`     PASS      `a$b`    PASS
+ *
+ *   **第 1 段は \p{Nd} までで、\p{N} にしてはいけない** —— No と Nl を「そのまま書ける」と
+ *   誤判定し、**kotlinc が拒む Kotlin を出す**（#340 の穴 1。**2026-09-16 まで実在した**）。
+ *   **Java の規則とは違う** —— javac は Nl と $ を受け、No だけを拒む（同日に両方測った）。
+ *   **jpa-java.ts の綴りを写さないこと。**
  */
 export function kotlinIdentifier(name: string): string {
-    if (/^[\p{L}_][\p{L}\p{N}_]*$/u.test(name)) {
+    if (/^[\p{L}_][\p{L}\p{Nd}_]*$/u.test(name)) {
         return name;
     }
     if (name !== "" && !/[`.;[\]/<>:\\\r\n]/.test(name)) {
         return "`" + name + "`";
     }
-    const safe = name.replace(/[^\p{L}\p{N}_]/gu, "_");
+    const safe = name.replace(/[^\p{L}\p{Nd}_]/gu, "_");
     return /^[\p{L}_]/u.test(safe) ? safe : "_" + safe;
+}
+
+/**
+ * 名前を一意化する（**#340**）。**重複したものだけに通し番号が付く**（`_2` / `_3` …）。
+ * 入力の順にしか依らないので決定論が保たれる。
+ *
+ * **Kotlin でも同一ファイルに同名のクラスは置けない。** 第 3 段（`_` への置換）で潰れた名前は
+ * 衝突しうる（`a.b` と `a/b` がどちらも `A_b`）ので、**クラス名もフィールド名も**ここを通す。
+ * **囲める段があるぶん Kotlin は潰れにくい**が、潰れないわけではない ——
+ * **2026-09-16 まで、通していなかった。**
+ *
+ * prisma.ts / drizzle.ts / jpa-java.ts が同じ形を持つ（これで **4 本目**）。括らない判断は
+ * drizzle.ts の KDoc にあり、**#332 が射程を測ったのは別の 2 本**（isGenerated / primaryKeyOf）。
+ */
+function uniqueNames(raw: readonly string[]): string[] {
+    const used = new Map<string, number>();
+    return raw.map((one) => {
+        const seen = used.get(one) ?? 0;
+        used.set(one, seen + 1);
+        return seen === 0 ? one : one + "_" + String(seen + 1);
+    });
+}
+
+/** 複合 PK なら返す（@IdClass と id クラスが要るのはこのときだけ） */
+function compositeKeyOf(table: DdlTable): DdlKey | null {
+    const pk = primaryKeyOf(table);
+    return pk !== null && pk.parts.length > 1 ? pk : null;
 }
 
 function quote(value: string): string {
@@ -149,11 +177,43 @@ export function generateJpa(tables: readonly DdlTable[]): string {
         return "";
     }
 
+    /*
+     * **クラス名はファイル全体で一意化する**（#340）。**id クラスも同じ名前空間に入れる** ——
+     * Kotlin でも 1 つのファイルに同名のクラスは置けないので、潰れた名前が衝突すると壊れる。
+     */
+    const raw: string[] = [];
+    for (const table of tables) {
+        const base = className(table.name);
+        raw.push(base);
+        if (compositeKeyOf(table) !== null) {
+            raw.push(base + "Id");
+        }
+    }
+    const unique = uniqueNames(raw);
+
+    const entityNames = new Map<string, string>();
+    const idNames = new Map<string, string>();
+    let at = 0;
+    for (const table of tables) {
+        entityNames.set(table.name, unique[at++]!);
+        if (compositeKeyOf(table) !== null) {
+            idNames.set(table.name, unique[at++]!);
+        }
+    }
+
     const imports = new Set<string>();
     const bodies: string[] = [];
 
     for (const table of tables) {
-        bodies.push(entity(table, imports));
+        bodies.push(
+            entity(
+                table,
+                entityNames.get(table.name)!,
+                idNames.get(table.name) ?? null,
+                entityNames,
+                imports,
+            ),
+        );
     }
 
     /*
@@ -175,7 +235,13 @@ export function generateJpa(tables: readonly DdlTable[]): string {
     return head.join("\n") + "\n\n" + bodies.join("\n\n");
 }
 
-function entity(table: DdlTable, imports: Set<string>): string {
+function entity(
+    table: DdlTable,
+    name: string,
+    idName: string | null,
+    entityNames: ReadonlyMap<string, string>,
+    imports: Set<string>,
+): string {
     const pk = primaryKeyOf(table);
     const pkParts = new Set(pk?.parts ?? []);
     const out: string[] = [];
@@ -190,24 +256,32 @@ function entity(table: DdlTable, imports: Set<string>): string {
     out.push(...tableAnnotation(table, imports));
 
     /* 複合 PK は @IdClass。JPA は @Id を複数持つ entity に id クラスを要求する */
-    const compositeId = pk !== null && pk.parts.length > 1;
-    if (compositeId) {
+    if (idName !== null) {
         imports.add("jakarta.persistence.IdClass");
-        out.push("@IdClass(" + className(table.name) + "Id::class)");
+        out.push("@IdClass(" + idName + "::class)");
     }
 
-    out.push("class " + className(table.name) + "(");
+    out.push("class " + name + "(");
+
+    /* **フィールド名はクラスの中でまとめて一意化する**（#340。列と関連が同じ名前空間） */
+    const fieldNames = uniqueNames(
+        table.rows.map((row) =>
+            !pkParts.has(row.name) && row.relations.length > 0
+                ? relationFieldName(row.name)
+                : fieldName(row.name),
+        ),
+    );
 
     const fields: string[] = [];
-    for (const row of table.rows) {
-        fields.push(field(table, row, pkParts, imports));
-    }
+    table.rows.forEach((row, i) => {
+        fields.push(field(row, pkParts, fieldNames[i]!, entityNames, imports));
+    });
     out.push(fields.join(",\n\n") + ",");
     out.push(")");
 
-    if (compositeId) {
+    if (idName !== null) {
         out.push("");
-        out.push(...idClass(table, pk!, imports));
+        out.push(...idClass(table, pk!, idName, imports));
     }
 
     return out.join("\n");
@@ -261,9 +335,10 @@ function tableAnnotation(table: DdlTable, imports: Set<string>): string[] {
 }
 
 function field(
-    table: DdlTable,
     row: DdlRow,
     pkParts: ReadonlySet<string>,
+    name: string,
+    entityNames: ReadonlyMap<string, string>,
     imports: Set<string>,
 ): string {
     const out: string[] = [];
@@ -307,14 +382,9 @@ function field(
                 String(row.nullable) +
                 ")",
         );
-        const type = className(rel.table);
-        out.push(
-            "    var " +
-                relationFieldName(row.name) +
-                ": " +
-                type +
-                (row.nullable ? "? = null" : ""),
-        );
+        /* 参照先のクラス名も一意化後の名前で引く（#340。宣言側とずれると解決できない） */
+        const type = entityNames.get(rel.table) ?? className(rel.table);
+        out.push("    var " + name + ": " + type + (row.nullable ? "? = null" : ""));
         if (row.relations.length > 1) {
             out.push("    /* 2 本目以降の関係は 1 列に 1 つしか書けないので落とした */");
         }
@@ -340,9 +410,7 @@ function field(
         imports.add(imported);
     }
 
-    out.push(
-        "    var " + fieldName(row.name) + ": " + type + (row.nullable ? "? = null" : ""),
-    );
+    out.push("    var " + name + ": " + type + (row.nullable ? "? = null" : ""));
     /* 生成される列は初期値を持てない（DB が入れる）ので、非 null でも既定値を出す */
     if (!row.nullable && isGenerated(row)) {
         out[out.length - 1] = out[out.length - 1]! + " = " + zeroOf(type);
@@ -374,14 +442,15 @@ function zeroOf(type: string): string {
     return "0";
 }
 
-function idClass(table: DdlTable, pk: DdlKey, imports: Set<string>): string[] {
+function idClass(table: DdlTable, pk: DdlKey, name: string, imports: Set<string>): string[] {
     imports.add("java.io.Serializable");
-    const name = className(table.name) + "Id";
     const out: string[] = [
         "/** " + table.name + " の複合主キー（JPA は @IdClass に id クラスを要求する） */",
         "data class " + name + "(",
     ];
-    for (const part of pk.parts) {
+    /* id クラスの中でも一意化する（#340。entity 側とは別のクラスなので名前空間も別） */
+    const fieldNames = uniqueNames(pk.parts.map((part) => fieldName(part)));
+    pk.parts.forEach((part, i) => {
         const row = table.rows.find((r) => r.name === part);
         const kind = row?.kind ?? null;
         const mapped = kind === null ? null : KOTLIN_TYPES[kind];
@@ -390,8 +459,8 @@ function idClass(table: DdlTable, pk: DdlKey, imports: Set<string>): string[] {
         if (imported) {
             imports.add(imported);
         }
-        out.push("    var " + fieldName(part) + ": " + type + "? = null,");
-    }
+        out.push("    var " + fieldNames[i]! + ": " + type + "? = null,");
+    });
     out.push(") : Serializable");
     return out;
 }

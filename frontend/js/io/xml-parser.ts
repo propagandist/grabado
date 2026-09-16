@@ -29,6 +29,12 @@
  * 倒し、#10 は照合が re を見ない。**どちらも 6-8d で消えた**（未現代化が 0 本になった）。
  * 上の 2 つ（comment の走査規則・<part> のガード無し）は揃えてはいけないまま。
  *
+ * ★ 訂正（2026-09-16。#321）—— **冒頭に挙げた var / for (var i = …) / 二重の var d は、
+ *   もう無い**（`let` / `const` にした）。**元の記述は消さない** —— 逐語で持ち込んだという
+ *   履歴は事実で、**消えたのは束縛の書き方だけ**。**non-null の ! と緩い比較（==）はそのまま**で、
+ *   **上の 2 つ（comment の走査規則・<part> のガード無し）も 1 文字も動いていない**。
+ *   **危険箇所は束縛ではなく、走査規則の側にある。**
+ *
  * palette を引数で受けるのは、型パレット依存の解決（sql/re 照合・quote 剥がし）を
  * 形式側に閉じる 4-1a の規約による。モデルは添字のまま持つ（js/io/model.ts）。
  */
@@ -50,7 +56,7 @@ import type {
  * 差し替えの**タイミング**が挙動を決めるので、順序の理由は呼び出し側に書いてある。
  */
 export function parseDatatypes(node: Element): Element | null {
-    var types = node.getElementsByTagName("datatypes");
+    const types = node.getElementsByTagName("datatypes");
     if (types.length) {
         return types[0]!;
     }
@@ -58,28 +64,28 @@ export function parseDatatypes(node: Element): Element | null {
 }
 
 export function parseDesignXml(node: Element, palette: TypePalette): DesignModel {
-    var tables: TableModel[] = [];
-    var ts = node.getElementsByTagName("table");
-    for (var i = 0; i < ts.length; i++) {
+    const tables: TableModel[] = [];
+    const ts = node.getElementsByTagName("table");
+    for (let i = 0; i < ts.length; i++) {
         tables.push(parseTable(ts[i]!, palette));
     }
     return { tables: tables };
 }
 
 function parseTable(node: Element, palette: TypePalette): TableModel {
-    var name = node.getAttribute("name");
-    var x = parseInt(node.getAttribute("x")!) || 0;
-    var y = parseInt(node.getAttribute("y")!) || 0;
+    const name = node.getAttribute("name");
+    const x = parseInt(node.getAttribute("x")!) || 0;
+    const y = parseInt(node.getAttribute("y")!) || 0;
 
-    var rows: RowModel[] = [];
-    var rs = node.getElementsByTagName("row");
-    for (var i = 0; i < rs.length; i++) {
+    const rows: RowModel[] = [];
+    const rs = node.getElementsByTagName("row");
+    for (let i = 0; i < rs.length; i++) {
         rows.push(parseRow(rs[i]!, palette));
     }
 
-    var keys: KeyModel[] = [];
-    var ks = node.getElementsByTagName("key");
-    for (var i = 0; i < ks.length; i++) {
+    const keys: KeyModel[] = [];
+    const ks = node.getElementsByTagName("key");
+    for (let i = 0; i < ks.length; i++) {
         keys.push(parseKey(ks[i]!));
     }
 
@@ -89,10 +95,10 @@ function parseTable(node: Element, palette: TypePalette): TableModel {
      * 現行は一致するたびに setComment() を呼ぶが、最終値だけが観測できる
      * （setComment は data.comment と dom.title.title への代入だけ）ので同値。
      */
-    var comment = "";
-    for (var i = 0; i < node.childNodes.length; i++) {
+    let comment = "";
+    for (let i = 0; i < node.childNodes.length; i++) {
         /* テキストノードも来るので Element として読む（tagName が無ければ短絡する） */
-        var ch = node.childNodes[i] as Element;
+        const ch = node.childNodes[i] as Element;
         if (
             ch.tagName &&
             ch.tagName.toLowerCase() == "comment" &&
@@ -119,7 +125,7 @@ function parseTable(node: Element, palette: TypePalette): TableModel {
 }
 
 function parseRow(node: Element, palette: TypePalette): RowModel {
-    var name = node.getAttribute("name");
+    const name = node.getAttribute("name");
 
     /*
      * 現行 Row.fromXML の obj をそのまま持つ。現行は comment / def を「見つかったときだけ」
@@ -127,7 +133,7 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
      * 入れる既定（type 0 / size "" / def "" / comment ""）と本オブジェクトの初期値が
      * 一致するので、update() の for-in が余分にコピーしても結果は同じ。
      */
-    var obj = {
+    const obj = {
         type: 0,
         size: "",
         nll: node.getAttribute("null") == "1",
@@ -136,16 +142,16 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
         def: "",
     };
 
-    var cs = node.getElementsByTagName("comment");
+    const cs = node.getElementsByTagName("comment");
     if (cs.length && cs[0]!.firstChild) {
         obj.comment = cs[0]!.firstChild!.nodeValue!;
     }
 
-    var d = node.getElementsByTagName("datatype");
+    const d = node.getElementsByTagName("datatype");
     if (d.length && d[0]!.firstChild) {
-        var s = d[0]!.firstChild!.nodeValue!;
-        var r = s.match(/^([^\(]+)(\((.*)\))?.*$/);
-        var type = r![1]!;
+        const s = d[0]!.firstChild!.nodeValue!;
+        const r = s.match(/^([^\(]+)(\((.*)\))?.*$/);
+        const type = r![1]!;
         if (r![3]) {
             obj.size = r![3]!;
         }
@@ -167,7 +173,7 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
          * **同梱パレットを持たない XML なら今開いている設計は変わらない** —— 6-3 が
          * Designer.fromXML にその経路を分けて parse を clearTables() より先に置いたため。
          */
-        var found = palette.indexOfTypeName(type);
+        const found = palette.indexOfTypeName(type);
         if (found === -1) {
             throw new Error(
                 `設計 XML: 型 "${type}" が現在の型パレット（db=${palette.db()}）に無い`
@@ -193,16 +199,17 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
         }
     }
 
-    var elm = palette.typeAt(obj.type);
-    var d = node.getElementsByTagName("default");
-    if (d.length && d[0]!.firstChild) {
-        var def = d[0]!.firstChild!.nodeValue!;
+    const elm = palette.typeAt(obj.type);
+    /* grabado: #321。上の datatype の d と同一スコープなので改名した（読む要素が違う） */
+    const defaultNodes = node.getElementsByTagName("default");
+    if (defaultNodes.length && defaultNodes[0]!.firstChild) {
+        const def = defaultNodes[0]!.firstChild!.nodeValue!;
         obj.def = def;
-        var q = elm.getAttribute("quote");
+        const q = elm.getAttribute("quote");
         if (q) {
-            /* 上のループの var re が string | null なので同名だと TS2403（段階3-2 の改名） */
-            var quoteRe = new RegExp("^" + q + "(.*)" + q + "$");
-            var r = def.match(quoteRe);
+            /* 上のループの re が string | null なので同名だと TS2403（段階3-2 の改名） */
+            const quoteRe = new RegExp("^" + q + "(.*)" + q + "$");
+            const r = def.match(quoteRe);
             if (r) {
                 obj.def = r[1]!;
             }
@@ -244,9 +251,9 @@ function parseRow(node: Element, palette: TypePalette): RowModel {
  * スキップされる。子孫走査にすると拾ってしまい、手書き XML で挙動が変わる。
  */
 function parseRelations(node: Element): RelationRef[] {
-    var relations: RelationRef[] = [];
-    for (var i = 0; i < node.childNodes.length; i++) {
-        var ch = node.childNodes[i] as Element;
+    const relations: RelationRef[] = [];
+    for (let i = 0; i < node.childNodes.length; i++) {
+        const ch = node.childNodes[i] as Element;
         if (ch.tagName && ch.tagName.toLowerCase() == "relation") {
             relations.push({
                 /* 属性が無ければ実行時 null。現行も同じ null を findNamedTable に渡す */
@@ -259,9 +266,9 @@ function parseRelations(node: Element): RelationRef[] {
 }
 
 function parseKey(node: Element): KeyModel {
-    var parts: string[] = [];
-    var ps = node.getElementsByTagName("part");
-    for (var i = 0; i < ps.length; i++) {
+    const parts: string[] = [];
+    const ps = node.getElementsByTagName("part");
+    for (let i = 0; i < ps.length; i++) {
         /* firstChild をガードしないのは現行どおり（空の <part> は現行も TypeError） */
         parts.push(ps[i]!.firstChild!.nodeValue!);
     }

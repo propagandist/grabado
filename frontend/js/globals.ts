@@ -78,8 +78,8 @@ export function publish(
     publisher: unknown,
     data?: unknown,
 ): void {
-    var subscribers = _subscribers[message] || [];
-    var obj = {
+    const subscribers = _subscribers[message] || [];
+    const obj = {
         target: publisher,
         data: data,
     };
@@ -92,7 +92,7 @@ export function subscribe(message: string, subscriber: SqlSubscriber): void {
     if (!(message in _subscribers)) {
         _subscribers[message] = [];
     }
-    var index = _subscribers[message]!.indexOf(subscriber);
+    const index = _subscribers[message]!.indexOf(subscriber);
     if (index == -1) {
         _subscribers[message]!.push(subscriber);
     }

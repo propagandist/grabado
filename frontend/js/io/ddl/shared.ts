@@ -131,6 +131,28 @@ function buildKey(key: KeyModel): DdlKey {
 }
 
 /**
+ * identity 列か。@autoincrement のチェックと、型そのものが持つ identity 句の両方。
+ *
+ * **ここに居てよい理由は「生成先の言語を 1 バイトも知らない」こと**（#332）。引数も戻り値も
+ * このファイルの型で、本体が触るのは row.autoincrement と row.datatype だけ ——
+ * 6-9e の「言語ごとの識別子の規則は各生成器が持つ」の**射程の外側**にある。
+ * **射程の内側（drizzle.ts の tsIdentifier / tsString、両方の uniqueNames）は動かしていない。**
+ *
+ * **括る前に代償を測った**（2026-09-15。#332 の判定条件 2）——
+ * **1 本だけ変異させると golden が 6 本動き、3 本まとめて変異させると 18 本動く**
+ * （ORM golden 42 本の内側）。**DDL golden 56 本への波及は 0 本**で、それは
+ * **DDL 生成器がこれを呼んでいないから**。**呼び始めるときは射程が変わる**ので測り直すこと。
+ */
+export function isGenerated(row: DdlRow): boolean {
+    return row.autoincrement || /IDENTITY|AUTO_INCREMENT/i.test(row.datatype);
+}
+
+/** PRIMARY キー（部分の無い key は無い扱い）。**上と同じ理由でここに居る** */
+export function primaryKeyOf(table: DdlTable): DdlKey | null {
+    return table.keys.find((k) => k.type === "PRIMARY" && k.parts.length > 0) ?? null;
+}
+
+/**
  * 既定値に型の quote を適用する（js/io/ddl-xml.ts:158-169 の逐語移設）。
  *
  * 「囲まない側」の判定は下の isSqlExpression（段階6-4）、囲む側の値のエスケープは

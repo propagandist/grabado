@@ -34,7 +34,7 @@ object IntrospectionMapper {
                 IntrospectedTable(
                     name = table.name,
                     comment = table.comment,
-                    columns = (columnsByTable[table.name] ?: emptyList())
+                    columns = columnsByTable[table.name].orEmpty()
                         .sortedBy { it.position }
                         .map { column -> toColumn(column, referencesByColumn) },
                     keys = keysOf(snapshot, table.name),
@@ -64,7 +64,7 @@ object IntrospectionMapper {
         nullable = column.nullable,
         default = column.default,
         comment = column.comment,
-        references = (referencesByColumn[column.table to column.name] ?: emptyList())
+        references = referencesByColumn[column.table to column.name].orEmpty()
             .map { IntrospectedReference(it.referencedTable, it.referencedColumn) },
     )
 

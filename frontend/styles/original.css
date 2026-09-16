@@ -184,8 +184,11 @@ body {
 }
 
 #textarea {
-    width: 650px;
-    height: 200px;
+    /* #312: 2 列のセクションに合わせて全幅へ（元は 650px 固定で、新しい箱に対して狭い）。
+       高さは material 側と同じ理由で 200px から下げた */
+    width: 100%;
+    box-sizing: border-box;
+    height: 140px;
 }
 
 #keys {

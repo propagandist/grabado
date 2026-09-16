@@ -22,6 +22,25 @@ npm run typecheck     # js/ src/ tests/ と *.config.ts（strict / noUncheckedIn
 npm run migrate:design -- <ファイル>  # 設計 JSON の移行（§4 段階4-2b の形式 ＋ §6 段階6-3 の型 id）
 ```
 
+**到達の計測**（#320）。**既定では走らない** —— `--coverage` を付けたときだけ。
+
+```bash
+npm run test:coverage # Node 側の到達率（ファイル単位）。**閾値は置いていない**
+```
+
+**★★ 0% を「到達していない」と読まない。** [`harness.ts`](../tests/node/harness.ts) は
+**vite でバンドルしたコードを `window.eval` で jsdom に流し込む**ので、**v8 の計測はその realm を
+追えない**。測れているのは「**テストファイルが直接 import して呼んだモジュール**」だけで、
+**アプリとして動いている経路（`js/` 直下のほぼ全部）はまるごと落ちる** ——
+`js/io/ddl/mssql.ts` は **golden が毎回通しているのに 0%** になる（2026-09-16 実測）。
+**測れるようにするのは #350。**
+
+**★ 閾値を置かない**（#320）—— 置くと閾値を守る作業が始まり、**到達は増やすが意図を検査しない
+テスト**が生える。#302 の「幾何の不変条件は、意図の検査にならない」が、カバレッジでは一段ひどく
+出る（**呼ぶだけで数字が上がる**）。
+
+**数値と読み方は `CUSTOMIZATIONS.md` の 2026-09-16。**
+
 実 HTTP の E2E（段階5-9）。**要 JDK 25。** ブラウザ（実 XHR）→ Vite dev proxy → Kotlin →
 ファイルシステムを通しで動かす、唯一の系統。
 
@@ -90,7 +109,7 @@ cd server && \
 ```
 
 **ORM 出力を実物の道具に通す**（issue #120）。**要 Docker ＋ ネットワーク** ——
-使い捨てコンテナに `kotlinc` / `prisma` / `drizzle-orm` を都度入れる（`devDependencies` は
+使い捨てコンテナに `kotlinc` / `javac` / `prisma` / `drizzle-orm` を都度入れる（`devDependencies` は
 増やさない）。**`npm test` にも CI にも入らない。**
 **回すのは版を切るとき**（[`BRANCHING.md`](BRANCHING.md) の「リリース」。#251）。
 道具の版のうち **typescript と kotlin は本体から読む**（`package-lock.json` と
@@ -98,11 +117,11 @@ cd server && \
 本体だけ上げて 12 日ずれた。
 
 ```bash
-npm run test:orm-tools             # 3 本とも
+npm run test:orm-tools             # 4 本とも
 npm run test:orm-tools -- drizzle  # 1 本だけ
 ```
 
-**確かめるのは構文と型だけ** —— JPA は Kotlin コンパイラ、Prisma は `prisma validate`、
+**確かめるのは構文と型だけ** —— JPA は Kotlin コンパイラと `javac`、Prisma は `prisma validate`、
 Drizzle は `drizzle-orm` の型定義に照らした `tsc --strict`。**`drizzle-kit generate` /
 `prisma migrate diff` は走らせない**（設定と接続情報が要り、使い捨てで完結しなくなる）。
 
@@ -281,7 +300,7 @@ UI の `#textarea` に入る値と一致する。
 
 ### ORM golden — `tests/golden/orm/<target>/<db>/<fixture>.<ext>`（§6 段階6-9d で新設）
 
-**ターゲット 1 本につき 14 本**（6-9e で Prisma、**6-9f で Drizzle** が入って 42 本）。DDL のように 8 × 7 = 56 本にはしていない。** ORM 出力は「型の写像」と
+**ターゲット 1 本につき 14 本**（6-9e で Prisma、**6-9f で Drizzle**、**2026-09-15 で JPA (Java)** が入って **56 本**）。DDL のように 8 × 7 = 56 本にはしていない。** ORM 出力は「型の写像」と
 「構造の組み立て」に分かれ、**構造の側はプロファイルに依らない**（生成器が見るのは
 正規型 `kind` と関係とキーだけで、SQL 型名も識別子の引用も通らない）:
 
@@ -292,7 +311,8 @@ UI の `#textarea` に入る値と一致する。
 
 母集団の定義は [`../tests/support/fixtures.ts`](../tests/support/fixtures.ts) の
 `ormGoldenCases`、拡張子は [`../frontend/js/io/orm/generate.ts`](../frontend/js/io/orm/generate.ts) の
-`ORM_EXTENSIONS`。ORM が 4 本になっても 56 本で、DDL の 56 本と同じ桁に収まる。
+`ORM_EXTENSIONS`。**★ 4 本目（JPA (Java)）が入って、予告どおり 56 本で着地した** ——
+DDL の 56 本と同じ桁に収まっている。
 
 **`db/` にディレクトリを作っていない**のが要点 —— 作った瞬間 `DB_PROFILES` に入り、
 ORM が型パレットの契約（`strict` / `<template>` / `newrowtype` / 全型網羅）を背負うことになる。
@@ -399,7 +419,7 @@ golden はすべて fixture を読み込んでから `toXML()` / `toJson()` で�
 | [`../tests/browser/template.spec.ts`](../tests/browser/template.spec.ts) | 実ブラウザ側。**UI から新規テーブルを作る経路**（`TableManager.click()` の入口を `window.d` 越しに叩く）。3 列と PK ができること・その DDL が `DEFAULT uuidv7()` で出ること・`Add row` の既定型が `text` になること・**`sqlite` の 3 列**（PK が既定値を持てない側の例） |
 | [`../tests/node/identifier.test.ts`](../tests/node/identifier.test.ts) | [`../frontend/js/io/ddl/naming.ts`](../frontend/js/io/ddl/naming.ts) の識別子検査を直に叩く（ハーネス不要。段階6-9b）。**どの名前が・どのプロファイルで・なぜ使えないか**の 3 つ組。8 本の上限と単位の表（実測と一次資料の別つき）・**囲めば通るものは 1 件も警告しない**こと・known-issue #15 が直っていないこと |
 | [`../tests/browser/identifier.spec.ts`](../tests/browser/identifier.spec.ts) | 実ブラウザ側（段階6-9b）。**警告が画面に届いているか** —— 波線（`class="invalid"`）と理由の tooltip、テーブル名ではコメントと重ねること、**警告が出ても名前はモデルに入る**（止めない）こと |
-| [`../tests/node/orm.test.ts`](../tests/node/orm.test.ts) | ORM 出力（段階6-9d / 6-9e）。golden 14 本を読むほか、**golden から読み取れない規則**を近くで押さえる —— テーブル名 → クラス名（**単数化は英語の規則だけ。倒せない語はそのまま**）・Kotlin 識別子の 3 段（そのまま / バッククォート / `_` 置換）・8 プロファイルの全型が型注釈を持つこと・**JPA は逆参照を出さない**こと・**Prisma は出す**こと（形式が要求するため。自己参照の名前付き relation と、ASCII だけの識別子の一意化を含む） |
+| [`../tests/node/orm.test.ts`](../tests/node/orm.test.ts) | ORM 出力（段階6-9d / 6-9e）。golden 14 本を読むほか、**golden から読み取れない規則**を近くで押さえる —— テーブル名 → クラス名（**単数化は英語の規則だけ。倒せない語はそのまま**）・Kotlin 識別子の 3 段（そのまま / バッククォート / `_` 置換。**文字集合は kotlinc の実測で決めた** —— No / Nl / `$` は裸で書けない。#340）・**Java 識別子の 3 段**（**非 ASCII は保つ**。予約語は末尾に `_`）・**名前の一意化**（クラス名とフィールド名。4 本とも）・8 プロファイルの全型が型注釈を持つこと・**JPA は逆参照を出さない**こと・**Prisma は出す**こと（形式が要求するため。自己参照の名前付き relation と、ASCII だけの識別子の一意化を含む） |
 | [`../tests/node/type-mapping.test.ts`](../tests/node/type-mapping.test.ts) | [`TYPE-MAPPING.md`](TYPE-MAPPING.md) の表を実装の出力と 1 セルずつ突き合わせる（段階6-10b）。**手で書いた表は必ず腐る**ので、パレットを触れば docs が赤くなる形にしてある |
 | [`../tests/node/convert.test.ts`](../tests/node/convert.test.ts) | プロファイル変換（段階6-10a）。**golden から読めない規則**を押さえる —— 同じ db なら恒等（既存 golden が動かない根拠）・逆向きの劣化（`timestamp -> date`）を 1 つも持たないこと・Oracle の `DATE` の罠（名前が同じでも値の域が違えば寄せない）・8 プロファイルへの全型変換で着地点がすべて説明できること |
 | [`../tests/browser/convert.spec.ts`](../tests/browser/convert.spec.ts) | プロファイル変換 golden の権威（段階6-10a）。14 本 ＋ 決定論 ＋ **設計が 1 バイトも変わらないこと**（出力時変換のみというスコープの実体）＋ 引数なしの `toDdl()` が従来と同一であること。**段階6-10b で UI 経路が加わった** —— 出力先 select の中身・SQL ボタンのラベル（`(postgresql -> mysql)`）・ORM が同じ select に従うこと（golden はここを 1 ビットも押さえない） |
@@ -702,6 +722,56 @@ XML の読み込みで実際に到達する」と書いていた。**#263 が関
 **★ `toThrow(TypeError)` と書かない。** 落ちるのは **jsdom の realm** のコードなので、
 Node 側の `TypeError` とは別のコンストラクタになり `instanceof` が成立しない。
 メッセージで照合する。
+
+### 副作用の順序 — 結果には出ない層（#318）
+
+[`js/io/apply.ts`](../frontend/js/io/apply.ts) は純関数ではない。**副作用の順序そのものが挙動**で、
+同ファイルの★★が 3 つの制約を宣言している。**それを見る網が 1 本も無かった。**
+
+| ファイル | 担当 |
+|---|---|
+| [`../tests/node/apply-order.test.ts`](../tests/node/apply-order.test.ts) | `Designer` の `suspendRedraw` / `resumeRedraw` / `sync` / `addTable` / `addRelation` と `Table` の `select` / `deselect` が**呼ばれた順**を記録し、4 つの不変条件で見る |
+
+**★★ golden は結果しか見ない。** 括りが外れても、ff hack が旗の内側に入っても、relation が
+hack より先に張られても、**最終状態は同じ**なので golden は 1 バイトも動かない。
+
+**★★ 実ブラウザの棚も通す**（**2026-09-16 実測**）—— **relation を ff hack より先に張る変異で、
+`npm run test:browser` の 258 本が全部緑**だった。#302 が踏んだ形（**辺が 1 本も取れなくなる変異を、
+実ブラウザの棚が緑で通した**）の **2 例目**。
+
+**★ 唯一反応したのは規模の棚**（同日実測）。`scale.test.ts` が **`offsetWidth` / `offsetTop` の
+回数**で赤くなる。**ただし、あれが言うのは「費用が変わった」であって「順序が壊れた」ではない**
+—— メッセージは `offsetWidth = -2 + 5N` で、**何の制約が破れたかを言わない**。
+
+見る 4 つ:
+
+| # | 不変条件 | 根拠（`apply.ts` の★★） |
+|---|---|---|
+| 1 | `suspendRedraw` / `resumeRedraw` が**括弧として釣り合う**（深さが負にならず、最後に 0） | 旗が立ったまま抜けると**以後すべての描画が止まる** |
+| 2 | ff hack（`select` / `deselect`）は**深さ 0 で走る** | 束ねたまま通すと **hack が意味を失う** |
+| 3 | `addRelation` は**最後の ff hack より後** | `Relation` のコンストラクタが `offsetLeft` を読む |
+| 4 | `applyRow` が落ちても `resumeRedraw` が走る | `try` / `finally` |
+
+**★ 回数は見ない。** 呼び出しが増えても、**関係が保たれていれば緑**（#318 の判断）。
+
+**★ 4 つとも、対応する変異で赤くなることを確かめてある**（2026-09-16）:
+
+| 変異 | 落ちた検査 |
+|---|---|
+| `finally` を外す（**例外経路だけ**壊す） | **4 だけ** |
+| 旗を戻さない | 1 / 2 / 4 |
+| ff hack を旗の内側へ入れる | **2 だけ** |
+| relation を ff hack より先に張る | **3 だけ** |
+
+**★ `apply.ts` は 1 行も変えていない**（#318 の判断）。**網が実装に合わせて書かれると、
+壊れたときに落ちる保証にならない。**
+
+**★ 旗そのものを見る側は上の #210 の節。** あちらは `redrawSuspended` という**結果**、こちらは
+**呼ばれ方**。**軸が違うので、どちらも要る** —— #210 の「例外で抜けても倒れる」とこちらの 4 は
+**同じ経路を踏むが、片方は値を、もう片方は列を見る**。
+
+**★ 記録の口に戻す仕掛けを持たせていない。** このファイルの中だけで使い、テストごとに列を
+空にする。**戻す仕掛けを持つと、戻し忘れたときに他のテストが黙って素通しになる。**
 
 ### 規模の費用 — 2 系統に分かれる 4 本目の層（#206）
 

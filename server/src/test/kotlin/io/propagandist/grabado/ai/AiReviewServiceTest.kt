@@ -13,6 +13,7 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
@@ -350,7 +351,7 @@ class AiReviewServiceTest {
     private class MovableClock(private var now: Instant) : Clock() {
         override fun getZone() = ZoneOffset.UTC
 
-        override fun withZone(zone: java.time.ZoneId): Clock = this
+        override fun withZone(zone: ZoneId): Clock = this
 
         override fun instant(): Instant = now
 

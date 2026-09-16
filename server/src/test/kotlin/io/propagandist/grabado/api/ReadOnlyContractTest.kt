@@ -1,5 +1,6 @@
 package io.propagandist.grabado.api
 
+import tools.jackson.databind.json.JsonMapper
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeEach
@@ -79,7 +80,7 @@ class ReadOnlyContractTest {
 
     /** 契約表を書かずに 1 リクエストを組む小道具（表に載せるほどでもない検査のため）。 */
     private fun request(action: String, keyword: String?, method: String, body: String): JsonNode {
-        val node = tools.jackson.databind.json.JsonMapper().createObjectNode()
+        val node = JsonMapper().createObjectNode()
         node.put("method", method)
         node.put("action", action)
         if (keyword != null) node.put("keyword", keyword)

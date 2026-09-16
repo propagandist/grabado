@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { className, fieldName, kotlinIdentifier } from "../../frontend/js/io/orm/jpa.ts";
+import { FILE_MARKER, javaIdentifier } from "../../frontend/js/io/orm/jpa-java.ts";
 import type { OrmTarget } from "../../frontend/js/io/orm/generate.ts";
 import { ORM_EXTENSIONS, ORM_TARGETS, isOrmTarget } from "../../frontend/js/io/orm/generate.ts";
 import { DB_PROFILES, ormGoldenCases, readFixture } from "../support/fixtures.ts";
@@ -49,8 +50,8 @@ describe("ORM 出力（Node）", () => {
     }
 
     describe("ターゲットの登録", () => {
-        test("ORM_TARGETS は 3 本で確定（jpa / prisma / drizzle）。SQLAlchemy は決めて外した", () => {
-            expect(ORM_TARGETS).toEqual(["jpa", "prisma", "drizzle"]);
+        test("ORM_TARGETS は 4 本（jpa / jpa-java / prisma / drizzle）。4 本目は SQLAlchemy ではない", () => {
+            expect(ORM_TARGETS).toEqual(["jpa", "jpa-java", "prisma", "drizzle"]);
         });
 
         test("知らないターゲットは受け付けない", () => {
@@ -117,6 +118,20 @@ describe("ORM 出力（Node）", () => {
                 expect(kotlinIdentifier("a/b")).toBe("a_b");
                 expect(kotlinIdentifier("a`b")).toBe("a_b");
                 expect(kotlinIdentifier("")).toBe("_");
+            });
+
+            test("★ No / Nl / $ は裸で書けないので囲む段に落ちる（#340。kotlinc で実測）", () => {
+                /*
+                 * **2026-09-16 に kotlinc 2.4.10 で測った** —— 裸の `a½` / `aⅧ` / `a$b` は
+                 * どれも syntax error で、**囲めば 3 つとも通る**。
+                 * **Java とは違う**（javac は Nl と $ を受け、No だけを拒む）ので、
+                 * **jpa-java.ts の文字集合を写すと直らない。**
+                 */
+                expect(kotlinIdentifier("a½")).toBe("`a½`");
+                expect(kotlinIdentifier("aⅧ")).toBe("`aⅧ`");
+                expect(kotlinIdentifier("a$b")).toBe("`a$b`");
+                /* Nd（普通の数字）は裸で書けるので、囲まない */
+                expect(kotlinIdentifier("a1")).toBe("a1");
             });
         });
     });
@@ -205,12 +220,192 @@ describe("ORM 出力（Node）", () => {
             );
         });
 
+        test("★ クラス名もフィールド名も一意化する（#340。潰れた名前は衝突しうる）", () => {
+            /*
+             * 第 3 段（`_` への置換）に落ちるのは JVM が使えない文字を含むときだけだが、
+             * **落ちれば衝突する** —— `a.b` と `a/b` はどちらも `A_b` になる。
+             * **Kotlin でも 1 つのファイルに同名のクラスは置けない。**
+             *
+             * ★ **golden には無い形なので、ここで設計を直接組む** —— 母集団（14 本）を
+             *   変えずに退行を捕まえるため。
+             */
+            h.useDatatypes("postgresql");
+            h.loadFixture(
+                [
+                    '<?xml version="1.0" encoding="utf-8" ?>',
+                    "<sql>",
+                    '<table x="10" y="20" name="a.b">',
+                    '<row name="x.y" null="0" autoincrement="0"><datatype>INTEGER</datatype></row>',
+                    '<row name="x/y" null="0" autoincrement="0"><datatype>INTEGER</datatype></row>',
+                    "</table>",
+                    '<table x="10" y="60" name="a/b">',
+                    '<row name="id" null="0" autoincrement="0"><datatype>INTEGER</datatype></row>',
+                    "</table>",
+                    "</sql>",
+                ].join("\n"),
+            );
+            const kt = h.toOrm("jpa");
+
+            /* 同じ名前が 2 回出ていない（出すと kotlinc が拒む） */
+            expect(kt).toContain("class A_b(");
+            expect(kt).toContain("class A_b_2(");
+            expect(kt).toContain("var x_y: Int");
+            expect(kt).toContain("var x_y_2: Int");
+
+            const classes = kt.split("\n").flatMap((line) => {
+                const m = /^class (\S+)\(/.exec(line);
+                return m === null ? [] : [m[1]!];
+            });
+            expect(new Set(classes).size).toBe(classes.length);
+        });
+
         test("identity 列は @GeneratedValue（型の identity 句と ai チェックの両方）", () => {
             h.useDatatypes("postgresql");
             h.loadFixture(readFixture("postgresql", "autoincrement"));
             expect(h.toOrm("jpa")).toContain(
                 "@GeneratedValue(strategy = GenerationType.IDENTITY)",
             );
+        });
+    });
+
+    /*
+     * jpa-java（4 本目。2026-09-15）。
+     *
+     * **Kotlin 版と同じ規則は繰り返さない** —— 逆参照の有無・PK 列を関連にしないこと・
+     * キーの表現は、上の「関係とキー」と下の「キーの表現（4 ターゲット横断）」が既に見ている。
+     * **ここが見るのは Java 側の都合で Kotlin と違うところだけ。**
+     */
+    describe("jpa-java（4 本目）", () => {
+        describe("Java 識別子（3 段）", () => {
+            test("**非 ASCII はそのまま**（Prisma の ASCII 規則を写していない）", () => {
+                /*
+                 * Java の識別子は Unicode を許す（Character.isJavaIdentifierStart）。
+                 * Prisma が ASCII へ潰したのは**あちらの文法の都合**で、写すと Kotlin 版が
+                 * 保てている名前を理由なく壊すことになる。
+                 */
+                expect(javaIdentifier("顧客")).toBe("顧客");
+                expect(javaIdentifier("氏名")).toBe("氏名");
+                expect(javaIdentifier("createdAt")).toBe("createdAt");
+            });
+
+            test("予約語は末尾に _ を足す（バッククォートの逃げ道が無い）", () => {
+                expect(javaIdentifier("class")).toBe("class_");
+                expect(javaIdentifier("int")).toBe("int_");
+                expect(javaIdentifier("null")).toBe("null_");
+                expect(javaIdentifier("true")).toBe("true_");
+                /* contextual keyword は識別子として使えるので触らない */
+                expect(javaIdentifier("var")).toBe("var");
+                expect(javaIdentifier("record")).toBe("record");
+                expect(javaIdentifier("yield")).toBe("yield");
+            });
+
+            test("書けない文字は _ に置換する（ここで初めて名前が変わる）", () => {
+                /* quotes-i18n の `say "hi"` が実物の例。Kotlin は囲めたのでここが違う */
+                expect(javaIdentifier('say "hi"')).toBe("say__hi_");
+                expect(javaIdentifier("a.b")).toBe("a_b");
+                expect(javaIdentifier("1st")).toBe("_1st");
+                expect(javaIdentifier("")).toBe("_");
+            });
+        });
+
+        test("**型は常にボクシング**（primitive を 1 つも出さない）", () => {
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "types-matrix"));
+            const java = h.toOrm("jpa-java");
+            /*
+             * primitive が 1 つも無いことが「**null 許容で型が動かない**」の実体でもある ——
+             * nullable を見て型を選ぶ実装なら、NOT NULL の列が int で出るはず。
+             * byte[] は配列なので null を表せる（ここでは許す）。
+             */
+            expect(java).not.toMatch(/\n {4}private (int|long|short|float|double|boolean|char) /);
+            expect(java).toContain("private Integer ");
+        });
+
+        test("identity 列に初期値を出さない（Kotlin 版は = 0 が要る）", () => {
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "autoincrement"));
+            const java = h.toOrm("jpa-java");
+            expect(java).toContain("@GeneratedValue(strategy = GenerationType.IDENTITY)");
+            /* フィールドの既定が null で、型がボクシングなので「まだ採番されていない」を表せる */
+            expect(java).not.toContain("= 0");
+        });
+
+        test("id クラスは JPA 3.2 §2.4 の 4 点を満たす（data class が無いぶんを出す）", () => {
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "relations"));
+            const java = h.toOrm("jpa-java");
+
+            expect(java).toContain("@IdClass(EmployeeProjectId.class)");
+            /* public であること / Serializable / equals / hashCode（引数無しの構築子は暗黙） */
+            expect(java).toContain("public class EmployeeProjectId implements Serializable {");
+            expect(java).toContain("public boolean equals(Object other) {");
+            expect(java).toContain("public int hashCode() {");
+            /* **record は使えない** —— JPA が引数の無いコンストラクタを要求する */
+            expect(java).not.toContain("record ");
+        });
+
+        test("**全フィールドに getter / setter がある**（列が黙って落ちない）", () => {
+            for (const db of DB_PROFILES) {
+                h.useDatatypes(db);
+                h.loadFixture(readFixture(db, "types-matrix"));
+                const java = h.toOrm("jpa-java");
+                const fields = (java.match(/\n {4}private /g) ?? []).length;
+                expect(fields).toBeGreaterThan(0);
+                expect((java.match(/\n {4}public \S+ get/g) ?? []).length).toBe(fields);
+                expect((java.match(/\n {4}public void set/g) ?? []).length).toBe(fields);
+            }
+        });
+
+        test("ファイルの区切りとクラス宣言が 1 対 1（検証側の分割が成立する前提）", () => {
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "relations"));
+            const lines = h.toOrm("jpa-java").split("\n");
+
+            /*
+             * **Docker を 1 秒も使わずに、orm-tools の前提を固定する。**
+             * 向こう（tests/orm-tools/verify.ts）はこのマーカーで切って javac に渡すので、
+             * 名指しされた名前と public クラスの名前がずれると、その場で壊れる。
+             */
+            const marked = lines.flatMap((line) => {
+                const m = FILE_MARKER.exec(line);
+                return m === null ? [] : [m[1]!];
+            });
+            const declared = lines.flatMap((line) => {
+                const m = /^public class (\S+)/.exec(line);
+                return m === null ? [] : [m[1]!];
+            });
+            expect(marked).toEqual(declared);
+            expect(marked.length).toBeGreaterThan(1);
+        });
+
+        test("import はセクションごとに付く（先頭に束ねると分割した瞬間に壊れる）", () => {
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "relations"));
+            const sections = h.toOrm("jpa-java").split(/^\/\* ==== /m).slice(1);
+
+            expect(sections.length).toBeGreaterThan(1);
+            for (const section of sections) {
+                /* id クラスの節は jakarta を 1 つも使わない（java.io / java.util だけ）ので、
+                 * 見るのは「**自分の import を持っているか**」まで */
+                expect(section).toContain("import ");
+            }
+        });
+
+        test("binary は byte[]（Kotlin の ByteArray の写し先）", () => {
+            h.useDatatypes("sqlite");
+            h.loadFixture(readFixture("sqlite", "types-matrix"));
+            expect(h.toOrm("jpa-java")).toContain("private byte[] ");
+        });
+
+        test("**逆参照を出さない**（6-9d の判断は Java 側でも同じ）", () => {
+            h.useDatatypes("postgresql");
+            h.loadFixture(readFixture("postgresql", "relations"));
+            const java = h.toOrm("jpa-java");
+
+            expect(java).toContain("@ManyToOne");
+            expect(java).toContain('@JoinColumn(name = "manager_id", nullable = true)');
+            expect(java).not.toContain("@OneToMany");
+            expect(java).not.toContain("@OneToOne");
         });
     });
 
@@ -380,6 +575,12 @@ describe("ORM 出力（Node）", () => {
                 compositePk: "@IdClass(",
                 unique: "UniqueConstraint(name = ",
                 index: "Index(name = ",
+            },
+            /* Java はネストした注釈にも @ が要るので、Kotlin と印の文字列が違う */
+            "jpa-java": {
+                compositePk: "@IdClass(",
+                unique: "@UniqueConstraint(name = ",
+                index: "@Index(name = ",
             },
             prisma: { compositePk: "@@id([", unique: "@@unique([", index: "@@index([" },
             drizzle: { compositePk: "primaryKey({", unique: "unique(", index: "index(" },

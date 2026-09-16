@@ -19,7 +19,8 @@ describe("index.html の a11y 属性（#175）", () => {
     test("レイアウト用の <table> が全部 role=presentation を持つ", () => {
         /* 属性の無い <table> が 1 つも無いこと。増えたときに素通りさせない */
         expect(html).not.toMatch(/<table>/);
-        expect([...html.matchAll(/<table\s+role="presentation">/g)]).toHaveLength(4);
+        /* #312 で #io の 2 列レイアウトを撤去した（4 → 3）。残りは #opts / #keys / #table */
+        expect([...html.matchAll(/<table\s+role="presentation">/g)]).toHaveLength(3);
     });
 
     test("aria-describedby が実在する id を指す", () => {

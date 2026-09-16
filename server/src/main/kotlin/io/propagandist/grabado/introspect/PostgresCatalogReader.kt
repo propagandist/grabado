@@ -2,7 +2,6 @@ package io.propagandist.grabado.introspect
 
 import io.propagandist.grabado.introspect.JdbcSupport.intOrNull
 import java.sql.Connection
-import java.sql.ResultSet
 
 /**
  * PostgreSQL のカタログを読む（段階5-7a）。**分岐を持たない** ——

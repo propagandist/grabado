@@ -18,10 +18,11 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { FILE_MARKER } from "../../frontend/js/io/orm/jpa-java.ts";
 import { GOLDEN_DIR, REPO_ROOT } from "../support/fixtures.ts";
 import type { ToolSpec } from "./cases.ts";
 import { EXCLUSIONS, PRISMA_PRELUDE, PRISMA_URLS, TOOLS } from "./cases.ts";
@@ -139,6 +140,49 @@ function script(tool: ToolSpec): string {
             "exit $fail",
         ].join("\n");
     }
+    if (tool.target === "jpa-java") {
+        return [
+            "set -u",
+            "command -v curl >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq curl >/dev/null 2>&1; }",
+            "cd /tmp",
+            "curl -fsSL -o jakarta.jar https://repo1.maven.org/maven2/jakarta/persistence/jakarta.persistence-api/" +
+                v["jakarta.persistence-api"] +
+                "/jakarta.persistence-api-" +
+                v["jakarta.persistence-api"] +
+                ".jar || { echo 'ERROR: jakarta.persistence-api の取得に失敗した'; exit 9; }",
+            "fail=0",
+            /*
+             * caseLine が「1 クラス 1 ファイル」に分けたディレクトリを渡してくる。
+             * **空のディレクトリは来ない** —— 0 バイトの golden（空の設計）は
+             * 呼び手が先に SKIP している。
+             */
+            "while IFS=\"$(printf '\\t')\" read -r rel dir; do",
+            /*
+             * ★ **-encoding UTF-8 は必須。** javac の既定はプラットフォーム依存で、
+             *   コンテナのロケールが POSIX だと非 ASCII の識別子（顧客 / 氏名）を復号できない
+             *   —— kotlinc は既定が UTF-8 なので、jpa の枝では要らなかった。
+             * ★ **--release は生成物を受け取る側の下限**（cases.ts の versions を参照）。
+             * ★ -proc:none は注釈処理器が紛れ込まないように。-nowarn は jpa の枝と同じ理由。
+             */
+            '  if javac -nowarn -proc:none -encoding UTF-8 --release ' +
+                v["--release"] +
+                ' -cp /tmp/jakarta.jar -d /tmp/out "$dir"/*.java; then',
+            '    echo "PASS  $rel"',
+            "  else",
+            '    echo "FAIL  $rel"',
+            "    fail=$((fail+1))",
+            "  fi",
+            "done < /cases/cases.txt",
+            "exit $fail",
+        ].join("\n");
+    }
+    /*
+     * ★ **末尾を fallback にしない**（2026-09-15）—— ここは以前 Kotlin のスクリプトで、
+     * **知らないターゲットが Kotlin として走っていた**。4 本目を足すときに気づいた。
+     */
+    if (tool.target !== "jpa") {
+        throw new Error("道具のスクリプトが無い: " + tool.target);
+    }
     return [
         "set -u",
         "command -v curl >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq curl >/dev/null 2>&1; }",
@@ -174,8 +218,55 @@ function flatten(rel: string): string {
     return rel.split("/").join("_");
 }
 
+/**
+ * Java の golden を「1 クラス 1 ファイル」へ分けて、置いたディレクトリを返す。
+ *
+ * ★ **golden は 1 バイトも変えない**（Prisma の prelude と同じ立場）。分けるのは
+ *   **javac の都合** —— 1 つのコンパイル単位に public なクラスは 1 つしか置けず、
+ *   @IdClass の id クラスも public でなければならない。
+ *
+ * ★ **区切りの正本は生成器が持つ**（frontend/js/io/orm/jpa-java.ts の FILE_MARKER）。
+ *   ここに同じ形を書くと、片方を直したときに黙ってずれる。
+ *
+ * ★ **ファイル名はクラス名でなければならない** —— public クラスとファイル名の一致は
+ *   Java の要求なので、マーカーが名指しした名前をそのまま使う（**非 ASCII も含む**）。
+ */
+function javaCase(one: Case, work: string): string {
+    const text = readFileSync(join(ORM_GOLDEN, "jpa-java", one.rel), "utf8");
+    const flat = flatten(one.rel).replace(/\.java$/, "");
+    const dir = join(work, flat);
+    mkdirSync(dir, { recursive: true });
+
+    let name: string | null = null;
+    let body: string[] = [];
+    const flush = (): void => {
+        if (name !== null) {
+            writeFileSync(join(dir, name + ".java"), body.join("\n"), "utf8");
+        }
+    };
+    for (const line of text.split("\n")) {
+        const marker = FILE_MARKER.exec(line);
+        if (marker !== null) {
+            flush();
+            name = marker[1]!;
+            body = [];
+            continue;
+        }
+        /* マーカーより前（ファイル全体の見出し）は、分けた先のどれにも属さないので捨てる */
+        if (name !== null) {
+            body.push(line);
+        }
+    }
+    flush();
+
+    return [one.rel, "/cases/" + flat].join("\t");
+}
+
 /** cases.txt の 1 行を組む。Prisma だけ「スキーマの場所」と「URL」が要る */
 function caseLine(tool: ToolSpec, one: Case, work: string): string {
+    if (tool.target === "jpa-java") {
+        return javaCase(one, work);
+    }
     if (tool.target !== "prisma") {
         return one.rel;
     }
@@ -252,7 +343,7 @@ function runTool(tool: ToolSpec): Outcome {
             "-v",
             work + ":/cases:ro",
             "-w",
-            tool.target === "jpa" ? "/tmp" : "/work",
+            tool.workdir,
             tool.image,
             "sh",
             "-c",

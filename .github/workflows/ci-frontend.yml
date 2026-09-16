@@ -63,6 +63,8 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'tsconfig.json'
+      # oxlint の設定（issue #316）。規則を変えたら検査が走らないと意味が無い。
+      - '.oxlintrc.json'
       - '*.config.ts'
       # toolchain.test.ts の入力（issue #134 のツールチェーンの版）。正本 2 本（下の
       # ci-frontend.yml の `node-version` と build.gradle.kts の `jvmToolchain`）と写し 3 か所。
@@ -168,6 +170,15 @@ jobs:
 
       # **軽い検査は 1 ステップにまとめず、1 ジョブの中の複数ステップにする。**
       # ステップは何本あっても課金は変わらず、どこで落ちたかは画面で分かる。
+      # ★ 静的解析（oxlint。issue #316）。tsc が見ない形（var / 再宣言 / 未使用）を数える。
+      #   **閾値つきで緑になる** —— 上限は package.json の --max-warnings が持ち、
+      #   2026-09-16 の実測 650 件で固定してある。**増えたら赤くなる。**
+      #   整形規則は 1 つも入れていない（#296。整形は人が持つ）。自動修正のフラグも置いていない
+      #   —— **語そのものを書かない** —— 受け入れ基準が「配管に自動修正が無いこと」を
+      #   grep で見るので、説明に書くと自分で引っかかる（#171 の !important と同じ形）。
+      - name: 静的解析（oxlint）
+        run: npm run lint
+
       - name: 型検査
         run: npm run typecheck
 

@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Kaydet / Yükle</string>
     <string name="empty">Lütfen JSON verilerini aşağıdaki metin alanına yapıştırın ve tekrar deneyin.</string>
-    <string name="client">İstemci</string>
     <string name="server">Sunucu</string>
     <string name="output">Giriş / Çıkış</string>
     <string name="clientsave">JSON Kaydet</string>

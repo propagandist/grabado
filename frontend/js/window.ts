@@ -16,11 +16,33 @@ import { _ } from "./globals.ts";
 /* owner の型。必ず import type で受ける（理由は js/table.ts の冒頭） */
 import type { Designer } from "./wwwsqldesigner.ts";
 
+/**
+ * ボタンを包む `span.tb` を返す（grabado: #311）。
+ *
+ * **無ければ落とす。** input へ黙って落とすと、**隠したつもりでアイコンだけ残る** ——
+ * それが #311 で 9 日間見えていた形そのもの。
+ */
+function wrapperOf(input: HTMLInputElement, id: string): HTMLElement {
+    const wrapper = input.closest<HTMLElement>(".tb");
+    if (!wrapper) {
+        throw new Error(`#${id} を包む .tb が無い（index.html の構造が変わった）`);
+    }
+    return wrapper;
+}
+
 /** ダイアログの DOM。すべてコンストラクタで埋まる（後付けキーは無い） */
 export interface WindowDom {
     container: HTMLDialogElement;
     ok: HTMLInputElement;
     cancel: HTMLInputElement;
+    /*
+     * grabado: #311。**アイコンはラッパーの ::before が描く**（#220 で全ボタンを
+     * span.tb で包んだ）。**input に visibility を当てても span は残る**ので、
+     * 隠す当て先はこちら。**取れなければ構築時に落とす**（`OZ.$` と同じ立場で、
+     * 黙って input へ落とすと「隠したつもりで残る」= #311 そのものが再発する）。
+     */
+    okWrapper: HTMLElement;
+    cancelWrapper: HTMLElement;
     title: HTMLElement;
     content: HTMLElement;
     throbber: HTMLImageElement;
@@ -36,10 +58,14 @@ export class Window {
 
     constructor(owner: Designer) {
         this.owner = owner;
+        const ok = OZ.$<HTMLInputElement>("windowok");
+        const cancel = OZ.$<HTMLInputElement>("windowcancel");
         this.dom = {
             container: OZ.$<HTMLDialogElement>("window"),
-            ok: OZ.$<HTMLInputElement>("windowok"),
-            cancel: OZ.$<HTMLInputElement>("windowcancel"),
+            ok: ok,
+            cancel: cancel,
+            okWrapper: wrapperOf(ok, "windowok"),
+            cancelWrapper: wrapperOf(cancel, "windowcancel"),
             title: OZ.$("windowtitle"),
             content: OZ.$("windowcontent"),
             throbber: OZ.$<HTMLImageElement>("throbber"),
@@ -85,12 +111,31 @@ export class Window {
             this.dom.title.removeChild(this.dom.title.childNodes[1]!);
         }
 
-        var txt = OZ.DOM.text(title);
+        const txt = OZ.DOM.text(title);
         this.dom.title.appendChild(txt);
         OZ.DOM.clear(this.dom.content);
         this.dom.content.appendChild(content);
 
-        this.dom.cancel.style.visibility = this.callback ? "" : "hidden";
+        /*
+         * grabado: #311。**確定があるかどうかで、右下のボタンの意味が変わる。**
+         *
+         *   callback あり（オプション / キー / テーブル編集）  [✓ OK] [× キャンセル]
+         *   callback 無し（#io）                              [× 閉じる] だけ
+         *
+         * ★★ **隠す当て先はラッパー。** input に当てても、アイコンを描いているのは
+         *   `span.tb` の ::before なので**アイコンだけ残る**（#220 で包んだ日から
+         *   9 日間、押しても何も起きない × が出ていた）。
+         *
+         * ★ **`visibility` のままにする。`display: none` にしない** —— visibility は
+         *   場所を保持するので、`float: right` の OK の位置が今と変わらない。
+         *
+         * ★ **class は `i-windowok` を残したまま `is-close` を足す** —— 差し替えると
+         *   tests/dist/smoke.spec.ts が見ている `.tb.i-windowok` のセレクタが外れる。
+         *   アイコンの実体は styles/icons.css が `--icon` を上書きして替える。
+         */
+        this.dom.cancelWrapper.style.visibility = this.callback ? "" : "hidden";
+        this.dom.ok.value = _(this.callback ? "windowok" : "close");
+        this.dom.okWrapper.classList.toggle("is-close", !this.callback);
         /*
          * grabado: #173。showModal() が中央寄せ・::backdrop・フォーカストラップ・
          * 背後の inert 化・Esc を持つ。**JS の px 計算（scroll + (win - offsetWidth) / 2）と
@@ -98,9 +143,9 @@ export class Window {
          */
         this.dom.container.showModal();
 
-        var formElements = ["input", "select", "textarea"];
-        var all = this.dom.container.getElementsByTagName("*");
-        for (var i = 0; i < all.length; i++) {
+        const formElements = ["input", "select", "textarea"];
+        const all = this.dom.container.getElementsByTagName("*");
+        for (let i = 0; i < all.length; i++) {
             if (formElements.indexOf(all[i]!.tagName.toLowerCase()) != -1) {
                 (all[i] as HTMLElement).focus();
                 break;

@@ -74,7 +74,6 @@
     <!-- io -->
     <string name="saveload">Uložit / Načíst</string>
     <string name="empty">Prosím vložte JSON data do textového pole níže.</string>
-    <string name="client">Klient</string>
     <string name="server">Server</string>
     <string name="output">Vstup / Výstup</string>
     <string name="clientsave">Uložit JSON</string>

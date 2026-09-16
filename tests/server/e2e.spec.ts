@@ -47,8 +47,7 @@ test("設計を保存すると正本ディレクトリに実ファイルが書�
         return json;
     }, fixture);
 
-    /* TEMP: #319 の受け入れ基準 —— CI が赤くなることを確かめるための故意の変異。次のコミットで戻す */
-    await expect.poll(() => existsSync(join(SCHEMA_DIR, "e2e-save-BROKEN.json"))).toBe(true);
+    await expect.poll(() => existsSync(join(SCHEMA_DIR, "e2e-save.json"))).toBe(true);
     /* **バイト一致**。backend は body を解釈せずそのまま書く（実測契約） */
     expect(serverFile("e2e-save.json")).toBe(expected);
 });

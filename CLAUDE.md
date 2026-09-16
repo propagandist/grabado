@@ -4,7 +4,7 @@
 
 **目的 = 会社のブランディングとして無料公開する OSS**（収益化しない）＋ **自社でも使う**。
 **社内ツールではない。** house 標準（Kotlin/Spring Boot + PostgreSQL 18 DDL）へ寄せ、**Docker で各自ローカル稼働**、**設計データは git 管理の JSON ファイルを正本**とする。
-根拠は `HANDOVER.md`（設計判断の確定版。**元の記述は残し、実態との差は各節の注記で足してある** —— **2026-09-11 に入れ終えた**。#182）。**★ 2026-08-15 に挙げた齟齬は、2026-09-11 に全部閉じた**（最後の §6.2/§6.3 は #183 で案 A —— 意見のある既定）。一覧と判定の経緯は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
+根拠は `docs/HANDOVER.md`（設計判断の確定版。**元の記述は残し、実態との差は各節の注記で足してある** —— **2026-09-11 に入れ終えた**。#182）。**★ 2026-08-15 に挙げた齟齬は、2026-09-11 に全部閉じた**（最後の §6.2/§6.3 は #183 で案 A —— 意見のある既定）。一覧と判定の経緯は `CUSTOMIZATIONS.md` の 2026-08-15「プロジェクトの目的を記録する」。
 
 ## プロジェクト概要
 - **配置**（**2026-08-27。段階2-6 で集約**）: フロントの実体は **`frontend/`**（`index.html` / `src/` / `js/` / `styles/` / `db/` / `locale/` / `images/`）、backend は **`server/`**。**`package.json` と `tests/` は root のまま** —— `tests/contract/` は backend と共有し、`tests/image/` は root の `compose.yaml` を叩くため（#107）。**vite の root は `frontend/`、出力は `frontend/dist/`。URL 空間は集約の前後で 1 バイトも変わっていない。**
@@ -24,7 +24,14 @@
 1. **特性化テストが緑であることが移植の前提**。DDL golden ＋ serializer round-trip/決定論テストを先に用意し、挙動不変を保証してから内部を作り替える。半移行を放置しない。
 2. **正本は git 管理のファイル**。保存はファイルへ write-through（人手エクスポート禁止）。PG を正本にしない。時間駆動の一方向同期を作らない（pull 上書き事故を防ぐため、同期は load/save のイベント境界＋外部変更検知で行う）。
 3. **serializer は決定論・diff フレンドリー**。同一モデル→同一バイト列（キー順・配列順安定、2スペース、改行区切り）。1テーブル=独立ブロック。
-4. **フォーマットは JSON 固定**。全入出力は `io/serializer.ts` を通す。XML は読込専用（書き出し撤去）。JSON ルートに `formatVersion`。
+4. **フォーマットは JSON 固定**。全入出力は **`frontend/js/io/json-serializer.ts`**（`serializeDesignJson`）
+   を通す。XML は読込専用（書き出し撤去）。JSON ルートに `formatVersion`。**形式の契約は
+   `frontend/js/io/json-format.ts`**（型だけ・emit 空。散文は `docs/FORMAT.md`）
+   - **訂正の元**: **元は「`io/serializer.ts`」だった。消さずに残す** —— **そのパスは
+     1 度も実在しなかった**（2026-09-16 実測。`frontend/src/` にあるのは `app.ts` と `main.ts` の
+     2 本だけ）。HANDOVER §4 の到達点の書き方をそのまま写したもので、**段階4-1〜4-3b で
+     実体が `js/io/` に置かれ、直列化と形式の定義が 2 本に分かれた**ことが反映されていない。
+     **`indexedDB` / Prettier と同じ型のずれ**（どちらも「準拠の対象が存在しない」まま残っていた）
 5. **配布は Docker・DB レス既定**。ビルドはイメージ内に隠蔽、秘密は env 注入。既定で PG コンテナを持たない。
 6. **backend は Spring Boot 一本**。PHP を残さない。save/load=ファイル I/O、introspection=information_schema→JSON。`READONLY` 時は副作用（保存・introspection）を無効化。
 7. **AI 出力は自動適用しない**。提案は review-first、適用は §4 の決定論パスに合流、LLM はテストでモック。キーは各自コンテナ env（BYOK・localStorage 不使用）。**構造化出力を強制する（自由テキストをパースしない）** —— 手段は structured outputs（段階11-0）。特定モデル名を焼き込まず env＋docs 参照。
@@ -50,6 +57,14 @@
   `--max-warnings=650`**（**2026-09-16 実測**。`no-var` 563 / `no-redeclare` 44 /
   `no-unused-vars` 43 / `no-implicit-globals` 0）。**増えたら赤くなる。**
   **`--fix` はどのスクリプトにも書かない**（整形と静的解析は別だが、配管に置けば誘因ができる）
+  - **★ 訂正（2026-09-16 の同じ日）—— 上限は `--max-warnings=43` になった。元の 650 は消さない**
+    （**入れた時点の観測として正しい**）。**同じ日のうちに 2 本閉じて 607 件が消えた** ——
+    #352（`no-redeclare` 44）と #353（`no-var` 563。**機械が 556 のうち 526 を直し、残り 30 は人が見た**）。
+    **残る 43 件は `no-unused-vars` だけ**で、`no-var` / `no-redeclare` / `no-implicit-globals` は
+    **3 つとも 0 件**（同日実測）
+  - **★ 閾値が「増えても赤くならない」幅かどうかは #361 が見ている** —— **43 は現状ちょうどの値**なので、
+    **1 件増えれば赤くなる**。**数を書いた時点で、直した日に古くなる** ——
+    引くなら `npm run lint` か `npx oxlint`
   - **★ ESLint は入らない**（同日実測）—— `@typescript-eslint/parser` の peer は
     `typescript >=4.8.4 <6.1.0` で、**このリポジトリは `typescript ^7.0.2`**。
     `--legacy-peer-deps` で入れても**走らせた瞬間に落ちる**（parser が自分で
@@ -62,7 +77,7 @@
     当たらなかった**（同日実測。`bin` は `oxlint` 1 本、整形器は **oxfmt という別パッケージ**、
     `scripts` が空で **postinstall を持たない**）。**判断の経緯は `CUSTOMIZATIONS.md` の同日**
 
-## スキーマ既定（`HANDOVER.md` §6 準拠）
+## スキーマ既定（`docs/HANDOVER.md` §6 準拠）
 - PK: 既定 `id uuid DEFAULT uuidv7()`（外部露出=v4 / 完全内部=bigint identity）。
 - テーブル名: snake_case・複数形。監査列 `created_at`/`updated_at` = `timestamptz NOT NULL DEFAULT now()`。
 - 型: `text` 優先、`timestamptz` 固定、`jsonb`（not json）、`numeric`（not money）。`serial`/`char(n)`/`timestamp`/`money`/`json` はパレットから外す。enum=参照テーブル/CHECK 既定。
@@ -76,7 +91,7 @@
 - backend の契約は実測に一致させる（フロント無改修のため）。
 
 ## 実装順序
-`HANDOVER.md` §9: 現物確認 → 特性化テスト → フロント TS 化 → IO(JSON+決定論) → 型/テンプレ/エクスポート → backend(ファイル I/O + introspection) → AI 機能 → Docker/Railway → 仕上げ。
+`docs/HANDOVER.md` §9: 現物確認 → 特性化テスト → フロント TS 化 → IO(JSON+決定論) → 型/テンプレ/エクスポート → backend(ファイル I/O + introspection) → AI 機能 → Docker/Railway → 仕上げ。
 
 ## 迷ったら
 - スキーマ既定や上記制約を覆す提案（単数形化・native enum・PG 正本化・時間駆動同期・UI framework 化・AI 自動適用等）は勝手に進めず確認し、決定を `CUSTOMIZATIONS.md` に記録する。
@@ -205,6 +220,11 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
     （`dependencies` / `docker` / `javascript` に続く 4 本目の bot 産）。
     **元の 12 種という数は消さない**（2026-08-26 時点の観測として正しい）。
     **数を書いた時点で、bot が足した日に古くなる** —— 選ぶ前に `gh label list` を見ること
+  - **★ 三たび訂正（2026-09-16）—— 14 種になった。** `github_actions` が増えている
+    （**5 本目の bot 産**）。**上の「数を書いた時点で古くなる」が、そのとおりになった** ——
+    **12 → 13 → 14 と 3 回動いており、動かしたのは 3 回とも bot**。
+    **ここに数を書き続けるのをやめない**（**動いた回数そのものが「人が足していない」ことの記録**）が、
+    **選ぶときは必ず `gh label list` を引く**
 - **★ マイルストーンを運用する**（**2026-08-30**。#141）。名前は**日本語**。
   **規律の正本は org `work-conventions.md` の「マイルストーンと版」節**（**2026-09-01 に立った**。
   propagandist/.github#123）—— 作るとき ／ 何を入れるか ／ 閉じるとき ／ `gh` の口。
@@ -289,7 +309,7 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
     **どれも 2026-08-30〜31 にここで実測したもの**だが、**org の「マイルストーンと版」節が
     正本になった**ので**写しを残さない**（この節の冒頭の「規約の中身をここへ写さない」）
   - **訂正の元**: **2026-08-23 / 08-26 の実測は「運用していない」だった**（上のラベルの行に
-    同居）。**消さずに残す** —— **`HANDOVER.md` §9 の段階が尽きるまで束ねる先が無く、
+    同居）。**消さずに残す** —— **`docs/HANDOVER.md` §9 の段階が尽きるまで束ねる先が無く、
     作れば空になった**（org 規約 §6 が挙げる「空は害になる」の実体）。9 項目は #118（§6.4）で
     全部閉じ、**`段階N-M` という軸が無くなった日に前提が変わった**
 - **★ 版を切ったら Release を出す**（**2026-08-30**。#150）—— **`assets` は付けない**
@@ -382,7 +402,7 @@ push protection** ／ **Dependabot の security updates**（`server/` には `de
 
 - **常体**（**2026-08-23 実測**: 常体 129 / 敬体 0）
 - **長音は短形**——`サーバ` `ブラウザ` `コンテナ`（`ユーザー` だけ長形。**2026-08-23 実測**）
-- **定番語彙は `HANDOVER.md` が正**（上の `## スキーマ既定`）。**ここに語の表を作らない**
+- **定番語彙は `docs/HANDOVER.md` が正**（上の `## スキーマ既定`）。**ここに語の表を作らない**
 - **基準時点の書式は決めていない**——`YYYY-MM-DD 実測` の形は、上の `## 作業の型` を
   足したときに持ち込んだものだけ
 - **一文の長さの閾値は置いていない。校正の実装も無い**（`ci-*.yml` は `paths` で絞っている）

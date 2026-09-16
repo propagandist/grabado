@@ -19,6 +19,12 @@ plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
     alias(libs.plugins.spring.boot)
+    /*
+     * 静的解析（#317）。**ワークフローは 1 行も足さない** —— detekt plugin は自分を
+     * `check` に付けるので、ci-server.yml の `./gradlew build` から
+     * build → check → detekt の経路で走る。
+     */
+    alias(libs.plugins.detekt)
 }
 
 group = "io.propagandist.grabado"
@@ -42,6 +48,32 @@ kotlin {
 
 repositories {
     mavenCentral()
+}
+
+/*
+ * 静的解析（#317）。**検査だけ**。
+ *
+ * ★★ **自動修正のフラグを書かない。** #296（整形は人が持つ）と同じ理由で、
+ *   配管に自動修正を置かない。整形系の規則は detekt.yml で名指しして切ってある。
+ *
+ * ★ **ベースラインを置かない。** 初回の違反は数えて直す —— ベースラインは
+ *   「見たことにする」装置になりやすい（#317 の判断）。置くなら件数を記録に残す。
+ */
+detekt {
+    config.setFrom(files("detekt.yml"))
+    buildUponDefaultConfig = true
+}
+
+/*
+ * ★★ **型解決の付いたタスクを check に付ける**（#317）。plugin が既定で check に付けるのは
+ *   型解決**無し**の  タスクで、あれは  のような
+ *   **型を要る規則を 1 本も動かさない**（2026-09-16 実測。無しで 0 件、付きで 4 件）。
+ *
+ * ★ **ワークフローは触らない** —— ci-server.yml の  から
+ *   build → check → detektMain / detektTest の経路で走る。
+ */
+tasks.named("check") {
+    dependsOn(tasks.named("detektMain"), tasks.named("detektTest"))
 }
 
 /*

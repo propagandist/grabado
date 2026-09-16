@@ -1,5 +1,6 @@
 package io.propagandist.grabado.config
 
+import io.propagandist.grabado.introspect.IntrospectSource
 import org.springframework.boot.context.properties.ConfigurationProperties
 import java.nio.file.Path
 import java.time.Duration
@@ -122,5 +123,5 @@ data class AiProperties(
  * フロントはボタンを隠す。
  */
 data class IntrospectProperties(
-    val sources: Map<String, io.propagandist.grabado.introspect.IntrospectSource> = emptyMap(),
+    val sources: Map<String, IntrospectSource> = emptyMap(),
 )

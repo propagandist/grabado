@@ -21259,6 +21259,116 @@ jsdom に流し込む。** v8 の計測はその realm を追えないので、*
   **#312 がボタンの配置を変えても直らなかった** —— #354 が「#312 の後に引き直す」と
   書いた予想は**外れ**で、**原因は `#window .tb.i-windowok` の `float: right` の側にある**
 
+### 2026-09-16 detekt を検査のみで入れた —— 安定版は JDK 25 で起動しなかった
+
+**#317。v0.11.0 の 9 本目。** **ワークフローは 1 行も変えていない。**
+
+#### ★★ 実測の順序 —— 安定版 → CI で落ちる → alpha へ
+
+| 段 | 何をした | 結果 |
+|---|---|---|
+| 1 | **detekt 1.23.8**（Maven Central の最新安定版）を入れる | `Invalid value (25) passed to --jvm-target, must be one of […, 22]`。**Kotlin 1.9 系のコンパイラを内蔵している** |
+| 2 | 解析だけ `jvmTarget = "21"` に落とす | **手元では動いた**（Gradle が JDK 21 で起動していたため）。**21 件** |
+| 3 | 型解決（`detektMain`）で回す | **36 件。うち `UnreachableCode` 3 件が誤検出**（到達可能なコードを指した）。**Kotlin 2.4 を 1.9 のコンパイラで解析しているため** |
+| 4 | **CI（JDK 25）で落ちた** | `Execution failed for task ':detekt' > 25.0.4.1`。**detekt 1.23.8 は JDK 25 のランタイムでは起動しない** |
+| 5 | 手元で再現 | `JAVA_HOME` を JDK 25 に向けると **`> 25.0.3`** で同じ形に落ちる |
+| 6 | **detekt 2.0.0-alpha.6**（`dev.detekt`。**groupId が変わっている**）へ | **JDK 25 で起動した。型解決でも誤検出 0 件** |
+
+**★ 安定版が使えない。** `io.gitlab.arturbosch.detekt` の最新は 1.23.8 で、**2.x は
+`dev.detekt` へ移って alpha しか無い**（2026-09-16 実測）。**alpha を入れた** ——
+**検査のみで、出力にも配布物にも 1 バイトも影響しない**ので、踏める種類の賭けと判断した。
+
+#### ★★ 実測 —— 型解決を付けないと、`UnusedImport` すら動かない
+
+**detekt 2 では `UnusedImport` が型解決を要る**（2026-09-16 実測。変異で確かめた）:
+
+| タスク | 未使用 import を戻したとき |
+|---|---|
+| `detekt`（型解決なし。**plugin が既定で `check` に付けるのはこちら**） | **緑のまま**（何も言わない） |
+| `detektMain`（型解決あり） | **`The import 'java.sql.ResultSet' is unused. [UnusedImport]`** |
+
+**だから `check` に `detektMain` / `detektTest` を明示的に付けた。**
+**既定のままでは、#317 の発端そのものが 1 件も出ない。**
+
+#### 発端の 4 種類は、3 つ閉じた
+
+| # | #317 が挙げた形 | 始末 |
+|---|---|---|
+| 1 | 未使用 import（`PostgresCatalogReader.kt:5`） | **`UnusedImport` を立て、import を消した** |
+| 2 | `Locale` 無しの `"%02x".format(…)` 2 件 | **手で `Locale.ROOT` を足した**（`ETags.kt` / `SuggestionCache.kt`） |
+| 3 | 二重空行・末尾空行 | **切る** —— 整形。人が持つ（#296） |
+| 4 | 完全修飾のインライン記述 | **`UnnecessaryFullyQualifiedName` が拾った。3 件とも import にした**（`ReadOnlyContractTest.kt:82` ／ `GrabadoProperties.kt:125` ／ `AiReviewServiceTest.kt:353`） |
+
+**ついでに 2 件直した** —— `IntrospectionMapper.kt` の `?: emptyList()` を `orEmpty()` へ（`UseOrEmpty`）。
+
+#### ★ alpha の限界に 1 つ当たった
+
+**`SuggestionCache.maxEntries` を「未使用」と報告する**が、**`removeEldestEntry` の中
+（匿名オブジェクト）で使われている**。**参照を追えていない誤検出。**
+
+**`@Suppress` を出荷コードへ書かない**（検査の都合を製品に持ち込まない）。
+**`UnusedPrivateProperty` を切り、理由を設定に書いた。安定版になったら立て直す。**
+
+#### 切った規則と、その理由
+
+| 規則 | 理由 |
+|---|---|
+| `MaxLineLength` / `WildcardImport` / `MultilineLambdaItParameter` | **整形**。人が持つ（#296） |
+| `MagicNumber` | 設定クラスの既定値。**定数名を付けても読みやすくならない** |
+| `ReturnCount` / `ThrowsCount` | **検証関数の形と合わない**（拒む理由の数だけ return / throw する） |
+| `ForbiddenVoid` | **Spring の `ResponseEntity<Void>`**。Unit へは替えられない |
+| `UnusedParameter` | `@ExceptionHandler` は**例外の型で選ばれる** |
+| `LoopWithTooManyJumpStatements` | `RateLimiter.admit()` は **break 2 つで読める** |
+| `TooGenericExceptionCaught` / `SwallowedException` | 上流 SDK と I/O は**投げる型が広い**。具体化すると**取りこぼす側に倒れる** |
+| `SpreadOperator` | `runApplication<…>(*args)` は **Boot の定型** |
+| `TooManyFunctions` | `ApiExceptionHandler` は**例外ハンドラを集める**クラス |
+| `UnusedPrivateProperty` / `VarCouldBeVal` | **alpha の誤検出** ／ `@LocalServerPort` は **var でなければ動かない** |
+| `MapGetWithNotNullAssertionOperator` / `HasPlatformType` | **テストだけ除外**。本番は縛ったまま（`!!` は本番 0 件） |
+
+**ベースラインは置かなかった** —— **切る判断を 1 つずつ書いたほうが後から読める**。
+**「見たことにする」装置を作らない**（#317 の判断）。
+
+#### ★★ detekt は設定の綴り間違いを検出する（oxlint とは逆）
+
+```
+Property 'style>UnusedImports' is misspelled or does not exist. Did you mean 'UnusedImport'?
+```
+
+**2 度助かった** —— `ThrowsCount` を `exceptions` に置いたとき、
+`UnusedImports`（複数形。**detekt 2 で単数に変わった**）を書いたとき。
+
+**#316 の oxlint とは逆** —— あちらは**存在しない規則を `-D` で指定しても何も言わなかった**
+（同日実測）。**規則名を 1 文字間違えると黙って無効になる**のが oxlint、
+**落ちて教える**のが detekt。**同じ「検査のみで入れる」でも、空振りの見え方が違う。**
+
+#### ★ 受け入れ基準の grep に、自分の説明が引っかかった（2 度目）
+
+「`grep 'auto-correct\|ktlint'` が **0 件**」という基準に、**それを説明した文が 3 件当たった**。
+**#316 で 1 度踏んでいる**（`--fix`）。語を落とし、**入れなかった道具の名前は `detekt.yml` に
+置いた**（あちらは grep の対象外）。
+
+**★ 3 度目が出たら、基準の書き方そのものを変える** —— 「配管に無いこと」を grep で書くと、
+**理由を書いた文が必ず当たる**。#171 の `!important` がテスト側でコメントを剥がして
+解いたのと同じ形。
+
+#### 検証（2026-09-16 実測。**JDK 25 で回した**）
+
+| 検査 | 結果 |
+|---|---|
+| `./gradlew build --rerun-tasks` | **BUILD SUCCESSFUL**。`:detekt` / `:detektMain` / `:detektTest` が経路に出る |
+| 未使用 import を戻す変異 | **`detektMain` が赤くなる**（`detekt` は緑のまま＝型解決が要る証拠） |
+| `.github/workflows/` の差分 | **0 バイト** |
+| `grep 'auto-correct\|ktlint'`（build.gradle.kts / toml） | **0 件** |
+| `gradle.lockfile` / `settings-gradle.lockfile` | **どちらも動いていない**（plugin の classpath は lock の対象外） |
+| frontend の `lint` / `typecheck` | 緑 |
+
+#### 申し送り
+
+- **detekt 2 が安定版になったら、`UnusedPrivateProperty` を立て直す**（いま切っているのは
+  alpha の誤検出のため）。**版を上げる契機は Dependabot が持つ**（`libs.versions.toml` にある）
+- **型解決なしの `detekt` タスクは `check` に付いたまま**。**外していない** ——
+  速く、害が無く、**外す設定を書くほうが読み手に説明が要る**
+
 ## 保持している upstream 資産（撤去予定を含む）
 
 | 資産 | 現状 | 方針（HANDOVER 準拠） |

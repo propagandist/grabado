@@ -45,6 +45,8 @@
     <!-- windows & options -->
     <string name="windowok">OK</string>
     <string name="windowcancel">Cancel</string>
+    <!-- #311: right-hand button of panels without a confirm step (#io) -->
+    <string name="close">Close</string>
     <string name="throbber">Please wait...</string>
     <string name="options">Options</string>
     <string name="language">Language</string>

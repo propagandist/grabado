@@ -241,6 +241,16 @@
 .i-windowcancel {
     --icon: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20height=%2220%22%20viewBox=%220%20-960%20960%20960%22%20width=%2220%22%3E%3Cpath%20d=%22m291-240-51-51%20189-189-189-189%2051-51%20189%20189%20189-189%2051%2051-189%20189%20189%20189-51%2051-189-189-189%20189Z%22/%3E%3C/svg%3E");
 }
+/*
+ * #311: **確定の無いパネル（#io）では、OK が「閉じる」になる。**
+ *
+ * ★ **class は差し替えず、`--icon` だけ上書きする** —— `.tb.i-windowok` は
+ *   tests/dist/smoke.spec.ts が見ているセレクタで、差し替えると外れる。
+ *   絵柄は上の .i-windowcancel と同じ close（**同じ意味のボタンは同じ絵**）。
+ */
+.i-windowok.is-close {
+    --icon: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20height=%2220%22%20viewBox=%220%20-960%20960%20960%22%20width=%2220%22%3E%3Cpath%20d=%22m291-240-51-51%20189-189-189-189%2051-51%20189%20189%20189-189%2051%2051-189%20189%20189%20189-51%2051-189-189-189%20189Z%22/%3E%3C/svg%3E");
+}
 /* add */
 .i-keyadd {
     --icon: url("data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20height=%2220%22%20viewBox=%220%20-960%20960%20960%22%20width=%2220%22%3E%3Cpath%20d=%22M444-444H240v-72h204v-204h72v204h204v72H516v204h-72v-204Z%22/%3E%3C/svg%3E");

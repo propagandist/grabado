@@ -45,6 +45,8 @@
     <!-- windows & options -->
     <string name="windowok">OK</string>
     <string name="windowcancel">キャンセル</string>
+    <!-- #311: 確定の無いパネル（#io）の右下。未訳の言語ではキー名 "close" がそのまま出る -->
+    <string name="close">閉じる</string>
     <string name="throbber">しばらくお待ちください...</string>
     <string name="options">オプション</string>
     <string name="language">言語</string>

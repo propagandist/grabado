@@ -29,7 +29,7 @@
 #   2026-08-30 まで**この一文しか無く**、Dependabot が片側だけ動かしても全ジョブ緑だった。
 #   版そのものを上げる判断は docs/HANDOVER.md §2.2（着手時に**最新 LTS** 確認）。
 # ---------------------------------------------------------------------------
-FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS web
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS web
 
 WORKDIR /web
 

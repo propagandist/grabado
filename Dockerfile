@@ -59,7 +59,7 @@ RUN npm run build
 #   のがそこだから）。**このステージと下の runtime、そして ci-server.yml の `java-version` が
 #   その写し**で、**揃っていることは tests/node/toolchain.test.ts が見る**（issue #134）。
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:25-jdk-alpine@sha256:09349d79941fd53bb3d487b393ca118d8853c08c09193f416fe6a8718df9e732 AS api
+FROM eclipse-temurin:25-jdk-alpine@sha256:3fd2d245c4e0eba615fe366a71b8bd25f5db7104f53e4026b24bf508b880bd2a AS api
 
 WORKDIR /src
 
@@ -77,7 +77,7 @@ RUN sh ./gradlew bootJar --no-daemon
 # ---------------------------------------------------------------------------
 # 3) runtime —— jar だけを thin JRE で起こす（単一プロセスで static と API の両方を配る）
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:25-jre-alpine@sha256:3137541deb3cac6626b5d9a4a2187bc0d6a34312f858bd2c67dd01e732e6b682
+FROM eclipse-temurin:25-jre-alpine@sha256:3c0a9084927a221ccd1d007fcaf614465672c0af37aaa834c5184483afe56d61
 
 # ★ 非 root で走らせる。`/data/schema` は **save が書く先**（正本は git 管理のファイル。
 #   CLAUDE.md 制約2）なので、先に作って所有権を渡す。
